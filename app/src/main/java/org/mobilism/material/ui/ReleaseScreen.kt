@@ -9,17 +9,14 @@ import android.text.style.ClickableSpan
 import android.text.style.URLSpan
 import android.view.View
 import android.widget.TextView
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -50,9 +47,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
@@ -60,7 +55,6 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import org.jsoup.Jsoup
 import org.jsoup.safety.Safelist
@@ -170,17 +164,8 @@ fun ReleaseScreen(
                     item {
                         Text("${release.author} · ${release.replies} replies", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    if (images.isNotEmpty()) item {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(images, key = { it }) { image ->
-                                AsyncImage(
-                                    model = image, contentDescription = "Open release image ${images.indexOf(image) + 1}",
-                                    modifier = Modifier.widthIn(min = 160.dp, max = 300.dp).heightIn(min = 180.dp, max = 360.dp).clip(MaterialTheme.shapes.large)
-                                        .clickable { gallery = images to images.indexOf(image) },
-                                    contentScale = ContentScale.Fit,
-                                )
-                            }
-                        }
+                    if (images.isNotEmpty()) item("images-${release.id}") {
+                        ReleaseImageCarousel(images) { index -> gallery = images to index }
                     }
                     items(sections, key = { it.kind }) { section ->
                         val accent = when (section.kind) {

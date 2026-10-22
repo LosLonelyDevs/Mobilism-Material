@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.5
+
+Added a Material 3 carousel above the release description.
+
+- Swipe through rounded image previews or use the arrows. The counter shows your position.
+- Tap an image to open it full size, with the existing zoom and gallery controls.
+- Use Expressive motion for snapping and navigation. Respect reduced motion.
+- Add README screenshots and an Obtainium install button, with prereleases enabled.
+
+Tested the three-image TizenTube release on the emulator. All 45 tests pass; lint has no errors.
+
 ## 0.1.4
 
 Added Following with installed-version checks and optional update notifications.
