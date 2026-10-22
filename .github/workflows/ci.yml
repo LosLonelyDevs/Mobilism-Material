@@ -31,11 +31,15 @@ jobs:
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           echo "version=$version" >> "$GITHUB_OUTPUT"
           previous=""
+          capture_changed=false
           if [[ "$EVENT_NAME" == push && "$BEFORE_SHA" =~ ^[0-9a-f]{40}$ && "$BEFORE_SHA" != 0000000000000000000000000000000000000000 ]]; then
             previous=$(git show "$BEFORE_SHA:app/build.gradle.kts" | sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p')
+            if ! git diff --quiet "$BEFORE_SHA" "$GITHUB_SHA" -- .github/workflows/ci.yml scripts/capture-readme-screenshots.py scripts/check-readme-screenshots.py app/src/androidTest app/src/debug/assets/readme; then
+              capture_changed=true
+            fi
           fi
           refresh=false
-          if [[ "$GITHUB_REF" == refs/heads/main && ( "$EVENT_NAME" == workflow_dispatch || ( "$EVENT_NAME" == push && "$version" != "$previous" ) ) ]]; then
+          if [[ "$GITHUB_REF" == refs/heads/main && ( "$EVENT_NAME" == workflow_dispatch || ( "$EVENT_NAME" == push && ( "$version" != "$previous" || "$capture_changed" == true ) ) ) ]]; then
             refresh=true
           fi
           echo "screenshots=$refresh" >> "$GITHUB_OUTPUT"
@@ -98,8 +102,8 @@ jobs:
           script: |
             adb shell wm size 1080x2400
             adb shell wm density 420
-            bash ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.mobilism.material.ReadmeScreenshots --stacktrace
-            for name in apps release downloads appearance; do adb pull "/sdcard/Android/data/cum.ahfu.mobi.material/files/readme-screenshots/$name.png" "docs/images/$name.png"; done
+            bash ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+            python scripts/capture-readme-screenshots.py --serial emulator-5554
       - name: Check screenshot files
         run: python scripts/check-readme-screenshots.py
       - name: Publish README screenshots
