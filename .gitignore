@@ -1,0 +1,94 @@
+# ── AI agent workspace (private, not tracked) ─────────────────────────────
+.agents/
+
+# ── apktool / JADX rebuild artifacts ──────────────────────────────────────
+# The new source of truth is app/ and core/. Legacy rebuild outputs stay local.
+build/
+dist/
+*.apk.new
+*-aligned.apk
+*-signed.apk
+*.apk.idsig
+# APK inputs and outputs are local artifacts, including the legacy input.
+*.apk
+*.aab
+*.apks
+
+# Legacy APK decode: retained locally as migration reference, never in new history.
+# Root anchors keep Android source module resources and manifests trackable.
+/AndroidManifest.xml
+/apktool.yml
+/assets/
+/original/
+/res/
+/resources/
+/smali*/
+/sources/
+/unknown/
+
+# Gradle / Kotlin source rewrite
+.gradle/
+.kotlin/
+**/build/
+local.properties
+**/local.properties
+.cxx/
+.externalNativeBuild/
+captures/
+**/screenshots/
+*.hprof
+*.heapdump
+# The wrapper JAR is build infrastructure, not a generated app binary.
+!gradle/wrapper/gradle-wrapper.jar
+
+# ── Signing / secrets — NEVER commit ──────────────────────────────────────
+*.keystore
+*.jks
+*.pem
+*.key
+*.p12
+keystore.properties
+signing.properties
+*secret*
+*.env
+.env
+.env.*
+*.credentials.json
+credentials.properties
+google-services.json
+
+# ── IDE / editor ──────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+*.sublime-project
+*.sublime-workspace
+*~
+*.swp
+*.swo
+
+# ── OS cruft ──────────────────────────────────────────────────────────────
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+# Linux
+.directory
+.Trash-*
+
+# ── Logs / temp ───────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.bak
+*.orig
+tmp/
+temp/
