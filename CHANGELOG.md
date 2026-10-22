@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Keep HushFeed's versioned feature list and changelog link in Mod info instead of Description.
+
 ## 0.1.6
 
 Added release actions and automatic README screenshots.

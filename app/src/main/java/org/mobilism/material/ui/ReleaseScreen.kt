@@ -103,7 +103,9 @@ fun ReleaseScreen(
     val content = remember(release) {
         release?.let { ReleaseContentParser.parse(it.contentHtml, it.downloadLinks, it.browserUrl ?: "https://forum.mobilism.org/") }
     }
-    val sections = remember(content) { ReleaseSections.parse(content?.bodyHtml.orEmpty()) }
+    val sections = remember(content, release?.title) {
+        ReleaseSections.parse(content?.bodyHtml.orEmpty(), release?.title.orEmpty())
+    }
     val groups = remember(content, preferences) { DownloadGroups.group(content?.downloads.orEmpty(), preferences) }
     gallery?.let { (urls, index) -> ReleaseImageViewer(urls, index, onDismiss = { gallery = null }) }
     Scaffold(

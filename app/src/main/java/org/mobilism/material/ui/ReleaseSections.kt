@@ -14,11 +14,26 @@ object ReleaseSections {
     private val modBullet = Regex("""(?i)^[◉•●✓✔★\-]+\s*(premium|pro|vip|paid)\s+(activated|unlocked)\b.*""")
     private val decoration = Regex("""^[\s\p{So}\p{Sk}\p{Cf}\uFFFD*#_\[\]<>|=~\-]+|[\s\p{So}\p{Sk}\p{Cf}\uFFFD*#_\[\]<>|=~\-]+$""")
     private val modCredit = Regex("""(?i)^mod\s+by\s+\S.{0,80}$""")
+    private val titleTag = Regex("""\[([^\[\]]+)]""")
+    private val modTag = Regex("""(?i)^mod(?:ded)?(?:\s.*)?$""")
+    private val namedVersion = Regex("""(?i)^(.+?)\s+v?\d+(?:\.\d+)+(?:[-+][\w.-]+)?$""")
+    private val featureBullet = Regex("""^(?:[-•●◉✓✔★]|\d+[.)])\s+\S.*$""")
 
-    fun parse(html: String): List<ReleaseTextSection> {
+    fun parse(html: String, releaseTitle: String = ""): List<ReleaseTextSection> {
+        val tags = titleTag.findAll(Jsoup.parseBodyFragment(releaseTitle).text()).map { it.groupValues[1].trim() }.toList()
+        val modNames = if (tags.any(modTag::matches)) tags.filterNot(modTag::matches).map { it.lowercase() }.toSet() else emptySet()
+        fun isNamedModBlock(node: Element): Boolean {
+            if (modNames.isEmpty()) return false
+            val lines = node.wholeText().lineSequence().map(String::trim).filter(String::isNotBlank).take(2).toList()
+            if (lines.size < 2 || !featureBullet.matches(lines[1])) return false
+            val name = namedVersion.matchEntire(lines[0].replace(decoration, "").trim())?.groupValues?.get(1)
+            return name?.lowercase() in modNames
+        }
         var current = ReleaseSection.Description
         fun split(node: Node): List<Pair<ReleaseSection, Node>> {
-            if (node is Element && node.normalName() in setOf("b", "strong") && modBullet.matches(node.text().trim())) {
+            // Named mods can use their own version heading instead of "Mod Info".
+            if (node is Element && node.normalName() in setOf("b", "strong") &&
+                (modBullet.matches(node.text().trim()) || isNamedModBlock(node))) {
                 current = ReleaseSection.Mod
             }
             if (node is TextNode) {

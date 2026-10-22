@@ -5,6 +5,33 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReleaseSectionsTest {
+    @Test fun separatesHushfeedVersionedModBlockFromTikTokDescription() {
+        val html = """<div>TikTok description.<br/><br/><b>Hushfeed 0.75.0<br/>- AMOLED dark theme<br/>- Accent color<br/>- Advanced downloads<br/><br/>Changes and bug fixes read here:</b><br/><a href="https://github.com/SysAdminDoc/HushFeed/releases/tag/v0.75.0">Changelog</a><br/><u>What's New:</u><br/>Bug fixes and performance improvements.<br/><b>This app has no advertisements</b><br/><u>More Info:</u><a href="https://example.com/store">Store</a></div>"""
+        val result = ReleaseSections.parse(html, "TikTok v47.1.4 [HushFeed] v0.75.0 [Mod]")
+        val sections = result.associate { it.kind to Jsoup.parse(it.html).text() }
+        assertEquals("TikTok description. More Info:Store", sections[ReleaseSection.Description])
+        assertTrue(sections.getValue(ReleaseSection.Mod).contains("Hushfeed 0.75.0"))
+        assertTrue(sections.getValue(ReleaseSection.Mod).contains("AMOLED dark theme"))
+        assertTrue(sections.getValue(ReleaseSection.Mod).contains("This app has no advertisements"))
+        assertEquals("Bug fixes and performance improvements.", sections[ReleaseSection.Changes])
+        assertTrue(result.single { it.kind == ReleaseSection.Mod }.html.contains("https://github.com/SysAdminDoc/HushFeed/releases/tag/v0.75.0"))
+    }
+
+    @Test fun keepsUnrelatedVersionedFeatureListsInDescription() {
+        val html = "<b>TikTok 47.1.4<br/>- Watch videos<br/>- Share with friends</b>"
+        val result = ReleaseSections.parse(html, "TikTok v47.1.4 [HushFeed] v0.75.0 [Mod]")
+        assertEquals(listOf(ReleaseSection.Description), result.map { it.kind })
+        assertEquals(Jsoup.parse(html).text(), Jsoup.parse(result.single().html).text())
+    }
+
+    @Test fun keepsNamedModMentionsAndUnmodifiedReleaseFeaturesInDescription() {
+        val title = "TikTok v47.1.4 [HushFeed] v0.75.0 [Mod]"
+        val prose = "<p>Hushfeed 0.75.0 adds options to the app.</p><b>Hushfeed 0.75.0</b><p>A description of the release.</p>"
+        assertEquals(listOf(ReleaseSection.Description), ReleaseSections.parse(prose, title).map { it.kind })
+        val features = "<b>Hushfeed 0.75.0<br/>- Theme options</b>"
+        assertEquals(listOf(ReleaseSection.Description), ReleaseSections.parse(features, "Hushfeed v0.75.0").map { it.kind })
+    }
+
     @Test fun separatesDecoratedSpotifyModHeadingFromPremiumDescription() {
         val html = """<div>Spotify Premium features<br>• Play any song.<br>• Download music.<br><br><b>★★★ Mod by kefir52 ★★★</b><br><br><b>▣ Mod Info:</b><br>• Unlocked Next Track<br>• Disabled Audio Ads<br><br>Use a different account if needed.</div>"""
         val sections = ReleaseSections.parse(html).associate { it.kind to Jsoup.parse(it.html).text() }
