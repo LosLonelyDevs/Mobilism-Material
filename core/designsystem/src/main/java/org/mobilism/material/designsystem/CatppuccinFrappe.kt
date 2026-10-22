@@ -29,6 +29,8 @@ val CatppuccinFrappe = ThemeDefinition(
     id = "catppuccin-frappe",
     name = "Catppuccin Frappé",
     isDark = true,
+    success = Color(0xFFA6D189),
+    onSuccess = Color(0xFF232634),
     colors = with(Frappe) {
         darkColorScheme(
             primary = blue, onPrimary = crust,

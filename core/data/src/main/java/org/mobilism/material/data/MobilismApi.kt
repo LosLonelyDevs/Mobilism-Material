@@ -48,7 +48,7 @@ internal class MobilismApi(private val context: Context) {
         require(page > 0)
         val path = "release/${section.apiPath}/category/all/page/$page/limit/$PAGE_SIZE/orderby/${order.apiValue}/desc/0"
         val response = request(path, token).getJSONArray("response")
-        return ReleasePage(response.objects().map(::parseRelease), response.length() >= PAGE_SIZE)
+        return ReleasePage(response.objects().map(ReleaseJson::parse), response.length() >= PAGE_SIZE)
     }
 
     suspend fun register(username: String, email: String, password: String) {
@@ -64,7 +64,7 @@ internal class MobilismApi(private val context: Context) {
 
     suspend fun release(id: Long, token: String?): Release {
         require(id > 0)
-        return parseRelease(request("release/$id", token).getJSONObject("response"))
+        return ReleaseJson.parse(request("release/$id", token).getJSONObject("response"))
     }
 
     private suspend fun request(path: String, token: String? = null, form: Map<String, String>? = null): JSONObject =
@@ -123,25 +123,7 @@ internal class MobilismApi(private val context: Context) {
             }
         }
 
-    private fun parseRelease(json: JSONObject): Release = Release(
-        id = json.getLong("id"),
-        title = json.optString("subject").ifBlank { "Untitled release" },
-        author = json.optString("name"),
-        thumbnail = safeUrl(json.optString("preview")),
-        publishedAt = json.optLong("date"),
-        replies = json.optLong("replies"),
-        views = json.optLong("views"),
-        contentHtml = json.optString("content"),
-        images = json.optJSONArray("images").strings().mapNotNull(::safeUrl),
-        downloadLinks = json.optJSONArray("url").strings().mapNotNull(::safeUrl),
-        browserUrl = safeUrl(json.optString("browser_url")),
-    )
-
-    private fun safeUrl(value: String): String? = value.toHttpUrlOrNull()?.toString()
     private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
-    private fun JSONArray?.strings(): List<String> = this?.let { array ->
-        (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) }
-    }.orEmpty()
 
     private companion object {
         val BASE_URL = "https://app.mobilism.org/api-new/".toHttpUrl()

@@ -24,43 +24,43 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil3.compose.AsyncImage
 import org.jsoup.Jsoup
 import org.jsoup.safety.Safelist
+import org.mobilism.material.data.DebridState
 import org.mobilism.material.designsystem.AppFont
 import org.mobilism.material.designsystem.AppIconButton
-import org.mobilism.material.designsystem.AppTextButton
-import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.LoadingState
 import org.mobilism.material.designsystem.LocalAppFont
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReleaseScreen(state: ReleaseState, onBack: () -> Unit, onRetry: () -> Unit) {
+fun ReleaseScreen(state: ReleaseState, debrid: DebridState, onBack: () -> Unit, onRetry: () -> Unit) {
     val context = LocalContext.current
-    var linksOpen by rememberSaveable { mutableStateOf(false) }
+    val snackbar = remember { SnackbarHostState() }
     val release = state.release
+    val content = remember(release) {
+        release?.let { ReleaseContentParser.parse(it.contentHtml, it.downloadLinks, it.browserUrl ?: "https://forum.mobilism.org/") }
+    }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text("Release", maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -97,24 +97,13 @@ fun ReleaseScreen(state: ReleaseState, onBack: () -> Unit, onRetry: () -> Unit) 
                             }
                         }
                     }
-                    item { ReleaseBody(release.contentHtml, release.browserUrl ?: "https://forum.mobilism.org/") }
-                    if (release.downloadLinks.isNotEmpty()) item {
-                        ExpressiveButton({ linksOpen = true }, Modifier.fillMaxWidth()) { Text("Download links") }
+                    item { ReleaseBody(content?.bodyHtml.orEmpty(), release.browserUrl ?: "https://forum.mobilism.org/") }
+                    if (!content?.downloads.isNullOrEmpty()) item {
+                        Text("Downloads", style = MaterialTheme.typography.headlineSmall)
                     }
-                }
-            }
-        }
-    }
-    if (linksOpen && release != null) {
-        ModalBottomSheet(onDismissRequest = { linksOpen = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(24.dp)) {
-                item { Text("Download links", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 16.dp)) }
-                items(release.downloadLinks.distinct(), key = { it }) { url ->
-                    val host = android.net.Uri.parse(url).host ?: "Download"
-                    AppTextButton("Open $host", {
-                        openWeb(context, url)
-                        linksOpen = false
-                    }, Modifier.fillMaxWidth())
+                    items(content?.downloads.orEmpty(), key = { it.url }) { link ->
+                        DownloadLinkRow(link, debrid) { snackbar.showSnackbar("Link copied") }
+                    }
                 }
             }
         }
@@ -129,14 +118,19 @@ private fun ReleaseBody(html: String, baseUrl: String) {
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
     val textSize = MaterialTheme.typography.bodyLarge.fontSize.value
     val font = LocalAppFont.current
-    val typeface = remember(context, font) {
-        if (font == AppFont.Geist) context.resources.getFont(org.mobilism.material.designsystem.R.font.geist_regular)
+    val resources = LocalResources.current
+    val typeface = remember(resources, font) {
+        if (font == AppFont.Geist) resources.getFont(org.mobilism.material.designsystem.R.font.geist_regular)
         else Typeface.create("sans-serif", Typeface.NORMAL)
     }
     val richText = remember(html, baseUrl, context) {
         val allowed = Safelist.basic().removeProtocols("a", "href", "ftp", "mailto")
         val cleaned = Jsoup.clean(html, baseUrl, allowed)
         SpannableStringBuilder(Html.fromHtml(cleaned, Html.FROM_HTML_MODE_LEGACY)).apply {
+            // Removed download anchors can leave many empty forum markup lines.
+            Regex("\n(?:[ \\t\\u00a0]*\n){2,}").findAll(this).toList().asReversed().forEach {
+                replace(it.range.first, it.range.last + 1, "\n\n")
+            }
             getSpans(0, length, URLSpan::class.java).forEach { link ->
                 val start = getSpanStart(link)
                 val end = getSpanEnd(link)

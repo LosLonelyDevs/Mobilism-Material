@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import org.mobilism.material.data.ApiFailure
 import org.mobilism.material.data.AuthState
 import org.mobilism.material.data.ContentSection
+import org.mobilism.material.data.DebridRepository
 import org.mobilism.material.data.FailureKind
 import org.mobilism.material.data.FeedOrder
 import org.mobilism.material.data.MobilismRepository
@@ -41,6 +42,7 @@ class MobilismViewModel(
     context: Context,
     val repository: MobilismRepository,
     val appearance: AppearanceStore,
+    val debrid: DebridRepository,
 ) : ViewModel() {
     private val preferences = context.getSharedPreferences("material-navigation", Context.MODE_PRIVATE)
     val preferredSection: ContentSection?
@@ -54,6 +56,11 @@ class MobilismViewModel(
     private var loginJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            try { debrid.load() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* Settings exposes retry and key replacement. */ }
+        }
         viewModelScope.launch {
             try { appearance.load() }
             catch (cancelled: CancellationException) { throw cancelled }

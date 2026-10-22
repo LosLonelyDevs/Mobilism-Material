@@ -30,6 +30,7 @@ dist/
 .gradle/
 .kotlin/
 **/build/
+/app/release/
 local.properties
 **/local.properties
 .cxx/

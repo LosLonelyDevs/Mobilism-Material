@@ -6,6 +6,5 @@
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:windowBackground">#292C3C</item>
         <item name="android:colorAccent">#8CAAEE</item>
-        <item name="android:windowLightNavigationBar">false</item>
     </style>
 </resources>

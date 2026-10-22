@@ -4,6 +4,8 @@
   "name": "Frappé Custom",
   "dark": true,
   "colors": {
+    "success": "#A6D189",
+    "onSuccess": "#232634",
     "primary": "#8CAAEE",
     "onPrimary": "#232634",
     "primaryContainer": "#414559",

@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 
 val LocalReducedMotion = staticCompositionLocalOf { false }
 val LocalAppFont = staticCompositionLocalOf { AppFont.Geist }
+val LocalAppTheme = staticCompositionLocalOf { ThemeCatalog.default }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private object InstantMotionScheme : MotionScheme {
@@ -43,7 +44,7 @@ fun MobilismTheme(
     val systemReducedMotion = systemAnimationsDisabled()
     val reduced = reduceMotion || systemReducedMotion
     val type = remember(font) { appTypography(font) }
-    CompositionLocalProvider(LocalReducedMotion provides reduced, LocalAppFont provides font) {
+    CompositionLocalProvider(LocalReducedMotion provides reduced, LocalAppFont provides font, LocalAppTheme provides theme) {
         MaterialExpressiveTheme(
             colorScheme = theme.colors,
             typography = type,

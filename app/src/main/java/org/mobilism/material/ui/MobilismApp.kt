@@ -27,7 +27,7 @@ import org.mobilism.material.designsystem.screenMotion
 @Composable
 fun MobilismApp(app: MobilismApplication) {
     val model: MobilismViewModel = viewModel(factory = viewModelFactory {
-        initializer { MobilismViewModel(app, app.repository, app.appearance) }
+        initializer { MobilismViewModel(app, app.repository, app.appearance, app.debrid) }
     })
     val auth by model.auth.collectAsStateWithLifecycle()
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -76,6 +76,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState) {
     val motion = screenMotion()
     val feed by model.feed.collectAsStateWithLifecycle()
     val appearance by model.appearance.state.collectAsStateWithLifecycle()
+    val debrid by model.debrid.state.collectAsStateWithLifecycle()
     val start = androidx.compose.runtime.remember { if (model.preferredSection == null) "favourite" else "feed" }
     LaunchedEffect(Unit) {
         if (start == "feed") model.loadFeed(refresh = true)
@@ -97,9 +98,12 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState) {
                 onSection = model::selectSection, onOrder = model::selectOrder,
                 onRefresh = { model.loadFeed(refresh = true) }, onMore = { model.loadFeed() },
                 onRelease = { id -> nav.navigate("release/$id") { launchSingleTop = true } },
-                onSettings = { nav.navigate("appearance") { launchSingleTop = true } },
+                onSettings = { nav.navigate("settings") { launchSingleTop = true } },
                 onSignOut = model::signOut,
             )
+        }
+        composable("settings") {
+            SettingsScreen(debrid, model.debrid, onAppearance = { nav.navigate("appearance") }, onBack = { nav.popBackStack() })
         }
         composable("appearance") {
             AppearanceScreen(appearance, model.appearance, onBack = { nav.popBackStack() })
@@ -110,7 +114,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState) {
                 initializer { ReleaseViewModel(id, model.repository) }
             })
             val state by detail.state.collectAsStateWithLifecycle()
-            ReleaseScreen(state, onBack = { nav.popBackStack() }, onRetry = detail::load)
+            ReleaseScreen(state, debrid, onBack = { nav.popBackStack() }, onRetry = detail::load)
         }
     }
 }

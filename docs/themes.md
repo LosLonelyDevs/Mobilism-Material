@@ -12,7 +12,8 @@ Open **Settings → Appearance → Import theme** and select a JSON document. Th
 - `id`: 2–64 lowercase letters, digits, or hyphens, beginning with a letter or digit. Built-in IDs cannot be overwritten.
 - `name`: 1–60 characters after trimming.
 - `dark`: boolean controlling light/dark system-bar appearance.
-- `colors`: all named roles in the example, each an opaque `#RRGGBB` value. Missing or malformed roles reject the import.
+- `colors`: all Material roles in the example, each an opaque `#RRGGBB` value. Missing or malformed Material roles reject the import.
+- Optional `colors.success` and `colors.onSuccess` style supported-host buttons. Frappé uses green `#A6D189` on `#232634`. Older version 1 themes without these roles fall back to their tertiary pair.
 
 Files are limited to 64 KiB. Imported documents are stored atomically in private app storage. Importing the same custom ID replaces that theme; it cannot replace the built-in Frappé theme. An unreadable theme falls back to the built-in theme. Selection, font, and reduced motion persist across launches.
 

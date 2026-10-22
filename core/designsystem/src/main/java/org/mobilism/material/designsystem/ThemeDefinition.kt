@@ -14,6 +14,8 @@ data class ThemeDefinition(
     val name: String,
     val isDark: Boolean,
     val colors: ColorScheme,
+    val success: Color = colors.tertiary,
+    val onSuccess: Color = colors.onTertiary,
 )
 
 object ThemeCatalog {
@@ -41,7 +43,7 @@ object ThemeCatalog {
             return Color(android.graphics.Color.parseColor(value))
         }
         val base = if (dark) darkColorScheme() else lightColorScheme()
-        return ThemeDefinition(id, name, dark, base.copy(
+        val colors = base.copy(
             primary = color("primary"), onPrimary = color("onPrimary"),
             primaryContainer = color("primaryContainer"),
             onPrimaryContainer = color("onPrimaryContainer"),
@@ -79,6 +81,10 @@ object ThemeCatalog {
             tertiaryFixed = color("tertiaryFixed"), onTertiaryFixed = color("onTertiaryFixed"),
             tertiaryFixedDim = color("tertiaryFixedDim"),
             onTertiaryFixedVariant = color("onTertiaryFixedVariant"),
-        ))
+        )
+        return ThemeDefinition(id, name, dark, colors,
+            success = if (roles.has("success")) color("success") else colors.tertiary,
+            onSuccess = if (roles.has("onSuccess")) color("onSuccess") else colors.onTertiary,
+        )
     }
 }
