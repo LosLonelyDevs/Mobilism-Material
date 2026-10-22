@@ -12,6 +12,7 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 - Encrypted debrid keys and supported-host indicators. These do not yet resolve unrestricted links or download files.
 - Native release search, section filters, paginated results, artwork, empty/error states, and retry.
 - My Applications with launcher-app discovery, installed-app search, optional system apps, downloaded marks, removal and Undo.
+- Release thumbs-up, visible watch/download controls, and optional auto-watch when opening a file host. Browser opens are a rough download signal, not completion tracking.
 - Following with installed-version baselines, automatic package/name matching, manual app linking, scheduled checks, and optional update notifications. Checks keep phone/TV and stable/preview releases separate. Following another version preserves downloaded history.
 
 ## Remaining functional work
@@ -19,7 +20,7 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 | Area | Missing behavior | Main legacy reference |
 | --- | --- | --- |
 | Search and discovery | Discussion/other-result search, legacy advanced search filters, and remaining feed filters | `UI/Main/SearchActivity.java`, `logic/network/MobilismService.java` |
-| Release interaction | Post/reply/quote comments, likes, previous-version history, library actions beyond Apps | `UI/Release/ReleaseActivtiy.java`, `UI/Discussion/CommentActivity.java`, `res/menu/menu_releases.xml` |
+| Release interaction | Post/reply/quote comments, previous-version history, library actions beyond Apps | `UI/Release/ReleaseActivtiy.java`, `UI/Discussion/CommentActivity.java`, `res/menu/menu_releases.xml` |
 | Forum sections | Announcements, Contests, Chitchat, Services, Suggestions & Feedback, discussion categories/topics/comments | `res/menu/activity_main_drawer.xml`, `UI/Discussion/` |
 | My Applications | Full non-launcher discovery, batch actions, save/copy/export, legacy data import | `UI/MyApplications/`, installed/downloaded/favorites action menus |
 | Version tracker | Full version history, broader matching for ambiguous/unversioned releases, large-library performance | `UI/VersionTracker/` |

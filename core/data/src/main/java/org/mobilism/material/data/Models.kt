@@ -21,6 +21,8 @@ data class Release(
     val downloadLinks: List<String> = emptyList(),
     val browserUrl: String? = null,
     val section: ContentSection? = null,
+    val likeId: Long? = null,
+    val liked: Boolean? = null,
 )
 
 data class ReleasePage(val items: List<Release>, val canLoadMore: Boolean)
@@ -68,6 +70,7 @@ interface MobilismRepository {
     suspend fun categories(section: ContentSection): List<ReleaseCategory>
     suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters = FeedFilters()): ReleasePage
     suspend fun release(id: Long): Release
+    suspend fun toggleLike(release: Release): Boolean
     suspend fun comments(id: Long, page: Int): CommentPage
     suspend fun search(query: String, scope: SearchScope, page: Int): ReleasePage
 }

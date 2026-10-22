@@ -21,6 +21,8 @@ import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilledTonalIconToggleButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,6 +38,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -98,6 +101,21 @@ fun AppIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifie
     IconButton(
         onClick = onClick, interactionSource = interaction,
         modifier = modifier.size(48.dp).focusOutline(interaction),
+    ) { Icon(icon, contentDescription = label) }
+}
+
+@Composable
+fun AppIconToggleButton(icon: ImageVector, label: String, checked: Boolean, accent: Color,
+    onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    val interaction = remember { MutableInteractionSource() }
+    FilledTonalIconToggleButton(
+        checked = checked, onCheckedChange = onCheckedChange, enabled = enabled,
+        interactionSource = interaction, modifier = modifier.size(48.dp).focusOutline(interaction),
+        colors = IconButtonDefaults.filledTonalIconToggleButtonColors(
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            checkedContainerColor = accent.copy(alpha = 0.18f), checkedContentColor = accent,
+        ),
     ) { Icon(icon, contentDescription = label) }
 }
 

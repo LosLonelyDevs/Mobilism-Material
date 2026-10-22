@@ -17,7 +17,8 @@ class AppLibraryStore(context: Context) {
     }
 
     fun watch(release: Release, enabled: Boolean) = change { AppLibrary.watch(it, release, enabled) }
-    fun downloaded(release: Release, enabled: Boolean) = change { AppLibrary.downloaded(it, release, enabled) }
+    fun downloaded(release: Release, enabled: Boolean, autoWatch: Boolean = false) =
+        change { AppLibrary.downloaded(it, release, enabled, autoWatch) }
     fun remove(entry: LibraryEntry) = change { entries -> entries.filterNot { it.release.id == entry.release.id } }
     fun restore(entry: LibraryEntry) = change { AppLibrary.restore(it, entry) }
 

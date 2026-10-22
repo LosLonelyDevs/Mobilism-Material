@@ -73,6 +73,26 @@ internal class MobilismApi(private val context: Context) {
         return ReleaseJson.parse(request("release/$id", token).getJSONObject("response"))
     }
 
+    suspend fun toggleLike(release: Release, token: String): Boolean {
+        require(release.id > 0)
+        // Current release responses can omit like_id. The API expects the first post ID, not the topic ID.
+        val postId = release.likeId ?: withContext(Dispatchers.IO) {
+            val request = Request.Builder().url("https://forum.mobilism.org/viewtopic.php?t=${release.id}").build()
+            client.newCall(request).await().use { response ->
+                if (!response.isSuccessful) throw ApiFailure(FailureKind.Server, "The forum could not load this post. Try again later.")
+                val source = response.body?.source()
+                    ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum returned an empty post.")
+                source.request(MAX_RESPONSE_BYTES + 1)
+                if (source.buffer.size > MAX_RESPONSE_BYTES) throw ApiFailure(FailureKind.InvalidResponse, "The forum response was too large.")
+                ReleaseLikes.postId(source.readUtf8())
+                    ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum did not return this post's thumbs-up action.")
+            }
+        }
+        val response = request("post/like", token, mapOf("id" to postId.toString())).getJSONObject("response")
+        return ReleaseLikes.liked(response)
+            ?: throw ApiFailure(FailureKind.InvalidResponse, "The server did not confirm the thumbs-up state.")
+    }
+
     suspend fun comments(id: Long, page: Int, token: String?): CommentPage {
         require(id > 0 && page > 0)
         return CommentJson.page(request("release/$id/comments/page/$page/limit/$PAGE_SIZE/orderby/date/desc", token,

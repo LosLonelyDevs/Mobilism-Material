@@ -174,10 +174,13 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             })
             val state by detail.state.collectAsStateWithLifecycle()
             ReleaseScreen(state, debrid, downloads, onBack = { nav.popBackStack() }, onRetry = detail::load, onMoreComments = detail::loadComments,
+                onLike = detail::toggleLike, onActionMessageShown = detail::actionMessageShown,
                 watched = library.any { item -> item.watched && state.release?.let { org.mobilism.material.data.ReleaseVersions.sameApp(item.release, it) } == true },
                 downloaded = library.any { it.downloaded && it.release.id == state.release?.id },
                 onWatch = { enabled -> state.release?.let { model.library.watch(it, enabled) } },
-                onDownloaded = { enabled -> state.release?.let { model.library.downloaded(it, enabled) } })
+                onDownloaded = { enabled -> state.release?.let {
+                    model.library.downloaded(it, enabled, downloads.autoWatchDownloads)
+                } })
         }
     }
 }

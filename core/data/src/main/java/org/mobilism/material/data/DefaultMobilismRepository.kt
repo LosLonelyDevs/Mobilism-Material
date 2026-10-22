@@ -9,6 +9,7 @@ import kotlinx.coroutines.sync.withLock
 class DefaultMobilismRepository(context: Context) : MobilismRepository {
     private val api = MobilismApi(context.applicationContext)
     private val store = SessionStore(context.applicationContext)
+    private val reactions = context.getSharedPreferences("release-reactions", Context.MODE_PRIVATE)
     private val authMutex = Mutex()
     private val categoryMutex = Mutex()
     private var categoryCache: Map<ContentSection, List<ReleaseCategory>>? = null
@@ -76,7 +77,25 @@ class DefaultMobilismRepository(context: Context) : MobilismRepository {
             }
         }
 
-    override suspend fun release(id: Long): Release = withSession { token -> api.release(id, token) }
+    override suspend fun release(id: Long): Release = withSession { token ->
+        val account = session
+        val release = api.release(id, token)
+        val key = account?.takeIf { it.accessToken == token }?.let { reactionKey(it.username, id) }
+        if (release.liked != null && key != null) reactions.edit().putBoolean(key, release.liked).apply()
+        release.copy(liked = release.liked ?: key?.takeIf(reactions::contains)?.let { reactions.getBoolean(it, false) })
+    }
+
+    override suspend fun toggleLike(release: Release): Boolean = withSession { token ->
+        val account = session?.takeIf { it.accessToken == token }
+            ?: throw ApiFailure(FailureKind.Credentials, "Sign in to give this release a thumbs up.")
+        api.toggleLike(release, account.accessToken).also {
+            reactions.edit().putBoolean(reactionKey(account.username, release.id), it).apply()
+        }
+    }
+
+    private fun reactionKey(username: String, id: Long): String = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(username.lowercase(java.util.Locale.ROOT).toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) } + ":$id"
 
     override suspend fun comments(id: Long, page: Int): CommentPage = withSession { token -> api.comments(id, page, token) }
 

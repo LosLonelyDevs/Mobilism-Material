@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,14 +13,32 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      screenshots: ${{ steps.version.outputs.screenshots }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
       - name: Read app version
         id: version
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
+          set -euo pipefail
           version=$(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' app/build.gradle.kts)
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          previous=""
+          if [[ "$EVENT_NAME" == push && "$BEFORE_SHA" =~ ^[0-9a-f]{40}$ && "$BEFORE_SHA" != 0000000000000000000000000000000000000000 ]]; then
+            previous=$(git show "$BEFORE_SHA:app/build.gradle.kts" | sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p')
+          fi
+          refresh=false
+          if [[ "$GITHUB_REF" == refs/heads/main && ( "$EVENT_NAME" == workflow_dispatch || ( "$EVENT_NAME" == push && "$version" != "$previous" ) ) ]]; then
+            refresh=true
+          fi
+          echo "screenshots=$refresh" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@v6.1.0
         with:
           distribution: temurin
@@ -32,7 +51,7 @@ jobs:
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          bash ./gradlew :app:testDebugUnitTest :core:data:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+          bash ./gradlew :app:testDebugUnitTest :core:data:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
           test -f "build/apk/MobilismMaterial_v${APP_VERSION}-debug.apk"
       - uses: actions/upload-artifact@v7.0.2
         # Release assets are durable. Actions storage quota must not block publishing.
@@ -42,3 +61,60 @@ jobs:
           path: build/apk/*-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+  screenshots:
+    needs: checks
+    if: needs.checks.outputs.screenshots == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v4.0.4
+      - uses: gradle/actions/setup-gradle@v6.4.0
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Capture sample screens
+        uses: reactivecircus/android-emulator-runner@v2.34.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            adb shell wm size 1080x2400
+            adb shell wm density 420
+            bash ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.mobilism.material.ReadmeScreenshots --stacktrace
+            for name in apps release downloads appearance; do adb pull "/sdcard/Android/data/cum.ahfu.mobi.material/files/readme-screenshots/$name.png" "docs/images/$name.png"; done
+      - name: Check screenshot files
+        run: python scripts/check-readme-screenshots.py
+      - name: Publish README screenshots
+        env:
+          APP_VERSION: ${{ needs.checks.outputs.version }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if [[ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]]; then
+            echo 'Main moved during capture. Leaving its screenshots unchanged.'
+            exit 0
+          fi
+          git add -- docs/images/apps.png docs/images/release.png docs/images/downloads.png docs/images/appearance.png
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "$(git show -s --format=%an "$GITHUB_SHA")"
+          git config user.email "$(git show -s --format=%ae "$GITHUB_SHA")"
+          git commit -m "Refresh README screenshots for $APP_VERSION"
+          git push origin HEAD:main

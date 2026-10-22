@@ -40,15 +40,16 @@ fun ErrorPanel(error: ScreenError, modifier: Modifier = Modifier, onRetry: (() -
     }
 }
 
-fun openWeb(context: Context, url: String) {
+fun openWeb(context: Context, url: String): Boolean {
     val uri = Uri.parse(url)
-    if (uri.scheme !in listOf("https", "http") || uri.host.isNullOrBlank()) return
-    launch(context, Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE))
+    if (uri.scheme !in listOf("https", "http") || uri.host.isNullOrBlank()) return false
+    return launch(context, Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE))
 }
 
-private fun launch(context: Context, intent: Intent) {
-    try { context.startActivity(intent) }
+private fun launch(context: Context, intent: Intent): Boolean {
+    return try { context.startActivity(intent); true }
     catch (_: android.content.ActivityNotFoundException) {
         Toast.makeText(context, "No app is available to open this link.", Toast.LENGTH_SHORT).show()
+        false
     }
 }

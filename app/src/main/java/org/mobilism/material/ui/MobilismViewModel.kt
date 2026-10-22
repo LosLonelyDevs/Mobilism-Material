@@ -215,17 +215,36 @@ data class CommentsState(
     val busy: Boolean = false, val canLoadMore: Boolean = true, val error: ScreenError? = null,
 )
 data class ReleaseState(val release: Release? = null, val busy: Boolean = true, val error: ScreenError? = null,
-    val comments: CommentsState = CommentsState())
+    val comments: CommentsState = CommentsState(), val likeBusy: Boolean = false, val actionMessage: String? = null)
 
 class ReleaseViewModel(private val id: Long, private val repository: MobilismRepository) : ViewModel() {
     private val mutableState = MutableStateFlow(ReleaseState())
     val state = mutableState.asStateFlow()
     private var job: Job? = null
     private var commentsJob: Job? = null
+    private var likeJob: Job? = null
 
     init { load() }
 
+    fun toggleLike() {
+        val release = mutableState.value.release ?: return
+        if (likeJob?.isActive == true || mutableState.value.busy) return
+        likeJob = viewModelScope.launch {
+            mutableState.update { it.copy(likeBusy = true, actionMessage = null) }
+            try {
+                val liked = repository.toggleLike(release)
+                mutableState.update { it.copy(release = it.release?.copy(liked = liked),
+                    actionMessage = if (liked) "Thumbs up added" else "Thumbs up removed") }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { mutableState.update { it.copy(actionMessage = error.forScreen().message) } }
+            finally { mutableState.update { it.copy(likeBusy = false) } }
+        }
+    }
+
+    fun actionMessageShown() { mutableState.update { it.copy(actionMessage = null) } }
+
     fun load() {
+        if (likeJob?.isActive == true) return
         job?.cancel()
         job = viewModelScope.launch {
             mutableState.update { it.copy(busy = true, error = null) }

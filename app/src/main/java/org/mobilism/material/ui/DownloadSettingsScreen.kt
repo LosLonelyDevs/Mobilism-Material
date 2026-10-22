@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
@@ -25,6 +26,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -79,6 +81,19 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
     }) { insets ->
         LazyColumn(Modifier.padding(insets), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            item {
+                CollapsibleSection("download-tracking", "Download tracking", Icons.Outlined.Visibility, theme.success) {
+                    Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large)
+                        .toggleable(state.autoWatchDownloads, role = Role.Switch, onValueChange = store::autoWatchDownloads)
+                        .padding(8.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Auto-watch downloaded apps", Modifier.weight(1f))
+                        Switch(state.autoWatchDownloads, onCheckedChange = null)
+                    }
+                    Text("Opening a file host marks that release downloaded. It's a rough record, not a completion check. You can clear the mark on the release page.",
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             item {
                 CollapsibleSection("cpu-preference", "CPU architecture", Icons.Outlined.Memory, theme.reading) {
                     Text("Matching and universal downloads stay open. Other architectures are collapsed, so you can still access them.",

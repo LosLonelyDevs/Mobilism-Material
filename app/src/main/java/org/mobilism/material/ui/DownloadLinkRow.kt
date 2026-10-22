@@ -30,7 +30,7 @@ import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.LocalAppTheme
 
 @Composable
-fun DownloadLinkRow(link: DownloadLink, debrid: DebridState, onCopied: suspend () -> Unit) {
+fun DownloadLinkRow(link: DownloadLink, debrid: DebridState, onOpened: () -> Unit, onCopied: suspend () -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
@@ -44,7 +44,7 @@ fun DownloadLinkRow(link: DownloadLink, debrid: DebridState, onCopied: suspend (
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ExpressiveButton(
-                onClick = { openWeb(context, link.url) },
+                onClick = { if (openWeb(context, link.url)) onOpened() },
                 modifier = Modifier.weight(1f).semantics {
                     stateDescription = if (supported) "Supported by " + providers.joinToString() else "Open in browser"
                 },

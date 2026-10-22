@@ -40,6 +40,29 @@ class AppLibraryTest {
         assertTrue(AppLibrary.watch(entries, release, false).isEmpty())
     }
 
+    @Test fun downloadCanAutoWatchWithoutChangingOtherReleaseHistory() {
+        val older = release(1, "1.0")
+        val newer = release(2, "2.0")
+        var entries = AppLibrary.downloaded(emptyList(), newer, true, autoWatch = true)
+        assertTrue(entries.single().watched)
+        assertTrue(entries.single().downloaded)
+        entries = AppLibrary.downloaded(entries, older, true, autoWatch = true)
+        entries = AppLibrary.downloaded(entries, older, true, autoWatch = true)
+        assertEquals(listOf(2L), entries.filter { it.watched }.map { it.release.id })
+        assertEquals(setOf(1L, 2L), entries.filter { it.downloaded }.map { it.release.id }.toSet())
+        entries = AppLibrary.downloaded(entries, newer, false, autoWatch = true)
+        assertTrue(entries.first { it.release.id == 2L }.watched)
+        assertFalse(entries.first { it.release.id == 2L }.downloaded)
+        assertEquals(entries, LibraryJson.decode(LibraryJson.encode(entries)))
+    }
+
+    @Test fun disabledAutoWatchAndNonAppDownloadsDoNotCreateWatches() {
+        val app = release(1, "1.0")
+        assertFalse(AppLibrary.downloaded(emptyList(), app, true, autoWatch = false).single().watched)
+        assertFalse(AppLibrary.downloaded(emptyList(), app.copy(section = ContentSection.Books), true, autoWatch = true).single().watched)
+        assertTrue(AppLibrary.downloaded(emptyList(), app, false, autoWatch = true).isEmpty())
+    }
+
     @Test fun trackerKeepsTvVariantsAndNumberedPreviewsSeparate() {
         val stable = release(1, "1.0")
         assertFalse(ReleaseVersions.isNewer(release(2, "2.0").copy(title = "Example v2.0 [TV]"), stable))

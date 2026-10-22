@@ -34,12 +34,17 @@ object AppLibrary {
         return result.filter { it.watched || it.downloaded }
     }
 
-    fun downloaded(entries: List<LibraryEntry>, release: Release, enabled: Boolean): List<LibraryEntry> {
+    fun downloaded(entries: List<LibraryEntry>, release: Release, enabled: Boolean, autoWatch: Boolean = false): List<LibraryEntry> {
         val result = entries.toMutableList()
         val index = result.indexOfFirst { it.release.id == release.id }
         val entry = (result.getOrNull(index) ?: LibraryEntry(compact(release))).copy(downloaded = enabled)
         if (index >= 0) result[index] = entry else if (enabled) result.add(0, entry)
-        return result.filter { it.watched || it.downloaded }
+        val saved = result.filter { it.watched || it.downloaded }
+        // Opening an older release must not move an existing watch backwards.
+        return if (enabled && autoWatch && release.section == ContentSection.Apps &&
+            saved.none { it.watched && ReleaseVersions.sameApp(it.release, release) }) {
+            watch(saved, release, true)
+        } else saved
     }
 
     fun compact(release: Release): Release {

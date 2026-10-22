@@ -14,11 +14,13 @@ data class DownloadPreferences(
     val architecture: CpuArchitecture? = null,
     val preferredHosts: Set<String> = emptySet(),
     val hosts: List<SupportedHost> = emptyList(),
+    val autoWatchDownloads: Boolean = true,
 )
 
 class DownloadPreferencesStore(context: Context) {
     private val preferences = context.getSharedPreferences("material-downloads", Context.MODE_PRIVATE)
     private val mutableState = MutableStateFlow(DownloadPreferences(
+        autoWatchDownloads = preferences.getBoolean("auto-watch-downloads", true),
         architecture = CpuArchitecture.entries.firstOrNull { it.name == preferences.getString("architecture", null) },
         preferredHosts = preferences.getStringSet("preferred-hosts", emptySet()).orEmpty().toSet(),
         hosts = preferences.getStringSet("host-catalog", emptySet()).orEmpty().mapNotNull { value ->
@@ -27,6 +29,11 @@ class DownloadPreferencesStore(context: Context) {
         }.sortedBy { it.name.lowercase() },
     ))
     val state = mutableState.asStateFlow()
+
+    fun autoWatchDownloads(enabled: Boolean) {
+        preferences.edit().putBoolean("auto-watch-downloads", enabled).apply()
+        mutableState.update { it.copy(autoWatchDownloads = enabled) }
+    }
 
     fun architecture(value: CpuArchitecture?) {
         preferences.edit().putString("architecture", value?.name).apply()

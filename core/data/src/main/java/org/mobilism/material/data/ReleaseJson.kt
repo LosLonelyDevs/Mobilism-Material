@@ -32,6 +32,8 @@ internal object ReleaseJson {
             images = images,
             downloadLinks = strings(json.optJSONArray("url")).mapNotNull(::webUrlOrNull),
             browserUrl = webUrlOrNull(json.optString("browser_url")),
+            likeId = json.optLong("like_id").takeIf { it > 0 },
+            liked = ReleaseLikes.liked(json),
             section = when (json.optString("section")) {
                 "app", "apps" -> ContentSection.Apps
                 "game", "games" -> ContentSection.Games

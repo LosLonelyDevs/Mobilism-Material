@@ -28,6 +28,11 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ThumbUp
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -61,6 +66,7 @@ import org.jsoup.safety.Safelist
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.designsystem.AppFont
 import org.mobilism.material.designsystem.AppIconButton
+import org.mobilism.material.designsystem.AppIconToggleButton
 import org.mobilism.material.designsystem.LoadingState
 import org.mobilism.material.designsystem.LocalAppFont
 import org.mobilism.material.designsystem.LocalAppTheme
@@ -76,6 +82,7 @@ fun ReleaseScreen(
     state: ReleaseState, debrid: DebridState, preferences: DownloadPreferences, onBack: () -> Unit,
     onRetry: () -> Unit, onMoreComments: () -> Unit, watched: Boolean, downloaded: Boolean,
     onWatch: (Boolean) -> Unit, onDownloaded: (Boolean) -> Unit,
+    onLike: () -> Unit, onActionMessageShown: () -> Unit,
 ) {
     val theme = LocalAppTheme.current
     val context = LocalContext.current
@@ -84,6 +91,9 @@ fun ReleaseScreen(
     var menu by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val release = state.release
+    LaunchedEffect(state.actionMessage) {
+        state.actionMessage?.let { snackbar.showSnackbar(it); onActionMessageShown() }
+    }
     var gallery by remember(release?.id) { mutableStateOf<Pair<List<String>, Int>?>(null) }
     val images = remember(release) {
         val embedded = Jsoup.parse(release?.contentHtml.orEmpty(), release?.browserUrl ?: "https://forum.mobilism.org/")
@@ -104,6 +114,30 @@ fun ReleaseScreen(
                 title = { AppHeading("Release", HeadingLevel.Page, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack) },
                 actions = { release?.let {
+                    AppIconToggleButton(
+                        if (it.liked == true) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                        if (it.liked == true) "Remove thumbs up" else "Thumbs up",
+                        it.liked == true, MaterialTheme.colorScheme.secondary,
+                        onCheckedChange = { onLike() }, enabled = !state.likeBusy && !state.busy,
+                    )
+                    if (it.section == ContentSection.Apps) {
+                        AppIconToggleButton(
+                            if (watched) Icons.Filled.Visibility else Icons.Outlined.Visibility,
+                            if (watched) "Unwatch app" else "Watch app", watched, theme.featured,
+                            onCheckedChange = { enabled ->
+                                onWatch(enabled)
+                                scope.launch { snackbar.showSnackbar(if (enabled) "Watching app" else "App unwatched") }
+                            },
+                        )
+                        AppIconToggleButton(
+                            if (downloaded) Icons.Filled.DownloadDone else Icons.Outlined.Download,
+                            if (downloaded) "Clear downloaded mark" else "Mark as downloaded", downloaded, theme.success,
+                            onCheckedChange = { enabled ->
+                                onDownloaded(enabled)
+                                scope.launch { snackbar.showSnackbar(if (enabled) "Marked as downloaded" else "Downloaded mark cleared") }
+                            },
+                        )
+                    }
                     val url = it.browserUrl ?: "https://forum.mobilism.org/viewtopic.php?t=${it.id}"
                     Box {
                         AppIconButton(Icons.Outlined.MoreVert, "Release options", { menu = true })
@@ -195,7 +229,9 @@ fun ReleaseScreen(
                                     headingStyle = MaterialTheme.typography.titleSmall,
                                 ) {
                                     group.links.forEach { link ->
-                                        DownloadLinkRow(link, debrid) { snackbar.showSnackbar("Link copied") }
+                                        DownloadLinkRow(link, debrid, onOpened = {
+                                            if (release.section == ContentSection.Apps) onDownloaded(true)
+                                        }) { snackbar.showSnackbar("Link copied") }
                                     }
                                 }
                             }

@@ -14,8 +14,9 @@ android {
         applicationId = "cum.ahfu.mobi.material"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.1.5"
+        versionCode = 7
+        versionName = "0.1.6"
+        testInstrumentationRunner = "org.mobilism.material.ReadmeScreenshotRunner"
     }
 
     signingConfigs {
@@ -81,5 +82,11 @@ dependencies {
     implementation(libs.coil.network)
     implementation(libs.jsoup)
     debugImplementation(libs.compose.tooling)
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     testImplementation("junit:junit:4.13.2")
 }

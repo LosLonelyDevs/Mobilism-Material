@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.6
+
+Added release actions and automatic README screenshots.
+
+- Put thumbs-up, watch/unwatch, and downloaded controls on the release page.
+- Treat a file-host open as a rough downloaded mark. Copying a link doesn't count.
+- Auto-watch downloaded apps by default, with a switch in Download settings. Keep an existing watch when opening an older release.
+- Fill the adaptive launcher icon with deep blue and add a monochrome layer for themed icons.
+- Put the GitHub download badge beside Obtainium.
+- Refresh README screenshots on version bumps, including the image carousel. Use bundled sample content without account data.
+
+All 49 unit tests and seven emulator checks pass. Lint has no errors. Thumbs-up remembers the state returned by the server; the API currently omits the initial state.
+
 ## 0.1.5
 
 Added a Material 3 carousel above the release description.
