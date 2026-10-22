@@ -1,35 +1,55 @@
 # Changelog
 
+## 0.1.4
+
+Added Following with installed-version checks and optional update notifications.
+
+- Match an installed app automatically or link it yourself. Check now or let Android run background checks.
+- Open the release from its notification. Repeat checks won't send the same alert again.
+- Separate app names from version and mod details in list cards.
+- Fix the doubled login border and add Android password-manager Autofill hints.
+- Keep decorated Mod Info headings in their own section, including the Spotify post that was splitting incorrectly.
+- Center and enlarge the release loader. Remove theme import from Settings.
+- Shorten the README and release notes. Future releases use this changelog.
+
+Tested on the Android 16 emulator. Checks cover recent search results; Android controls background timing. Password-manager save and fill prompts depend on the configured provider.
+
 ## 0.1.3
 
-- Add native release search with section filters, artwork, infinite scrolling, empty states, and retry.
-- Add My Applications with installed launcher apps, optional system apps, watchlists, and marked-downloaded history.
-- Search Apps releases directly from an installed app; watch or mark a release from its overflow menu.
-- Persist the local library across restarts and support removal with Undo.
-- Check watched apps for newer releases using package identity, conservative title matching, numeric versions/builds, and separate TV/phone and preview/stable variants.
-- Preserve downloaded history when moving a watch to a newer version. Checks currently cover recent search matches and run manually while My Applications remains in navigation.
-- Publish signed APK prereleases after successful CI on a version-bumped main commit, with versioned filenames and checksums.
+Added search and My Applications.
+
+- Search releases by section, with images and infinite scrolling.
+- Find releases from installed apps. Follow an app or mark a release as downloaded.
+- Keep downloaded history when moving a watch to a newer release. Remove records with Undo.
+- Check for newer versions manually. Phone/TV variants and stable/beta releases stay separate.
+
+Tested on the Android 16 emulator. All 37 tests pass; lint has no errors. The signed APK and checksum are verified.
+
+Checks cover recent search results. Installed-version matching and background alerts aren't in this version.
 
 ## 0.1.2
 
-- Format release names separately from explicit version/build markers and tags; preserve ambiguous titles intact.
-- Add read-only paginated comments below Downloads and a full-screen image viewer with zoom, pan, and paging.
-- Reduce release heading and host-button sizes; remove debrid subtitles from download buttons.
-- Recognize underlined changelog headings and common premium mod blocks without losing post formatting.
-- Expose the newest-first feed as Latest beside Top.
-- Add a filter sheet with searchable multiselect categories, Apply and Reset controls, and per-section preferences.
-- Merge selected categories in order across infinite-scroll pages, with duplicate protection and retry-safe cursors.
-- Align debrid cards with Appearance, add colorful account status and actions, and show supported hosts in an expandable menu.
-- Use Frappé's broader palette through semantic theme roles across feeds, navigation, settings, and release sections.
-- Right-align the active category chip and clear icon button.
-- Split releases into collapsible Description, What's new, Mod info, and Downloads cards when present.
-- Group download buttons by CPU architecture; remember preferred architecture and favorite hosts, with other architectures collapsed and preferred hosts listed first.
-- Add a release overflow menu with Copy release URL and Open in browser actions.
+Split release pages into collapsible Description, What's new, Mod info, and Downloads sections.
+
+- Show app names separately from versions, builds, and tags.
+- Add read-only comments and a full-screen image viewer.
+- Group downloads by architecture. Put preferred hosts first.
+- Add Latest/Top feeds, category filters, and infinite scrolling.
+- Use more of the Frappé palette, with consistent headings and rounded controls.
+
+Tested on the Android 16 emulator. All 27 tests pass; lint has no errors. The release APK is signed.
+
+Search, comment posting, and native downloads are still pending in this version.
 
 ## 0.1.1
 
-- Build the Compose rewrite with Material 3 Expressive, Catppuccin Frappé, Geist, persistent appearance settings, and encrypted login sessions.
-- Load list thumbnails from release images and turn download URLs into host-name browser buttons with adjacent copy actions.
-- Continue feed pagination when the server returns fewer items than requested.
-- Add encrypted Real-Debrid and MegaDebrid key settings, supported-host highlighting, and regression coverage for image/link parsing and domain matching.
-- Hide saved-key inputs and shortlist provider support against Mobilism's own file-host directory.
+First Compose preview, with Material 3 Expressive, Frappé, and Geist.
+
+- Add login, feeds, release pages, and saved appearance settings.
+- Fix list images and pagination.
+- Turn download links into host buttons, with browser and copy actions.
+- Store debrid keys encrypted. Hide saved inputs and highlight supported Mobilism hosts.
+
+Tested login, browsing, images, links, clipboard, and saved settings on the emulator. All 14 tests, lint, the signed build, and CI pass.
+
+Download links open in the browser. A supported-host indicator doesn't confirm account access.

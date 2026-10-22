@@ -11,6 +11,7 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalAutofillManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -26,9 +27,9 @@ import org.mobilism.material.designsystem.LoadingState
 import org.mobilism.material.designsystem.screenMotion
 
 @Composable
-fun MobilismApp(app: MobilismApplication) {
+fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, onNotificationHandled: () -> Unit = {}) {
     val model: MobilismViewModel = viewModel(factory = viewModelFactory {
-        initializer { MobilismViewModel(app, app.repository, app.appearance, app.debrid) }
+        initializer { MobilismViewModel(app, app.repository, app.appearance, app.debrid, app.library) }
     })
     val auth by model.auth.collectAsStateWithLifecycle()
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -39,7 +40,7 @@ fun MobilismApp(app: MobilismApplication) {
                     LoadingState("Opening Mobilism…")
                 }
                 AuthState.SignedOut -> AccountNavigation(model)
-                else -> MainNavigation(model, auth)
+                else -> MainNavigation(model, auth, notificationRelease, onNotificationHandled)
             }
         }
     }
@@ -47,6 +48,7 @@ fun MobilismApp(app: MobilismApplication) {
 
 @Composable
 private fun AccountNavigation(model: MobilismViewModel) {
+    val autofill = LocalAutofillManager.current
     val nav = rememberNavController()
     val motion = screenMotion()
     val login by model.login.collectAsStateWithLifecycle()
@@ -57,9 +59,11 @@ private fun AccountNavigation(model: MobilismViewModel) {
     ) {
         composable("login") {
             LoginScreen(
-                state = login, onSignIn = model::signIn, onGuest = model::continueAsGuest,
-                onRegister = { nav.navigate("register") { launchSingleTop = true } },
-                onForgot = { nav.navigate("recover") { launchSingleTop = true } },
+                state = login,
+                onSignIn = { username, password -> model.signIn(username, password) { autofill?.commit() } },
+                onGuest = { autofill?.cancel(); model.continueAsGuest() },
+                onRegister = { autofill?.cancel(); nav.navigate("register") { launchSingleTop = true } },
+                onForgot = { autofill?.cancel(); nav.navigate("recover") { launchSingleTop = true } },
             )
         }
         composable("register") {
@@ -72,7 +76,7 @@ private fun AccountNavigation(model: MobilismViewModel) {
 }
 
 @Composable
-private fun MainNavigation(model: MobilismViewModel, auth: AuthState) {
+private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificationRelease: Long?, onNotificationHandled: () -> Unit) {
     val nav = rememberNavController()
     val motion = screenMotion()
     val feed by model.feed.collectAsStateWithLifecycle()
@@ -82,9 +86,17 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState) {
     val downloads by model.downloads.state.collectAsStateWithLifecycle()
     val library by model.library.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val app = context.applicationContext as MobilismApplication
     val start = androidx.compose.runtime.remember { if (model.preferredSection == null) "favourite" else "feed" }
     LaunchedEffect(Unit) {
         if (start == "feed") model.loadFeed(refresh = true)
+    }
+    LaunchedEffect(notificationRelease) {
+        notificationRelease?.takeIf { it > 0 }?.let { id ->
+            nav.navigate("following") { launchSingleTop = true }
+            nav.navigate("release/$id") { launchSingleTop = true }
+            onNotificationHandled()
+        }
     }
     NavHost(
         navController = nav, startDestination = start,
@@ -106,6 +118,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState) {
                 onSettings = { nav.navigate("settings") { launchSingleTop = true } },
                 onSearch = { nav.navigate("search") { launchSingleTop = true } },
                 onLibrary = { nav.navigate("library") { launchSingleTop = true } },
+                onFollowing = { nav.navigate("following") { launchSingleTop = true } },
                 onSignOut = model::signOut,
                 categories = categories, onLoadCategories = model::loadCategories, onFilters = model::applyFilters,
             )
@@ -123,13 +136,25 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState) {
         }
         composable("library") { entry ->
             val libraryModel: LibraryViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
-                initializer { LibraryViewModel(context, model.library, model.repository) }
+                initializer { LibraryViewModel(context) }
             })
             val installed by libraryModel.installed.collectAsStateWithLifecycle()
-            val check by libraryModel.check.collectAsStateWithLifecycle()
-            LibraryScreen(library, installed, check, model.library,
-                onRefresh = libraryModel::refreshInstalled, onCheck = libraryModel::checkUpdates,
+            LibraryScreen(library, installed, model.library,
+                onRefresh = libraryModel::refreshInstalled,
                 onSearch = { nav.navigate("search?query=${android.net.Uri.encode(it)}") },
+                onFollowing = { nav.navigate("following") },
+                onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() })
+        }
+        composable("following") { entry ->
+            val followingModel: FollowingViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
+                initializer { FollowingViewModel(app) }
+            })
+            val installed by followingModel.installed.collectAsStateWithLifecycle()
+            val check by followingModel.check.collectAsStateWithLifecycle()
+            val error by followingModel.error.collectAsStateWithLifecycle()
+            val preferences by followingModel.preferences.state.collectAsStateWithLifecycle()
+            FollowingScreen(library, installed, check, error, preferences, followingModel.preferences,
+                app.followNotifications, model.library, followingModel::refresh, followingModel::checkNow, followingModel::link,
                 onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() })
         }
         composable("settings") {
@@ -149,7 +174,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState) {
             })
             val state by detail.state.collectAsStateWithLifecycle()
             ReleaseScreen(state, debrid, downloads, onBack = { nav.popBackStack() }, onRetry = detail::load, onMoreComments = detail::loadComments,
-                watched = library.any { it.watched && it.release.id == state.release?.id },
+                watched = library.any { item -> item.watched && state.release?.let { org.mobilism.material.data.ReleaseVersions.sameApp(item.release, it) } == true },
                 downloaded = library.any { it.downloaded && it.release.id == state.release?.id },
                 onWatch = { enabled -> state.release?.let { model.library.watch(it, enabled) } },
                 onDownloaded = { enabled -> state.release?.let { model.library.downloaded(it, enabled) } })

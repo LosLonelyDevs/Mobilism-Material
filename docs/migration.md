@@ -17,15 +17,16 @@ The migration identity `cum.ahfu.mobi.material` permits a separate install when 
 | Main drawer and Latest / Top | Three sections, searchable category multiselect, merged infinite-scroll feeds |
 | Release detail | Structured titles, collapsible text sections, zoomable full-screen gallery, architecture groups, compact host buttons, clipboard and browser actions |
 | Release comments | Read-only paginated comments below Downloads, quoted text and images |
-| Appearance | Frappé default; fonts, versioned custom-theme import, reduced motion |
+| Appearance | Frappé default, fonts, reduced motion, theme support; import hidden |
 | Debrid settings | Encrypted keys, cached provider host lists, supported-host colors |
 | Download preferences | Preferred architecture, collapsed alternatives, favorite hosts sorted first |
 | Premium / unrestricted / native downloads | Not ported; original links open in a browser |
 | Release search | Native search, section filter, artwork, infinite scrolling, empty/error states and retry |
-| My Applications | Installed launcher apps, Apps search, local watchlist/downloaded marks, delete/Undo, manual recent-release checks |
+| My Applications | Installed launcher apps, Apps search, downloaded marks, delete/Undo |
+| Following | Installed-version matching and manual linking, scheduled checks, optional update notifications, release navigation |
 | Discussion feeds / comment posting / messages / full version history | Not ported |
 | Existing session and preferences | Not migrated; separate app storage |
-| Legacy updater / installers / notifications | Not ported |
+| Legacy updater / installers / forum notifications | Not ported |
 
 ## Data boundary
 

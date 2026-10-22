@@ -1,5 +1,18 @@
 # Verification
 
+## 0.1.4
+
+- Debug and signed release builds pass. All 45 tests pass; lint reports no errors.
+- Following shows the installed version, latest matching release, and update action. A disposable emulator app verified the installed-version baseline and that the update action clears after an upgrade. The fixture was removed afterward.
+- A real AdGuard check posted an update notification. Tapping it opened the release and Back returned to Following. Rechecking after dismissal did not repeat the alert.
+- WorkManager completed a background check while the app was offscreen. Android still controls periodic timing.
+- Spotify release `6429648` now keeps its author credit and unlocked-feature bullets in Mod info. Description retains the normal Spotify features.
+- Feed cards show app names above smaller version/build/mod text. Focused login fields have one native border. Login succeeded and the configured Android Autofill service received a field request.
+- Username/password Autofill hints and successful-login commit are wired. Third-party provider save/fill dialogs still need device coverage.
+- Theme import is hidden. Release loading uses a centered 96 dp animated indicator and respects reduced motion.
+
+Following checks inspect up to three Apps search pages. Unknown or ambiguous versions are not reported as definite updates. Non-launcher discovery, long-running battery behavior, and large libraries need broader testing. No physical device was changed.
+
 ## 0.1.3
 
 Completed on an Android 16 / API 36 emulator:

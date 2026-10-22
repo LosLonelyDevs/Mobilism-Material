@@ -4,9 +4,9 @@ Catppuccin Frappé is the initial built-in dark theme. Its palette and semantic 
 
 `ThemeDefinition` holds identity, display name, light/dark mode, and a complete Material `ColorScheme`. Screens use that scheme through `MaterialTheme`; palette constants belong only in theme definitions. Typography and motion are separate preferences.
 
-## Import
+## Theme definitions
 
-Open **Settings → Appearance → Import theme** and select a JSON document. The example [frappe-custom.json](themes/frappe-custom.json) uses the Frappé palette with a different ID so it can be imported. Change its ID, name, and roles to create another theme.
+Theme import is hidden in Settings for now. Existing saved themes still load. The example [frappe-custom.json](themes/frappe-custom.json) documents the format for development; it is not a user import flow.
 
 - `schemaVersion`: integer `1`.
 - `id`: 2–64 lowercase letters, digits, or hyphens, beginning with a letter or digit. Built-in IDs cannot be overwritten.

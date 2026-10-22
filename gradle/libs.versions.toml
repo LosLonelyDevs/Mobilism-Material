@@ -11,9 +11,11 @@ coroutines = "1.10.2"
 okhttp = "4.12.0"
 coil = "3.6.0"
 jsoup = "1.21.2"
+work = "2.11.2"
 
 [libraries]
 androidx-core = { module = "androidx.core:core-ktx", version.ref = "core" }
+androidx-work = { module = "androidx.work:work-runtime", version.ref = "work" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
 androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }

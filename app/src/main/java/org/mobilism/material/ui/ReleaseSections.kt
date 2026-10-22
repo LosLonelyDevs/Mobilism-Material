@@ -12,6 +12,8 @@ data class ReleaseTextSection(val kind: ReleaseSection, val html: String)
 object ReleaseSections {
     private val heading = Regex("""(?i)^\s*(description|overview|more\s+info|what['’]?s\s+new(?:\s+in\s+this\s+version)?|changelog|change\s+log|mod\s+(?:info(?:rmation)?|features)|modded\s+info)\s*(?::\s*(.*))?$""")
     private val modBullet = Regex("""(?i)^[◉•●✓✔★\-]+\s*(premium|pro|vip|paid)\s+(activated|unlocked)\b.*""")
+    private val decoration = Regex("""^[\s\p{So}\p{Sk}\p{Cf}\uFFFD*#_\[\]<>|=~\-]+|[\s\p{So}\p{Sk}\p{Cf}\uFFFD*#_\[\]<>|=~\-]+$""")
+    private val modCredit = Regex("""(?i)^mod\s+by\s+\S.{0,80}$""")
 
     fun parse(html: String): List<ReleaseTextSection> {
         var current = ReleaseSection.Description
@@ -26,7 +28,9 @@ object ReleaseSections {
                 val block = ancestors.firstOrNull { it.isBlock }
                 val headingContext = parent?.isBlock == true || block?.text()?.trim() == node.text().trim() ||
                     ancestors.takeWhile { !it.isBlock }.any { it.normalName() in setOf("b", "strong", "u", "h1", "h2", "h3", "h4", "h5", "h6") }
-                val match = if (headingContext) heading.matchEntire(node.text().trim()) else null
+                val labelText = node.text().trim().replace(decoration, "").trim()
+                if (headingContext && modCredit.matches(labelText)) current = ReleaseSection.Mod
+                val match = if (headingContext) heading.matchEntire(labelText) else null
                 if (match != null) {
                     val label = match.groupValues[1].lowercase()
                     current = when {

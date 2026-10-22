@@ -116,11 +116,11 @@ fun ReleaseScreen(
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = MaterialTheme.shapes.extraLarge) {
                             if (it.section == ContentSection.Apps) {
                                 RoundedMenuItem(
-                                    label = if (watched) "Stop watching" else "Watch this version", accent = theme.featured,
+                                    label = if (watched) "Unfollow app" else "Follow app", accent = theme.featured,
                                     icon = if (watched) Icons.Outlined.BookmarkRemove else Icons.Outlined.BookmarkAdd,
                                     onClick = {
                                         menu = false; onWatch(!watched)
-                                        scope.launch { snackbar.showSnackbar(if (watched) "Removed from watchlist" else "Added to watchlist") }
+                                        scope.launch { snackbar.showSnackbar(if (watched) "App unfollowed" else "App followed") }
                                     },
                                 )
                                 RoundedMenuItem(
@@ -153,12 +153,15 @@ fun ReleaseScreen(
         },
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            if (state.busy && release == null) {
+                LoadingState("Loading release…", Modifier.align(Alignment.Center), indicatorSize = 96.dp)
+            }
             LazyColumn(
                 modifier = Modifier.widthIn(max = 840.dp).fillMaxSize(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(24.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                if (state.busy) item { LoadingState("Loading release…", Modifier.fillMaxWidth()) }
+                if (state.busy && release != null) item { LoadingState("Updating release…", Modifier.fillMaxWidth()) }
                 state.error?.let { item { ErrorPanel(it, onRetry = onRetry) } }
                 if (release != null) {
                     item {

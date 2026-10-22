@@ -19,14 +19,22 @@ class AppLibraryStore(context: Context) {
     fun watch(release: Release, enabled: Boolean) = change { AppLibrary.watch(it, release, enabled) }
     fun downloaded(release: Release, enabled: Boolean) = change { AppLibrary.downloaded(it, release, enabled) }
     fun remove(entry: LibraryEntry) = change { entries -> entries.filterNot { it.release.id == entry.release.id } }
-    fun restore(entry: LibraryEntry) = change { entries ->
-        if (entries.any { it.release.id == entry.release.id }) entries
-        else (listOf(entry.copy(watched = entry.watched && entries.none { it.watched && ReleaseVersions.sameApp(it.release, entry.release) })) + entries)
-            .filter { it.watched || it.downloaded }
-    }
-    fun checked(baseline: Release, update: Release?) = change { entries ->
-        entries.map {
-            if (it.watched && it.release.id == baseline.id) it.copy(checkedAt = System.currentTimeMillis(), update = update?.let(AppLibrary::compact)) else it
-        }
-    }
+    fun restore(entry: LibraryEntry) = change { AppLibrary.restore(it, entry) }
+
+    fun checked(snapshot: LibraryEntry, latest: Release?, update: Release?) = change { entries -> entries.map {
+        if (it.watched && it.release.id == snapshot.release.id && it.linkedPackage == snapshot.linkedPackage)
+            it.copy(checkedAt = System.currentTimeMillis(), latest = latest?.let(AppLibrary::compact),
+                update = update?.let(AppLibrary::compact), checkError = null)
+        else it
+    } }
+    fun failed(snapshot: LibraryEntry, message: String) = change { entries -> entries.map {
+        if (it.watched && it.release.id == snapshot.release.id && it.linkedPackage == snapshot.linkedPackage) it.copy(checkError = message) else it
+    } }
+    fun linkPackage(id: Long, packageName: String?) = change { entries -> entries.map {
+        if (it.release.id == id && it.linkedPackage != packageName) it.copy(linkedPackage = packageName,
+            update = null, latest = null, checkedAt = null, checkError = null, lastNotifiedVersion = null) else it
+    } }
+    fun notified(id: Long, version: String) = change { entries -> entries.map {
+        if (it.watched && it.release.id == id) it.copy(lastNotifiedVersion = version) else it
+    } }
 }

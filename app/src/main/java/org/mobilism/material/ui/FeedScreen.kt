@@ -1,6 +1,5 @@
 package org.mobilism.material.ui
 
-import android.text.Html
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,11 +68,13 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import org.mobilism.material.R
 import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Bookmarks
 import org.mobilism.material.data.AuthState
 import org.mobilism.material.data.ContentSection
 import org.mobilism.material.data.FeedOrder
 import org.mobilism.material.data.FeedFilters
 import org.mobilism.material.data.Release
+import org.mobilism.material.data.ReleaseTitles
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.ExpressiveCard
 import org.mobilism.material.designsystem.LoadingState
@@ -93,6 +94,7 @@ fun FeedScreen(
     onSettings: () -> Unit,
     onSearch: () -> Unit,
     onLibrary: () -> Unit,
+    onFollowing: () -> Unit,
     onSignOut: () -> Unit,
     categories: CategoryState,
     onLoadCategories: () -> Unit,
@@ -140,6 +142,12 @@ fun FeedScreen(
                     )
                 }
                 HorizontalDivider(Modifier.padding(16.dp))
+                NavigationDrawerItem(
+                    label = { Text("Following") }, selected = false,
+                    icon = { Icon(Icons.Outlined.Bookmarks, null, tint = theme.success) },
+                    onClick = { scope.launch { drawer.close() }; onFollowing() },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
                 NavigationDrawerItem(
                     label = { Text("My Applications") }, selected = false,
                     icon = { Icon(Icons.Outlined.PhoneAndroid, null, tint = theme.featured) },
@@ -244,7 +252,7 @@ fun FeedScreen(
 
 @Composable
 internal fun ReleaseCard(release: Release, accent: Color, onClick: () -> Unit) {
-    val title = remember(release.title) { Html.fromHtml(release.title, Html.FROM_HTML_MODE_LEGACY).toString() }
+    val title = remember(release.title) { ReleaseTitles.parse(release.title) }
     val theme = LocalAppTheme.current
     ExpressiveCard(onClick, Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
         containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, accent, 0.06f),
@@ -256,7 +264,12 @@ internal fun ReleaseCard(release: Release, accent: Color, onClick: () -> Unit) {
                 modifier = Modifier.size(72.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop,
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                AppHeading(title, HeadingLevel.Subsection, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                AppHeading(title.name, HeadingLevel.Subsection, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                val details = listOfNotNull(title.version?.let { "v$it" }, title.build?.let { "build $it" }) + title.tags
+                if (details.isNotEmpty()) Text(
+                    details.joinToString(" · "), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                )
                 Text(release.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {

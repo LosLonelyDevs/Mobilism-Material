@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 
 /** M3 state layers remain native; one visible keyboard focus ring is shared by controls. */
 fun Modifier.focusOutline(source: MutableInteractionSource): Modifier = composed {
@@ -125,13 +126,15 @@ fun ExpressiveCard(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun LoadingState(label: String, modifier: Modifier = Modifier) {
+fun LoadingState(label: String, modifier: Modifier = Modifier, indicatorSize: Dp? = null) {
     Column(
         modifier = modifier.padding(24.dp).semantics { liveRegion = LiveRegionMode.Polite },
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
     ) {
-        if (!LocalReducedMotion.current) ContainedLoadingIndicator()
+        if (!LocalReducedMotion.current) ContainedLoadingIndicator(
+            modifier = if (indicatorSize != null) Modifier.size(indicatorSize) else Modifier,
+        )
         Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }

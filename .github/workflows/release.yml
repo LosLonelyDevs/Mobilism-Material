@@ -128,11 +128,17 @@ jobs:
           APP_VERSION: ${{ needs.check.outputs.version }}
           RELEASE_TAG: ${{ needs.check.outputs.tag }}
         run: |
+          awk -v version="$APP_VERSION" '
+            $0 == "## " version { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          grep -q '[[:alnum:]]' "$RUNNER_TEMP/release-notes.md"
           gh release create "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$SOURCE_SHA" \
             --title "$APP_VERSION" \
-            --generate-notes --prerelease \
+            --notes-file "$RUNNER_TEMP/release-notes.md" --prerelease \
             "build/apk/MobilismMaterial_v${APP_VERSION}-release.apk" \
             build/apk/SHA256SUMS
       - name: Remove temporary keystore

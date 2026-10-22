@@ -48,4 +48,18 @@ class AppLibraryTest {
         assertFalse(ReleaseVersions.isNewer(release(2, "2.0-unknown"), stable))
         assertTrue(ReleaseVersions.isNewer(release(2, "2.0"), stable))
     }
+
+    @Test fun undoUnfollowKeepsDownloadedMarkAndNotificationState() {
+        val original = LibraryEntry(release(1, "1.0"), watched = true, downloaded = true,
+            linkedPackage = "org.example.app", lastNotifiedVersion = "2.0||false", latest = AppLibrary.compact(release(2, "2.0")))
+        val unfollowed = AppLibrary.watch(listOf(original), original.release, false)
+        val restored = AppLibrary.restore(unfollowed, original).single()
+        assertTrue(restored.watched)
+        assertTrue(restored.downloaded)
+        assertEquals(original.lastNotifiedVersion, restored.lastNotifiedVersion)
+        val persisted = LibraryJson.decode(LibraryJson.encode(listOf(restored))).single()
+        assertEquals(original.linkedPackage, persisted.linkedPackage)
+        assertEquals(original.latest, persisted.latest)
+        assertEquals(original.lastNotifiedVersion, persisted.lastNotifiedVersion)
+    }
 }

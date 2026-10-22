@@ -54,8 +54,8 @@ class MobilismViewModel(
     val repository: MobilismRepository,
     val appearance: AppearanceStore,
     val debrid: DebridRepository,
+    val library: org.mobilism.material.data.AppLibraryStore,
 ) : ViewModel() {
-    val library = org.mobilism.material.data.AppLibraryStore(context)
     val downloads = DownloadPreferencesStore(context)
     private val preferences = context.getSharedPreferences("material-navigation", Context.MODE_PRIVATE)
     val preferredSection: ContentSection?
@@ -99,10 +99,13 @@ class MobilismViewModel(
         }
     }
 
-    fun signIn(username: String, password: String) = authAction {
+    fun signIn(username: String, password: String, onSuccess: () -> Unit = {}) = authAction {
         if (username.isBlank() || password.isEmpty()) {
             mutableLogin.value = LoginState(error = ScreenError("Enter your username and password."))
-        } else repository.signIn(username, password)
+        } else {
+            repository.signIn(username, password)
+            onSuccess()
+        }
     }
 
     fun continueAsGuest() = authAction { repository.continueAsGuest() }

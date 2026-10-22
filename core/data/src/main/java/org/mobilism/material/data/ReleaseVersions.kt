@@ -35,9 +35,11 @@ object ReleaseVersions {
         val old = ReleaseTitles.parse(current.title)
         val next = ReleaseTitles.parse(candidate.title)
         // Stable installations stay on stable releases; beta watchers can advance to stable.
-        if (!preview(old) && preview(next)) return false
-        return compare(next, old)?.let { it > 0 } == true
+        return newerThan(next, old)
     }
+
+    fun newerThan(candidate: ReleaseTitle, current: ReleaseTitle): Boolean =
+        (isPreview(current) || !isPreview(candidate)) && compare(candidate, current)?.let { it > 0 } == true
 
     fun compare(first: ReleaseTitle, second: ReleaseTitle): Int? {
         val a = numeric(first.version) ?: return null
@@ -71,5 +73,5 @@ object ReleaseVersions {
             else -> 3
         }
     }
-    private fun preview(title: ReleaseTitle) = rank(title) < 3
+    fun isPreview(title: ReleaseTitle) = rank(title) < 3
 }

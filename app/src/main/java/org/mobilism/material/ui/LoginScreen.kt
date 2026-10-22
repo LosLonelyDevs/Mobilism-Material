@@ -1,6 +1,5 @@
 package org.mobilism.material.ui
 
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +33,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -45,7 +49,6 @@ import org.mobilism.material.designsystem.AppTextButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.LoadingState
 import org.mobilism.material.designsystem.LocalAppTheme
-import org.mobilism.material.designsystem.focusOutline
 
 @Composable
 fun LoginScreen(
@@ -60,6 +63,7 @@ fun LoginScreen(
     var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
     val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
     val submit = {
         if (!state.busy) {
             keyboard?.hide()
@@ -76,25 +80,22 @@ fun LoginScreen(
                     AppHeading("Mobilism", HeadingLevel.Page, style = MaterialTheme.typography.displayMedium)
                     Text("Your source for apps & books", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                val usernameInteraction = remember { MutableInteractionSource() }
                 OutlinedTextField(
                     value = username, onValueChange = { username = it }, label = { Text("Username") },
                     leadingIcon = { Icon(Icons.Outlined.Person, null, tint = MaterialTheme.colorScheme.primary) },
                     enabled = !state.busy, singleLine = true,
-                    interactionSource = usernameInteraction,
-                    modifier = Modifier.fillMaxWidth().focusOutline(usernameInteraction),
+                    modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Username },
                     shape = MaterialTheme.shapes.large,
                     keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Next) }),
                 )
-                val passwordInteraction = remember { MutableInteractionSource() }
                 OutlinedTextField(
                     value = password, onValueChange = { password = it }, label = { Text("Password") },
                     leadingIcon = { Icon(Icons.Outlined.Lock, null, tint = MaterialTheme.colorScheme.secondary) },
                     enabled = !state.busy, singleLine = true,
-                    interactionSource = passwordInteraction,
-                    modifier = Modifier.fillMaxWidth().focusOutline(passwordInteraction),
+                    modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Password },
                     shape = MaterialTheme.shapes.large,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { submit() }),
                     visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {

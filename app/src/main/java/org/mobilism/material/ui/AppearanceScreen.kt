@@ -1,7 +1,5 @@
 package org.mobilism.material.ui
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,7 +14,6 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -24,11 +21,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,13 +30,9 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
 import org.mobilism.material.designsystem.AppFont
 import org.mobilism.material.designsystem.AppIconButton
-import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.ExpressiveCard
-import org.mobilism.material.designsystem.LoadingState
 import org.mobilism.material.designsystem.LocalAppTheme
 import org.mobilism.material.settings.AppearanceState
 import org.mobilism.material.settings.AppearanceStore
@@ -53,20 +41,6 @@ import org.mobilism.material.settings.AppearanceStore
 @Composable
 fun AppearanceScreen(state: AppearanceState, store: AppearanceStore, onBack: () -> Unit) {
     val activeTheme = LocalAppTheme.current
-    val scope = rememberCoroutineScope()
-    var importing by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<ScreenError?>(null) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launch {
-            importing = true
-            error = null
-            try { store.importTheme(uri) }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) {
-                error = ScreenError("This theme could not be imported. Choose a valid Mobilism theme file.")
-            } finally { importing = false }
-        }
-    }
     Scaffold(topBar = {
         TopAppBar(
             title = { AppHeading("Appearance", HeadingLevel.Page) },
@@ -103,15 +77,6 @@ fun AppearanceScreen(state: AppearanceState, store: AppearanceStore, onBack: () 
                     }
                 }
             }
-            item {
-                ExpressiveButton(
-                    onClick = { picker.launch(arrayOf("application/json", "text/plain")) },
-                    enabled = !importing, modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = activeTheme.personalization, contentColor = activeTheme.onPersonalization),
-                ) { Text("Import theme") }
-            }
-            if (importing) item { LoadingState("Importing theme…", Modifier.fillMaxWidth()) }
-            error?.let { problem -> item { ErrorPanel(problem) } }
             item { AppHeading("Font", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 16.dp)) }
             item {
                 Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {

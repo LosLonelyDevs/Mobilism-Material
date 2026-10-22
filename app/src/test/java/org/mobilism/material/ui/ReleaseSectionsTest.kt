@@ -5,6 +5,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReleaseSectionsTest {
+    @Test fun separatesDecoratedSpotifyModHeadingFromPremiumDescription() {
+        val html = """<div>Spotify Premium features<br>• Play any song.<br>• Download music.<br><br><b>★★★ Mod by kefir52 ★★★</b><br><br><b>▣ Mod Info:</b><br>• Unlocked Next Track<br>• Disabled Audio Ads<br><br>Use a different account if needed.</div>"""
+        val sections = ReleaseSections.parse(html).associate { it.kind to Jsoup.parse(it.html).text() }
+        assertTrue(sections.getValue(ReleaseSection.Description).contains("Spotify Premium features"))
+        assertFalse(sections.getValue(ReleaseSection.Description).contains("Mod by"))
+        assertFalse(sections.getValue(ReleaseSection.Description).contains("Unlocked Next Track"))
+        assertTrue(sections.getValue(ReleaseSection.Mod).contains("Mod by kefir52"))
+        assertTrue(sections.getValue(ReleaseSection.Mod).contains("Unlocked Next Track"))
+        assertTrue(sections.getValue(ReleaseSection.Mod).contains("different account"))
+    }
+
+    @Test fun handlesSymbolHeadingsWithoutMovingOrdinaryMentions() {
+        val sections = ReleaseSections.parse("<p>Includes a mod by a community member.</p><b>☢ MOD INFO ☢</b><p>Unlocked.</p><u>★ What's New: ★</u><p>Fixed.</p>")
+            .associate { it.kind to Jsoup.parse(it.html).text() }
+        assertEquals("Includes a mod by a community member.", sections[ReleaseSection.Description])
+        assertEquals("Unlocked.", sections[ReleaseSection.Mod])
+        assertEquals("Fixed.", sections[ReleaseSection.Changes])
+    }
+
     @Test fun handlesUnderlinedChangelogAndBulletModBlock() {
         val result = ReleaseSections.parse("""<p>App description.</p><b>◉ Premium Activated<br>◉ Debug information removed</b><br><u>What's New:</u><br>No changelog<br><u>More Info:</u><a href="https://example.com">Store</a>""")
         val sections = result.associate { it.kind to Jsoup.parse(it.html).text() }
