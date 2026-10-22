@@ -10,6 +10,13 @@ fun webUrlOrNull(value: String): String? {
 }
 
 internal object ReleaseJson {
+    fun page(array: JSONArray): ReleasePage {
+        val items = (0 until array.length()).map { parse(array.getJSONObject(it)) }
+        // The live API can cap pages below the requested limit. Only an empty
+        // page ends pagination; the view model also stops repeated page IDs.
+        return ReleasePage(items, items.isNotEmpty())
+    }
+
     fun parse(json: JSONObject): Release {
         val images = strings(json.optJSONArray("images")).mapNotNull(::webUrlOrNull).distinct()
         return Release(

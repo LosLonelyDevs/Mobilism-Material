@@ -36,7 +36,7 @@ During migration the app ID is `cum.ahfu.mobi.material`, separate from the legac
 - Frappé colors, Geist/System font selection, persistent appearance preferences, JSON theme import, and reduced motion.
 - Native Expressive buttons, loading indicators, flexible app bars, and spring-based screen/press motion.
 
-Release downloads appear as host-name buttons with adjacent copy controls. Settings stores Real-Debrid and MegaDebrid keys encrypted; supported hosts turn theme green using the providers' published host lists. This indicator does not validate a key, subscription, or current host availability, and links still open in the device browser.
+Release downloads appear as host-name buttons with adjacent copy controls. Settings stores Real-Debrid and MegaDebrid keys encrypted and hides saved-key inputs. Supported hosts turn theme green using the intersection of [Mobilism's file-host directory](https://forum.mobilism.org/filehosts.xml) and each provider's published list. Aliases count as one named host in Settings. This indicator does not validate a key, subscription, or current host availability, and links still open in the device browser.
 
 Unrestricted debrid downloads, background transfers, search, categories, comments, messages, and other legacy features are not ported. See [migration scope](docs/migration.md).
 

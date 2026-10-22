@@ -18,6 +18,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(libs.jsoup)
     implementation(libs.androidx.core)
     api(libs.coroutines.android)
     implementation(libs.okhttp)

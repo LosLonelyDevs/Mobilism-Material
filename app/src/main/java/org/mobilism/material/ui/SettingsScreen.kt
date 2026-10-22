@@ -62,7 +62,7 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             item {
                 Text("Debrid accounts", style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "Green download buttons mark hosts supported by a provider with a saved key. Links open in your browser.",
+                    "Green download buttons mark Mobilism file hosts supported by a provider with a saved key. Links open in your browser.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
                 )
@@ -78,6 +78,7 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
 private fun DebridAccountCard(account: DebridAccount, repository: DebridRepository) {
     val scope = rememberCoroutineScope()
     var key by remember(account.provider) { mutableStateOf("") }
+    var editing by remember(account.provider) { mutableStateOf(false) }
     var working by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<ScreenError?>(null) }
     val busy = working || account.busy
@@ -96,10 +97,16 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(account.provider.label, style = MaterialTheme.typography.titleLarge)
             Text(
-                if (account.configured) "Key saved · " + account.hosts.size + " supported domains" else "No key saved",
+                if (account.configured) "Key saved · " + account.hostNames.size + " Mobilism hosts" else "No key saved",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedTextField(
+            if (account.configured && account.hostNames.isNotEmpty()) Text(
+                account.hostNames.joinToString(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (!account.configured || editing) {
+              OutlinedTextField(
                 value = key, onValueChange = { if (it.length <= 4096) key = it },
                 label = { Text(account.provider.label + " API key") },
                 placeholder = { Text(if (account.configured) "Enter a replacement key" else "Enter your key or token") },
@@ -107,14 +114,16 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth(),
             )
-            ExpressiveButton(
-                onClick = { perform { repository.saveKey(account.provider, key); key = "" } },
+              ExpressiveButton(
+                onClick = { perform { repository.saveKey(account.provider, key); key = ""; editing = false } },
                 enabled = key.isNotBlank() && !busy,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Save " + account.provider.label + " key") }
+              ) { Text("Save " + account.provider.label + " key") }
+              if (account.configured) AppTextButton("Cancel", { key = ""; editing = false }, enabled = !busy)
+            } else AppTextButton("Change key", { editing = true }, enabled = !busy)
             if (account.configured) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AppTextButton("Refresh hosts", { perform { repository.refresh(account.provider) } }, enabled = !busy)
-                AppTextButton("Remove key", { perform { repository.removeKey(account.provider); key = "" } }, enabled = !busy)
+                AppTextButton("Remove key", { perform { repository.removeKey(account.provider); key = ""; editing = false } }, enabled = !busy)
             }
             if (busy) LoadingState("Loading hosts…", Modifier.fillMaxWidth())
             error?.let { ErrorPanel(it) }

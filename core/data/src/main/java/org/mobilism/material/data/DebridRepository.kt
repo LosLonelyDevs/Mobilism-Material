@@ -28,7 +28,10 @@ data class DebridAccount(
     val hosts: List<SupportedHost> = emptyList(),
     val busy: Boolean = false,
     val error: String? = null,
-)
+) {
+    val hostNames: List<String>
+        get() = hosts.map { it.name }.distinctBy { it.lowercase() }.sortedBy { it.lowercase() }
+}
 
 data class DebridState(val accounts: List<DebridAccount> = DebridProvider.entries.map { DebridAccount(it) }) {
     fun supporting(url: String): List<DebridAccount> = accounts.filter { account ->
@@ -56,13 +59,17 @@ object HostMatcher {
     fun displayName(url: String): String {
         val host = domain(url) ?: return "Download"
         return when {
-            matches(url, "rapidgator.net") -> "Rapidgator"
+            matches(url, "rapidgator.net") || matches(url, "rg.to") -> "Rapidgator"
             matches(url, "mega.nz") -> "MEGA"
             matches(url, "mediafire.com") -> "MediaFire"
             matches(url, "1fichier.com") -> "1fichier"
-            matches(url, "upfilesgo.com") -> "UpFiles"
-            matches(url, "uploadrar.com") -> "Uploadrar"
+            matches(url, "upfilesgo.com") || matches(url, "upfiles.com") -> "UpFiles"
+            matches(url, "uploadrar.com") || matches(url, "uploadrar.net") -> "Uploadrar"
+            matches(url, "filedot.to") || matches(url, "filedot.pw") -> "Filedot"
+            matches(url, "zincdrive.com") || matches(url, "zdrive.to") -> "ZincDrive"
             matches(url, "devuploads.com") -> "DevUploads"
+            matches(url, "send.now") -> "Send.now"
+            matches(url, "sendit.cloud") -> "Sendit.cloud"
             matches(url, "katfile.com") -> "KatFile"
             matches(url, "send.cm") -> "Send"
             matches(url, "uploady.io") -> "Uploady"
@@ -72,7 +79,8 @@ object HostMatcher {
 }
 
 /**
- * Keys stay encrypted locally. Highlighting uses the providers' published host catalogs;
+ * Keys stay encrypted locally. Highlighting intersects Mobilism's file-host directory
+ * with the providers' published host catalogs;
  * it does not validate account entitlement or generate an unrestricted download.
  */
 class DebridRepository(context: Context) {
@@ -97,7 +105,8 @@ class DebridRepository(context: Context) {
             })
         }
         for (account in state.value.accounts.filter { it.configured }) {
-            if (System.currentTimeMillis() - cache.getLong(account.provider.name + "-updated", 0) > CACHE_AGE) {
+            if (cache.getInt(account.provider.name + "-format", 0) != CACHE_FORMAT ||
+                System.currentTimeMillis() - cache.getLong(account.provider.name + "-updated", 0) > CACHE_AGE) {
                 refresh(account.provider)
             }
         }
@@ -115,7 +124,8 @@ class DebridRepository(context: Context) {
     suspend fun removeKey(provider: DebridProvider) = withContext(Dispatchers.IO) {
         mutex.withLock {
             keys.remove(provider)
-            cache.edit().remove(provider.name).remove(provider.name + "-updated").apply()
+            cache.edit().remove(provider.name).remove(provider.name + "-updated")
+                .remove(provider.name + "-format").apply()
             update(provider) { DebridAccount(provider) }
         }
     }
@@ -125,7 +135,8 @@ class DebridRepository(context: Context) {
             if (state.value.accounts.none { it.provider == provider && it.configured }) return@withLock
             update(provider) { it.copy(busy = true, error = null) }
             try {
-                val hosts = when (provider) {
+                val mobilismDomains = MobilismHosts.parse(get(MobilismHosts.URL))
+                val providerHosts = when (provider) {
                     DebridProvider.RealDebrid -> {
                         val names = JSONObject(get("https://api.real-debrid.com/rest/1.0/hosts"))
                         val domains = JSONArray(get("https://api.real-debrid.com/rest/1.0/hosts/domains"))
@@ -153,10 +164,12 @@ class DebridRepository(context: Context) {
                         }
                     }
                 }.distinctBy { it.domain }
-                check(hosts.isNotEmpty())
+                check(providerHosts.isNotEmpty())
+                val hosts = MobilismHosts.shortlist(mobilismDomains, providerHosts)
                 cache.edit().putString(provider.name, JSONArray().apply {
                     hosts.forEach { put(JSONObject().put("domain", it.domain).put("name", it.name)) }
-                }.toString()).putLong(provider.name + "-updated", System.currentTimeMillis()).apply()
+                }.toString()).putLong(provider.name + "-updated", System.currentTimeMillis())
+                    .putInt(provider.name + "-format", CACHE_FORMAT).apply()
                 update(provider) { it.copy(hosts = hosts, busy = false, error = null) }
             } catch (cancelled: CancellationException) {
                 update(provider) { it.copy(busy = false) }
@@ -185,6 +198,7 @@ class DebridRepository(context: Context) {
     }
 
     private fun cachedHosts(provider: DebridProvider): List<SupportedHost> = runCatching {
+        if (cache.getInt(provider.name + "-format", 0) != CACHE_FORMAT) return@runCatching emptyList()
         val array = JSONArray(cache.getString(provider.name, "[]"))
         (0 until array.length()).map { array.getJSONObject(it) }
             .map { SupportedHost(it.getString("domain"), it.getString("name")) }
@@ -199,5 +213,6 @@ class DebridRepository(context: Context) {
     private companion object {
         const val MAX_CATALOG_BYTES = 2L * 1024 * 1024
         const val CACHE_AGE = 24L * 60 * 60 * 1000
+        const val CACHE_FORMAT = 2
     }
 }

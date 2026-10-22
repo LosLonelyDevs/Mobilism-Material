@@ -22,7 +22,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -48,7 +47,7 @@ internal class MobilismApi(private val context: Context) {
         require(page > 0)
         val path = "release/${section.apiPath}/category/all/page/$page/limit/$PAGE_SIZE/orderby/${order.apiValue}/desc/0"
         val response = request(path, token).getJSONArray("response")
-        return ReleasePage(response.objects().map(ReleaseJson::parse), response.length() >= PAGE_SIZE)
+        return ReleaseJson.page(response)
     }
 
     suspend fun register(username: String, email: String, password: String) {
@@ -122,8 +121,6 @@ internal class MobilismApi(private val context: Context) {
                 throw ApiFailure(FailureKind.Connection, "Could not connect securely to Mobilism. Check your connection and try again.")
             }
         }
-
-    private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
 
     private companion object {
         val BASE_URL = "https://app.mobilism.org/api-new/".toHttpUrl()
