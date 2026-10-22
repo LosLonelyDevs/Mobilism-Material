@@ -5,6 +5,8 @@
 Added release actions and automatic README screenshots.
 
 - Put thumbs-up, watch/unwatch, and downloaded controls on the release page.
+- Keep just the images in the release carousel. Remove the counter and arrow strip.
+- Simplify debrid cards with a check beside the provider name, a host dropdown, and compact refresh and remove buttons. Remove a saved key before replacing it.
 - Treat a file-host open as a rough downloaded mark. Copying a link doesn't count.
 - Auto-watch downloaded apps by default, with a switch in Download settings. Keep an existing watch when opening an older release.
 - Fill the adaptive launcher icon with deep blue and add a monochrome layer for themed icons.

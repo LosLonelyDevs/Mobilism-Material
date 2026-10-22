@@ -4,7 +4,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -19,7 +18,6 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Download
@@ -27,10 +25,11 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -58,7 +57,6 @@ import org.mobilism.material.data.DebridAccount
 import org.mobilism.material.data.DebridRepository
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.designsystem.AppIconButton
-import org.mobilism.material.designsystem.AppTextButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.ExpressiveCard
 import org.mobilism.material.designsystem.LoadingState
@@ -124,8 +122,8 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
 @Composable
 private fun DebridAccountCard(account: DebridAccount, repository: DebridRepository, debrid: DebridState) {
     val scope = rememberCoroutineScope()
+    val theme = LocalAppTheme.current
     var key by remember(account.provider) { mutableStateOf("") }
-    var editing by remember(account.provider) { mutableStateOf(false) }
     var working by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<ScreenError?>(null) }
     val busy = working || account.busy
@@ -142,56 +140,57 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
     }
     Surface(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            AppHeading(account.provider.label, HeadingLevel.Subsection, style = MaterialTheme.typography.titleLarge)
-            if (account.configured) DebridAccountStatus(account, debrid)
-            else Text("No key saved", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (!account.configured || editing) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) {
+                    AppHeading(account.provider.label, HeadingLevel.Subsection, style = MaterialTheme.typography.titleLarge)
+                }
+                if (account.configured) Icon(
+                    Icons.Outlined.CheckCircle, "Key saved", tint = theme.success,
+                    modifier = Modifier.padding(start = 12.dp).size(24.dp),
+                )
+            }
+            if (!account.configured) {
+              Text("No key saved", color = MaterialTheme.colorScheme.onSurfaceVariant)
               OutlinedTextField(
                 value = key, onValueChange = { if (it.length <= 4096) key = it },
                 label = { Text(account.provider.label + " API key") },
-                placeholder = { Text(if (account.configured) "Enter a replacement key" else "Enter your key or token") },
+                placeholder = { Text("Enter your key or token") },
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.large,
             )
               ExpressiveButton(
-                onClick = { perform { repository.saveKey(account.provider, key); key = ""; editing = false } },
+                onClick = { perform { repository.saveKey(account.provider, key); key = "" } },
                 enabled = key.isNotBlank() && !busy,
                 modifier = Modifier.fillMaxWidth(),
               ) { Text("Save " + account.provider.label + " key") }
-              if (account.configured) AppTextButton("Cancel", { key = ""; editing = false }, enabled = !busy)
-            } else ExpressiveButton({ editing = true }, Modifier.fillMaxWidth(), enabled = !busy) {
-                Icon(Icons.Outlined.Key, null, Modifier.padding(end = 8.dp).size(20.dp))
-                Text("Change key")
             }
-            if (account.configured) FlowRow(
+            if (account.configured) Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                maxItemsInEachRow = 2,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                ExpressiveButton(
-                    { perform { repository.refresh(account.provider) } },
-                    Modifier.weight(1f).widthIn(min = 144.dp), enabled = !busy,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.tertiary,
-                        contentColor = MaterialTheme.colorScheme.onTertiary,
+                FilledTonalIconButton(
+                    onClick = { perform { repository.refresh(account.provider) } },
+                    modifier = Modifier.size(48.dp), enabled = !busy,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     ),
                 ) {
-                    Icon(Icons.Outlined.Refresh, null, Modifier.padding(end = 8.dp).size(20.dp))
-                    Text("Refresh hosts")
+                    Icon(Icons.Outlined.Refresh, "Refresh hosts")
                 }
-                ExpressiveButton(
-                    { perform { repository.removeKey(account.provider); key = ""; editing = false } },
-                    Modifier.weight(1f).widthIn(min = 144.dp), enabled = !busy,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError,
+                DebridHostMenu(account, debrid, Modifier.weight(1f))
+                FilledTonalIconButton(
+                    onClick = { perform { repository.removeKey(account.provider); key = "" } },
+                    modifier = Modifier.size(48.dp), enabled = !busy,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
                     ),
                 ) {
-                    Icon(Icons.Outlined.DeleteOutline, null, Modifier.padding(end = 8.dp).size(20.dp))
-                    Text("Remove key")
+                    Icon(Icons.Outlined.DeleteOutline, "Remove key")
                 }
             }
             if (busy) LoadingState("Loading hosts…", Modifier.fillMaxWidth())
@@ -203,61 +202,49 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun DebridAccountStatus(account: DebridAccount, debrid: DebridState) {
+private fun DebridHostMenu(account: DebridAccount, debrid: DebridState, modifier: Modifier = Modifier) {
     val theme = LocalAppTheme.current
     var expanded by remember(account.provider) { mutableStateOf(false) }
     val rotation by animateFloatAsState(
         if (expanded) 180f else 0f,
         MaterialTheme.motionScheme.fastSpatialSpec(), label = "host menu chevron",
     )
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Surface(color = theme.success, contentColor = theme.onSuccess, shape = MaterialTheme.shapes.extraLarge) {
-            Row(
-                Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(Icons.Outlined.CheckCircle, null, Modifier.size(20.dp))
-                Text("Key saved", style = MaterialTheme.typography.labelLarge)
-            }
+    Box(modifier, contentAlignment = Alignment.CenterEnd) {
+        ExpressiveButton(
+            { expanded = !expanded },
+            Modifier.semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary,
+            ),
+        ) {
+            Text("${account.hostNames.size} Mobilism hosts")
+            Icon(Icons.Outlined.ExpandMore, null, Modifier.padding(start = 4.dp).size(20.dp).rotate(rotation))
         }
-        Box {
-            ExpressiveButton(
-                { expanded = !expanded },
-                Modifier.semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary,
-                    contentColor = MaterialTheme.colorScheme.onSecondary,
-                ),
-            ) {
-                Text("${account.hostNames.size} Mobilism hosts")
-                Icon(Icons.Outlined.ExpandMore, null, Modifier.padding(start = 4.dp).size(20.dp).rotate(rotation))
-            }
-            DropdownMenu(
-                expanded = expanded, onDismissRequest = { expanded = false },
-                modifier = Modifier.widthIn(min = 240.dp, max = 320.dp).heightIn(max = 360.dp),
-                shape = MaterialTheme.shapes.extraLarge,
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            ) {
-                Text(
-                    "Supported Mobilism hosts", Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                    style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
+        DropdownMenu(
+            expanded = expanded, onDismissRequest = { expanded = false },
+            modifier = Modifier.widthIn(min = 240.dp, max = 320.dp).heightIn(max = 360.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        ) {
+            Text(
+                "Supported Mobilism hosts", Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
+            )
+            if (account.hostNames.isEmpty()) Text(
+                if (account.busy) "Loading hosts…" else "No matching hosts. Try Refresh hosts.",
+                Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            account.hostNames.forEach { name ->
+                val domains = account.hosts.filter { it.name.equals(name, ignoreCase = true) }.map { it.domain }
+                RoundedMenuItem(
+                    label = name, onClick = { expanded = false }, accent = theme.success,
+                    icon = Icons.Outlined.CheckCircle,
+                    supportLabel = debrid.accounts.filter { other ->
+                        other.configured && other.hosts.any { it.domain in domains }
+                    }.map { it.provider.label }.takeIf { it.isNotEmpty() }?.joinToString(" · "),
                 )
-                if (account.hostNames.isEmpty()) Text(
-                    if (account.busy) "Loading hosts…" else "No matching hosts. Try Refresh hosts.",
-                    Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                account.hostNames.forEach { name ->
-                    val domains = account.hosts.filter { it.name.equals(name, ignoreCase = true) }.map { it.domain }
-                    RoundedMenuItem(
-                        label = name, onClick = { expanded = false }, accent = theme.success,
-                        icon = Icons.Outlined.CheckCircle,
-                        supportLabel = debrid.accounts.filter { other ->
-                            other.configured && other.hosts.any { it.domain in domains }
-                        }.map { it.provider.label }.takeIf { it.isNotEmpty() }?.joinToString(" · "),
-                    )
-                }
             }
         }
     }

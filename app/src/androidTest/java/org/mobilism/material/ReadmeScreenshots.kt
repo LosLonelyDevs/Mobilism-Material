@@ -71,10 +71,10 @@ class ReadmeScreenshots {
     @Test fun release() {
         releaseScreen()
         awaitImages(listOf(asset("tizen-1"), asset("tizen-2")))
-        compose.onNodeWithContentDescription("Next release image").assertExists()
         capture("release")
-        compose.onNodeWithContentDescription("Next release image").performClick()
-        compose.onNodeWithText("2 / 2").assertExists()
+        compose.onNode(hasScrollToIndexAction() and
+            SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange))
+            .performTouchInput { swipeLeft() }
         compose.onNodeWithContentDescription("Release image 2 of 2").performClick()
         compose.onNodeWithContentDescription("Close image viewer").assertExists()
     }
