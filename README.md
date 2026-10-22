@@ -26,6 +26,10 @@ On macOS/Linux, use `bash ./gradlew :app:assembleDebug`. Versioned APKs are writ
 
 Release builds are unsigned unless the process provides `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD`. Unsigned filenames retain the `-unsigned` suffix. Never commit signing material or credentials. The manual **Build APK** workflow accepts debug or release; release requires the four `ANDROID_*` signing secrets documented in the workflow. Automatic CI runs tests, lint, and a debug build.
 
+**Auto Release (APK)** follows Lectio's release-on-version-bump flow. Increase `versionName` and `versionCode` in `app/build.gradle.kts`, then push to `main`. After **Android checks** succeeds for that commit, the workflow skips existing versions or builds, verifies, and publishes the signed APK and `SHA256SUMS` as a prerelease with a `v<version>` tag. It does not increment versions itself or overwrite existing releases. A manual run on `main` retries an unpublished version.
+
+Configure these repository secret names before the first automated release: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. Use the same signing key as the existing releases. Debug builds need no signing secrets. The APK and Actions artifact names both include the app version and build type; Actions artifacts expire after 14 days, while release assets remain available.
+
 During migration the app ID is `cum.ahfu.mobi.material`, separate from the legacy `cum.ahfu.mobi`. It does not replace the legacy install or share its data. The minimum Android version is 8.0 (API 26).
 
 ## First slice
@@ -43,6 +47,8 @@ During migration the app ID is `cum.ahfu.mobi.material`, separate from the legac
 Release downloads appear as host-name buttons with adjacent copy controls, grouped once per CPU architecture. Settings can prioritize selected hosts and collapse architectures other than the preferred CPU type. Universal and unlabeled downloads remain visible; compatibility cannot be inferred for unlabeled files. Settings stores Real-Debrid and MegaDebrid keys encrypted and hides saved-key inputs. Supported hosts turn theme green using the intersection of [Mobilism's file-host directory](https://forum.mobilism.org/filehosts.xml) and each provider's published list. Aliases count as one named host in the expandable Settings menu. This indicator does not validate a key, subscription, or current host availability, and links still open in the device browser.
 
 Unrestricted debrid downloads, background transfers, search, comment posting, messages, and other legacy features are not ported. See [migration scope](docs/migration.md).
+
+The [feature-parity inventory](docs/feature-parity.md) maps remaining legacy features and the recommended implementation order.
 
 ## Themes and motion
 

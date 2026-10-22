@@ -1,0 +1,43 @@
+# Rewrite feature parity
+
+Source audit against the local legacy manifest, drawer and action menus, settings XML, API interface, and UI classes. This is an implementation inventory, not a claim that every old server endpoint still works.
+
+## Implemented
+
+- Login, guest entry, account registration/password recovery screens, sign-out, and encrypted session storage.
+- Favourite starting section, Apps/Games/Books navigation, Latest/Top feeds, category multiselect, and pagination.
+- Release details, formatted text, parsed title metadata, collapsible description/changelog/mod/download sections, and read-only paginated comments.
+- Full-screen images, zoom/paging, architecture groups, preferred hosts, host links, clipboard actions, and browser opening.
+- Material 3 Expressive components and motion, Frappé/Geist defaults, custom themes, appearance preferences, and reduced motion.
+- Encrypted debrid keys and supported-host indicators. These do not yet resolve unrestricted links or download files.
+
+## Remaining functional work
+
+| Area | Missing behavior | Main legacy reference |
+| --- | --- | --- |
+| Search and discovery | Search UI, API queries, result paging, legacy search filters, and any remaining feed filters | `UI/Main/SearchActivity.java`, `logic/network/MobilismService.java` |
+| Release interaction | Post/reply/quote comments, likes, mark downloaded, watch/tracker actions, previous versions | `UI/Release/ReleaseActivtiy.java`, `UI/Discussion/CommentActivity.java`, `res/menu/menu_releases.xml` |
+| Forum sections | Announcements, Contests, Chitchat, Services, Suggestions & Feedback, discussion categories/topics/comments | `res/menu/activity_main_drawer.xml`, `UI/Discussion/` |
+| My Applications | Installed/downloaded/watchlist tabs, package discovery, matching installed apps to releases, batch actions, save/copy/delete/undo | `UI/MyApplications/`, installed/downloaded/favorites action menus |
+| Version tracker | Watch/unwatch, update checks, version comparisons/history, new-version views and notifications | `UI/VersionTracker/` |
+| Downloads | Native queue/progress, download state and files, destination selection, background operation, completion notifications, archive extraction, opening/installing APKs, failure/retry handling | `logic/download/`, `UI/Release/DownloadsActivity.java`, `UI/Settings/FilePickerActivity.java` |
+| Premium and debrid | Mobilism Premium account/trial/plans/payment flows and link resolution; Real-Debrid/MegaDebrid unrestricted-link resolution and account/error handling | `UI/AMember/`, premium/payment API endpoints, legacy debrid integration |
+| Messages | Message lists, conversation history, compose/reply, read state, deletion, unread notifications | `UI/Messages/`, message API endpoints |
+| Settings and utilities | Notification preferences/sounds, content filters, cache controls, old listing options, download/extraction options, QR scanner, About, app-update flow | `res/xml/pref_general.xml`, `UI/QRCodeScanner/`, `UI/Settings/AboutActivity.java`, `logic/updater/` |
+
+## Complete Compose and migration work
+
+- Replace `ReleaseBody`'s `AndroidView`/`TextView` bridge with Compose rich text while retaining formatting, safe links, and text selection. Current screen layout and controls already use Compose.
+- Apply the shared M3E components, semantic colors, motion preferences, and rounded shapes to each remaining screen.
+- Add persistence and modern Android background, storage, package-visibility, install, and notification handling as their features land.
+- Decide on legacy data import and package/signing continuity. The rewrite currently has a separate package and cannot silently inherit the old app's private storage.
+- Complete session-expiry/guest-restriction coverage, registration/recovery verification, offline/retry cases, accessibility, gestures, process recreation, and physical-device checks.
+
+## Recommended implementation order
+
+1. Search and release history/actions, then My Applications/watchlists/version tracking.
+2. Premium/debrid link resolution and the native download pipeline.
+3. Comment writing, forum sections, private messages, and notifications.
+4. Remaining settings/utilities, pure-Compose rich text, migration, and final parity testing.
+
+The largest remaining engineering work is persistent downloads, installed-app/update tracking, and account/notification integration. Screen count alone is not a useful completion percentage.

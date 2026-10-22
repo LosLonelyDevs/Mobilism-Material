@@ -14,6 +14,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7.0.1
+      - name: Read app version
+        id: version
+        run: |
+          version=$(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' app/build.gradle.kts)
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@v6.1.0
         with:
           distribution: temurin
@@ -23,9 +29,16 @@ jobs:
       - name: Install Android SDK
         run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
       - name: Test, lint, and build
-        run: bash ./gradlew :app:testDebugUnitTest :core:data:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          bash ./gradlew :app:testDebugUnitTest :core:data:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+          test -f "build/apk/MobilismMaterial_v${APP_VERSION}-debug.apk"
       - uses: actions/upload-artifact@v7.0.2
+        # Release assets are durable. Actions storage quota must not block publishing.
+        continue-on-error: true
         with:
-          name: debug-apk
+          name: MobilismMaterial_v${{ steps.version.outputs.version }}-debug
           path: build/apk/*-debug.apk
           if-no-files-found: error
+          retention-days: 14
