@@ -10,6 +10,13 @@ class DefaultMobilismRepository(context: Context) : MobilismRepository {
     private val api = MobilismApi(context.applicationContext)
     private val store = SessionStore(context.applicationContext)
     private val authMutex = Mutex()
+    private val categoryMutex = Mutex()
+    private var categoryCache: Map<ContentSection, List<ReleaseCategory>>? = null
+    private val pagerMutex = Mutex()
+    private data class Query(val section: ContentSection, val order: FeedOrder, val categories: Set<Long>)
+    private var pagerQuery: Query? = null
+    private var pager: CategoryFeedPager? = null
+    private var pagerPage = 0
     private val mutableAuth = MutableStateFlow<AuthState>(AuthState.Restoring)
     override val auth = mutableAuth.asStateFlow()
     @Volatile private var session: Session? = null
@@ -45,10 +52,33 @@ class DefaultMobilismRepository(context: Context) : MobilismRepository {
         mutableAuth.value = AuthState.SignedOut
     }
 
-    override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int): ReleasePage =
-        withSession { token -> api.releases(section, order, page, token) }
+    override suspend fun categories(section: ContentSection): List<ReleaseCategory> = withSession { token ->
+        categoryMutex.withLock {
+            val catalog = categoryCache ?: api.categories(token).also { categoryCache = it }
+            catalog.getValue(section)
+        }
+    }
+
+    override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters): ReleasePage =
+        withSession { token ->
+            if (filters.categoryIds.isEmpty()) api.releases(section, order, page, token)
+            else pagerMutex.withLock {
+                val query = Query(section, order, filters.categoryIds.toSet())
+                if (page == 1 || pagerQuery != query) {
+                    pagerQuery = query
+                    pagerPage = 0
+                    pager = CategoryFeedPager(query.categories, order) { category, sourcePage ->
+                        api.releases(section, order, sourcePage, token, category)
+                    }
+                }
+                check(page == pagerPage + 1) { "Feed pages must be loaded in sequence" }
+                checkNotNull(pager).nextPage().also { pagerPage = page }
+            }
+        }
 
     override suspend fun release(id: Long): Release = withSession { token -> api.release(id, token) }
+
+    override suspend fun comments(id: Long, page: Int): CommentPage = withSession { token -> api.comments(id, page, token) }
 
     override suspend fun register(username: String, email: String, password: String) = api.register(username, email, password)
 

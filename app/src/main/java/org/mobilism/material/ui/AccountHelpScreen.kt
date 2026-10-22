@@ -51,7 +51,7 @@ fun AccountHelpScreen(register: Boolean, repository: MobilismRepository, onBack:
     val scope = rememberCoroutineScope()
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { TopAppBar(title = { Text(if (register) "Registration" else "Forgot password") }, navigationIcon = {
+        topBar = { TopAppBar(title = { AppHeading(if (register) "Registration" else "Forgot password", HeadingLevel.Page) }, navigationIcon = {
             AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack)
         }) },
     ) { padding ->

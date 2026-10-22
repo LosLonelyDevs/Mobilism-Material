@@ -15,9 +15,12 @@ import org.mobilism.material.data.ContentSection
 import org.mobilism.material.data.DebridRepository
 import org.mobilism.material.data.FailureKind
 import org.mobilism.material.data.FeedOrder
+import org.mobilism.material.data.FeedFilters
+import org.mobilism.material.data.ReleaseCategory
 import org.mobilism.material.data.MobilismRepository
 import org.mobilism.material.data.Release
 import org.mobilism.material.settings.AppearanceStore
+import org.mobilism.material.settings.DownloadPreferencesStore
 
 data class ScreenError(val message: String, val showNetworkSettings: Boolean = false)
 
@@ -36,6 +39,14 @@ data class FeedState(
     val busy: Boolean = false,
     val canLoadMore: Boolean = true,
     val error: ScreenError? = null,
+    val filters: FeedFilters = FeedFilters(),
+)
+
+data class CategoryState(
+    val section: ContentSection = ContentSection.Apps,
+    val items: List<ReleaseCategory> = emptyList(),
+    val busy: Boolean = false,
+    val error: ScreenError? = null,
 )
 
 class MobilismViewModel(
@@ -44,14 +55,18 @@ class MobilismViewModel(
     val appearance: AppearanceStore,
     val debrid: DebridRepository,
 ) : ViewModel() {
+    val downloads = DownloadPreferencesStore(context)
     private val preferences = context.getSharedPreferences("material-navigation", Context.MODE_PRIVATE)
     val preferredSection: ContentSection?
         get() = ContentSection.entries.firstOrNull { it.name == preferences.getString("section", null) }
     val auth = repository.auth
     private val mutableLogin = MutableStateFlow(LoginState())
     val login = mutableLogin.asStateFlow()
-    private val mutableFeed = MutableStateFlow(FeedState(section = preferredSection ?: ContentSection.Apps))
+    private val mutableFeed = MutableStateFlow(newFeed(preferredSection ?: ContentSection.Apps))
     val feed = mutableFeed.asStateFlow()
+    private val mutableCategories = MutableStateFlow(CategoryState(section = mutableFeed.value.section))
+    val categories = mutableCategories.asStateFlow()
+    private var categoryJob: Job? = null
     private var feedJob: Job? = null
     private var loginJob: Job? = null
 
@@ -70,7 +85,9 @@ class MobilismViewModel(
             auth.collect { state ->
                 if (state == AuthState.SignedOut) {
                     feedJob?.cancel()
-                    mutableFeed.value = FeedState(section = preferredSection ?: ContentSection.Apps)
+                    categoryJob?.cancel()
+                    mutableFeed.value = newFeed(preferredSection ?: ContentSection.Apps)
+                    mutableCategories.value = CategoryState(section = mutableFeed.value.section)
                 }
             }
         }
@@ -103,23 +120,65 @@ class MobilismViewModel(
 
     fun signOut() {
         feedJob?.cancel()
+        categoryJob?.cancel()
         authAction {
             repository.signOut()
-            mutableFeed.value = FeedState(section = mutableFeed.value.section)
+            mutableFeed.value = newFeed(mutableFeed.value.section)
         }
     }
 
     fun selectSection(section: ContentSection) {
         preferences.edit().putString("section", section.name).apply()
         feedJob?.cancel()
-        mutableFeed.value = FeedState(section = section, order = mutableFeed.value.order)
+        categoryJob?.cancel()
+        mutableCategories.value = CategoryState(section = section)
+        mutableFeed.value = newFeed(section, mutableFeed.value.order)
         loadFeed(refresh = true)
     }
 
     fun selectOrder(order: FeedOrder) {
         if (mutableFeed.value.order == order) return
         feedJob?.cancel()
-        mutableFeed.value = FeedState(section = mutableFeed.value.section, order = order)
+        mutableFeed.value = FeedState(section = mutableFeed.value.section, order = order, filters = mutableFeed.value.filters)
+        loadFeed(refresh = true)
+    }
+
+    private fun newFeed(section: ContentSection, order: FeedOrder = FeedOrder.Latest): FeedState {
+        val ids = preferences.getStringSet("filters-" + section.name + "-categories", emptySet()).orEmpty()
+            .mapNotNull { it.toLongOrNull()?.takeIf { id -> id > 0 } }.toSet()
+        return FeedState(section = section, order = order, filters = FeedFilters(ids))
+    }
+
+    fun loadCategories() {
+        val section = mutableFeed.value.section
+        if (categoryJob?.isActive == true ||
+            (mutableCategories.value.section == section && mutableCategories.value.items.isNotEmpty() &&
+                mutableCategories.value.error == null)) return
+        categoryJob = viewModelScope.launch {
+            mutableCategories.value = CategoryState(section = section, busy = true)
+            try {
+                val items = repository.categories(section)
+                if (mutableFeed.value.section == section) mutableCategories.value = CategoryState(section, items)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                if (mutableFeed.value.section == section) {
+                    mutableCategories.value = CategoryState(section, error = error.forScreen())
+                }
+            }
+        }
+    }
+
+    fun applyFilters(filters: FeedFilters) {
+        val snapshot = mutableFeed.value
+        val allowed = mutableCategories.value.takeIf { it.section == snapshot.section }
+            ?.items.orEmpty().map { it.id }.toSet()
+        val selected = if (allowed.isEmpty()) filters.categoryIds else filters.categoryIds.intersect(allowed)
+        val normalized = filters.copy(categoryIds = if (selected == allowed) emptySet() else selected)
+        if (normalized == snapshot.filters) return
+        preferences.edit().putStringSet("filters-" + snapshot.section.name + "-categories",
+            normalized.categoryIds.map { it.toString() }.toSet()).apply()
+        feedJob?.cancel()
+        mutableFeed.value = FeedState(section = snapshot.section, order = snapshot.order, filters = normalized)
         loadFeed(refresh = true)
     }
 
@@ -132,7 +191,7 @@ class MobilismViewModel(
         feedJob = viewModelScope.launch {
             mutableFeed.update { it.copy(busy = true, error = null) }
             try {
-                val result = repository.releases(snapshot.section, snapshot.order, page)
+                val result = repository.releases(snapshot.section, snapshot.order, page, snapshot.filters)
                 val existing = if (refresh) emptyList() else snapshot.items
                 val combined = (existing + result.items).distinctBy { it.id }
                 mutableFeed.update { it.copy(
@@ -147,12 +206,18 @@ class MobilismViewModel(
     }
 }
 
-data class ReleaseState(val release: Release? = null, val busy: Boolean = true, val error: ScreenError? = null)
+data class CommentsState(
+    val items: List<org.mobilism.material.data.ReleaseComment> = emptyList(), val page: Int = 0,
+    val busy: Boolean = false, val canLoadMore: Boolean = true, val error: ScreenError? = null,
+)
+data class ReleaseState(val release: Release? = null, val busy: Boolean = true, val error: ScreenError? = null,
+    val comments: CommentsState = CommentsState())
 
 class ReleaseViewModel(private val id: Long, private val repository: MobilismRepository) : ViewModel() {
     private val mutableState = MutableStateFlow(ReleaseState())
     val state = mutableState.asStateFlow()
     private var job: Job? = null
+    private var commentsJob: Job? = null
 
     init { load() }
 
@@ -160,9 +225,32 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
         job?.cancel()
         job = viewModelScope.launch {
             mutableState.update { it.copy(busy = true, error = null) }
-            try { mutableState.value = ReleaseState(release = repository.release(id), busy = false) }
+            try {
+                val release = repository.release(id)
+                mutableState.update { it.copy(release = release, busy = false) }
+                if (mutableState.value.comments.page == 0) loadComments()
+            }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { mutableState.value = ReleaseState(busy = false, error = error.forScreen()) }
+        }
+    }
+
+    fun loadComments() {
+        val snapshot = mutableState.value.comments
+        if (commentsJob?.isActive == true || !snapshot.canLoadMore) return
+        commentsJob = viewModelScope.launch {
+            mutableState.update { it.copy(comments = snapshot.copy(busy = true, error = null)) }
+            try {
+                val result = repository.comments(id, snapshot.page + 1)
+                val items = (snapshot.items + result.items).distinctBy { it.id }
+                mutableState.update { it.copy(comments = CommentsState(
+                    items = items, page = snapshot.page + 1,
+                    canLoadMore = result.canLoadMore && items.size > snapshot.items.size,
+                )) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                mutableState.update { it.copy(comments = snapshot.copy(error = error.forScreen())) }
+            }
         }
     }
 }

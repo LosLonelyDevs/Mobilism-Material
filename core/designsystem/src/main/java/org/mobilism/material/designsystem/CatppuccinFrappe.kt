@@ -2,6 +2,7 @@ package org.mobilism.material.designsystem
 
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 
 // Exact palette and dark semantic colors from the supplied catppuccin-frappe.json.
 // No wallpaper/dynamic colors override this default.
@@ -23,6 +24,9 @@ private object Frappe {
     val sky = Color(0xFF99D1DB)
     val red = Color(0xFFE78284)
     val maroon = Color(0xFFEA999C)
+    val peach = Color(0xFFEF9F76)
+    val yellow = Color(0xFFE5C890)
+    val pink = Color(0xFFF4B8E4)
 }
 
 val CatppuccinFrappe = ThemeDefinition(
@@ -31,21 +35,24 @@ val CatppuccinFrappe = ThemeDefinition(
     isDark = true,
     success = Color(0xFFA6D189),
     onSuccess = Color(0xFF232634),
+    reading = Frappe.peach, onReading = Frappe.crust,
+    featured = Frappe.yellow, onFeatured = Frappe.crust,
+    personalization = Frappe.pink, onPersonalization = Frappe.crust,
     colors = with(Frappe) {
         darkColorScheme(
             primary = blue, onPrimary = crust,
-            primaryContainer = surface0, onPrimaryContainer = lavender,
+            primaryContainer = lerp(base, blue, 0.22f), onPrimaryContainer = lavender,
             inversePrimary = base,
             secondary = mauve, onSecondary = crust,
-            secondaryContainer = surface0, onSecondaryContainer = mauve,
+            secondaryContainer = lerp(base, mauve, 0.22f), onSecondaryContainer = mauve,
             tertiary = teal, onTertiary = crust,
-            tertiaryContainer = surface0, onTertiaryContainer = sky,
+            tertiaryContainer = lerp(base, teal, 0.22f), onTertiaryContainer = sky,
             background = mantle, onBackground = text,
             surface = base, onSurface = text,
             surfaceVariant = surface0, onSurfaceVariant = subtext1,
             surfaceTint = blue, inverseSurface = text, inverseOnSurface = base,
             error = red, onError = crust,
-            errorContainer = surface0, onErrorContainer = maroon,
+            errorContainer = lerp(base, red, 0.22f), onErrorContainer = maroon,
             outline = overlay0, outlineVariant = surface1, scrim = crust,
             surfaceBright = surface1, surfaceDim = mantle,
             surfaceContainerLowest = crust, surfaceContainerLow = mantle,

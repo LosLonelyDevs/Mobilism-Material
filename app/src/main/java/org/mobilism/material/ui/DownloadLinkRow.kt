@@ -42,7 +42,6 @@ fun DownloadLinkRow(link: DownloadLink, debrid: DebridState, onCopied: suspend (
         containerColor = theme.success, contentColor = theme.onSuccess,
     ) else ButtonDefaults.filledTonalButtonColors()
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        link.section?.let { Text(it, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ExpressiveButton(
                 onClick = { openWeb(context, link.url) },
@@ -50,9 +49,10 @@ fun DownloadLinkRow(link: DownloadLink, debrid: DebridState, onCopied: suspend (
                     stateDescription = if (supported) "Supported by " + providers.joinToString() else "Open in browser"
                 },
                 colors = colors,
+                compact = true,
             ) {
                 if (supported) Icon(Icons.Outlined.CheckCircle, null, Modifier.padding(end = 8.dp))
-                Text(name)
+                Text(name, style = MaterialTheme.typography.labelLarge)
             }
             AppIconButton(Icons.Outlined.ContentCopy, "Copy $name link", {
                 scope.launch {
@@ -61,6 +61,5 @@ fun DownloadLinkRow(link: DownloadLink, debrid: DebridState, onCopied: suspend (
                 }
             })
         }
-        if (supported) Text(providers.joinToString(), style = MaterialTheme.typography.labelMedium, color = theme.success)
     }
 }

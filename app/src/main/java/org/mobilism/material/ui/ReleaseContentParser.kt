@@ -16,7 +16,7 @@ data class ReleaseContent(val bodyHtml: String, val downloads: List<DownloadLink
 object ReleaseContentParser {
     private val marker = Regex("""(?i)Download\s+(?:Instructions|Links)\s*:?\s*""")
     private val plainUrl = Regex("""https?://[^\s<>"]+""", RegexOption.IGNORE_CASE)
-    private val architecture = Regex("""(?i)\b(arm64-v8a|armeabi-v7a|arm64|x86_64|x86|universal)\b""")
+    private val architecture = DownloadGroups.architecturePattern
 
     fun parse(html: String, apiUrls: List<String>, baseUrl: String): ReleaseContent {
         val boundary = marker.find(html)
@@ -37,7 +37,7 @@ object ReleaseContentParser {
                     } else if (node is TextNode && generateSequence(node.parent()) { it.parent() }
                             .none { it.normalName() == "a" }) {
                         val text = node.wholeText
-                        architecture.find(text)?.let { section = it.value }
+                        DownloadGroups.label(text)?.let { section = it }
                         plainUrl.findAll(text).forEach { add(it.value.trimEnd('.', ',', ';'), section) }
                     }
                 }
@@ -60,7 +60,7 @@ object ReleaseContentParser {
                     if (node is TextNode) node.text(plainUrl.replace(node.wholeText) {
                         if (webUrlOrNull(it.value.trimEnd('.', ',', ';')) in links) "" else it.value
                     }.let { text ->
-                        if (notes != null && (architecture.matches(text.trim().trimEnd(':')) ||
+                        if (notes != null && (architecture.replace(text, "").trim().trim(':', '/', '+', ',', '|', ' ', '-', '[', ']', '(', ')').isEmpty() ||
                             text.trim().matches(Regex("(?i)mirrors?\\s*:?")))) "" else text
                     })
                 }

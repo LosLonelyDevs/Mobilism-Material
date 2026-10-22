@@ -43,9 +43,16 @@ internal class MobilismApi(private val context: Context) {
         return Session(username, token, result.optString("refresh_token").takeUnless { it.isBlank() || it == "null" })
     }
 
-    suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, token: String?): ReleasePage {
+    suspend fun categories(token: String?): Map<ContentSection, List<ReleaseCategory>> {
+        val response = request("release/category", token)
+        return ContentSection.entries.associateWith { CategoryJson.parse(response, it) }
+    }
+
+    suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, token: String?, categoryId: Long? = null): ReleasePage {
         require(page > 0)
-        val path = "release/${section.apiPath}/category/all/page/$page/limit/$PAGE_SIZE/orderby/${order.apiValue}/desc/0"
+        require(categoryId == null || categoryId > 0)
+        val category = categoryId?.toString() ?: "all"
+        val path = "release/${section.apiPath}/category/$category/page/$page/limit/$PAGE_SIZE/orderby/${order.apiValue}/desc/0"
         val response = request(path, token).getJSONArray("response")
         return ReleaseJson.page(response)
     }
@@ -66,7 +73,14 @@ internal class MobilismApi(private val context: Context) {
         return ReleaseJson.parse(request("release/$id", token).getJSONObject("response"))
     }
 
-    private suspend fun request(path: String, token: String? = null, form: Map<String, String>? = null): JSONObject =
+    suspend fun comments(id: Long, page: Int, token: String?): CommentPage {
+        require(id > 0 && page > 0)
+        return CommentJson.page(request("release/$id/comments/page/$page/limit/$PAGE_SIZE/orderby/date/desc", token,
+            emptyRecordsAsArray = true).getJSONArray("response"))
+    }
+
+    private suspend fun request(path: String, token: String? = null, form: Map<String, String>? = null,
+        emptyRecordsAsArray: Boolean = false): JSONObject =
         withContext(Dispatchers.IO) {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.INTERNET) != PackageManager.PERMISSION_GRANTED) {
                 throw ApiFailure(FailureKind.Permission, "Network access is disabled for Mobilism. Enable Network in app permissions.")
@@ -91,6 +105,10 @@ internal class MobilismApi(private val context: Context) {
                     }
                     val json = try { JSONObject(text) } catch (_: JSONException) {
                         throw ApiFailure(FailureKind.InvalidResponse, "The server returned an unreadable response.")
+                    }
+                    // Comments use HTTP 400 for an empty page, including the end of pagination.
+                    if (emptyRecordsAsArray && response.code == 400 && json.optJSONObject("error")?.optString("text") == "No records found.") {
+                        return@withContext JSONObject().put("response", org.json.JSONArray())
                     }
                     if (!response.isSuccessful || json.optString("status") == "error") {
                         val kind = when {

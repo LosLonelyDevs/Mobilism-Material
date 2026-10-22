@@ -16,6 +16,12 @@ data class ThemeDefinition(
     val colors: ColorScheme,
     val success: Color = colors.tertiary,
     val onSuccess: Color = colors.onTertiary,
+    val reading: Color = colors.tertiary,
+    val onReading: Color = colors.onTertiary,
+    val featured: Color = colors.secondary,
+    val onFeatured: Color = colors.onSecondary,
+    val personalization: Color = colors.primary,
+    val onPersonalization: Color = colors.onPrimary,
 )
 
 object ThemeCatalog {
@@ -85,6 +91,12 @@ object ThemeCatalog {
         return ThemeDefinition(id, name, dark, colors,
             success = if (roles.has("success")) color("success") else colors.tertiary,
             onSuccess = if (roles.has("onSuccess")) color("onSuccess") else colors.onTertiary,
+            reading = if (roles.has("reading")) color("reading") else colors.tertiary,
+            onReading = if (roles.has("onReading")) color("onReading") else colors.onTertiary,
+            featured = if (roles.has("featured")) color("featured") else colors.secondary,
+            onFeatured = if (roles.has("onFeatured")) color("onFeatured") else colors.onSecondary,
+            personalization = if (roles.has("personalization")) color("personalization") else colors.primary,
+            onPersonalization = if (roles.has("onPersonalization")) color("onPersonalization") else colors.onPrimary,
         )
     }
 }

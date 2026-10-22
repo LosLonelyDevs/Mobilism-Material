@@ -10,6 +10,9 @@ The theme uses `MaterialExpressiveTheme` with `MotionScheme.expressive()`. Share
 | Drawer | Material navigation drawer transitions | Keep familiar navigation and dismissal behavior |
 | Waiting | Contained Expressive loading indicator plus live-region text | Show progress without inventing a percentage |
 | Appearance change | Immediate semantic color/font update | Show the selected appearance without a separate staged preview |
+| Release sections / architecture groups | Theme spatial expansion and effects fade, rotating chevron | Keep context while folding long descriptions and alternate downloads |
+| Full-screen image viewer | Direct pinch/pan, theme spatial double-tap zoom and arrow paging, native swipe paging | Inspect images without leaving the release; motion preference applies to animated transitions |
+| Filters / host menus | Native Material sheet and menu motion; animated sheet dismissal and host chevron | Expose choices without changing the navigation hierarchy |
 
 Spatial movement uses the theme's spring specs; opacity uses effects specs. The common focus outline provides a visible keyboard focus state. Buttons and icon controls keep at least 48 dp touch targets, and field/password error text remains readable independently of accent colors.
 

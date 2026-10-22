@@ -22,7 +22,7 @@ Use JDK 21 and Android SDK 37. Set `ANDROID_HOME`, or create an ignored `local.p
 ./gradlew.bat :app:assembleDebug
 ```
 
-On macOS/Linux, use `bash ./gradlew :app:assembleDebug`. Versioned APKs are written beneath `app/build/outputs/apk/` and copied to `build/apk/`, for example `MobilismMaterial_v0.1.1-debug.apk`. The build does not read `.env`, inject credentials, install an APK, or contact a device.
+On macOS/Linux, use `bash ./gradlew :app:assembleDebug`. Versioned APKs are written beneath `app/build/outputs/apk/` and copied to `build/apk/`, for example `MobilismMaterial_v0.1.2-debug.apk`. The build does not read `.env`, inject credentials, install an APK, or contact a device.
 
 Release builds are unsigned unless the process provides `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD`. Unsigned filenames retain the `-unsigned` suffix. Never commit signing material or credentials. The manual **Build APK** workflow accepts debug or release; release requires the four `ANDROID_*` signing secrets documented in the workflow. Automatic CI runs tests, lint, and a debug build.
 
@@ -31,14 +31,18 @@ During migration the app ID is `cum.ahfu.mobi.material`, separate from the legac
 ## First slice
 
 - Login, guest entry, account registration, password recovery, and first-use favourite section selection.
-- Apps, Games, and Books navigation; Home/Top feeds with pagination; release text, images, and links.
+- Apps, Games, and Books navigation; Latest/Top feeds with infinite scrolling and searchable category multiselect filters remembered per section.
+- Collapsible Description, What's new, Mod info, and Downloads cards. Missing post sections are omitted.
+- Structured release titles with separate version, build, and tag badges when parsing is unambiguous.
+- Read-only comments below Downloads, with automatic pagination and formatted quoted text.
+- Full-screen image viewer with a dark backdrop, swipe paging, pinch zoom, and double-tap zoom.
 - Error states distinguish blocked Network permission, DNS/network failure, server rejection, and session expiry. Passwords are not saved; session tokens use Android Keystore encryption.
 - Frappé colors, Geist/System font selection, persistent appearance preferences, JSON theme import, and reduced motion.
 - Native Expressive buttons, loading indicators, flexible app bars, and spring-based screen/press motion.
 
-Release downloads appear as host-name buttons with adjacent copy controls. Settings stores Real-Debrid and MegaDebrid keys encrypted and hides saved-key inputs. Supported hosts turn theme green using the intersection of [Mobilism's file-host directory](https://forum.mobilism.org/filehosts.xml) and each provider's published list. Aliases count as one named host in Settings. This indicator does not validate a key, subscription, or current host availability, and links still open in the device browser.
+Release downloads appear as host-name buttons with adjacent copy controls, grouped once per CPU architecture. Settings can prioritize selected hosts and collapse architectures other than the preferred CPU type. Universal and unlabeled downloads remain visible; compatibility cannot be inferred for unlabeled files. Settings stores Real-Debrid and MegaDebrid keys encrypted and hides saved-key inputs. Supported hosts turn theme green using the intersection of [Mobilism's file-host directory](https://forum.mobilism.org/filehosts.xml) and each provider's published list. Aliases count as one named host in the expandable Settings menu. This indicator does not validate a key, subscription, or current host availability, and links still open in the device browser.
 
-Unrestricted debrid downloads, background transfers, search, categories, comments, messages, and other legacy features are not ported. See [migration scope](docs/migration.md).
+Unrestricted debrid downloads, background transfers, search, comment posting, messages, and other legacy features are not ported. See [migration scope](docs/migration.md).
 
 ## Themes and motion
 

@@ -16,6 +16,7 @@ import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CardColors
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -66,13 +67,14 @@ fun ExpressiveButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     colors: ButtonColors = ButtonDefaults.buttonColors(),
+    compact: Boolean = false,
     content: @Composable RowScope.() -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     Button(
         onClick = onClick,
         shapes = ButtonDefaults.shapes(),
-        modifier = modifier.heightIn(min = 56.dp).focusOutline(interaction),
+        modifier = modifier.heightIn(min = if (compact) 48.dp else 56.dp).focusOutline(interaction),
         interactionSource = interaction,
         enabled = enabled,
         colors = colors,
@@ -103,6 +105,7 @@ fun AppIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifie
 fun ExpressiveCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    colors: CardColors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -114,7 +117,7 @@ fun ExpressiveCard(
     Card(
         onClick = onClick, interactionSource = interaction,
         shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        colors = colors,
         modifier = modifier.focusOutline(interaction).graphicsLayer { scaleX = scale; scaleY = scale },
         content = content,
     )

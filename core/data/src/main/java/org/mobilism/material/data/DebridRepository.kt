@@ -46,6 +46,17 @@ data class DebridState(val accounts: List<DebridAccount> = DebridProvider.entrie
 }
 
 object HostMatcher {
+    fun key(value: String): String? = domain(value)?.let { host ->
+        when (displayName(host)) {
+            "Rapidgator" -> "rapidgator.net"
+            "Uploadrar" -> "uploadrar.com"
+            "UpFiles" -> "upfiles.com"
+            "Filedot" -> "filedot.to"
+            "ZincDrive" -> "zincdrive.com"
+            else -> host
+        }
+    }
+
     fun domain(value: String): String? =
         (if (value.contains("://")) value else "https://$value").toHttpUrlOrNull()
             ?.host?.lowercase()?.trimEnd('.')?.removePrefix("www.")
@@ -92,6 +103,12 @@ class DebridRepository(context: Context) {
     private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS).callTimeout(30, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).build()
+
+    suspend fun fileHosts(): List<SupportedHost> = withContext(Dispatchers.IO) {
+        MobilismHosts.parse(get(MobilismHosts.URL)).map { domain ->
+            SupportedHost(checkNotNull(HostMatcher.key(domain)), HostMatcher.displayName(domain))
+        }.distinctBy { it.domain }.sortedBy { it.name.lowercase() }
+    }
 
     suspend fun load() = withContext(Dispatchers.IO) {
         mutex.withLock {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,6 +16,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -43,12 +45,14 @@ import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.ExpressiveCard
 import org.mobilism.material.designsystem.LoadingState
+import org.mobilism.material.designsystem.LocalAppTheme
 import org.mobilism.material.settings.AppearanceState
 import org.mobilism.material.settings.AppearanceStore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppearanceScreen(state: AppearanceState, store: AppearanceStore, onBack: () -> Unit) {
+    val activeTheme = LocalAppTheme.current
     val scope = rememberCoroutineScope()
     var importing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<ScreenError?>(null) }
@@ -65,7 +69,7 @@ fun AppearanceScreen(state: AppearanceState, store: AppearanceStore, onBack: () 
     }
     Scaffold(topBar = {
         TopAppBar(
-            title = { Text("Appearance") },
+            title = { AppHeading("Appearance", HeadingLevel.Page) },
             navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack) },
         )
     }) { insets ->
@@ -74,7 +78,7 @@ fun AppearanceScreen(state: AppearanceState, store: AppearanceStore, onBack: () 
             contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { Text("Theme", style = MaterialTheme.typography.headlineSmall) }
+            item { AppHeading("Theme", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall) }
             item {
                 Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     state.themes.forEach { theme ->
@@ -86,9 +90,10 @@ fun AppearanceScreen(state: AppearanceState, store: AppearanceStore, onBack: () 
                             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                                 RadioButton(selected = active, onClick = null)
                                 Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(theme.name, style = MaterialTheme.typography.titleMedium)
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        listOf(theme.colors.primary, theme.colors.secondary, theme.colors.tertiary).forEach { color ->
+                                    AppHeading(theme.name, HeadingLevel.Subsection, style = MaterialTheme.typography.titleMedium)
+                                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        listOf(theme.colors.primary, theme.colors.secondary, theme.colors.tertiary, theme.reading,
+                                            theme.featured, theme.personalization, theme.success).forEach { color ->
                                             Box(Modifier.size(24.dp).clip(MaterialTheme.shapes.small).background(color))
                                         }
                                     }
@@ -102,11 +107,12 @@ fun AppearanceScreen(state: AppearanceState, store: AppearanceStore, onBack: () 
                 ExpressiveButton(
                     onClick = { picker.launch(arrayOf("application/json", "text/plain")) },
                     enabled = !importing, modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = activeTheme.personalization, contentColor = activeTheme.onPersonalization),
                 ) { Text("Import theme") }
             }
             if (importing) item { LoadingState("Importing theme…", Modifier.fillMaxWidth()) }
             error?.let { problem -> item { ErrorPanel(problem) } }
-            item { Text("Font", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 16.dp)) }
+            item { AppHeading("Font", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 16.dp)) }
             item {
                 Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     AppFont.entries.forEach { font ->
@@ -122,7 +128,7 @@ fun AppearanceScreen(state: AppearanceState, store: AppearanceStore, onBack: () 
                     }
                 }
             }
-            item { Text("Motion", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 16.dp)) }
+            item { AppHeading("Motion", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 16.dp)) }
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),

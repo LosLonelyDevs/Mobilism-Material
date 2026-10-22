@@ -24,6 +24,18 @@ data class Release(
 
 data class ReleasePage(val items: List<Release>, val canLoadMore: Boolean)
 
+data class CommentQuote(val author: String, val html: String)
+data class ReleaseComment(
+    val id: Long, val author: String, val avatar: String?, val publishedAt: Long,
+    val contentHtml: String, val images: List<String> = emptyList(), val quotes: List<CommentQuote> = emptyList(),
+)
+data class CommentPage(val items: List<ReleaseComment>, val canLoadMore: Boolean)
+
+data class ReleaseCategory(val id: Long, val name: String, val group: String? = null)
+
+/** Additional filter dimensions can be added without changing feed navigation. */
+data class FeedFilters(val categoryIds: Set<Long> = emptySet())
+
 sealed interface AuthState {
     data object Restoring : AuthState
     data object SignedOut : AuthState
@@ -47,6 +59,8 @@ interface MobilismRepository {
     suspend fun signOut()
     suspend fun register(username: String, email: String, password: String)
     suspend fun restorePassword(email: String)
-    suspend fun releases(section: ContentSection, order: FeedOrder, page: Int): ReleasePage
+    suspend fun categories(section: ContentSection): List<ReleaseCategory>
+    suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters = FeedFilters()): ReleasePage
     suspend fun release(id: Long): Release
+    suspend fun comments(id: Long, page: Int): CommentPage
 }

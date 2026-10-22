@@ -18,6 +18,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -40,6 +44,7 @@ import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.AppTextButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.LoadingState
+import org.mobilism.material.designsystem.LocalAppTheme
 import org.mobilism.material.designsystem.focusOutline
 
 @Composable
@@ -68,12 +73,13 @@ fun LoginScreen(
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 Column(Modifier.padding(top = 48.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Mobilism", style = MaterialTheme.typography.displayMedium, color = MaterialTheme.colorScheme.primary)
+                    AppHeading("Mobilism", HeadingLevel.Page, style = MaterialTheme.typography.displayMedium)
                     Text("Your source for apps & books", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 val usernameInteraction = remember { MutableInteractionSource() }
                 OutlinedTextField(
                     value = username, onValueChange = { username = it }, label = { Text("Username") },
+                    leadingIcon = { Icon(Icons.Outlined.Person, null, tint = MaterialTheme.colorScheme.primary) },
                     enabled = !state.busy, singleLine = true,
                     interactionSource = usernameInteraction,
                     modifier = Modifier.fillMaxWidth().focusOutline(usernameInteraction),
@@ -83,6 +89,7 @@ fun LoginScreen(
                 val passwordInteraction = remember { MutableInteractionSource() }
                 OutlinedTextField(
                     value = password, onValueChange = { password = it }, label = { Text("Password") },
+                    leadingIcon = { Icon(Icons.Outlined.Lock, null, tint = MaterialTheme.colorScheme.secondary) },
                     enabled = !state.busy, singleLine = true,
                     interactionSource = passwordInteraction,
                     modifier = Modifier.fillMaxWidth().focusOutline(passwordInteraction),
@@ -102,7 +109,9 @@ fun LoginScreen(
                     Text(if (state.busy) "Signing in…" else "Login")
                 }
                 if (state.busy) LoadingState("Connecting to Mobilism", Modifier.fillMaxWidth())
-                AppTextButton("Continue as guest", onGuest, Modifier.fillMaxWidth(), enabled = !state.busy)
+                ExpressiveButton(onGuest, Modifier.fillMaxWidth(), enabled = !state.busy,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer)) { Text("Continue as guest") }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     AppTextButton("Forgot password?", onForgot, enabled = !state.busy)
                     AppTextButton("Register", onRegister, enabled = !state.busy)

@@ -75,8 +75,10 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState) {
     val nav = rememberNavController()
     val motion = screenMotion()
     val feed by model.feed.collectAsStateWithLifecycle()
+    val categories by model.categories.collectAsStateWithLifecycle()
     val appearance by model.appearance.state.collectAsStateWithLifecycle()
     val debrid by model.debrid.state.collectAsStateWithLifecycle()
+    val downloads by model.downloads.state.collectAsStateWithLifecycle()
     val start = androidx.compose.runtime.remember { if (model.preferredSection == null) "favourite" else "feed" }
     LaunchedEffect(Unit) {
         if (start == "feed") model.loadFeed(refresh = true)
@@ -100,10 +102,15 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState) {
                 onRelease = { id -> nav.navigate("release/$id") { launchSingleTop = true } },
                 onSettings = { nav.navigate("settings") { launchSingleTop = true } },
                 onSignOut = model::signOut,
+                categories = categories, onLoadCategories = model::loadCategories, onFilters = model::applyFilters,
             )
         }
         composable("settings") {
-            SettingsScreen(debrid, model.debrid, onAppearance = { nav.navigate("appearance") }, onBack = { nav.popBackStack() })
+            SettingsScreen(debrid, model.debrid, onAppearance = { nav.navigate("appearance") },
+                onDownloads = { nav.navigate("download-preferences") }, onBack = { nav.popBackStack() })
+        }
+        composable("download-preferences") {
+            DownloadSettingsScreen(downloads, model.downloads, model.debrid, onBack = { nav.popBackStack() })
         }
         composable("appearance") {
             AppearanceScreen(appearance, model.appearance, onBack = { nav.popBackStack() })
@@ -114,7 +121,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState) {
                 initializer { ReleaseViewModel(id, model.repository) }
             })
             val state by detail.state.collectAsStateWithLifecycle()
-            ReleaseScreen(state, debrid, onBack = { nav.popBackStack() }, onRetry = detail::load)
+            ReleaseScreen(state, debrid, downloads, onBack = { nav.popBackStack() }, onRetry = detail::load, onMoreComments = detail::loadComments)
         }
     }
 }

@@ -6,6 +6,12 @@
   "colors": {
     "success": "#A6D189",
     "onSuccess": "#232634",
+    "reading": "#EF9F76",
+    "onReading": "#232634",
+    "featured": "#E5C890",
+    "onFeatured": "#232634",
+    "personalization": "#F4B8E4",
+    "onPersonalization": "#232634",
     "primary": "#8CAAEE",
     "onPrimary": "#232634",
     "primaryContainer": "#414559",
