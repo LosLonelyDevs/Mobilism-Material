@@ -1,5 +1,21 @@
 # Verification
 
+## 0.1.3
+
+Completed on an Android 16 / API 36 emulator:
+
+- Debug and signed release builds pass; 37 regression tests pass; Android lint reports zero errors and 20 advisory warnings.
+- Native Apps search returns live artwork and releases. Scrolling a Contacts search exposed 27 distinct titles, beyond the server's ten-item page. Returning from a release preserves the query/results.
+- An unmatched query renders the empty state. Disabling the emulator network produces a retryable error; restoring connectivity and retrying returns results.
+- My Applications lists installed launcher apps and opens an Apps search from the selected app's label.
+- Watch and downloaded marks coexist and persist through process restart and APK replacement. Removal and Undo restore the record.
+- A real AdGuard watch finds a newer phone release. A TV variant initially exposed an identity ambiguity; the matching rule and regression test now reject it for the phone watch.
+- Moving the watch to the newer release preserves the older downloaded record.
+- Manifest version 0.1.3/build 4 and local release signature verified. No physical device was changed.
+- Repository signing secrets were provisioned through GitHub's encrypted API flow. A hosted manual release build succeeded and its signing certificate matched the published 0.1.2 APK.
+
+Update checks are manual and search up to three recent Apps result pages per watch. Automatic installed-version matching, background checks/notifications, bulk actions, complete history, and large-library performance remain unimplemented or unverified. Library data stays local to this installation. The Downloaded tab contains user marks, not native download jobs.
+
 ## 0.1.2
 
 Completed on an Android 16 / API 36 emulator:

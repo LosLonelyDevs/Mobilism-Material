@@ -9,7 +9,7 @@ This is an early source rewrite, not a feature-complete replacement. Debug compi
 | Module | Responsibility |
 | --- | --- |
 | `app` | Navigation, screens, view models, appearance preferences |
-| `core:data` | Mobilism API, session state, encrypted token storage |
+| `core:data` | Mobilism API, session state, encrypted token storage, local app library and version matching |
 | `core:designsystem` | Semantic themes, fonts, Expressive controls, motion |
 
 Legacy decoded Java, smali, resources, APKs, and local credentials are ignored. The new Gradle project does not compile or package them.
@@ -22,7 +22,7 @@ Use JDK 21 and Android SDK 37. Set `ANDROID_HOME`, or create an ignored `local.p
 ./gradlew.bat :app:assembleDebug
 ```
 
-On macOS/Linux, use `bash ./gradlew :app:assembleDebug`. Versioned APKs are written beneath `app/build/outputs/apk/` and copied to `build/apk/`, for example `MobilismMaterial_v0.1.2-debug.apk`. The build does not read `.env`, inject credentials, install an APK, or contact a device.
+On macOS/Linux, use `bash ./gradlew :app:assembleDebug`. Versioned APKs are written beneath `app/build/outputs/apk/` and copied to `build/apk/`, for example `MobilismMaterial_v0.1.3-debug.apk`. The build does not read `.env`, inject credentials, install an APK, or contact a device.
 
 Release builds are unsigned unless the process provides `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD`. Unsigned filenames retain the `-unsigned` suffix. Never commit signing material or credentials. The manual **Build APK** workflow accepts debug or release; release requires the four `ANDROID_*` signing secrets documented in the workflow. Automatic CI runs tests, lint, and a debug build.
 

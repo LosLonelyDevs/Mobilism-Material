@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import org.mobilism.material.designsystem.LocalAppTheme
+import org.mobilism.material.data.ReleaseTitles
 
 @Composable
 fun ReleaseTitleHeader(title: String) {

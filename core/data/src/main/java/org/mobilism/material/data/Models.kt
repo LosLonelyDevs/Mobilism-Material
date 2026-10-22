@@ -20,6 +20,7 @@ data class Release(
     val images: List<String> = emptyList(),
     val downloadLinks: List<String> = emptyList(),
     val browserUrl: String? = null,
+    val section: ContentSection? = null,
 )
 
 data class ReleasePage(val items: List<Release>, val canLoadMore: Boolean)
@@ -35,6 +36,11 @@ data class ReleaseCategory(val id: Long, val name: String, val group: String? = 
 
 /** Additional filter dimensions can be added without changing feed navigation. */
 data class FeedFilters(val categoryIds: Set<Long> = emptySet())
+
+enum class SearchScope(val label: String, val apiId: String, val section: ContentSection?) {
+    All("All releases", "all", null), Apps("Apps", "app", ContentSection.Apps),
+    Games("Games", "game", ContentSection.Games), Books("Books", "book", ContentSection.Books),
+}
 
 sealed interface AuthState {
     data object Restoring : AuthState
@@ -63,4 +69,5 @@ interface MobilismRepository {
     suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters = FeedFilters()): ReleasePage
     suspend fun release(id: Long): Release
     suspend fun comments(id: Long, page: Int): CommentPage
+    suspend fun search(query: String, scope: SearchScope, page: Int): ReleasePage
 }

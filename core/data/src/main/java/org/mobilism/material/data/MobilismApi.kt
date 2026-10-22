@@ -79,6 +79,14 @@ internal class MobilismApi(private val context: Context) {
             emptyRecordsAsArray = true).getJSONArray("response"))
     }
 
+    suspend fun search(query: String, scope: SearchScope, page: Int, token: String?): ReleasePage {
+        require(query.isNotBlank() && page > 0)
+        return SearchJson.page(request("search", token, form = mapOf(
+            "search" to query.trim(), "count" to page.toString(), "limits" to PAGE_SIZE.toString(),
+            "isrelease" to "1", "isdiscussion" to "0", "isother" to "0", "id" to scope.apiId,
+        )))
+    }
+
     private suspend fun request(path: String, token: String? = null, form: Map<String, String>? = null,
         emptyRecordsAsArray: Boolean = false): JSONObject =
         withContext(Dispatchers.IO) {

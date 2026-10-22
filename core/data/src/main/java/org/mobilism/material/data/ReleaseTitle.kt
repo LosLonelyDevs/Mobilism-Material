@@ -1,4 +1,4 @@
-package org.mobilism.material.ui
+package org.mobilism.material.data
 
 import org.jsoup.Jsoup
 

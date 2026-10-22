@@ -80,6 +80,9 @@ class DefaultMobilismRepository(context: Context) : MobilismRepository {
 
     override suspend fun comments(id: Long, page: Int): CommentPage = withSession { token -> api.comments(id, page, token) }
 
+    override suspend fun search(query: String, scope: SearchScope, page: Int): ReleasePage =
+        withSession { token -> api.search(query, scope, page, token) }
+
     override suspend fun register(username: String, email: String, password: String) = api.register(username, email, password)
 
     override suspend fun restorePassword(email: String) = api.restorePassword(email)

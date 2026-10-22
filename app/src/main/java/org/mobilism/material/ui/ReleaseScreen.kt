@@ -71,10 +71,18 @@ import org.mobilism.material.designsystem.LoadingState
 import org.mobilism.material.designsystem.LocalAppFont
 import org.mobilism.material.designsystem.LocalAppTheme
 import org.mobilism.material.settings.DownloadPreferences
+import org.mobilism.material.data.ContentSection
+import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.outlined.BookmarkRemove
+import androidx.compose.material.icons.outlined.DownloadDone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReleaseScreen(state: ReleaseState, debrid: DebridState, preferences: DownloadPreferences, onBack: () -> Unit, onRetry: () -> Unit, onMoreComments: () -> Unit) {
+fun ReleaseScreen(
+    state: ReleaseState, debrid: DebridState, preferences: DownloadPreferences, onBack: () -> Unit,
+    onRetry: () -> Unit, onMoreComments: () -> Unit, watched: Boolean, downloaded: Boolean,
+    onWatch: (Boolean) -> Unit, onDownloaded: (Boolean) -> Unit,
+) {
     val theme = LocalAppTheme.current
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
@@ -106,6 +114,24 @@ fun ReleaseScreen(state: ReleaseState, debrid: DebridState, preferences: Downloa
                     Box {
                         AppIconButton(Icons.Outlined.MoreVert, "Release options", { menu = true })
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = MaterialTheme.shapes.extraLarge) {
+                            if (it.section == ContentSection.Apps) {
+                                RoundedMenuItem(
+                                    label = if (watched) "Stop watching" else "Watch this version", accent = theme.featured,
+                                    icon = if (watched) Icons.Outlined.BookmarkRemove else Icons.Outlined.BookmarkAdd,
+                                    onClick = {
+                                        menu = false; onWatch(!watched)
+                                        scope.launch { snackbar.showSnackbar(if (watched) "Removed from watchlist" else "Added to watchlist") }
+                                    },
+                                )
+                                RoundedMenuItem(
+                                    label = if (downloaded) "Clear downloaded mark" else "Mark as downloaded", accent = theme.success,
+                                    icon = Icons.Outlined.DownloadDone,
+                                    onClick = {
+                                        menu = false; onDownloaded(!downloaded)
+                                        scope.launch { snackbar.showSnackbar(if (downloaded) "Downloaded mark cleared" else "Marked as downloaded") }
+                                    },
+                                )
+                            }
                             RoundedMenuItem(
                                 label = "Copy release URL", accent = theme.featured, icon = Icons.Outlined.ContentCopy,
                                 onClick = {

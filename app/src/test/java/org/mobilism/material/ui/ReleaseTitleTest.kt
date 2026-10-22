@@ -2,6 +2,8 @@ package org.mobilism.material.ui
 
 import org.junit.Assert.*
 import org.junit.Test
+import org.mobilism.material.data.ReleaseTitle
+import org.mobilism.material.data.ReleaseTitles
 
 class ReleaseTitleTest {
     @Test fun separatesVersionBuildAndMultipleTags() {

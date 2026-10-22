@@ -55,6 +55,7 @@ class MobilismViewModel(
     val appearance: AppearanceStore,
     val debrid: DebridRepository,
 ) : ViewModel() {
+    val library = org.mobilism.material.data.AppLibraryStore(context)
     val downloads = DownloadPreferencesStore(context)
     private val preferences = context.getSharedPreferences("material-navigation", Context.MODE_PRIVATE)
     val preferredSection: ContentSection?

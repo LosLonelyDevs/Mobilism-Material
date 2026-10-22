@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -79,6 +80,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState) {
     val appearance by model.appearance.state.collectAsStateWithLifecycle()
     val debrid by model.debrid.state.collectAsStateWithLifecycle()
     val downloads by model.downloads.state.collectAsStateWithLifecycle()
+    val library by model.library.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val start = androidx.compose.runtime.remember { if (model.preferredSection == null) "favourite" else "feed" }
     LaunchedEffect(Unit) {
         if (start == "feed") model.loadFeed(refresh = true)
@@ -101,9 +104,33 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState) {
                 onRefresh = { model.loadFeed(refresh = true) }, onMore = { model.loadFeed() },
                 onRelease = { id -> nav.navigate("release/$id") { launchSingleTop = true } },
                 onSettings = { nav.navigate("settings") { launchSingleTop = true } },
+                onSearch = { nav.navigate("search") { launchSingleTop = true } },
+                onLibrary = { nav.navigate("library") { launchSingleTop = true } },
                 onSignOut = model::signOut,
                 categories = categories, onLoadCategories = model::loadCategories, onFilters = model::applyFilters,
             )
+        }
+        composable("search?query={query}", arguments = listOf(navArgument("query") { defaultValue = "" })) { entry ->
+            val query = entry.arguments?.getString("query").orEmpty()
+            val search: SearchViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
+                initializer { SearchViewModel(model.repository,
+                    if (query.isNotEmpty()) org.mobilism.material.data.SearchScope.Apps
+                    else org.mobilism.material.data.SearchScope.entries.first { it.section == feed.section }, query) }
+            })
+            val state by search.state.collectAsStateWithLifecycle()
+            SearchScreen(state, search::editQuery, search::submit, search::selectScope, search::loadMore,
+                onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() })
+        }
+        composable("library") { entry ->
+            val libraryModel: LibraryViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
+                initializer { LibraryViewModel(context, model.library, model.repository) }
+            })
+            val installed by libraryModel.installed.collectAsStateWithLifecycle()
+            val check by libraryModel.check.collectAsStateWithLifecycle()
+            LibraryScreen(library, installed, check, model.library,
+                onRefresh = libraryModel::refreshInstalled, onCheck = libraryModel::checkUpdates,
+                onSearch = { nav.navigate("search?query=${android.net.Uri.encode(it)}") },
+                onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() })
         }
         composable("settings") {
             SettingsScreen(debrid, model.debrid, onAppearance = { nav.navigate("appearance") },
@@ -121,7 +148,11 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState) {
                 initializer { ReleaseViewModel(id, model.repository) }
             })
             val state by detail.state.collectAsStateWithLifecycle()
-            ReleaseScreen(state, debrid, downloads, onBack = { nav.popBackStack() }, onRetry = detail::load, onMoreComments = detail::loadComments)
+            ReleaseScreen(state, debrid, downloads, onBack = { nav.popBackStack() }, onRetry = detail::load, onMoreComments = detail::loadComments,
+                watched = library.any { it.watched && it.release.id == state.release?.id },
+                downloaded = library.any { it.downloaded && it.release.id == state.release?.id },
+                onWatch = { enabled -> state.release?.let { model.library.watch(it, enabled) } },
+                onDownloaded = { enabled -> state.release?.let { model.library.downloaded(it, enabled) } })
         }
     }
 }

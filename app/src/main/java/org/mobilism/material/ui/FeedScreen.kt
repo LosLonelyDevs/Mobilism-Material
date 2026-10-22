@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -67,6 +68,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import org.mobilism.material.R
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import org.mobilism.material.data.AuthState
 import org.mobilism.material.data.ContentSection
 import org.mobilism.material.data.FeedOrder
@@ -89,6 +91,8 @@ fun FeedScreen(
     onMore: () -> Unit,
     onRelease: (Long) -> Unit,
     onSettings: () -> Unit,
+    onSearch: () -> Unit,
+    onLibrary: () -> Unit,
     onSignOut: () -> Unit,
     categories: CategoryState,
     onLoadCategories: () -> Unit,
@@ -136,6 +140,12 @@ fun FeedScreen(
                     )
                 }
                 HorizontalDivider(Modifier.padding(16.dp))
+                NavigationDrawerItem(
+                    label = { Text("My Applications") }, selected = false,
+                    icon = { Icon(Icons.Outlined.PhoneAndroid, null, tint = theme.featured) },
+                    onClick = { scope.launch { drawer.close() }; onLibrary() },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
                 val settingsInteraction = remember { MutableInteractionSource() }
                 NavigationDrawerItem(
                     label = { Text("Settings") }, selected = false,
@@ -168,6 +178,7 @@ fun FeedScreen(
                     subtitle = { Text(if (state.order == FeedOrder.Latest) "Latest releases" else "Most viewed releases") },
                     navigationIcon = { AppIconButton(Icons.Outlined.Menu, "Open navigation drawer", { scope.launch { drawer.open() } }) },
                     actions = {
+                        AppIconButton(Icons.Outlined.Search, "Search releases", onSearch)
                         AppIconButton(Icons.Outlined.FilterList, "Filters", openFilters)
                         AppIconButton(Icons.Outlined.Refresh, "Refresh", onRefresh)
                     },
@@ -232,7 +243,7 @@ fun FeedScreen(
 }
 
 @Composable
-private fun ReleaseCard(release: Release, accent: Color, onClick: () -> Unit) {
+internal fun ReleaseCard(release: Release, accent: Color, onClick: () -> Unit) {
     val title = remember(release.title) { Html.fromHtml(release.title, Html.FROM_HTML_MODE_LEGACY).toString() }
     val theme = LocalAppTheme.current
     ExpressiveCard(onClick, Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(

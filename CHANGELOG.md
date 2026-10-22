@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.3
+
+- Add native release search with section filters, artwork, infinite scrolling, empty states, and retry.
+- Add My Applications with installed launcher apps, optional system apps, watchlists, and marked-downloaded history.
+- Search Apps releases directly from an installed app; watch or mark a release from its overflow menu.
+- Persist the local library across restarts and support removal with Undo.
+- Check watched apps for newer releases using package identity, conservative title matching, numeric versions/builds, and separate TV/phone and preview/stable variants.
+- Preserve downloaded history when moving a watch to a newer version. Checks currently cover recent search matches and run manually while My Applications remains in navigation.
+- Publish signed APK prereleases after successful CI on a version-bumped main commit, with versioned filenames and checksums.
+
 ## 0.1.2
 
 - Format release names separately from explicit version/build markers and tags; preserve ambiguous titles intact.

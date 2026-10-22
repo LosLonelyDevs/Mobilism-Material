@@ -32,6 +32,12 @@ internal object ReleaseJson {
             images = images,
             downloadLinks = strings(json.optJSONArray("url")).mapNotNull(::webUrlOrNull),
             browserUrl = webUrlOrNull(json.optString("browser_url")),
+            section = when (json.optString("section")) {
+                "app", "apps" -> ContentSection.Apps
+                "game", "games" -> ContentSection.Games
+                "book", "books" -> ContentSection.Books
+                else -> null
+            },
         )
     }
 
