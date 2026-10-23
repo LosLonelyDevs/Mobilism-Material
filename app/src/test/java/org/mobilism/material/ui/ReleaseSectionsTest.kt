@@ -5,6 +5,24 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReleaseSectionsTest {
+    @Test fun recognizesDifferentNamedModsFromReleaseTitles() {
+        val cases = listOf(
+            Triple("ReVanced Extended", "v2.4.1-beta", "Mod"),
+            Triple("HushFacebook", "0.14.0", "MOD v0.14.0"),
+            Triple("Example.Custom+", "1.5.2", "Modded"),
+        )
+        cases.forEach { (name, version, tag) ->
+            val title = "Original App v4.2.0 [$name] [$tag]"
+            val html = """<p>Original app description.</p><strong>Original App 4.2.0<br/>- Original features</strong><strong><span>${name.lowercase()} $version</span><br/>- Custom theme<br/>- Extra controls</strong><p><a href="https://example.com/changes">Mod changelog</a></p><u>What's New:</u><p>App bug fixes.</p>"""
+            val result = ReleaseSections.parse(html, title)
+            val sections = result.associate { it.kind to Jsoup.parse(it.html).text() }
+            assertEquals(name, "Original app description. Original App 4.2.0 - Original features", sections[ReleaseSection.Description])
+            assertEquals(name, "${name.lowercase()} $version - Custom theme - Extra controls Mod changelog", sections[ReleaseSection.Mod])
+            assertEquals(name, "App bug fixes.", sections[ReleaseSection.Changes])
+            assertTrue(name, result.single { it.kind == ReleaseSection.Mod }.html.contains("https://example.com/changes"))
+        }
+    }
+
     @Test fun separatesHushfeedVersionedModBlockFromTikTokDescription() {
         val html = """<div>TikTok description.<br/><br/><b>Hushfeed 0.75.0<br/>- AMOLED dark theme<br/>- Accent color<br/>- Advanced downloads<br/><br/>Changes and bug fixes read here:</b><br/><a href="https://github.com/SysAdminDoc/HushFeed/releases/tag/v0.75.0">Changelog</a><br/><u>What's New:</u><br/>Bug fixes and performance improvements.<br/><b>This app has no advertisements</b><br/><u>More Info:</u><a href="https://example.com/store">Store</a></div>"""
         val result = ReleaseSections.parse(html, "TikTok v47.1.4 [HushFeed] v0.75.0 [Mod]")

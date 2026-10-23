@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Keep HushFeed's versioned feature list and changelog link in Mod info instead of Description.
+- Recognize named mod headings and keep their feature lists in Mod info.
 
 ## 0.1.6
 
