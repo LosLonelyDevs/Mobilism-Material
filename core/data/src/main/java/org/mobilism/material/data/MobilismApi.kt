@@ -53,7 +53,7 @@ internal class MobilismApi(private val context: Context) {
         require(categoryId == null || categoryId > 0)
         val category = categoryId?.toString() ?: "all"
         val path = "release/${section.apiPath}/category/$category/page/$page/limit/$PAGE_SIZE/orderby/${order.apiValue}/desc/0"
-        val response = request(path, token).getJSONArray("response")
+        val response = request(path, token, emptyRecordsAsArray = true).getJSONArray("response")
         return ReleaseJson.page(response)
     }
 

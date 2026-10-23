@@ -18,6 +18,7 @@ class DefaultMobilismRepository(context: Context) : MobilismRepository {
     private var pagerQuery: Query? = null
     private var pager: CategoryFeedPager? = null
     private var pagerPage = 0
+    private val pagerResults = mutableMapOf<Int, ReleasePage>()
     private val mutableAuth = MutableStateFlow<AuthState>(AuthState.Restoring)
     override val auth = mutableAuth.asStateFlow()
     @Volatile private var session: Session? = null
@@ -61,19 +62,32 @@ class DefaultMobilismRepository(context: Context) : MobilismRepository {
     }
 
     override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters): ReleasePage =
+        filteredReleasePages(page, filters.copy(categoryIds = emptySet()), newestFirst = order == FeedOrder.Latest) {
+            sourcePage -> categoryReleases(section, order, sourcePage, filters.categoryIds)
+        }
+
+    private suspend fun categoryReleases(section: ContentSection, order: FeedOrder, page: Int, categories: Set<Long>): ReleasePage =
         withSession { token ->
-            if (filters.categoryIds.isEmpty()) api.releases(section, order, page, token)
+            if (categories.isEmpty()) api.releases(section, order, page, token)
             else pagerMutex.withLock {
-                val query = Query(section, order, filters.categoryIds.toSet())
+                val query = Query(section, order, categories.toSet())
                 if (page == 1 || pagerQuery != query) {
                     pagerQuery = query
                     pagerPage = 0
+                    pagerResults.clear()
                     pager = CategoryFeedPager(query.categories, order) { category, sourcePage ->
                         api.releases(section, order, sourcePage, token, category)
                     }
                 }
-                check(page == pagerPage + 1) { "Feed pages must be loaded in sequence" }
-                checkNotNull(pager).nextPage().also { pagerPage = page }
+                // A date scan can fail after consuming several category pages. Retrying must replay them.
+                pagerResults[page] ?: run {
+                    check(page == pagerPage + 1) { "Feed pages must be loaded in sequence" }
+                    checkNotNull(pager).nextPage().also {
+                        pagerPage = page
+                        pagerResults[page] = it
+                        pagerResults.keys.removeAll { cached -> cached < page - 5 }
+                    }
+                }
             }
         }
 
@@ -99,8 +113,10 @@ class DefaultMobilismRepository(context: Context) : MobilismRepository {
 
     override suspend fun comments(id: Long, page: Int): CommentPage = withSession { token -> api.comments(id, page, token) }
 
-    override suspend fun search(query: String, scope: SearchScope, page: Int): ReleasePage =
-        withSession { token -> api.search(query, scope, page, token) }
+    override suspend fun search(query: String, scope: SearchScope, page: Int, filters: FeedFilters): ReleasePage =
+        filteredReleasePages(page, filters) { sourcePage ->
+            withSession { token -> api.search(query, scope, sourcePage, token) }
+        }
 
     override suspend fun register(username: String, email: String, password: String) = api.register(username, email, password)
 

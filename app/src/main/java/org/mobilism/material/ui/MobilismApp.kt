@@ -128,10 +128,14 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             val search: SearchViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
                 initializer { SearchViewModel(model.repository,
                     if (query.isNotEmpty()) org.mobilism.material.data.SearchScope.Apps
-                    else org.mobilism.material.data.SearchScope.entries.first { it.section == feed.section }, query) }
+                    else org.mobilism.material.data.SearchScope.entries.first { it.section == feed.section }, query,
+                    initialFilters = org.mobilism.material.data.ContentSection.entries.associateWith(model::filtersFor),
+                    onFiltersChanged = model::saveFilters) }
             })
             val state by search.state.collectAsStateWithLifecycle()
+            val searchCategories by search.categories.collectAsStateWithLifecycle()
             SearchScreen(state, search::editQuery, search::submit, search::selectScope, search::loadMore,
+                categories = searchCategories, onLoadCategories = search::loadCategories, onFilters = search::applyFilters,
                 onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() })
         }
         composable("library") { entry ->

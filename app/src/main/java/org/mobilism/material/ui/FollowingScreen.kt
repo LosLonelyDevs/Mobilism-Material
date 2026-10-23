@@ -157,6 +157,7 @@ private fun FollowingCard(entry: LibraryEntry, installed: InstalledVersion?, onR
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
             Text("Latest found: " + (latest?.version?.let { "v$it" } ?: "Version not detected") +
                 (latest?.build?.let { " (build $it)" } ?: ""), style = MaterialTheme.typography.bodyMedium)
+            ReleasePostDate((result.latest ?: entry.release).publishedAt)
             if (installed == null) Text("Tracking the followed release: " + (title.version?.let { "v$it" } ?: "Unknown version"),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (!result.comparable) Text("This version couldn't be compared automatically.", style = MaterialTheme.typography.bodySmall)

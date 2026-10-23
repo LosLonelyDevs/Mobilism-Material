@@ -14,8 +14,8 @@ android {
         applicationId = "cum.ahfu.mobi.material"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.1.6"
+        versionCode = 8
+        versionName = "0.1.7"
         testInstrumentationRunner = "org.mobilism.material.ReadmeScreenshotRunner"
     }
 
@@ -89,4 +89,5 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
 }

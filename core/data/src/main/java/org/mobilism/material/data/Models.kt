@@ -23,9 +23,10 @@ data class Release(
     val section: ContentSection? = null,
     val likeId: Long? = null,
     val liked: Boolean? = null,
+    val categoryId: Long? = null,
 )
 
-data class ReleasePage(val items: List<Release>, val canLoadMore: Boolean)
+data class ReleasePage(val items: List<Release>, val canLoadMore: Boolean, val lastPage: Int? = null)
 
 data class CommentQuote(val author: String, val html: String)
 data class ReleaseComment(
@@ -37,7 +38,23 @@ data class CommentPage(val items: List<ReleaseComment>, val canLoadMore: Boolean
 data class ReleaseCategory(val id: Long, val name: String, val group: String? = null)
 
 /** Additional filter dimensions can be added without changing feed navigation. */
-data class FeedFilters(val categoryIds: Set<Long> = emptySet())
+data class FeedFilters(
+    val categoryIds: Set<Long> = emptySet(),
+    val postedFrom: java.time.LocalDate? = null,
+    val postedThrough: java.time.LocalDate? = null,
+) {
+    val hasDates: Boolean get() = postedFrom != null || postedThrough != null
+    val isActive: Boolean get() = categoryIds.isNotEmpty() || hasDates
+    val validDates: Boolean get() = postedFrom == null || postedThrough == null || postedFrom <= postedThrough
+
+    fun matches(release: Release, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): Boolean {
+        if (categoryIds.isNotEmpty() && release.categoryId !in categoryIds) return false
+        if (!hasDates) return true
+        if (!validDates || release.publishedAt <= 0) return false
+        val date = java.time.Instant.ofEpochSecond(release.publishedAt).atZone(zone).toLocalDate()
+        return (postedFrom == null || date >= postedFrom) && (postedThrough == null || date <= postedThrough)
+    }
+}
 
 enum class SearchScope(val label: String, val apiId: String, val section: ContentSection?) {
     All("All releases", "all", null), Apps("Apps", "app", ContentSection.Apps),
@@ -72,5 +89,5 @@ interface MobilismRepository {
     suspend fun release(id: Long): Release
     suspend fun toggleLike(release: Release): Boolean
     suspend fun comments(id: Long, page: Int): CommentPage
-    suspend fun search(query: String, scope: SearchScope, page: Int): ReleasePage
+    suspend fun search(query: String, scope: SearchScope, page: Int, filters: FeedFilters = FeedFilters()): ReleasePage
 }

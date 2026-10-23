@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import org.mobilism.material.data.SearchScope
+import org.mobilism.material.data.FeedFilters
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.LoadingState
@@ -53,14 +54,19 @@ import org.mobilism.material.designsystem.LoadingState
 fun SearchScreen(
     state: SearchState, onQuery: (String) -> Unit, onSubmit: () -> Unit,
     onScope: (SearchScope) -> Unit, onMore: () -> Unit, onRelease: (Long) -> Unit, onBack: () -> Unit,
+    categories: CategoryState, onLoadCategories: () -> Unit, onFilters: (FeedFilters) -> Unit,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val list = rememberLazyListState()
     var filters by remember { mutableStateOf(false) }
+    var showReleaseFilters by remember { mutableStateOf(false) }
+    val openFilters = { keyboard?.hide(); onLoadCategories(); showReleaseFilters = true }
     val submit = { keyboard?.hide(); onSubmit() }
-    LaunchedEffect(state.submitted, state.scope) { list.scrollToItem(0) }
+    LaunchedEffect(state.submitted, state.scope, state.filters) { list.scrollToItem(0) }
+    if (showReleaseFilters) CategoryFilterSheet(categories, state.filters, onLoadCategories, onFilters,
+        onDismiss = { showReleaseFilters = false }, showCategories = state.scope.section != null)
     LaunchedEffect(list, state.items.size, state.busy, state.error, state.canLoadMore) {
-        if (state.items.isNotEmpty() && !state.busy && state.error == null && state.canLoadMore) {
+        if (state.items.isNotEmpty() && !state.busy && state.error == null && state.canLoadMore && !state.awaitingMore) {
             snapshotFlow { (list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.items.size - 3 }
                 .distinctUntilChanged().filter { it }.collect { onMore() }
         }
@@ -109,7 +115,9 @@ fun SearchScreen(
                         Text(state.scope.label)
                     }
                     ExpressiveButton(submit, compact = true, enabled = state.query.isNotBlank()) { Text("Search") }
+                    AppIconButton(Icons.Outlined.FilterList, "Release filters", openFilters)
                 }
+                ActiveFilterSummary(state.filters, openFilters, { onFilters(FeedFilters()) })
                 LazyColumn(state = list, modifier = Modifier.weight(1f),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -118,7 +126,13 @@ fun SearchScreen(
                     }
                     if (state.busy) item { LoadingState("Searching…", Modifier.fillMaxWidth()) }
                     state.error?.let { error -> item { ErrorPanel(error, onRetry = onMore) } }
-                    if (!state.busy && state.error == null && state.items.isEmpty()) item {
+                    if (!state.busy && state.error == null && state.awaitingMore) item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("No matches in the posts just checked.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            ExpressiveButton(onMore, Modifier.fillMaxWidth()) { Text("Keep looking") }
+                        }
+                    }
+                    if (!state.busy && state.error == null && state.items.isEmpty() && !state.awaitingMore) item {
                         Text(if (state.submitted.isEmpty()) "Find apps, games, and books." else "No releases found for “${state.submitted}”.",
                             Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

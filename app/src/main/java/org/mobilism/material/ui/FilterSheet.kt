@@ -110,8 +110,10 @@ fun CategoryFilterSheet(
     onRetry: () -> Unit,
     onApply: (FeedFilters) -> Unit,
     onDismiss: () -> Unit,
+    showCategories: Boolean = true,
 ) {
     var selected by remember { mutableStateOf(initial.categoryIds) }
+    var dates by remember { mutableStateOf(initial) }
     val sectionStyle = state.section.style()
     var search by remember { mutableStateOf("") }
     val visible = remember(state.items, search) {
@@ -120,10 +122,12 @@ fun CategoryFilterSheet(
     }
     FilterSheet(
         onDismiss = onDismiss,
-        onReset = { selected = emptySet(); search = "" },
-        onApply = { onApply(initial.copy(categoryIds = selected)) },
-        applyEnabled = selected.isEmpty() || (!state.busy && state.error == null),
+        onReset = { selected = emptySet(); dates = FeedFilters(); search = "" },
+        onApply = { onApply(dates.copy(categoryIds = selected)) },
+        applyEnabled = dates.validDates,
     ) {
+        item("post-date") { PostDateFilters(dates) { dates = it } }
+        if (!showCategories) return@FilterSheet
         item("category-header") {
             FilterSectionHeader("Categories · " + state.section.label,
                 if (selected.isEmpty()) "All categories. Select any combination to narrow the feed."

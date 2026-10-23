@@ -109,6 +109,7 @@ fun LibraryScreen(
                                     AppHeading(title.name, HeadingLevel.Subsection, style = MaterialTheme.typography.titleMedium)
                                     Text(listOfNotNull(title.version?.let { "v$it" }, title.build?.let { "build $it" }).joinToString(" · ")
                                         .ifBlank { "Version not detected" }, style = MaterialTheme.typography.bodySmall)
+                                    ReleasePostDate(entry.release.publishedAt)
                                 }
                                 AppIconButton(Icons.Outlined.DeleteOutline, "Remove ${title.name} from downloaded", {
                                     store.downloaded(entry.release, false)

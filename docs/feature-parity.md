@@ -5,12 +5,12 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 ## Implemented
 
 - Login, guest entry, account registration/password recovery screens, sign-out, and encrypted session storage.
-- Favourite starting section, Apps/Games/Books navigation, Latest/Top feeds, category multiselect, and pagination.
+- Favourite starting section, Apps/Games/Books navigation, Latest/Top feeds, category multiselect, inclusive post-date filters, and pagination.
 - Release details, formatted text, parsed title metadata, collapsible description/changelog/mod/download sections, and read-only paginated comments.
 - Full-screen images, zoom/paging, architecture groups, preferred hosts, host links, clipboard actions, and browser opening.
 - Material 3 Expressive components and motion, Frappé/Geist defaults, theme support, appearance preferences, and reduced motion. Theme import is hidden for now.
 - Encrypted debrid keys and supported-host indicators. These do not yet resolve unrestricted links or download files.
-- Native release search, section filters, paginated results, artwork, empty/error states, and retry.
+- Native release search with saved section/category/date filters, paginated results, artwork, empty/error states, and retry. Cards and release pages show the original post date.
 - My Applications with launcher-app discovery, installed-app search, optional system apps, downloaded marks, removal and Undo.
 - Release thumbs-up, visible watch/download controls, and optional auto-watch when opening a file host. Browser opens are a rough download signal, not completion tracking.
 - Following with installed-version baselines, automatic package/name matching, manual app linking, scheduled checks, and optional update notifications. Checks keep phone/TV and stable/preview releases separate. Following another version preserves downloaded history.

@@ -1,8 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.1.7
 
+Added post dates and shared browse/search filters.
+
+- Keep app names separate from versions when titles have extra labels, alternate version markers, or truncated tags.
+- Show post dates on release cards and pages, including downloaded and followed releases.
+- Add inclusive start/end date filters with Material date pickers. Save filters per section and carry them into search, including searches from installed apps.
+- Keep filtered pagination moving past unmatched pages. Offer a continue action for sparse results.
 - Detect Mod info from varied headings, feature wording, formatting, and nearby advertisement statements. Keep descriptions and changelogs separate.
+
+All 73 unit tests and eight emulator checks pass. Lint has no errors. Checked the title parser against the reported release formats.
 
 ## 0.1.6
 

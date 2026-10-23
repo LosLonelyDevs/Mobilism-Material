@@ -199,6 +199,7 @@ fun ReleaseScreen(
                     }
                     item {
                         Text("${release.author} · ${release.replies} replies", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        ReleasePostDate(release.publishedAt, Modifier.padding(top = 8.dp))
                     }
                     if (images.isNotEmpty()) item("images-${release.id}") {
                         ReleaseImageCarousel(images) { index -> gallery = images to index }

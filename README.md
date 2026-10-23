@@ -24,8 +24,8 @@ Screenshots use sample data. CI refreshes them on each version bump.
 
 ## What works
 
-- Apps, Games, and Books: search, Latest/Top feeds, category filters, and infinite scrolling.
-- Release pages: collapsible sections, grouped downloads, thumbs-up, read-only comments, and an image carousel with a full-screen viewer.
+- Apps, Games, and Books: search, Latest/Top feeds, category/date filters, and infinite scrolling. Search keeps your section's filters.
+- Release cards and pages: separate names/versions, post dates, collapsible sections, grouped downloads, thumbs-up, comments, and an image carousel with a full-screen viewer.
 - Following: installed-version checks, background checks, and optional update notifications. My Applications keeps installed apps and downloaded marks.
 - Preferred architectures and file hosts, debrid host indicators, font choices, and reduced motion.
 

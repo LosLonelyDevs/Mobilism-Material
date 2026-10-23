@@ -40,6 +40,7 @@ data class FeedState(
     val canLoadMore: Boolean = true,
     val error: ScreenError? = null,
     val filters: FeedFilters = FeedFilters(),
+    val awaitingMore: Boolean = false,
 )
 
 data class CategoryState(
@@ -147,11 +148,17 @@ class MobilismViewModel(
         loadFeed(refresh = true)
     }
 
-    private fun newFeed(section: ContentSection, order: FeedOrder = FeedOrder.Latest): FeedState {
+    fun filtersFor(section: ContentSection): FeedFilters {
         val ids = preferences.getStringSet("filters-" + section.name + "-categories", emptySet()).orEmpty()
             .mapNotNull { it.toLongOrNull()?.takeIf { id -> id > 0 } }.toSet()
-        return FeedState(section = section, order = order, filters = FeedFilters(ids))
+        fun date(key: String) = preferences.getString("filters-${section.name}-$key", null)?.let {
+            runCatching { java.time.LocalDate.parse(it) }.getOrNull()
+        }
+        return FeedFilters(ids, date("from"), date("through"))
     }
+
+    private fun newFeed(section: ContentSection, order: FeedOrder = FeedOrder.Latest) =
+        FeedState(section = section, order = order, filters = filtersFor(section))
 
     fun loadCategories() {
         val section = mutableFeed.value.section
@@ -178,11 +185,18 @@ class MobilismViewModel(
             ?.items.orEmpty().map { it.id }.toSet()
         val selected = if (allowed.isEmpty()) filters.categoryIds else filters.categoryIds.intersect(allowed)
         val normalized = filters.copy(categoryIds = if (selected == allowed) emptySet() else selected)
-        if (normalized == snapshot.filters) return
-        preferences.edit().putStringSet("filters-" + snapshot.section.name + "-categories",
-            normalized.categoryIds.map { it.toString() }.toSet()).apply()
+        saveFilters(snapshot.section, normalized)
+    }
+
+    fun saveFilters(section: ContentSection, filters: FeedFilters) {
+        if (!filters.validDates || filters == filtersFor(section)) return
+        preferences.edit().putStringSet("filters-${section.name}-categories", filters.categoryIds.map { it.toString() }.toSet())
+            .putString("filters-${section.name}-from", filters.postedFrom?.toString())
+            .putString("filters-${section.name}-through", filters.postedThrough?.toString()).apply()
+        val snapshot = mutableFeed.value
+        if (snapshot.section != section) return
         feedJob?.cancel()
-        mutableFeed.value = FeedState(section = snapshot.section, order = snapshot.order, filters = normalized)
+        mutableFeed.value = FeedState(section = section, order = snapshot.order, filters = filters)
         loadFeed(refresh = true)
     }
 
@@ -199,8 +213,9 @@ class MobilismViewModel(
                 val existing = if (refresh) emptyList() else snapshot.items
                 val combined = (existing + result.items).distinctBy { it.id }
                 mutableFeed.update { it.copy(
-                    items = combined, page = page, busy = false,
-                    canLoadMore = result.canLoadMore && (refresh || combined.size > existing.size),
+                    items = combined, page = result.lastPage ?: page, busy = false,
+                    awaitingMore = result.items.isEmpty() && result.canLoadMore,
+                    canLoadMore = result.canLoadMore && (result.items.isEmpty() || refresh || combined.size > existing.size),
                 ) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {

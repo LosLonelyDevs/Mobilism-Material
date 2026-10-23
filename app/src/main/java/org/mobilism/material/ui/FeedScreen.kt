@@ -21,11 +21,8 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.FilterList
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -114,7 +111,7 @@ fun FeedScreen(
         onApply = onFilters, onDismiss = { showFilters = false },
     )
     LaunchedEffect(listState, state.items.size, state.busy, state.canLoadMore, state.error) {
-        if (state.items.isNotEmpty() && !state.busy && state.canLoadMore && state.error == null) {
+        if (state.items.isNotEmpty() && !state.busy && state.canLoadMore && state.error == null && !state.awaitingMore) {
             snapshotFlow { (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.items.size - 3 }
                 .distinctUntilChanged().filter { it }.collect { onMore() }
         }
@@ -211,21 +208,7 @@ fun FeedScreen(
                         )
                     }
                 }
-                if (state.filters.categoryIds.isNotEmpty()) Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    AssistChip(
-                        onClick = openFilters, label = { Text("Categories (" + state.filters.categoryIds.size + ")") },
-                        leadingIcon = { Icon(Icons.Outlined.FilterList, null, Modifier.size(18.dp)) },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = sectionStyle.accent, labelColor = sectionStyle.onAccent,
-                            leadingIconContentColor = sectionStyle.onAccent,
-                        ), border = null,
-                    )
-                    AppIconButton(Icons.Outlined.Close, "Clear filters", { onFilters(FeedFilters()) })
-                }
+                ActiveFilterSummary(state.filters, openFilters, { onFilters(FeedFilters()) })
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                     LazyColumn(
                         state = listState,
@@ -240,7 +223,13 @@ fun FeedScreen(
                         state.error?.let { error -> item(key = "error") {
                             ErrorPanel(error, onRetry = if (state.items.isEmpty()) onRefresh else onMore)
                         } }
-                        if (!state.busy && state.error == null && state.items.isEmpty()) item(key = "empty") {
+                        if (!state.busy && state.error == null && state.awaitingMore) item(key = "continue") {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("No matches in the posts just checked.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                org.mobilism.material.designsystem.ExpressiveButton(onMore, Modifier.fillMaxWidth()) { Text("Keep looking") }
+                            }
+                        }
+                        if (!state.busy && state.error == null && state.items.isEmpty() && !state.canLoadMore) item(key = "empty") {
                             Text("No releases found.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge)
                         }
                     }
@@ -271,6 +260,7 @@ internal fun ReleaseCard(release: Release, accent: Color, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis,
                 )
                 Text(release.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                ReleasePostDate(release.publishedAt)
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)

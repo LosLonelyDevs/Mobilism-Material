@@ -1,6 +1,7 @@
 package org.mobilism.material.data
 
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -19,6 +20,8 @@ internal object ReleaseJson {
 
     fun parse(json: JSONObject): Release {
         val images = strings(json.optJSONArray("images")).mapNotNull(::webUrlOrNull).distinct()
+        val browserUrl = json.optString("browser_url").takeIf { it.isNotBlank() && it != "null" }
+            ?.let { "https://forum.mobilism.org/".toHttpUrl().resolve(it) }
         return Release(
             id = json.getLong("id"),
             title = json.optString("subject").ifBlank { "Untitled release" },
@@ -31,7 +34,9 @@ internal object ReleaseJson {
             contentHtml = json.optString("content"),
             images = images,
             downloadLinks = strings(json.optJSONArray("url")).mapNotNull(::webUrlOrNull),
-            browserUrl = webUrlOrNull(json.optString("browser_url")),
+            browserUrl = browserUrl?.toString(),
+            categoryId = json.optLong("forum_id").takeIf { it > 0 }
+                ?: browserUrl?.queryParameter("f")?.toLongOrNull()?.takeIf { it > 0 },
             likeId = json.optLong("like_id").takeIf { it > 0 },
             liked = ReleaseLikes.liked(json),
             section = when (json.optString("section")) {

@@ -98,12 +98,31 @@ class ReadmeScreenshots {
         if (android.os.Build.VERSION.SDK_INT >= 33) assertNotNull((icon as AdaptiveIconDrawable).monochrome)
     }
 
+    @Test fun dateFiltersValidateResetAndUseCalendarDialog() {
+        val start = java.time.LocalDate.of(2026, 10, 10)
+        var applied: FeedFilters? = null
+        screen {
+            CategoryFilterSheet(CategoryState(items = listOf(ReleaseCategory(10, "Sample category"))),
+                FeedFilters(setOf(10), start, start.minusDays(1)), {}, { applied = it }, {})
+        }
+        compose.onNodeWithText("Apply filters").assertIsNotEnabled()
+        compose.onNodeWithText("On or after").performClick()
+        compose.onNodeWithText("Set date").assertExists()
+        compose.onAllNodesWithText("Cancel").onLast().performClick()
+        compose.onNodeWithText("Reset").performClick()
+        compose.onNodeWithText("Apply filters").assertIsEnabled().performClick()
+        compose.waitUntil { applied != null }
+        assertEquals(FeedFilters(), applied)
+    }
+
     @Test fun hostOpenSignalsDownloadButCopyDoesNot() {
         var downloads = 0
         releaseScreen(onDownloaded = { if (it) downloads++ })
         compose.onNode(verticalList).performScrollToNode(hasText("Downloads"))
         compose.onAllNodesWithContentDescription("Copy Rapidgator link").onFirst().performClick()
         compose.runOnIdle { assertEquals(0, downloads) }
+        // The copy snackbar can cover a host button on shorter viewports.
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Link copied").fetchSemanticsNodes().isEmpty() }
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val monitor = instrumentation.addMonitor(IntentFilter(Intent.ACTION_VIEW).apply {
             addDataScheme("https")
@@ -111,7 +130,7 @@ class ReadmeScreenshots {
         },
             Instrumentation.ActivityResult(Activity.RESULT_OK, null), true)
         try {
-            compose.onAllNodesWithText("Rapidgator").onFirst().performClick()
+            compose.onAllNodesWithText("Rapidgator").onFirst().performScrollTo().assertIsDisplayed().performClick()
             compose.runOnIdle { assertEquals(1, downloads) }
             assertEquals(1, monitor.hits)
         } finally {
@@ -183,6 +202,6 @@ class ReadmeScreenshots {
         SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)
 
     private fun sample(id: Long, title: String, image: String) = Release(
-        id, title, "Sample release", asset(image), 0, 8, 2048, section = ContentSection.Apps,
+        id, title, "Sample release", asset(image), 1792497600, 8, 2048, section = ContentSection.Apps,
     )
 }
