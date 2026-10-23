@@ -11,7 +11,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 class MobilismApplication : Application() {
-    val repository by lazy { DefaultMobilismRepository(this) }
+    val contentPreferences by lazy { org.mobilism.material.data.ContentPreferencesStore(this) }
+    val repository by lazy { DefaultMobilismRepository(this, contentPreferences) }
     val appearance by lazy { AppearanceStore(this) }
     val debrid by lazy { DebridRepository(this) }
     val library by lazy { AppLibraryStore(this) }

@@ -37,6 +37,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,7 +65,8 @@ import org.mobilism.material.designsystem.LocalAppTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearance: () -> Unit, onDownloads: () -> Unit, onBack: () -> Unit) {
+fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearance: () -> Unit, onDownloads: () -> Unit, onBack: () -> Unit,
+    hideAdult: Boolean = false, onHideAdult: (Boolean) -> Unit = {}) {
     val theme = LocalAppTheme.current
     Scaffold(topBar = {
         TopAppBar(title = { AppHeading("Settings", HeadingLevel.Page) }, navigationIcon = {
@@ -105,6 +107,9 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
                 }
             }
             item {
+                ContentVisibilitySetting(hideAdult, onHideAdult)
+            }
+            item {
                 AppHeading("Debrid accounts", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall)
                 Text(
                     "Green download buttons mark Mobilism file hosts supported by a provider with a saved key. Links open in your browser.",
@@ -115,6 +120,23 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             items(state.accounts, key = { it.provider }) { account ->
                 DebridAccountCard(account, repository, state)
             }
+        }
+    }
+}
+
+@Composable
+internal fun ContentVisibilitySetting(hideAdult: Boolean, onHideAdult: (Boolean) -> Unit) {
+    androidx.compose.material3.Surface(shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Row(Modifier.fillMaxWidth().toggleable(hideAdult, role = androidx.compose.ui.semantics.Role.Switch,
+            onValueChange = onHideAdult).padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                AppHeading("Hide 18+ content", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
+                Text("Hide adult categories and releases in browsing and search.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            androidx.compose.material3.Switch(hideAdult, onCheckedChange = null)
         }
     }
 }

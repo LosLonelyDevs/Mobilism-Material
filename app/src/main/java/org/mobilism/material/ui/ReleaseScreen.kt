@@ -12,6 +12,7 @@ import android.widget.TextView
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -198,8 +199,14 @@ fun ReleaseScreen(
                         ReleaseTitleHeader(release.title)
                     }
                     item {
-                        Text("${release.author} · ${release.replies} replies", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        ReleasePostDate(release.publishedAt, Modifier.padding(top = 8.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(release.author, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("${release.replies} replies", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            ReleasePostDate(release.publishedAt)
+                        }
                     }
                     if (images.isNotEmpty()) item("images-${release.id}") {
                         ReleaseImageCarousel(images) { index -> gallery = images to index }

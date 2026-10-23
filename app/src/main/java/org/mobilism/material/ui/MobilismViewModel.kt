@@ -1,5 +1,6 @@
 package org.mobilism.material.ui
 
+
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -56,6 +57,7 @@ class MobilismViewModel(
     val appearance: AppearanceStore,
     val debrid: DebridRepository,
     val library: org.mobilism.material.data.AppLibraryStore,
+    val contentPreferences: org.mobilism.material.data.ContentPreferencesStore = org.mobilism.material.data.ContentPreferencesStore(context),
 ) : ViewModel() {
     val downloads = DownloadPreferencesStore(context)
     private val preferences = context.getSharedPreferences("material-navigation", Context.MODE_PRIVATE)
@@ -73,6 +75,18 @@ class MobilismViewModel(
     private var loginJob: Job? = null
 
     init {
+        var previousVisibility = contentPreferences.hideAdult.value
+        viewModelScope.launch {
+            contentPreferences.hideAdult.collect { hidden ->
+                if (hidden == previousVisibility) return@collect
+                previousVisibility = hidden
+                feedJob?.cancel()
+                categoryJob?.cancel()
+                mutableCategories.value = CategoryState(section = mutableFeed.value.section)
+                mutableFeed.value = newFeed(mutableFeed.value.section, mutableFeed.value.order)
+                loadFeed(refresh = true)
+            }
+        }
         viewModelScope.launch {
             try { debrid.load() }
             catch (cancelled: CancellationException) { throw cancelled }

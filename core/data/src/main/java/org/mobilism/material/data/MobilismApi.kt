@@ -43,17 +43,17 @@ internal class MobilismApi(private val context: Context) {
         return Session(username, token, result.optString("refresh_token").takeUnless { it.isBlank() || it == "null" })
     }
 
-    suspend fun categories(token: String?): Map<ContentSection, List<ReleaseCategory>> {
-        val response = request("release/category", token)
+    suspend fun categories(token: String?, hideAdult: Boolean = false): Map<ContentSection, List<ReleaseCategory>> {
+        val response = request("release/category", token, hideAdult = hideAdult)
         return ContentSection.entries.associateWith { CategoryJson.parse(response, it) }
     }
 
-    suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, token: String?, categoryId: Long? = null): ReleasePage {
+    suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, token: String?, categoryId: Long? = null, hideAdult: Boolean = false): ReleasePage {
         require(page > 0)
         require(categoryId == null || categoryId > 0)
         val category = categoryId?.toString() ?: "all"
         val path = "release/${section.apiPath}/category/$category/page/$page/limit/$PAGE_SIZE/orderby/${order.apiValue}/desc/0"
-        val response = request(path, token, emptyRecordsAsArray = true).getJSONArray("response")
+        val response = request(path, token, emptyRecordsAsArray = true, hideAdult = hideAdult).getJSONArray("response")
         return ReleaseJson.page(response)
     }
 
@@ -99,21 +99,24 @@ internal class MobilismApi(private val context: Context) {
             emptyRecordsAsArray = true).getJSONArray("response"))
     }
 
-    suspend fun search(query: String, scope: SearchScope, page: Int, token: String?): ReleasePage {
+    suspend fun search(query: String, scope: SearchScope, page: Int, token: String?, hideAdult: Boolean = false): ReleasePage {
         require(query.isNotBlank() && page > 0)
         return SearchJson.page(request("search", token, form = mapOf(
             "search" to query.trim(), "count" to page.toString(), "limits" to PAGE_SIZE.toString(),
             "isrelease" to "1", "isdiscussion" to "0", "isother" to "0", "id" to scope.apiId,
-        )))
+        ), hideAdult = hideAdult))
     }
 
     private suspend fun request(path: String, token: String? = null, form: Map<String, String>? = null,
-        emptyRecordsAsArray: Boolean = false): JSONObject =
+        emptyRecordsAsArray: Boolean = false, hideAdult: Boolean = false): JSONObject =
         withContext(Dispatchers.IO) {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.INTERNET) != PackageManager.PERMISSION_GRANTED) {
                 throw ApiFailure(FailureKind.Permission, "Network access is disabled for Mobilism. Enable Network in app permissions.")
             }
-            val builder = Request.Builder().url(BASE_URL.resolve(path)!!).header("Accept", "application/json")
+            val url = BASE_URL.resolve(path)!!.newBuilder().apply {
+                if (hideAdult) addQueryParameter("no_adult", "1")
+            }.build()
+            val builder = Request.Builder().url(url).header("Accept", "application/json")
             // This client is used only for the API origin, never images or download URLs.
             token?.let { builder.header("X-Auth-Token", it) }
             form?.let { fields ->

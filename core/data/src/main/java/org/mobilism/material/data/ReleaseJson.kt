@@ -35,7 +35,8 @@ internal object ReleaseJson {
             images = images,
             downloadLinks = strings(json.optJSONArray("url")).mapNotNull(::webUrlOrNull),
             browserUrl = browserUrl?.toString(),
-            categoryId = json.optLong("forum_id").takeIf { it > 0 }
+            categoryId = json.optLong("category_id").takeIf { it > 0 }
+                ?: json.optLong("forum_id").takeIf { it > 0 }
                 ?: browserUrl?.queryParameter("f")?.toLongOrNull()?.takeIf { it > 0 },
             likeId = json.optLong("like_id").takeIf { it > 0 },
             liked = ReleaseLikes.liked(json),

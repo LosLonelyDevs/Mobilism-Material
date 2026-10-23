@@ -13,6 +13,24 @@ class FeedFiltersTest {
     private fun release(id: Long, timestamp: String = "2026-10-10T12:00:00Z", category: Long? = 10) =
         Release(id, "Example v1.0", "", null, Instant.parse(timestamp).epochSecond, 0, 0, categoryId = category)
 
+    @Test fun hiddenCategoriesDoNotEndPaginationWithoutOtherFilters() = runBlocking {
+        val result = filteredReleasePages(1, FeedFilters(), excludedCategories = setOf(20)) { page ->
+            ReleasePage(listOf(release(page.toLong(), category = if (page < 3) 20 else 10)), true)
+        }
+        assertEquals(listOf(3L), result.items.map { it.id })
+        assertEquals(3, result.lastPage)
+        assertTrue(result.canLoadMore)
+    }
+
+    @Test fun hiddenCategoriesCombineWithSelectedCategoriesAndDates() = runBlocking {
+        val result = filteredReleasePages(1, FeedFilters(setOf(10, 20), date, date), excludedCategories = setOf(20)) {
+            ReleasePage(listOf(release(1, category = 20), release(2, category = 30),
+                release(3, "2026-10-11T12:00:00Z"), release(4)), false)
+        }
+        assertEquals(listOf(4L), result.items.map { it.id })
+        assertFalse(result.canLoadMore)
+    }
+
     @Test fun dateBoundsIncludeTheWholeLocalDayAndRespectCategories() {
         val filters = FeedFilters(setOf(10), date, date)
         val zone = ZoneId.of("America/New_York")

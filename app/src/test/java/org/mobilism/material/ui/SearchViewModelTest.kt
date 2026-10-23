@@ -17,6 +17,24 @@ class SearchViewModelTest {
     @Before fun setMain() = Dispatchers.setMain(dispatcher)
     @After fun resetMain() = Dispatchers.resetMain()
 
+    @Test fun changingContentVisibilityReplacesSearchResultsAndKeepsFilters() = runTest(dispatcher) {
+        val filters = FeedFilters(postedFrom = LocalDate.of(2026, 10, 1))
+        val hidden = MutableStateFlow(false)
+        val repository = SearchRepository().apply {
+            response = ReleasePage(listOf(Release(1, "Example v1", "", null, 1, 0, 0)), true)
+        }
+        val model = SearchViewModel(repository, SearchScope.Apps, "Example",
+            mapOf(ContentSection.Apps to filters), hideAdultContent = hidden)
+        advanceUntilIdle()
+        repository.response = ReleasePage(listOf(Release(2, "Another example v1", "", null, 1, 0, 0)), false)
+        hidden.value = true
+        advanceUntilIdle()
+        assertEquals(2, repository.requests.size)
+        assertEquals(1, repository.requests.last().page)
+        assertEquals(filters, repository.requests.last().filters)
+        assertEquals(listOf(2L), model.state.value.items.map { it.id })
+    }
+
     @Test fun installedAppSearchAndResubmissionKeepActiveFilters() = runTest(dispatcher) {
         val filters = FeedFilters(setOf(10, 20), LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 20))
         val repository = SearchRepository()

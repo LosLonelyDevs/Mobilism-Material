@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
@@ -110,9 +111,24 @@ class ReadmeScreenshots {
         compose.onNodeWithText("Set date").assertExists()
         compose.onAllNodesWithText("Cancel").onLast().performClick()
         compose.onNodeWithText("Reset").performClick()
+        compose.onNodeWithText("On or after").assertDoesNotExist()
+        compose.onNodeWithText("On or before").assertDoesNotExist()
         compose.onNodeWithText("Apply filters").assertIsEnabled().performClick()
         compose.waitUntil { applied != null }
         assertEquals(FeedFilters(), applied)
+    }
+
+    @Test fun dateFiltersStartCollapsedWithoutActiveDates() {
+        screen {
+            CategoryFilterSheet(CategoryState(items = listOf(ReleaseCategory(10, "Sample category"))),
+                FeedFilters(categoryIds = setOf(10)), {}, {}, {})
+        }
+        compose.onNodeWithText("On or after").assertDoesNotExist()
+        compose.onNodeWithText("Post date").performClick()
+        compose.onNodeWithText("On or after").assertIsDisplayed()
+        compose.onNodeWithText("On or before").assertIsDisplayed()
+        compose.onNodeWithText("Post date").performClick()
+        compose.onNodeWithText("On or after").assertDoesNotExist()
     }
 
     @Test fun hostOpenSignalsDownloadButCopyDoesNot() {
@@ -135,6 +151,25 @@ class ReadmeScreenshots {
             assertEquals(1, monitor.hits)
         } finally {
             instrumentation.removeMonitor(monitor)
+        }
+    }
+
+    @Test fun hideAdultContentDefaultsOffAndPersistsThroughSettingsToggle() {
+        val context = object : ContextWrapper(compose.activity) {
+            override fun getSharedPreferences(name: String, mode: Int) =
+                super.getSharedPreferences("screenshot-test-$name", mode)
+        }
+        val preferences = context.getSharedPreferences("content-preferences", Context.MODE_PRIVATE)
+        preferences.edit().clear().commit()
+        try {
+            val store = ContentPreferencesStore(context)
+            screen { ContentVisibilitySetting(store.hideAdult.collectAsState().value, store::hideAdult) }
+            compose.onNodeWithText("Hide 18+ content").assertIsOff().performClick().assertIsOn()
+            assertTrue(ContentPreferencesStore(context).hideAdult.value)
+            compose.onNodeWithText("Hide 18+ content").performClick().assertIsOff()
+            assertFalse(ContentPreferencesStore(context).hideAdult.value)
+        } finally {
+            preferences.edit().clear().commit()
         }
     }
 

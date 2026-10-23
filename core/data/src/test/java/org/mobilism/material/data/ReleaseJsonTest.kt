@@ -6,6 +6,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReleaseJsonTest {
+    @Test fun feedCategoryIdIsPreservedForVisibilityFilters() {
+        val release = ReleaseJson.parse(JSONObject("""{"id":42,"category_id":"20","forum_id":10}"""))
+        assertEquals(20L, release.categoryId)
+        val fallback = ReleaseJson.parse(JSONObject("""{"id":42,"category_id":0,"forum_id":10}"""))
+        assertEquals(10L, fallback.categoryId)
+    }
+
     @Test fun serverCappedPageStillAllowsAnotherPage() {
         val response = JSONArray().apply { repeat(10) { put(JSONObject().put("id", it + 1)) } }
         val page = ReleaseJson.page(response)

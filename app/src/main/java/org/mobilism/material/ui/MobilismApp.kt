@@ -29,7 +29,7 @@ import org.mobilism.material.designsystem.screenMotion
 @Composable
 fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, onNotificationHandled: () -> Unit = {}) {
     val model: MobilismViewModel = viewModel(factory = viewModelFactory {
-        initializer { MobilismViewModel(app, app.repository, app.appearance, app.debrid, app.library) }
+        initializer { MobilismViewModel(app, app.repository, app.appearance, app.debrid, app.library, app.contentPreferences) }
     })
     val auth by model.auth.collectAsStateWithLifecycle()
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -130,7 +130,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                     if (query.isNotEmpty()) org.mobilism.material.data.SearchScope.Apps
                     else org.mobilism.material.data.SearchScope.entries.first { it.section == feed.section }, query,
                     initialFilters = org.mobilism.material.data.ContentSection.entries.associateWith(model::filtersFor),
-                    onFiltersChanged = model::saveFilters) }
+                    onFiltersChanged = model::saveFilters, hideAdultContent = model.contentPreferences.hideAdult) }
             })
             val state by search.state.collectAsStateWithLifecycle()
             val searchCategories by search.categories.collectAsStateWithLifecycle()
@@ -162,8 +162,10 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() })
         }
         composable("settings") {
+            val hideAdult by model.contentPreferences.hideAdult.collectAsStateWithLifecycle()
             SettingsScreen(debrid, model.debrid, onAppearance = { nav.navigate("appearance") },
-                onDownloads = { nav.navigate("download-preferences") }, onBack = { nav.popBackStack() })
+                onDownloads = { nav.navigate("download-preferences") }, onBack = { nav.popBackStack() },
+                hideAdult = hideAdult, onHideAdult = model.contentPreferences::hideAdult)
         }
         composable("download-preferences") {
             DownloadSettingsScreen(downloads, model.downloads, model.debrid, onBack = { nav.popBackStack() })

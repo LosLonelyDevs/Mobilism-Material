@@ -6,15 +6,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class DefaultMobilismRepository(context: Context) : MobilismRepository {
+class DefaultMobilismRepository(context: Context, private val contentPreferences: ContentPreferencesStore = ContentPreferencesStore(context)) : MobilismRepository {
     private val api = MobilismApi(context.applicationContext)
     private val store = SessionStore(context.applicationContext)
     private val reactions = context.getSharedPreferences("release-reactions", Context.MODE_PRIVATE)
     private val authMutex = Mutex()
     private val categoryMutex = Mutex()
-    private var categoryCache: Map<ContentSection, List<ReleaseCategory>>? = null
+    private val categoryCache = mutableMapOf<Boolean, Map<ContentSection, List<ReleaseCategory>>>()
     private val pagerMutex = Mutex()
-    private data class Query(val section: ContentSection, val order: FeedOrder, val categories: Set<Long>)
+    private data class Query(val section: ContentSection, val order: FeedOrder, val categories: Set<Long>, val hideAdult: Boolean)
     private var pagerQuery: Query? = null
     private var pager: CategoryFeedPager? = null
     private var pagerPage = 0
@@ -55,28 +55,45 @@ class DefaultMobilismRepository(context: Context) : MobilismRepository {
     }
 
     override suspend fun categories(section: ContentSection): List<ReleaseCategory> = withSession { token ->
-        categoryMutex.withLock {
-            val catalog = categoryCache ?: api.categories(token).also { categoryCache = it }
-            catalog.getValue(section)
+        catalog(contentPreferences.hideAdult.value, token).getValue(section)
+    }
+
+    private suspend fun catalog(hideAdult: Boolean, token: String?) = categoryMutex.withLock {
+        categoryCache[hideAdult] ?: api.categories(token, hideAdult).also { categoryCache[hideAdult] = it }
+    }
+
+    private suspend fun excludedCategories(hideAdult: Boolean): Set<Long> {
+        if (!hideAdult) return emptySet()
+        return withSession { token ->
+            val all = catalog(false, token).values.flatten().map { it.id }.toSet()
+            val visible = catalog(true, token).values.flatten().map { it.id }.toSet()
+            // Use the server's category policy; names such as Young Adult are not 18+ flags.
+            all - visible
         }
     }
 
-    override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters): ReleasePage =
-        filteredReleasePages(page, filters.copy(categoryIds = emptySet()), newestFirst = order == FeedOrder.Latest) {
-            sourcePage -> categoryReleases(section, order, sourcePage, filters.categoryIds)
+    override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters): ReleasePage {
+        val hideAdult = contentPreferences.hideAdult.value
+        val excluded = excludedCategories(hideAdult)
+        val categories = filters.categoryIds - excluded
+        if (filters.categoryIds.isNotEmpty() && categories.isEmpty()) return ReleasePage(emptyList(), false)
+        return filteredReleasePages(page, filters.copy(categoryIds = emptySet()),
+            newestFirst = order == FeedOrder.Latest, excludedCategories = excluded) { sourcePage ->
+            categoryReleases(section, order, sourcePage, categories, hideAdult)
         }
+    }
 
-    private suspend fun categoryReleases(section: ContentSection, order: FeedOrder, page: Int, categories: Set<Long>): ReleasePage =
+    private suspend fun categoryReleases(section: ContentSection, order: FeedOrder, page: Int, categories: Set<Long>, hideAdult: Boolean): ReleasePage =
         withSession { token ->
-            if (categories.isEmpty()) api.releases(section, order, page, token)
+            if (categories.isEmpty()) api.releases(section, order, page, token, hideAdult = hideAdult)
             else pagerMutex.withLock {
-                val query = Query(section, order, categories.toSet())
+                val query = Query(section, order, categories.toSet(), hideAdult)
                 if (page == 1 || pagerQuery != query) {
                     pagerQuery = query
                     pagerPage = 0
                     pagerResults.clear()
                     pager = CategoryFeedPager(query.categories, order) { category, sourcePage ->
-                        api.releases(section, order, sourcePage, token, category)
+                        api.releases(section, order, sourcePage, token, category, hideAdult)
                     }
                 }
                 // A date scan can fail after consuming several category pages. Retrying must replay them.
@@ -113,10 +130,12 @@ class DefaultMobilismRepository(context: Context) : MobilismRepository {
 
     override suspend fun comments(id: Long, page: Int): CommentPage = withSession { token -> api.comments(id, page, token) }
 
-    override suspend fun search(query: String, scope: SearchScope, page: Int, filters: FeedFilters): ReleasePage =
-        filteredReleasePages(page, filters) { sourcePage ->
-            withSession { token -> api.search(query, scope, sourcePage, token) }
+    override suspend fun search(query: String, scope: SearchScope, page: Int, filters: FeedFilters): ReleasePage {
+        val hideAdult = contentPreferences.hideAdult.value
+        return filteredReleasePages(page, filters, excludedCategories = excludedCategories(hideAdult)) { sourcePage ->
+            withSession { token -> api.search(query, scope, sourcePage, token, hideAdult) }
         }
+    }
 
     override suspend fun register(username: String, email: String, password: String) = api.register(username, email, password)
 

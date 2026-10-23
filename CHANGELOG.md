@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8
+
+- Put post dates beside replies and views in lists, and beside the author and replies on release pages. Remove the Posted label.
+- Collapse Post date filters unless a date filter is active. Make active filter pills smaller and add space below the tabs.
+- Add a Hide 18+ content setting for browsing and search. Keep it off by default and use Mobilism's category exclusions.
+
 ## 0.1.7
 
 Added post dates and shared browse/search filters.

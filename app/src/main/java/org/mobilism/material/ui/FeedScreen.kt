@@ -260,8 +260,8 @@ internal fun ReleaseCard(release: Release, accent: Color, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis,
                 )
                 Text(release.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                ReleasePostDate(release.publishedAt)
-                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
                         Text("${release.replies} replies", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
@@ -270,6 +270,7 @@ internal fun ReleaseCard(release: Release, accent: Color, onClick: () -> Unit) {
                         Icon(Icons.Outlined.Visibility, null, Modifier.size(14.dp), tint = theme.featured)
                         Text("${release.views} views", style = MaterialTheme.typography.labelSmall, color = theme.featured)
                     }
+                    ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
                 }
             }
         }

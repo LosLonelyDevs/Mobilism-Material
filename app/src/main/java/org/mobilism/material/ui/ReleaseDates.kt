@@ -1,6 +1,5 @@
 package org.mobilism.material.ui
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -12,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import java.time.Instant
 import java.time.ZoneId
@@ -26,12 +26,12 @@ private fun dateFormatter(): DateTimeFormatter =
     DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(LocalConfiguration.current.locales[0])
 
 @Composable
-fun ReleasePostDate(timestamp: Long, modifier: Modifier = Modifier) {
+fun ReleasePostDate(timestamp: Long, modifier: Modifier = Modifier, textStyle: TextStyle = MaterialTheme.typography.bodySmall) {
     if (timestamp <= 0) return
     val date = Instant.ofEpochSecond(timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
-        Text("Posted ${date.format(dateFormatter())}", style = MaterialTheme.typography.bodySmall,
+        Text(date.format(dateFormatter()), style = textStyle,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -45,11 +45,13 @@ fun ActiveFilterSummary(filters: FeedFilters, onEdit: () -> Unit, onClear: () ->
         filters.postedFrom?.let { add("From ${it.format(formatter)}") }
         filters.postedThrough?.let { add("Through ${it.format(formatter)}") }
     }
-    FlowRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+    FlowRow(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         labels.forEach { label ->
-            ExpressiveButton(onEdit, compact = true, colors = ButtonDefaults.filledTonalButtonColors()) { Text(label) }
+            ExpressiveButton(onEdit, compact = true, minHeight = 40.dp,
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                colors = ButtonDefaults.filledTonalButtonColors()) { Text(label) }
         }
         AppIconButton(Icons.Outlined.Close, "Clear filters", onClear)
     }
@@ -60,10 +62,10 @@ fun ActiveFilterSummary(filters: FeedFilters, onEdit: () -> Unit, onClear: () ->
 fun PostDateFilters(filters: FeedFilters, onChange: (FeedFilters) -> Unit) {
     var editing by remember { mutableStateOf<String?>(null) }
     val formatter = dateFormatter()
-    Column(Modifier.fillMaxWidth().then(if (LocalReducedMotion.current) Modifier else
-        Modifier.animateContentSize(MaterialTheme.motionScheme.fastSpatialSpec())),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilterSectionHeader("Post date", "Use either date or both. Selected days are included, in your time zone.")
+    CollapsibleSection("post-date-filter", "Post date", Icons.Outlined.CalendarMonth,
+        MaterialTheme.colorScheme.tertiary, initiallyExpanded = filters.hasDates) {
+        Text("Use either date or both. Selected days are included, in your time zone.",
+            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         listOf("On or after" to filters.postedFrom, "On or before" to filters.postedThrough).forEach { (label, date) ->
             ExpressiveCard({ editing = label }, Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
                 containerColor = if (date == null) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.tertiaryContainer)) {

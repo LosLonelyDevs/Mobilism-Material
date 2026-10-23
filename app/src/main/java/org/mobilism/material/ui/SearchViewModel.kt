@@ -1,5 +1,6 @@
 package org.mobilism.material.ui
 
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
@@ -27,6 +28,7 @@ class SearchViewModel(
     initialQuery: String = "",
     initialFilters: Map<ContentSection, FeedFilters> = emptyMap(),
     private val onFiltersChanged: (ContentSection, FeedFilters) -> Unit = { _, _ -> },
+    hideAdultContent: kotlinx.coroutines.flow.StateFlow<Boolean>? = null,
 ) : ViewModel() {
     private val savedFilters = SearchScope.entries.associateWith { initialFilters[it.section] ?: FeedFilters() }.toMutableMap()
     private val mutableState = MutableStateFlow(SearchState(scope = initialScope, query = initialQuery,
@@ -37,7 +39,21 @@ class SearchViewModel(
     private var categoryJob: Job? = null
     private var job: Job? = null
 
-    init { if (initialQuery.isNotBlank()) submit() }
+    init {
+        if (initialQuery.isNotBlank()) submit()
+        hideAdultContent?.let { visibility ->
+            var previous = visibility.value
+            viewModelScope.launch {
+                visibility.collect { hidden ->
+                    if (hidden == previous) return@collect
+                    previous = hidden
+                    categoryJob?.cancel()
+                    mutableCategories.value = CategoryState(section = mutableState.value.scope.section ?: ContentSection.Apps)
+                    if (mutableState.value.submitted.isNotEmpty()) submit()
+                }
+            }
+        }
+    }
 
     fun editQuery(value: String) { mutableState.update { it.copy(query = value) } }
 
