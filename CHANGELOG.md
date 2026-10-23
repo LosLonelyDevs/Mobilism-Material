@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Recognize named mod headings and keep their feature lists in Mod info.
+- Detect Mod info from varied headings, feature wording, formatting, and nearby advertisement statements. Keep descriptions and changelogs separate.
 
 ## 0.1.6
 

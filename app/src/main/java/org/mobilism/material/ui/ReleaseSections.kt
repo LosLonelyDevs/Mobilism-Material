@@ -8,58 +8,85 @@ import org.jsoup.nodes.TextNode
 enum class ReleaseSection(val title: String) { Description("Description"), Changes("What's new"), Mod("Mod info") }
 data class ReleaseTextSection(val kind: ReleaseSection, val html: String)
 
-/** Split headings without dropping nested formatting or treating prose as a heading. */
+internal data class ReleaseLine(
+    val nodes: List<TextNode>,
+    val text: String,
+    val styled: Boolean,
+    val listItem: Boolean,
+    val linkOnly: Boolean,
+    var kind: ReleaseSection = ReleaseSection.Description,
+    var boundary: Boolean = false,
+    var advertising: Boolean = false,
+)
+
+/** Classify visible lines, then split the original DOM so links and formatting survive. */
 object ReleaseSections {
-    private val heading = Regex("""(?i)^\s*(description|overview|more\s+info|what['’]?s\s+new(?:\s+in\s+this\s+version)?|changelog|change\s+log|mod\s+(?:info(?:rmation)?|features)|modded\s+info)\s*(?::\s*(.*))?$""")
-    private val modBullet = Regex("""(?i)^[◉•●✓✔★\-]+\s*(premium|pro|vip|paid)\s+(activated|unlocked)\b.*""")
+    private val heading = Regex("""(?ix)^\s*(
+        description | overview | more\s+info |
+        what['’]?s\s+new(?:\s+in\s+this\s+version)? | changelog | change\s+log |
+        mod(?:ded)?(?:\s+(?:info(?:rmation)?|features|details|notes|version))?(?:\s*[/&+]\s*(?:info|features|details))? |
+        modifications? | what['’]?s\s+(?:modded|modified) | about\s+(?:this\s+)?mod |
+        patch(?:ed)?\s+(?:info|details|features)
+        )\s*(?::\s*(.*))?$""")
     private val decoration = Regex("""^[\s\p{So}\p{Sk}\p{Cf}\uFFFD*#_\[\]<>|=~\-]+|[\s\p{So}\p{Sk}\p{Cf}\uFFFD*#_\[\]<>|=~\-]+$""")
-    private val modCredit = Regex("""(?i)^mod\s+by\s+\S.{0,80}$""")
-    private val titleTag = Regex("""\[([^\[\]]+)]""")
-    private val modTag = Regex("""(?i)^mod(?:ded)?(?:\s.*)?$""")
-    private val namedVersion = Regex("""(?i)^(.+?)\s+v?\d+(?:\.\d+)+(?:[-+][\w.-]+)?$""")
-    private val featureBullet = Regex("""^(?:[-•●◉✓✔★]|\d+[.)])\s+\S.*$""")
+    private val modCredit = Regex("""(?i)^(?:mod(?:ded|ified)?|patched|cracked|repacked)\s+by\s+\S.{0,80}$""")
+    private val advertising = Regex("""(?i)^this\s+(?:app|application|game)\s+(?:has|contains|includes|does\s+not\s+contain)\s+(?:[\w-]+\s+){0,3}(?:advertisements?|ads)[.!]?$""")
+    private val styledTags = setOf("b", "strong", "u", "h1", "h2", "h3", "h4", "h5", "h6")
 
     fun parse(html: String, releaseTitle: String = ""): List<ReleaseTextSection> {
-        val tags = titleTag.findAll(Jsoup.parseBodyFragment(releaseTitle).text()).map { it.groupValues[1].trim() }.toList()
-        val modNames = if (tags.any(modTag::matches)) tags.filterNot(modTag::matches).map { it.lowercase() }.toSet() else emptySet()
-        fun isNamedModBlock(node: Element): Boolean {
-            if (modNames.isEmpty()) return false
-            val lines = node.wholeText().lineSequence().map(String::trim).filter(String::isNotBlank).take(2).toList()
-            if (lines.size < 2 || !featureBullet.matches(lines[1])) return false
-            val name = namedVersion.matchEntire(lines[0].replace(decoration, "").trim())?.groupValues?.get(1)
-            return name?.lowercase() in modNames
-        }
+        val body = Jsoup.parseBodyFragment(html).body()
+        val lines = lines(body)
+        val replacements = mutableMapOf<TextNode, String>()
         var current = ReleaseSection.Description
-        fun split(node: Node): List<Pair<ReleaseSection, Node>> {
-            // Named mods can use their own version heading instead of "Mod Info".
-            if (node is Element && node.normalName() in setOf("b", "strong") &&
-                (modBullet.matches(node.text().trim()) || isNamedModBlock(node))) {
-                current = ReleaseSection.Mod
-            }
-            if (node is TextNode) {
-                if (node.text().trim().equals("This app has no advertisements", ignoreCase = true)) current = ReleaseSection.Mod
-                val parent = node.parent()
-                val ancestors = generateSequence(parent) { it.parent() }.toList()
-                val block = ancestors.firstOrNull { it.isBlock }
-                val headingContext = parent?.isBlock == true || block?.text()?.trim() == node.text().trim() ||
-                    ancestors.takeWhile { !it.isBlock }.any { it.normalName() in setOf("b", "strong", "u", "h1", "h2", "h3", "h4", "h5", "h6") }
-                val labelText = node.text().trim().replace(decoration, "").trim()
-                if (headingContext && modCredit.matches(labelText)) current = ReleaseSection.Mod
-                val match = if (headingContext) heading.matchEntire(labelText) else null
-                if (match != null) {
-                    val label = match.groupValues[1].lowercase()
+        lines.forEach { line ->
+            val labelText = line.text.trim().replace(decoration, "").trim()
+            val match = if (line.linkOnly) null else heading.matchEntire(labelText)
+            when {
+                match != null -> {
+                    val label = match.groupValues[1].lowercase().replace(Regex("""\s+"""), " ")
                     current = when {
-                        label.startsWith("mod") -> ReleaseSection.Mod
-                        label == "description" || label == "overview" || label == "more info" -> ReleaseSection.Description
-                        else -> ReleaseSection.Changes
+                        label in setOf("description", "overview", "more info") -> ReleaseSection.Description
+                        (label.startsWith("what") && label.contains("new")) || label in setOf("changelog", "change log") -> ReleaseSection.Changes
+                        else -> ReleaseSection.Mod
                     }
-                    val rest = match.groupValues[2]
-                    if (label == "more info") return listOf(current to node.clone())
-                    return if (rest.isBlank()) emptyList() else listOf(current to TextNode(rest))
+                    line.kind = current
+                    line.boundary = true
+                    if (label != "more info") {
+                        val rest = match.groupValues[2]
+                        var toRemove = if (rest.isBlank()) line.text.length else line.text.lastIndexOf(rest)
+                        line.nodes.forEach { node ->
+                            val raw = node.wholeText
+                            val count = toRemove.coerceIn(0, raw.length)
+                            replacements[node] = raw.drop(count)
+                            toRemove -= count
+                        }
+                    }
                 }
-                return listOf(current to node.clone())
+                modCredit.matches(labelText) -> {
+                    current = ReleaseSection.Mod
+                    line.kind = current
+                    line.boundary = true
+                }
+                advertising.matches(labelText) -> {
+                    line.kind = ReleaseSection.Mod
+                    line.advertising = true
+                    line.boundary = true
+                    // This footer ends the previous section; it does not make every following line mod info.
+                    current = ReleaseSection.Description
+                }
+                else -> line.kind = current
             }
-            if (node !is Element || node.childNodeSize() == 0) return listOf(current to node.clone())
+        }
+        ReleaseModHeuristics.classify(lines, releaseTitle)
+        val kinds = lines.flatMap { line -> line.nodes.map { it to line.kind } }.toMap()
+        var lastKind = ReleaseSection.Description
+        fun split(node: Node): List<Pair<ReleaseSection, Node>> {
+            if (node is TextNode) {
+                lastKind = kinds[node] ?: lastKind
+                val text = replacements[node] ?: node.wholeText
+                return if (text.isEmpty()) emptyList() else listOf(lastKind to TextNode(text))
+            }
+            if (node !is Element || node.childNodeSize() == 0) return listOf(lastKind to node.clone())
             val output = mutableListOf<Pair<ReleaseSection, Node>>()
             node.childNodes().flatMap { split(it) }.forEach { (kind, child) ->
                 val wrapper = if (output.lastOrNull()?.first == kind) output.last().second as Element
@@ -68,10 +95,46 @@ object ReleaseSections {
             }
             return output
         }
-        val fragments = Jsoup.parseBodyFragment(html).body().childNodes().flatMap { split(it) }
+        val fragments = body.childNodes().flatMap { split(it) }
         return ReleaseSection.entries.mapNotNull { kind ->
-            val body = fragments.filter { it.first == kind }.joinToString("") { it.second.outerHtml() }
-            if (Jsoup.parseBodyFragment(body).text().isBlank()) null else ReleaseTextSection(kind, body)
+            val content = fragments.filter { it.first == kind }.joinToString("") { it.second.outerHtml() }
+            if (Jsoup.parseBodyFragment(content).text().isBlank()) null else ReleaseTextSection(kind, content)
         }
+    }
+
+    private fun lines(body: Element): List<ReleaseLine> {
+        val result = mutableListOf<ReleaseLine>()
+        val pending = mutableListOf<TextNode>()
+        fun flush() {
+            val text = pending.joinToString("") { it.wholeText }
+            if (text.isNotBlank()) {
+                val visible = pending.filter { !it.isBlank }
+                fun ancestors(node: TextNode) = generateSequence(node.parent()) { it.parent() }.takeWhile { it != body }
+                result += ReleaseLine(
+                    pending.toList(), text,
+                    styled = visible.any { node -> ancestors(node).any { it.normalName() in styledTags } },
+                    listItem = visible.any { node -> ancestors(node).any { it.normalName() == "li" } },
+                    linkOnly = visible.all { node -> ancestors(node).any { it.normalName() == "a" } },
+                )
+            }
+            pending.clear()
+        }
+        fun visit(node: Node) {
+            when (node) {
+                is TextNode -> pending += node
+                is Element -> {
+                    if (node.normalName() == "br") flush()
+                    else {
+                        val multilineStyle = node.normalName() in styledTags && node.selectFirst("br") != null
+                        if (node.isBlock || multilineStyle) flush()
+                        node.childNodes().forEach(::visit)
+                        if (node.isBlock || multilineStyle) flush()
+                    }
+                }
+            }
+        }
+        body.childNodes().forEach(::visit)
+        flush()
+        return result
     }
 }

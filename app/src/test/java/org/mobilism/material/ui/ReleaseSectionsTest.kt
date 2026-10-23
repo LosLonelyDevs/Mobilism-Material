@@ -5,6 +5,98 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReleaseSectionsTest {
+    @Test fun findsUnlabelledModDetailsOnEitherSideOfAdvertisementStatements() {
+        val statements = listOf("This app has no advertisements", "This app has advertisements", "This app has no credit advertisements")
+        statements.forEach { statement ->
+            listOf(true, false).forEach { before ->
+                val details = "<p>Premium features unlocked.</p><p>License verification disabled.</p>"
+                val ad = "<b>${statement.substringBeforeLast(' ')} <span>${statement.substringAfterLast(' ')}</span></b><br>"
+                val html = "<p>Read books and organize your library.</p>" +
+                    (if (before) details + ad else ad + details) +
+                    "<u>More Info:</u><a href=\"https://example.com/store\">Store</a>"
+                val sections = ReleaseSections.parse(html).associate { it.kind to Jsoup.parse(it.html).text() }
+                assertEquals("$statement, before=$before", "Read books and organize your library. More Info:Store", sections[ReleaseSection.Description])
+                assertTrue(sections.getValue(ReleaseSection.Mod).contains("Premium features unlocked."))
+                assertTrue(sections.getValue(ReleaseSection.Mod).contains("License verification disabled."))
+                assertTrue(sections.getValue(ReleaseSection.Mod).contains(statement))
+            }
+        }
+    }
+
+    @Test fun usesNearbyAdvertisingContextForASingleModFeature() {
+        val html = "<p>App description.</p><strong>Build notes</strong><ul><li>Ads removed.</li></ul><p><a href=\"https://example.com/notes\">Release notes</a></p><p>This app contains no advertisements.</p>"
+        val sections = ReleaseSections.parse(html)
+        assertEquals("App description.", Jsoup.parse(sections.single { it.kind == ReleaseSection.Description }.html).text())
+        val mod = sections.single { it.kind == ReleaseSection.Mod }.html
+        assertTrue(Jsoup.parse(mod).text().contains("Build notes"))
+        assertTrue(mod.contains("<li>Ads removed.</li>"))
+        assertTrue(mod.contains("https://example.com/notes"))
+    }
+
+    @Test fun findsAnUnformattedModLineWithoutAbsorbingTheFollowingProse() {
+        val html = "<p>App description.</p><p>This app has no advertisements</p><p>Premium unlocked.</p><p>Available for phones and tablets.</p>"
+        val sections = ReleaseSections.parse(html).associate { it.kind to Jsoup.parse(it.html).text() }
+        assertEquals("App description. Available for phones and tablets.", sections[ReleaseSection.Description])
+        assertEquals("This app has no advertisements Premium unlocked.", sections[ReleaseSection.Mod])
+    }
+
+    @Test fun recognizesModHeadingVariantsAndSplitFormatting() {
+        listOf("MOD", "Mod notes", "What's modded", "What's modified", "Modifications", "Patch details", "About this mod", "MOD INFO / FEATURES").forEach { heading ->
+            val html = "<p>App description.</p><b>$heading:</b><p>Extra controls.</p><u>What's New:</u><p>Bug fixes.</p>"
+            val sections = ReleaseSections.parse(html).associate { it.kind to Jsoup.parse(it.html).text() }
+            assertEquals(heading, "App description.", sections[ReleaseSection.Description])
+            assertEquals(heading, "Extra controls.", sections[ReleaseSection.Mod])
+            assertEquals(heading, "Bug fixes.", sections[ReleaseSection.Changes])
+        }
+        val split = ReleaseSections.parse("<p>App description.</p><strong>Mod <span>Info</span>:</strong><p><em>Extra</em> controls.</p>")
+        assertEquals(listOf(ReleaseSection.Description, ReleaseSection.Mod), split.map { it.kind })
+        assertTrue(split.last().html.contains("<em>Extra</em>"))
+        assertEquals("Extra controls.", Jsoup.parse(split.last().html).text())
+    }
+
+    @Test fun guessesCustomBuildNotesWithoutMatchingATitleTag() {
+        val html = "<p>App description.</p><strong>Custom build</strong><ul><li>Trackers removed</li><li>Signature checks disabled</li><li>Extra theme options</li></ul><p>Note: uninstall the original app first.</p><u>What's New:</u><p>Bug fixes.</p>"
+        val sections = ReleaseSections.parse(html).associate { it.kind to Jsoup.parse(it.html).text() }
+        assertEquals("App description.", sections[ReleaseSection.Description])
+        assertTrue(sections.getValue(ReleaseSection.Mod).startsWith("Custom build"))
+        assertTrue(sections.getValue(ReleaseSection.Mod).contains("Extra theme options"))
+        assertTrue(sections.getValue(ReleaseSection.Mod).contains("uninstall the original"))
+        assertEquals("Bug fixes.", sections[ReleaseSection.Changes])
+    }
+
+    @Test fun advertisingStatementDoesNotPullInMarketingFeaturesOrChangelog() {
+        val html = "<p>Listen to music.</p><b>Premium features</b><ul><li>Download music offline</li><li>Enjoy ad-free listening</li><li>Choose a dark theme</li></ul><u>What's New:</u><p>Removed ads from the welcome screen.</p><p>This app has no advertisements</p><p>Available for phones and tablets.</p><u>More Info:</u><a href=\"https://example.com/store\">Store</a>"
+        val sections = ReleaseSections.parse(html, "Music v1.2.3 [Mod]").associate { it.kind to Jsoup.parse(it.html).text() }
+        assertTrue(sections.getValue(ReleaseSection.Description).contains("Premium features"))
+        assertTrue(sections.getValue(ReleaseSection.Description).contains("Download music offline"))
+        assertTrue(sections.getValue(ReleaseSection.Description).contains("Available for phones"))
+        assertEquals("Removed ads from the welcome screen.", sections[ReleaseSection.Changes])
+        assertEquals("This app has no advertisements", sections[ReleaseSection.Mod])
+    }
+
+    @Test fun advertisingMentionsInsideProseAreNotSectionAnchors() {
+        val html = "<p>This app has no advertisements while you read, and supports offline books.</p><p>Premium features unlock more themes when you subscribe.</p>"
+        val sections = ReleaseSections.parse(html)
+        assertEquals(listOf(ReleaseSection.Description), sections.map { it.kind })
+        assertEquals(Jsoup.parse(html).text(), Jsoup.parse(sections.single().html).text())
+    }
+
+    @Test fun combinesWeakCustomBuildCluesWithAdvertisingContext() {
+        val html = "<p>App description.</p><b>Community edition 2.4.0</b><ul><li>AMOLED theme</li><li>Accent color</li></ul><p>This app has no advertisements</p>"
+        val sections = ReleaseSections.parse(html, "Video v4.2.0 [Mod]").associate { it.kind to Jsoup.parse(it.html).text() }
+        assertEquals("App description.", sections[ReleaseSection.Description])
+        assertTrue(sections.getValue(ReleaseSection.Mod).contains("Community edition 2.4.0"))
+        assertTrue(sections.getValue(ReleaseSection.Mod).contains("Accent color"))
+    }
+
+    @Test fun keepsOriginalAppFeaturesAndPurchaseConditionsInDescription() {
+        val html = "<p>App description.</p><b>Video 4.2.0</b><ul><li>AMOLED theme</li><li>Accent color</li><li>Premium features unlocked when you subscribe.</li></ul><p>This app has no advertisements</p>"
+        val sections = ReleaseSections.parse(html, "Video v4.2.0 [Mod]").associate { it.kind to Jsoup.parse(it.html).text() }
+        assertTrue(sections.getValue(ReleaseSection.Description).contains("Video 4.2.0"))
+        assertTrue(sections.getValue(ReleaseSection.Description).contains("when you subscribe"))
+        assertEquals("This app has no advertisements", sections[ReleaseSection.Mod])
+    }
+
     @Test fun recognizesDifferentNamedModsFromReleaseTitles() {
         val cases = listOf(
             Triple("ReVanced Extended", "v2.4.1-beta", "Mod"),
