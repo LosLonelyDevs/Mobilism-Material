@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.9
+
+- Verify Real-Debrid keys and MegaDebrid tokens before saving. Recheck saved accounts when the app starts and when refreshing hosts.
+- Make green host buttons resolve downloads through verified debrid accounts and open the direct link. Try the other supported service if the first fails.
+- Show download errors with an option to open the original host. Keep copying links unchanged, and record a download only after opening a link.
+
 ## 0.1.8
 
 - Put post dates beside replies and views in lists, and beside the author and replies on release pages. Remove the Posted label.

@@ -27,9 +27,10 @@ Screenshots use sample data. CI refreshes them on each version bump.
 - Apps, Games, and Books: search, Latest/Top feeds, category/date filters, and infinite scrolling. Search keeps your section's filters.
 - Release cards and pages: separate names/versions, post dates, collapsible sections, grouped downloads, thumbs-up, comments, and an image carousel with a full-screen viewer.
 - Following: installed-version checks, background checks, and optional update notifications. My Applications keeps installed apps and downloaded marks.
-- Preferred architectures and file hosts, debrid host indicators, font choices, and reduced motion.
+- Real-Debrid and MegaDebrid: encrypted credentials, account verification, direct download links, and an original-host fallback when resolution fails.
+- Preferred architectures and file hosts, font choices, and reduced motion.
 
-Downloads currently open in your browser. Native downloads, unrestricted debrid links, and several legacy features are still pending. [Remaining work](docs/feature-parity.md).
+Downloads open in your browser. Green buttons resolve through a verified debrid account first. Native downloads and several legacy features are still pending. [Remaining work](docs/feature-parity.md).
 
 Opening a file host marks that release downloaded as a rough record. Auto-watch is on by default; you can turn it off in Download settings.
 

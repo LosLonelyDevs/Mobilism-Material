@@ -84,6 +84,9 @@ fun ReleaseScreen(
     onRetry: () -> Unit, onMoreComments: () -> Unit, watched: Boolean, downloaded: Boolean,
     onWatch: (Boolean) -> Unit, onDownloaded: (Boolean) -> Unit,
     onLike: () -> Unit, onActionMessageShown: () -> Unit,
+    onResolveDownload: suspend (String) -> String = {
+        throw org.mobilism.material.data.DebridException("Debrid is not available. Try again.")
+    },
 ) {
     val theme = LocalAppTheme.current
     val context = LocalContext.current
@@ -239,7 +242,7 @@ fun ReleaseScreen(
                                     headingStyle = MaterialTheme.typography.titleSmall,
                                 ) {
                                     group.links.forEach { link ->
-                                        DownloadLinkRow(link, debrid, onOpened = {
+                                        DownloadLinkRow(link, debrid, resolveLink = onResolveDownload, onOpened = {
                                             if (release.section == ContentSection.Apps) onDownloaded(true)
                                         }) { snackbar.showSnackbar("Link copied") }
                                     }

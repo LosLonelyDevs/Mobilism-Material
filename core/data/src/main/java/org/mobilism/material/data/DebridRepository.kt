@@ -28,6 +28,7 @@ data class DebridAccount(
     val hosts: List<SupportedHost> = emptyList(),
     val busy: Boolean = false,
     val error: String? = null,
+    val validated: Boolean = false,
 ) {
     val hostNames: List<String>
         get() = hosts.map { it.name }.distinctBy { it.lowercase() }.sortedBy { it.lowercase() }
@@ -35,7 +36,7 @@ data class DebridAccount(
 
 data class DebridState(val accounts: List<DebridAccount> = DebridProvider.entries.map { DebridAccount(it) }) {
     fun supporting(url: String): List<DebridAccount> = accounts.filter { account ->
-        account.configured && account.hosts.any { HostMatcher.matches(url, it.domain) }
+        account.configured && account.validated && account.hosts.any { HostMatcher.matches(url, it.domain) }
     }
 
     fun hostName(url: String): String {
@@ -89,15 +90,11 @@ object HostMatcher {
     }
 }
 
-/**
- * Keys stay encrypted locally. Highlighting intersects Mobilism's file-host directory
- * with the providers' published host catalogs;
- * it does not validate account entitlement or generate an unrestricted download.
- */
 class DebridRepository(context: Context) {
     private val keys = DebridKeyStore(context)
     private val cache = context.getSharedPreferences("material-debrid-hosts", Context.MODE_PRIVATE)
     private val mutex = Mutex()
+    private val api = DebridApi()
     private val mutableState = MutableStateFlow(DebridState())
     val state = mutableState.asStateFlow()
     private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
@@ -122,20 +119,22 @@ class DebridRepository(context: Context) {
             })
         }
         for (account in state.value.accounts.filter { it.configured }) {
-            if (cache.getInt(account.provider.name + "-format", 0) != CACHE_FORMAT ||
-                System.currentTimeMillis() - cache.getLong(account.provider.name + "-updated", 0) > CACHE_AGE) {
-                refresh(account.provider)
-            }
+            refresh(account.provider)
         }
     }
 
     suspend fun saveKey(provider: DebridProvider, value: String) = withContext(Dispatchers.IO) {
-        require(value.isNotBlank() && value.length <= 4096) { "Enter a valid key." }
         mutex.withLock {
-            keys.write(provider, value.trim())
-            update(provider) { it.copy(configured = true, error = null) }
+            update(provider) { it.copy(busy = true, error = null) }
+            try {
+                api.validate(provider, value.trim())
+                keys.write(provider, value.trim())
+                update(provider) { it.copy(configured = true, validated = true, error = null) }
+            } finally {
+                update(provider) { it.copy(busy = false) }
+            }
         }
-        refresh(provider)
+        refreshHosts(provider, validate = false)
     }
 
     suspend fun removeKey(provider: DebridProvider) = withContext(Dispatchers.IO) {
@@ -147,11 +146,18 @@ class DebridRepository(context: Context) {
         }
     }
 
-    suspend fun refresh(provider: DebridProvider) = withContext(Dispatchers.IO) {
+    suspend fun refresh(provider: DebridProvider) = refreshHosts(provider, validate = true)
+
+    private suspend fun refreshHosts(provider: DebridProvider, validate: Boolean) = withContext(Dispatchers.IO) {
         mutex.withLock {
             if (state.value.accounts.none { it.provider == provider && it.configured }) return@withLock
             update(provider) { it.copy(busy = true, error = null) }
             try {
+                if (validate) {
+                    update(provider) { it.copy(validated = false) }
+                    api.validate(provider, keys.read(provider).orEmpty())
+                    update(provider) { it.copy(validated = true) }
+                }
                 val mobilismDomains = MobilismHosts.parse(get(MobilismHosts.URL))
                 val providerHosts = when (provider) {
                     DebridProvider.RealDebrid -> {
@@ -191,6 +197,8 @@ class DebridRepository(context: Context) {
             } catch (cancelled: CancellationException) {
                 update(provider) { it.copy(busy = false) }
                 throw cancelled
+            } catch (failure: DebridException) {
+                update(provider) { it.copy(busy = false, validated = false, error = failure.message) }
             } catch (failure: Exception) {
                 // Only exception types are logged; requests and saved credentials are never logged.
                 android.util.Log.w("DebridHosts", provider.name + ": " +
@@ -202,6 +210,30 @@ class DebridRepository(context: Context) {
                 ) }
             }
         }
+    }
+
+    suspend fun resolve(url: String): String = withContext(Dispatchers.IO) {
+        val candidates = mutex.withLock {
+            state.value.supporting(url).map { it.provider to keys.read(it.provider).orEmpty() }
+        }
+        if (candidates.isEmpty()) throw DebridException("No verified account supports this host. Check Debrid accounts in Settings.")
+        val failures = mutableListOf<String>()
+        for ((provider, key) in candidates) {
+            try {
+                val resolved = api.resolve(provider, key, url)
+                val unchanged = mutex.withLock { keys.read(provider) == key }
+                if (!unchanged) throw DebridException("The saved account changed. Try again.")
+                return@withContext resolved
+            } catch (failure: DebridException) {
+                if (failure.invalidatesAccount) mutex.withLock {
+                    if (keys.read(provider) == key) update(provider) {
+                        it.copy(validated = false, error = failure.message)
+                    }
+                }
+                failures += "${provider.label}: ${failure.message}"
+            }
+        }
+        throw DebridException(failures.joinToString("\n\n"))
     }
 
     private fun get(url: String): String = client.newCall(Request.Builder().url(url)
@@ -229,7 +261,6 @@ class DebridRepository(context: Context) {
 
     private companion object {
         const val MAX_CATALOG_BYTES = 2L * 1024 * 1024
-        const val CACHE_AGE = 24L * 60 * 60 * 1000
         const val CACHE_FORMAT = 2
     }
 }

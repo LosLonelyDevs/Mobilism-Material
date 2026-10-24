@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Refresh
@@ -112,7 +113,7 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             item {
                 AppHeading("Debrid accounts", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "Green download buttons mark Mobilism file hosts supported by a provider with a saved key. Links open in your browser.",
+                    "Green buttons resolve downloads through a verified debrid account, then open the direct link in your browser.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
                 )
@@ -156,6 +157,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
             error = null
             try { block() }
             catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: org.mobilism.material.data.DebridException) { error = ScreenError(failure.message.orEmpty()) }
             catch (_: Exception) { error = ScreenError("The key could not be updated. Please try again.") }
             finally { working = false }
         }
@@ -167,7 +169,9 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                     AppHeading(account.provider.label, HeadingLevel.Subsection, style = MaterialTheme.typography.titleLarge)
                 }
                 if (account.configured) Icon(
-                    Icons.Outlined.CheckCircle, "Key saved", tint = theme.success,
+                    if (account.validated) Icons.Outlined.CheckCircle else Icons.Outlined.Info,
+                    if (account.validated) "Account verified" else "Account needs verification",
+                    tint = if (account.validated) theme.success else MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(start = 12.dp).size(24.dp),
                 )
             }
@@ -175,7 +179,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
               Text("No key saved", color = MaterialTheme.colorScheme.onSurfaceVariant)
               OutlinedTextField(
                 value = key, onValueChange = { if (it.length <= 4096) key = it },
-                label = { Text(account.provider.label + " API key") },
+                label = { Text(account.provider.label + if (account.provider == org.mobilism.material.data.DebridProvider.MegaDebrid) " API token" else " API key") },
                 placeholder = { Text("Enter your key or token") },
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -186,7 +190,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                 onClick = { perform { repository.saveKey(account.provider, key); key = "" } },
                 enabled = key.isNotBlank() && !busy,
                 modifier = Modifier.fillMaxWidth(),
-              ) { Text("Save " + account.provider.label + " key") }
+              ) { Text("Verify and save") }
             }
             if (account.configured) Row(
                 Modifier.fillMaxWidth(),
@@ -201,7 +205,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     ),
                 ) {
-                    Icon(Icons.Outlined.Refresh, "Refresh hosts")
+                    Icon(Icons.Outlined.Refresh, "Verify account and refresh hosts")
                 }
                 DebridHostMenu(account, debrid, Modifier.weight(1f))
                 FilledTonalIconButton(
@@ -215,7 +219,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                     Icon(Icons.Outlined.DeleteOutline, "Remove key")
                 }
             }
-            if (busy) LoadingState("Loading hosts…", Modifier.fillMaxWidth())
+            if (busy) LoadingState("Checking account and hosts…", Modifier.fillMaxWidth())
             error?.let { ErrorPanel(it) }
             account.error?.let { ErrorPanel(ScreenError(it)) }
         }

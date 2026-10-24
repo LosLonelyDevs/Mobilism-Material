@@ -9,7 +9,7 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 - Release details, formatted text, parsed title metadata, collapsible description/changelog/mod/download sections, and read-only paginated comments.
 - Full-screen images, zoom/paging, architecture groups, preferred hosts, host links, clipboard actions, and browser opening.
 - Material 3 Expressive components and motion, Frappé/Geist defaults, theme support, appearance preferences, and reduced motion. Theme import is hidden for now.
-- Encrypted debrid keys and supported-host indicators. These do not yet resolve unrestricted links or download files.
+- Encrypted Real-Debrid keys and MegaDebrid tokens, account verification, supported-host indicators, and direct link resolution. Errors offer the original host; downloads still open in the browser.
 - Native release search with saved section/category/date filters, paginated results, artwork, empty/error states, and retry. Cards and release pages show the original post date.
 - My Applications with launcher-app discovery, installed-app search, optional system apps, downloaded marks, removal and Undo.
 - Release thumbs-up, visible watch/download controls, and optional auto-watch when opening a file host. Browser opens are a rough download signal, not completion tracking.
@@ -25,7 +25,7 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 | My Applications | Full non-launcher discovery, batch actions, save/copy/export, legacy data import | `UI/MyApplications/`, installed/downloaded/favorites action menus |
 | Version tracker | Full version history, broader matching for ambiguous/unversioned releases, large-library performance | `UI/VersionTracker/` |
 | Downloads | Native queue/progress, download state and files, destination selection, background operation, completion notifications, archive extraction, opening/installing APKs, failure/retry handling | `logic/download/`, `UI/Release/DownloadsActivity.java`, `UI/Settings/FilePickerActivity.java` |
-| Premium and debrid | Mobilism Premium account/trial/plans/payment flows and link resolution; Real-Debrid/MegaDebrid unrestricted-link resolution and account/error handling | `UI/AMember/`, premium/payment API endpoints, legacy debrid integration |
+| Premium | Mobilism Premium account/trial/plans/payment flows and link resolution | `UI/AMember/`, premium/payment API endpoints |
 | Messages | Message lists, conversation history, compose/reply, read state, deletion, unread notifications | `UI/Messages/`, message API endpoints |
 | Settings and utilities | Notification preferences/sounds, content filters, cache controls, old listing options, download/extraction options, QR scanner, About, app-update flow | `res/xml/pref_general.xml`, `UI/QRCodeScanner/`, `UI/Settings/AboutActivity.java`, `logic/updater/` |
 
@@ -40,7 +40,7 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 ## Recommended implementation order
 
 1. Finish Apps: batch/library actions, release history, and broader matching coverage.
-2. Premium/debrid link resolution and the native download pipeline.
+2. Mobilism Premium link resolution and the native download pipeline.
 3. Comment writing, forum sections, private messages, and notifications.
 4. Remaining settings/utilities, pure-Compose rich text, migration, and final parity testing.
 

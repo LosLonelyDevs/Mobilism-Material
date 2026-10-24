@@ -20,6 +20,8 @@ class HostMatcherTest {
         val noKey = DebridState(listOf(DebridAccount(DebridProvider.RealDebrid, hosts = listOf(host))))
         assertTrue(noKey.supporting("https://rapidgator.net/file/a").isEmpty())
         val configured = DebridState(listOf(DebridAccount(DebridProvider.RealDebrid, configured = true, hosts = listOf(host))))
-        assertEquals(1, configured.supporting("https://rapidgator.net/file/a").size)
+        assertTrue(configured.supporting("https://rapidgator.net/file/a").isEmpty())
+        val verified = DebridState(configured.accounts.map { it.copy(validated = true) })
+        assertEquals(1, verified.supporting("https://rapidgator.net/file/a").size)
     }
 }

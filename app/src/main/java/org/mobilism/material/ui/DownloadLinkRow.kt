@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -13,7 +14,15 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,19 +33,34 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import org.mobilism.material.data.DebridException
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.LocalAppTheme
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun DownloadLinkRow(link: DownloadLink, debrid: DebridState, onOpened: () -> Unit, onCopied: suspend () -> Unit) {
+fun DownloadLinkRow(
+    link: DownloadLink, debrid: DebridState, onOpened: () -> Unit,
+    resolveLink: suspend (String) -> String = { throw DebridException("Debrid is not available. Try again.") },
+    openLink: ((String) -> Boolean)? = null,
+    onCopied: suspend () -> Unit,
+) {
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val providers = debrid.supporting(link.url).map { it.provider.label }
     val name = debrid.hostName(link.url)
     val supported = providers.isNotEmpty()
+    var resolving by remember(link.url) { mutableStateOf(false) }
+    var error by remember(link.url) { mutableStateOf<String?>(null) }
+    fun open(url: String): Boolean {
+        val opened = openLink?.invoke(url) ?: openWeb(context, url)
+        if (opened) onOpened() else error = "No browser is available to open this download."
+        return opened
+    }
     val theme = LocalAppTheme.current
     val colors = if (supported) ButtonDefaults.buttonColors(
         containerColor = theme.success, contentColor = theme.onSuccess,
@@ -44,15 +68,30 @@ fun DownloadLinkRow(link: DownloadLink, debrid: DebridState, onOpened: () -> Uni
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ExpressiveButton(
-                onClick = { if (openWeb(context, link.url)) onOpened() },
-                modifier = Modifier.weight(1f).semantics {
-                    stateDescription = if (supported) "Supported by " + providers.joinToString() else "Open in browser"
+                onClick = {
+                    if (!resolving) {
+                        if (!supported) open(link.url) else {
+                            resolving = true
+                            scope.launch {
+                                try { open(resolveLink(link.url)) }
+                                catch (cancelled: CancellationException) { throw cancelled }
+                                catch (failure: DebridException) { error = failure.message }
+                                catch (_: Exception) { error = "The download could not be resolved. Please try again." }
+                                finally { resolving = false }
+                            }
+                        }
+                    }
                 },
+                modifier = Modifier.weight(1f).semantics {
+                    stateDescription = if (resolving) "Resolving download" else if (supported) "Download through " + providers.joinToString() else "Open in browser"
+                },
+                enabled = !resolving,
                 colors = colors,
                 compact = true,
             ) {
-                if (supported) Icon(Icons.Outlined.CheckCircle, null, Modifier.padding(end = 8.dp))
-                Text(name, style = MaterialTheme.typography.labelLarge)
+                if (resolving) LoadingIndicator(Modifier.padding(end = 8.dp).size(24.dp))
+                else if (supported) Icon(Icons.Outlined.CheckCircle, null, Modifier.padding(end = 8.dp))
+                Text(if (resolving) "Resolving $name" else name, style = MaterialTheme.typography.labelLarge)
             }
             AppIconButton(Icons.Outlined.ContentCopy, "Copy $name link", {
                 scope.launch {
@@ -61,5 +100,17 @@ fun DownloadLinkRow(link: DownloadLink, debrid: DebridState, onOpened: () -> Uni
                 }
             })
         }
+    }
+    error?.let { message ->
+        AlertDialog(
+            onDismissRequest = { error = null },
+            title = { Text("Download unavailable") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { if (open(link.url)) error = null }) { Text("Open original host") }
+            },
+            dismissButton = { TextButton(onClick = { error = null }) { Text("Cancel") } },
+            shape = MaterialTheme.shapes.extraLarge,
+        )
     }
 }

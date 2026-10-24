@@ -206,10 +206,11 @@ class ReadmeScreenshots {
                 """.trimIndent(), liked = false), busy = false,
                 comments = CommentsState(canLoadMore = false)),
             debrid = DebridState(listOf(DebridAccount(DebridProvider.entries.first(), true,
-                listOf(SupportedHost("rapidgator.net", "Rapidgator"))))),
+                listOf(SupportedHost("rapidgator.net", "Rapidgator")), validated = true))),
             preferences = DownloadPreferences(), onBack = {}, onRetry = {}, onMoreComments = {},
             watched = true, downloaded = false, onWatch = {}, onDownloaded = onDownloaded,
             onLike = {}, onActionMessageShown = {},
+            onResolveDownload = { "https://example.org/sample-download.apk" },
         )
     }
 

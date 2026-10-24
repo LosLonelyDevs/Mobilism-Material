@@ -1,5 +1,12 @@
 # Verification
 
+## 0.1.9
+
+- Debug and Android test builds pass. All 87 unit tests pass; lint reports no errors.
+- All 13 emulator tests pass, including resolved-link opening, loading state, explicit original-host fallback, and copying without resolving or marking a download.
+- Real-Debrid and MegaDebrid credentials authenticated against their live APIs. Both providers refused the sample host link. Successful resolution is covered by API fixtures and emulator tests; a live file download was not verified.
+- Authentication failures, expired premium access, host errors, redirects, unsafe download URLs, and responses containing credentials have regression coverage. No physical device was changed.
+
 ## 0.1.4
 
 - Debug and signed release builds pass. All 45 tests pass; lint reports no errors.
