@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -52,7 +53,7 @@ class AppearanceOptionsTest {
         compose.runOnIdle { store.selectTheme(ThemeCatalog.default) }
         capture("appearance-dark")
         compose.onNodeWithContentDescription("Choose theme").performClick()
-        compose.onNodeWithTag("theme-options").performScrollToNode(hasText("Dark"))
+        compose.onNodeWithTag("theme-options").performScrollToIndex(ThemeCatalog.forMode(false).size + 1)
         compose.onNodeWithText("Dark").assertIsDisplayed()
         capture("theme-picker-dark")
         compose.onNodeWithContentDescription("Close themes").performClick()
@@ -128,8 +129,10 @@ class AppearanceOptionsTest {
         compose.waitForIdle()
         val directory = File(compose.activity.getExternalFilesDir(null), "appearance-checks").apply { mkdirs() }
         File(directory, "$name.png").outputStream().use {
-            checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
-                .compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            val bitmap = if (name.startsWith("theme-picker")) {
+                compose.onNodeWithTag("theme-options").onParent().captureToImage().asAndroidBitmap()
+            } else checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
         }
     }
 }
