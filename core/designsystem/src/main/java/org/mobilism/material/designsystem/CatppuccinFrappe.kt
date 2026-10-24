@@ -4,7 +4,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 
-// Exact palette and dark semantic colors from the supplied catppuccin-frappe.json.
+// Palette from catppuccin-frappe.json, with lighter text accents for raised surfaces.
 // No wallpaper/dynamic colors override this default.
 private object Frappe {
     val base = Color(0xFF303446)
@@ -35,15 +35,15 @@ val CatppuccinFrappe = ThemeDefinition(
     isDark = true,
     success = Color(0xFFA6D189),
     onSuccess = Color(0xFF232634),
-    reading = Frappe.peach, onReading = Frappe.crust,
+    reading = lerp(Frappe.peach, Frappe.text, 0.12f), onReading = Frappe.crust,
     featured = Frappe.yellow, onFeatured = Frappe.crust,
     personalization = Frappe.pink, onPersonalization = Frappe.crust,
     colors = with(Frappe) {
         darkColorScheme(
-            primary = blue, onPrimary = crust,
+            primary = lerp(blue, text, 0.3f), onPrimary = crust,
             primaryContainer = lerp(base, blue, 0.22f), onPrimaryContainer = lavender,
             inversePrimary = base,
-            secondary = mauve, onSecondary = crust,
+            secondary = lerp(mauve, text, 0.2f), onSecondary = crust,
             secondaryContainer = lerp(base, mauve, 0.22f), onSecondaryContainer = mauve,
             tertiary = teal, onTertiary = crust,
             tertiaryContainer = lerp(base, teal, 0.22f), onTertiaryContainer = sky,

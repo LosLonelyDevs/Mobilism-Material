@@ -6,6 +6,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import org.json.JSONObject
+import java.util.Locale
 
 /** Theme identity and semantic roles stay independent of every feature screen. */
 @Immutable
@@ -24,9 +25,18 @@ data class ThemeDefinition(
     val onPersonalization: Color = colors.onPrimary,
 )
 
+data class ThemePair(val name: String, val light: ThemeDefinition, val dark: ThemeDefinition)
+
 object ThemeCatalog {
     val default = CatppuccinFrappe
-    val builtIn: List<ThemeDefinition> = listOf(default)
+    val pairs = listOf(ThemePair("Catppuccin", CatppuccinLatte, default),
+        ThemePair("Rosé Pine", RosePineDawn, RosePine), ThemePair("Solarized", SolarizedLight, SolarizedDark),
+        ThemePair("Atom One", AtomOneLight, AtomOneDark), ThemePair("Tokyo", TokyoDay, TokyoNight),
+        ThemePair("Dracula", Alucard, Dracula))
+    val builtIn: List<ThemeDefinition> = pairs.flatMap { listOf(it.light, it.dark) }
+
+    fun forMode(dark: Boolean, custom: List<ThemeDefinition> = emptyList()): List<ThemeDefinition> =
+        (builtIn + custom).filter { it.isDark == dark }.sortedBy { it.name.lowercase(Locale.ROOT) }
 
     fun resolve(id: String, custom: List<ThemeDefinition> = emptyList()): ThemeDefinition =
         (builtIn + custom).firstOrNull { it.id == id } ?: default

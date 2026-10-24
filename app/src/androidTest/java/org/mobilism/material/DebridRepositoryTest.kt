@@ -29,6 +29,7 @@ class DebridRepositoryTest {
                 request.url.encodedPath.endsWith("/hosts/status") -> if (failHostRefresh) """{"error_code":5}""" else
                     """{"uploadrar.com":{"supported":1,"status":"down","name":"Uploadrar"}}"""
                 action == "getUserHistory" -> """{"response_code":"ok","history":[]}"""
+                action == "connectUser" -> """{"response_code":"ok","token":"test-only-token","vip_end":${System.currentTimeMillis() / 1000 + 3600}}"""
                 action == "getHostersList" -> if (failHostRefresh) """{"response_code":"SERVER_ERROR"}""" else
                     """{"response_code":"ok","hosters":[{"name":"Send.now","domains":["send.now"],"status":"up"},{"name":"Uploadrar","domains":["uploadrar.com"],"status":"down"}]}"""
                 else -> error("Unexpected provider request")
@@ -36,11 +37,21 @@ class DebridRepositoryTest {
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
                 .body(body.toResponseBody()).build()
         }.build()
-        val repository = DebridRepository(context, client)
+        var enabled = false
+        val repository = DebridRepository(context, client, isEnabled = { enabled })
         try {
+            assertTrue(DebridRepository(context, client).state.value.enabled)
+            val disabled = DebridRepository(context, client, isEnabled = { false })
+            disabled.load()
+            disabled.refresh(DebridProvider.RealDebrid)
+            assertTrue(runCatching { disabled.saveKey(DebridProvider.RealDebrid, "test-only-token") }.exceptionOrNull() is DebridException)
+            assertTrue(requestedHosts.isEmpty())
+            enabled = true
             assertTrue(repository.fileHosts().any { it.domain == "send.now" })
             assertTrue(requestedHosts.isEmpty())
-            for (provider in DebridProvider.entries) repository.saveKey(provider, "test-only-token")
+            assertTrue(runCatching { repository.saveKey(DebridProvider.MegaDebrid, "application-key") }.exceptionOrNull() is DebridException)
+            repository.saveKey(DebridProvider.RealDebrid, "test-only-token")
+            repository.connectMegaDebrid("sample", "test-password")
             assertEquals(2, repository.state.value.supporting("https://send.now/file").size)
             assertTrue(repository.state.value.supporting("https://uploadrar.com/file").isEmpty())
             assertTrue(repository.state.value.supporting("https://unrelated.example.org/file").isEmpty())
@@ -53,6 +64,29 @@ class DebridRepositoryTest {
             assertEquals(2, repository.state.value.supporting("https://send.now/file").size)
             assertTrue(repository.state.value.accounts.all { it.error == null && !it.busy })
             assertEquals(setOf("api.real-debrid.com", "www.mega-debrid.eu"), requestedHosts.toSet())
+            enabled = false
+            repository.deactivate()
+            val before = requestedHosts.size
+            repository.load()
+            repository.refresh(DebridProvider.RealDebrid)
+            assertTrue(runCatching { repository.resolve("https://send.now/file") }.exceptionOrNull() is DebridException)
+            assertTrue(runCatching { repository.saveKey(DebridProvider.RealDebrid, "replacement-token") }.exceptionOrNull() is DebridException)
+            assertEquals(before, requestedHosts.size)
+            assertFalse(repository.state.value.enabled)
+            assertTrue(repository.state.value.supporting("https://send.now/file").isEmpty())
+            enabled = true
+            repository.load()
+            assertTrue(repository.state.value.accounts.all { it.configured })
+            assertEquals(2, repository.state.value.supporting("https://send.now/file").size)
+            context.getSharedPreferences("material-debrid-hosts", 0).edit().remove("mega-premium-until").commit()
+            val beforeLegacyRefresh = requestedHosts.size
+            repository.refresh(DebridProvider.MegaDebrid)
+            val legacy = repository.state.value.accounts.single { it.provider == DebridProvider.MegaDebrid }
+            assertTrue(legacy.configured)
+            assertFalse(legacy.validated)
+            assertFalse(legacy.hostsVerified)
+            assertTrue(legacy.error.orEmpty().contains("sign in"))
+            assertEquals(beforeLegacyRefresh, requestedHosts.size)
         } finally {
             for (provider in DebridProvider.entries) repository.removeKey(provider)
         }

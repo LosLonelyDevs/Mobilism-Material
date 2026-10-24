@@ -16,6 +16,37 @@ class DebridApiTest {
     private val original = "https://files.example.org/file?id=123&name=test.apk"
     private val direct = "https://downloads.example.org/test.apk"
 
+    @Test fun megaSignInEncodesCredentialsAndReturnsPremiumUserToken() {
+        val until = System.currentTimeMillis() / 1000 + 3600
+        val service = api("""{"response_code":"ok","token":"user-token","vip_end":$until}""") { request ->
+            assertEquals("connectUser", request.url.queryParameter("action"))
+            assertEquals("sample+user", request.url.queryParameter("login"))
+            assertEquals("test & password+?", request.url.queryParameter("password"))
+            assertNull(request.url.queryParameter("token"))
+            assertEquals("GET", request.method)
+        }
+        val session = service.connectMegaDebrid(" sample+user ", "test & password+?")
+        assertEquals("user-token", session.token)
+        assertEquals(until, session.premiumUntil)
+    }
+
+    @Test fun megaSignInRejectsFreeExpiredAndMalformedAccounts() {
+        for (body in listOf(
+            """{"response_code":"ok","token":"test-token","vip_end":0}""",
+            """{"response_code":"ok","token":"test-token","vip_end":1}""",
+            """{"response_code":"ok","token":"test-token"}""",
+            """{"response_code":"ok","vip_end":9999999999}""",
+        )) assertThrows(DebridException::class.java) { api(body).connectMegaDebrid("sample", "test-password") }
+    }
+
+    @Test fun megaSignInDoesNotRetryOrReflectRejectedCredentials() {
+        var attempts = 0
+        val service = api("""{"response_code":"UNKNOWN_USER","response_text":"password test-password user sample"}""") { attempts++ }
+        val error = assertThrows(DebridException::class.java) { service.connectMegaDebrid("sample", "test-password") }
+        assertEquals(1, attempts)
+        assertEquals("The MegaDebrid username or password is incorrect.", error.message)
+    }
+
     private fun api(body: String, status: Int = 200, inspect: (Request) -> Unit = {}): DebridApi =
         DebridApi(OkHttpClient.Builder().addInterceptor { chain ->
             inspect(chain.request())

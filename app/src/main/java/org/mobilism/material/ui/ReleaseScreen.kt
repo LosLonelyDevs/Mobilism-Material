@@ -55,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalResources
@@ -191,7 +192,7 @@ fun ReleaseScreen(
                 LoadingState("Loading release…", Modifier.align(Alignment.Center), indicatorSize = 96.dp)
             }
             LazyColumn(
-                modifier = Modifier.widthIn(max = 840.dp).fillMaxSize(),
+                modifier = Modifier.widthIn(max = 840.dp).fillMaxSize().testTag("release-content"),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(24.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {

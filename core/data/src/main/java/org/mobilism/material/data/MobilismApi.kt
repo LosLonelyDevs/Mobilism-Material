@@ -25,8 +25,9 @@ import okhttp3.Response
 import org.json.JSONException
 import org.json.JSONObject
 
-internal class MobilismApi(private val context: Context) {
+internal class MobilismApi(private val context: Context, diagnostics: DiagnosticLogger = DiagnosticLogger.None) {
     private val client = OkHttpClient.Builder()
+        .addInterceptor(DiagnosticInterceptor(diagnostics))
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .callTimeout(45, TimeUnit.SECONDS)

@@ -30,7 +30,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumFlexibleTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
@@ -102,7 +102,7 @@ fun FeedScreen(
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val scroll = TopAppBarDefaults.pinnedScrollBehavior()
     var showFilters by remember { mutableStateOf(false) }
     val openFilters = { onLoadCategories(); showFilters = true }
     LaunchedEffect(state.section, state.order, state.filters) { listState.scrollToItem(0) }
@@ -173,14 +173,11 @@ fun FeedScreen(
             modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
-                MediumFlexibleTopAppBar(
+                TopAppBar(
                     title = {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Icon(sectionStyle.icon, null, Modifier.size(28.dp), tint = sectionStyle.accent)
-                            AppHeading(state.section.label, HeadingLevel.Page)
-                        }
+                        AppHeading(state.section.label, HeadingLevel.Page, style = MaterialTheme.typography.titleLarge,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
                     },
-                    subtitle = { Text(if (state.order == FeedOrder.Latest) "Latest releases" else "Most viewed releases") },
                     navigationIcon = { AppIconButton(Icons.Outlined.Menu, "Open navigation drawer", { scope.launch { drawer.open() } }) },
                     actions = {
                         AppIconButton(Icons.Outlined.Search, "Search releases", onSearch)

@@ -10,9 +10,13 @@ Project: https://github.com/vercel/geist-font
 
 License source: https://github.com/vercel/geist-font/blob/main/OFL.txt
 
-## Catppuccin
+## Other bundled fonts
 
-The default theme uses the Catppuccin Frappé palette and the supplied semantic mappings. Catppuccin is a community color palette, not an affiliation or endorsement.
+Alata, Atkinson Hyperlegible, and IBM Plex Sans use the SIL Open Font License 1.1. Their complete licenses ship in the APK. See [font sources and notices](docs/font-licenses.md).
+
+## Theme palettes
+
+Themes use the supplied Catppuccin, Rosé Pine, Solarized, Atom One, Tokyo, and Dracula/Alucard palettes and semantic mappings. Palette names identify their sources, not an affiliation or endorsement.
 
 Project: https://github.com/catppuccin/catppuccin
 

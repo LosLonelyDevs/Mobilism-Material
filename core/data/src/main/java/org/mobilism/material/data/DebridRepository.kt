@@ -35,9 +35,10 @@ data class DebridAccount(
         get() = hosts.map { it.name }.distinctBy { it.lowercase() }.sortedBy { it.lowercase() }
 }
 
-data class DebridState(val accounts: List<DebridAccount> = DebridProvider.entries.map { DebridAccount(it) }) {
+data class DebridState(val accounts: List<DebridAccount> = DebridProvider.entries.map { DebridAccount(it) },
+    val enabled: Boolean = true) {
     fun supporting(url: String): List<DebridAccount> = accounts.filter { account ->
-        account.configured && account.validated && account.hostsVerified &&
+        enabled && account.configured && account.validated && account.hostsVerified &&
             account.hosts.any { HostMatcher.matches(url, it.domain) }
     }
 
@@ -92,16 +93,31 @@ object HostMatcher {
     }
 }
 
-class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient()) {
+class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
+    private val isEnabled: () -> Boolean = { true },
+    private val diagnostics: DiagnosticLogger = DiagnosticLogger.None) {
     private val keys = DebridKeyStore(context)
     private val cache = context.getSharedPreferences("material-debrid-hosts", Context.MODE_PRIVATE)
     private val mutex = Mutex()
-    private val api = DebridApi(client)
-    private val mutableState = MutableStateFlow(DebridState())
+    private val mutableState = MutableStateFlow(DebridState(enabled = isEnabled()))
     val state = mutableState.asStateFlow()
     private val client = client.newBuilder().connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS).callTimeout(30, TimeUnit.SECONDS)
-        .followRedirects(false).followSslRedirects(false).build()
+        .followRedirects(false).followSslRedirects(false)
+        .addInterceptor { chain ->
+            if (!isEnabled()) throw java.io.IOException("Debrid services disabled")
+            chain.proceed(chain.request())
+        }.addInterceptor(DiagnosticInterceptor(diagnostics)).build()
+    private val api = DebridApi(this.client, diagnostics)
+
+    fun deactivate() {
+        client.dispatcher.cancelAll()
+        mutableState.value = DebridState(enabled = false)
+    }
+
+    private fun requireEnabled() {
+        if (!isEnabled()) throw DebridException("Experimental debrid services are disabled.")
+    }
 
     suspend fun fileHosts(): List<SupportedHost> = withContext(Dispatchers.IO) {
         MobilismHosts.domains.map { domain ->
@@ -110,6 +126,10 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient()) 
     }
 
     suspend fun load() = withContext(Dispatchers.IO) {
+        if (!isEnabled()) {
+            deactivate()
+            return@withContext
+        }
         mutex.withLock {
             mutableState.value = DebridState(DebridProvider.entries.map { provider ->
                 try {
@@ -118,7 +138,7 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient()) 
                 } catch (_: Exception) {
                     DebridAccount(provider, error = "The saved key could not be read. Enter it again.")
                 }
-            })
+            }, enabled = isEnabled())
         }
         for (account in state.value.accounts.filter { it.configured }) {
             refresh(account.provider)
@@ -127,10 +147,33 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient()) 
 
     suspend fun saveKey(provider: DebridProvider, value: String) = withContext(Dispatchers.IO) {
         mutex.withLock {
+            requireEnabled()
+            if (provider == DebridProvider.MegaDebrid) {
+                throw DebridException("Sign in to MegaDebrid to connect your Premium account.", true)
+            }
             update(provider) { it.copy(busy = true, error = null) }
             try {
                 api.validate(provider, value.trim())
+                requireEnabled()
                 keys.write(provider, value.trim())
+                update(provider) { it.copy(configured = true, validated = true, hostsVerified = false, error = null) }
+            } finally {
+                update(provider) { it.copy(busy = false) }
+            }
+        }
+        refreshHosts(provider, validate = false)
+    }
+
+    suspend fun connectMegaDebrid(username: String, password: String) = withContext(Dispatchers.IO) {
+        val provider = DebridProvider.MegaDebrid
+        mutex.withLock {
+            requireEnabled()
+            update(provider) { it.copy(busy = true, error = null) }
+            try {
+                val session = api.connectMegaDebrid(username, password)
+                requireEnabled()
+                keys.write(provider, session.token)
+                cache.edit().putLong("mega-premium-until", session.premiumUntil).apply()
                 update(provider) { it.copy(configured = true, validated = true, hostsVerified = false, error = null) }
             } finally {
                 update(provider) { it.copy(busy = false) }
@@ -142,6 +185,7 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient()) 
     suspend fun removeKey(provider: DebridProvider) = withContext(Dispatchers.IO) {
         mutex.withLock {
             keys.remove(provider)
+            if (provider == DebridProvider.MegaDebrid) cache.edit().remove("mega-premium-until").apply()
             cache.edit().remove(provider.name).remove(provider.name + "-updated")
                 .remove(provider.name + "-format").apply()
             update(provider) { DebridAccount(provider) }
@@ -152,11 +196,13 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient()) 
 
     private suspend fun refreshHosts(provider: DebridProvider, validate: Boolean) = withContext(Dispatchers.IO) {
         mutex.withLock {
+            if (!isEnabled()) return@withLock
             if (state.value.accounts.none { it.provider == provider && it.configured }) return@withLock
             update(provider) { it.copy(busy = true, hostsVerified = false, error = null) }
             try {
                 if (validate) {
                     update(provider) { it.copy(validated = false) }
+                    requirePremiumProof(provider)
                     api.validate(provider, keys.read(provider).orEmpty())
                     update(provider) { it.copy(validated = true) }
                 }
@@ -165,6 +211,7 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient()) 
                     (0 until domains.length()).map { domains.getString(it) }
                 } else emptyList()
                 val providerHosts = api.availableHosts(provider, keys.read(provider).orEmpty(), catalogDomains)
+                requireEnabled()
                 val hosts = MobilismHosts.shortlist(MobilismHosts.domains, providerHosts)
                 cache.edit().putString(provider.name, JSONArray().apply {
                     hosts.forEach { put(JSONObject().put("domain", it.domain).put("name", it.name)) }
@@ -178,10 +225,9 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient()) 
                 update(provider) { it.copy(busy = false,
                     validated = it.validated && !failure.invalidatesAccount, error = failure.message) }
             } catch (failure: Exception) {
-                // Only exception types are logged; requests and saved credentials are never logged.
-                android.util.Log.w("DebridHosts", provider.name + ": " +
-                    generateSequence<Throwable>(failure) { it.cause }
-                        .take(4).joinToString(" / ") { it.javaClass.simpleName })
+                diagnostics.record(DiagnosticEvent(
+                    if (provider == DebridProvider.RealDebrid) DiagnosticSource.RealDebrid else DiagnosticSource.MegaDebrid,
+                    DiagnosticOperation.Hosts, DiagnosticPhase.Failed, failure = DiagnosticFailure.Unexpected))
                 update(provider) { it.copy(busy = false, error =
                     if (it.hosts.isEmpty()) "Host support could not be loaded. Try again."
                     else "Host refresh failed. Saved hosts will stay inactive until a refresh succeeds."
@@ -191,18 +237,23 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient()) 
     }
 
     suspend fun resolve(url: String): String = withContext(Dispatchers.IO) {
+        requireEnabled()
         val candidates = mutex.withLock {
             state.value.supporting(url).map { it.provider to keys.read(it.provider).orEmpty() }
         }
         if (candidates.isEmpty()) throw DebridException("No verified account supports this host. Check Debrid accounts in Settings.")
         val failures = mutableListOf<String>()
         for ((provider, key) in candidates) {
+            requireEnabled()
             try {
+                requirePremiumProof(provider)
                 val resolved = api.resolve(provider, key, url)
+                requireEnabled()
                 val unchanged = mutex.withLock { keys.read(provider) == key }
                 if (!unchanged) throw DebridException("The saved account changed. Try again.")
                 return@withContext resolved
             } catch (failure: DebridException) {
+                requireEnabled()
                 if (failure.invalidatesAccount) mutex.withLock {
                     if (keys.read(provider) == key) update(provider) {
                         it.copy(validated = false, error = failure.message)
@@ -212,6 +263,13 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient()) 
             }
         }
         throw DebridException(failures.joinToString("\n\n"))
+    }
+
+    private fun requirePremiumProof(provider: DebridProvider) {
+        if (provider == DebridProvider.MegaDebrid &&
+            cache.getLong("mega-premium-until", 0) <= System.currentTimeMillis() / 1000) {
+            throw DebridException("Remove the MegaDebrid account and sign in again to verify Premium access.", true)
+        }
     }
 
     private fun get(url: String): String = client.newCall(Request.Builder().url(url)
@@ -232,7 +290,11 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient()) 
     }.getOrDefault(emptyList())
 
     private fun update(provider: DebridProvider, transform: (DebridAccount) -> DebridAccount) {
-        mutableState.update { it.copy(accounts = it.accounts.map { account ->
+        if (!isEnabled()) {
+            mutableState.value = DebridState(enabled = false)
+            return
+        }
+        mutableState.update { it.copy(enabled = true, accounts = it.accounts.map { account ->
             if (account.provider == provider) transform(account) else account
         }) }
     }

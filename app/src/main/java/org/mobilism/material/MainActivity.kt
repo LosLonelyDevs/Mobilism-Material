@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
                     else SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
             }
-            MobilismTheme(theme, appearance.font, appearance.reduceMotion) {
+            MobilismTheme(theme, appearance.font, appearance.reduceMotion, appearance.customFontFile) {
                 MobilismApp(app, notificationRelease, fromNotification = fromNotification) {
                     notificationRelease = null
                     intent.removeExtra(FollowingNotifications.EXTRA_RELEASE)

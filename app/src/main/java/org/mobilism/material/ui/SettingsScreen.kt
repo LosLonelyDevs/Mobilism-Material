@@ -17,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -37,7 +36,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import org.mobilism.material.designsystem.AppSurface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -54,6 +53,10 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
@@ -72,9 +75,8 @@ import org.mobilism.material.designsystem.LocalAppTheme
 fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearance: () -> Unit, onDownloads: () -> Unit, onBack: () -> Unit,
     hideAdult: Boolean = false, onHideAdult: (Boolean) -> Unit = {}, onAbout: () -> Unit = {},
     developer: org.mobilism.material.settings.DeveloperPreferences = org.mobilism.material.settings.DeveloperPreferences(),
-    onDeveloperMode: (Boolean) -> Unit = {}) {
+    onDeveloperOptions: () -> Unit = {}) {
     val theme = LocalAppTheme.current
-    val context = androidx.compose.ui.platform.LocalContext.current
     Scaffold(topBar = {
         TopAppBar(title = { AppHeading("Settings", HeadingLevel.Page) }, navigationIcon = {
             AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack)
@@ -116,48 +118,28 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             item {
                 ContentVisibilitySetting(hideAdult, onHideAdult)
             }
-            item {
-                AppHeading("Debrid accounts", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    "Green buttons use a verified account and supported host. Hosts reported as down use normal buttons. Both services require Premium access.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-            items(state.accounts, key = { it.provider }) { account ->
-                DebridAccountCard(account, repository, state)
-            }
-            item(key = "open-links") {
-                ExpressiveCard(onClick = {
-                    val action = if (android.os.Build.VERSION.SDK_INT >= 31)
-                        android.provider.Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS
-                    else android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-                    context.startActivity(android.content.Intent(action,
-                        android.net.Uri.parse("package:${context.packageName}")))
-                }, modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Icon(Icons.Outlined.Link, null, tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            AppHeading("Open Mobilism links", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                            Text("Choose whether forum links open here", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Icon(Icons.Outlined.ChevronRight, null, tint = MaterialTheme.colorScheme.primary)
-                    }
+            if (developer.debridEnabled) {
+                item {
+                    AppHeading("Debrid accounts", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        "Experimental. Green buttons resolve links through a verified account and supported host. Both services require Premium access.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+                items(state.accounts, key = { it.provider }) { account ->
+                    DebridAccountCard(account, repository, state)
                 }
             }
-            if (developer.unlocked) item(key = "developer") {
-                Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    modifier = Modifier.fillMaxWidth().toggleable(value = developer.enabled,
-                        role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onDeveloperMode)) {
+            if (developer.enabled) item(key = "developer") {
+                ExpressiveCard(onDeveloperOptions, Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Icon(Icons.Outlined.Code, null, tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(32.dp))
-                        AppHeading("Developer mode", HeadingLevel.Section, modifier = Modifier.weight(1f),
+                        AppHeading("Developer options", HeadingLevel.Section, modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.titleLarge)
-                        androidx.compose.material3.Switch(checked = developer.enabled, onCheckedChange = null)
+                        Icon(Icons.Outlined.ChevronRight, null, tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
@@ -185,7 +167,7 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
 
 @Composable
 internal fun ContentVisibilitySetting(hideAdult: Boolean, onHideAdult: (Boolean) -> Unit) {
-    androidx.compose.material3.Surface(shape = MaterialTheme.shapes.extraLarge,
+    AppSurface(shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Row(Modifier.fillMaxWidth().toggleable(hideAdult, role = androidx.compose.ui.semantics.Role.Switch,
             onValueChange = onHideAdult).padding(20.dp),
@@ -203,24 +185,30 @@ internal fun ContentVisibilitySetting(hideAdult: Boolean, onHideAdult: (Boolean)
 @Composable
 private fun DebridAccountCard(account: DebridAccount, repository: DebridRepository, debrid: DebridState) {
     val scope = rememberCoroutineScope()
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
     val theme = LocalAppTheme.current
     var key by remember(account.provider) { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<ScreenError?>(null) }
     val busy = working || account.busy
     fun perform(block: suspend () -> Unit) {
         if (busy) return
+        keyboard?.hide()
+        focus.clearFocus()
         scope.launch {
             working = true
             error = null
             try { block() }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: org.mobilism.material.data.DebridException) { error = ScreenError(failure.message.orEmpty()) }
-            catch (_: Exception) { error = ScreenError("The key could not be updated. Please try again.") }
+            catch (_: Exception) { error = ScreenError("The account could not be updated. Please try again.") }
             finally { working = false }
         }
     }
-    Surface(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+    AppSurface(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {
@@ -234,11 +222,38 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                 )
             }
             if (!account.configured) {
+              if (account.provider == org.mobilism.material.data.DebridProvider.MegaDebrid) {
+                Text("Sign in with your Premium account", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(
+                    value = username, onValueChange = { if (it.length <= 256) username = it },
+                    label = { Text("MegaDebrid username") }, singleLine = true, enabled = !busy,
+                    keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
+                    modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Username },
+                    shape = MaterialTheme.shapes.large,
+                )
+                OutlinedTextField(
+                    value = password, onValueChange = { if (it.length <= 4096) password = it },
+                    label = { Text("MegaDebrid password") }, singleLine = true, enabled = !busy,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Password },
+                    shape = MaterialTheme.shapes.large,
+                )
+                ExpressiveButton(
+                    onClick = { perform {
+                        repository.connectMegaDebrid(username, password)
+                        username = ""
+                        password = ""
+                    } },
+                    enabled = username.isNotBlank() && password.isNotEmpty() && !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Sign in to MegaDebrid") }
+              } else {
               Text("No key saved", color = MaterialTheme.colorScheme.onSurfaceVariant)
               OutlinedTextField(
                 value = key, onValueChange = { if (it.length <= 4096) key = it },
-                label = { Text(account.provider.label + if (account.provider == org.mobilism.material.data.DebridProvider.MegaDebrid) " API token" else " API key") },
-                placeholder = { Text("Enter your key or token") },
+                label = { Text(account.provider.label + " API key") },
+                placeholder = { Text("Enter your API key") },
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth(),
@@ -249,6 +264,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                 enabled = key.isNotBlank() && !busy,
                 modifier = Modifier.fillMaxWidth(),
               ) { Text("Verify and save") }
+              }
             }
             if (account.configured) Row(
                 Modifier.fillMaxWidth(),

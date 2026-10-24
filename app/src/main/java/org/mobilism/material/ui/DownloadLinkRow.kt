@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
@@ -64,7 +65,7 @@ fun DownloadLinkRow(
     val theme = LocalAppTheme.current
     val colors = if (supported) ButtonDefaults.buttonColors(
         containerColor = theme.success, contentColor = theme.onSuccess,
-    ) else ButtonDefaults.filledTonalButtonColors()
+    ) else ButtonDefaults.buttonColors()
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ExpressiveButton(
@@ -82,7 +83,7 @@ fun DownloadLinkRow(
                         }
                     }
                 },
-                modifier = Modifier.weight(1f).semantics {
+                modifier = Modifier.weight(1f).testTag("download:${link.url}").semantics {
                     stateDescription = if (resolving) "Resolving download" else if (supported) "Download through " + providers.joinToString() else "Open in browser"
                 },
                 enabled = !resolving,

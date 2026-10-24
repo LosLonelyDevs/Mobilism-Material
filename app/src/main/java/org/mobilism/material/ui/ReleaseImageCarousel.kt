@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,11 +28,25 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 import org.mobilism.material.designsystem.LoadingState
+import org.mobilism.material.designsystem.focusOutline
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ReleaseImageCarousel(images: List<String>, onImage: (Int) -> Unit) {
     if (images.isEmpty()) return
+    if (images.size == 1) {
+        val interaction = remember { MutableInteractionSource() }
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(Modifier.widthIn(max = 300.dp).fillMaxWidth().height(248.dp)
+                .focusOutline(interaction).clip(MaterialTheme.shapes.extraLarge)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable(interactionSource = interaction, indication = ripple(), role = Role.Button,
+                    onClickLabel = "View full size image") { onImage(0) }) {
+                ReleaseImageContent(images.single(), 0, 1)
+            }
+        }
+        return
+    }
     val state = rememberCarouselState { images.size }
     val motion = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     HorizontalMultiBrowseCarousel(
@@ -53,10 +69,17 @@ internal fun ReleaseImageCarousel(images: List<String>, onImage: (Int) -> Unit) 
                     onClickLabel = "View full size image") { onImage(index) },
             contentAlignment = Alignment.Center,
         ) {
-            SubcomposeAsyncImage(
-                model = images[index],
-                contentDescription = "Release image ${index + 1} of ${images.size}",
-                contentScale = if (images.size == 1) ContentScale.Fit else ContentScale.Crop,
+            ReleaseImageContent(images[index], index, images.size)
+        }
+    }
+}
+
+@Composable
+private fun ReleaseImageContent(image: String, index: Int, count: Int) {
+    SubcomposeAsyncImage(
+                model = image,
+                contentDescription = "Release image ${index + 1} of $count",
+                contentScale = if (count == 1) ContentScale.Fit else ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
                 loading = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingState("Loading image…") } },
                 error = {
@@ -66,6 +89,4 @@ internal fun ReleaseImageCarousel(images: List<String>, onImage: (Int) -> Unit) 
                     }
                 },
             )
-        }
-    }
 }

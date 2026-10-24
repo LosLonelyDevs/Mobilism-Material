@@ -88,6 +88,14 @@ class ReadmeScreenshots {
         capture("downloads")
     }
 
+    @Test fun singleImageStillOpensTheFullSizeViewer() {
+        releaseScreen(singleImage = true)
+        awaitImages(listOf(asset("tizen-1")))
+        capture("release-single-image")
+        compose.onNodeWithContentDescription("Release image 1 of 1").performClick()
+        compose.onNodeWithContentDescription("Close image viewer").assertExists()
+    }
+
     @Test fun appearance() {
         screen { AppearanceScreen(AppearanceState(), AppearanceStore(compose.activity), {}) }
         capture("appearance")
@@ -100,7 +108,8 @@ class ReadmeScreenshots {
             DebridAccount(DebridProvider.MegaDebrid, configured = true, validated = true, hostsVerified = true,
                 hosts = listOf(SupportedHost("rapidgator.net", "Rapidgator"))),
         ))
-        screen { SettingsScreen(accounts, DebridRepository(compose.activity), {}, {}, {}) }
+        screen { SettingsScreen(accounts, DebridRepository(compose.activity), {}, {}, {},
+            developer = org.mobilism.material.settings.DeveloperPreferences(enabled = true, debridEnabled = true)) }
         compose.onNodeWithText("Debrid accounts").performScrollTo()
         capture("debrid")
         compose.onNodeWithText("2 Mobilism hosts").performClick()
@@ -232,10 +241,10 @@ class ReadmeScreenshots {
         }
     }
 
-    private fun releaseScreen(onDownloaded: (Boolean) -> Unit = {}) = screen {
+    private fun releaseScreen(singleImage: Boolean = false, onDownloaded: (Boolean) -> Unit = {}) = screen {
         ReleaseScreen(
             state = ReleaseState(release = sample(1, "TizenTube v1.3.2 [Open Source]", "tizen-1").copy(
-                images = listOf(asset("tizen-1"), asset("tizen-2")),
+                images = if (singleImage) listOf(asset("tizen-1")) else listOf(asset("tizen-1"), asset("tizen-2")),
                 contentHtml = """
                     <p>A YouTube client for Android TV, with playback controls and a simple layout.</p>
                     <p>What's New:</p><p>Playback fixes and navigation improvements.</p>
@@ -247,7 +256,7 @@ class ReadmeScreenshots {
                 """.trimIndent(), liked = false), busy = false,
                 comments = CommentsState(canLoadMore = false)),
             debrid = DebridState(listOf(DebridAccount(DebridProvider.entries.first(), true,
-                listOf(SupportedHost("rapidgator.net", "Rapidgator")), validated = true, hostsVerified = true))),
+                listOf(SupportedHost("rapidgator.net", "Rapidgator")), validated = true, hostsVerified = true)), enabled = true),
             preferences = DownloadPreferences(), onBack = {}, onRetry = {}, onMoreComments = {},
             watched = true, downloaded = false, onWatch = {}, onDownloaded = onDownloaded,
             onLike = {}, onActionMessageShown = {},

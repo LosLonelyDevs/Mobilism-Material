@@ -21,7 +21,7 @@ class DebridDownloadsTest {
     private val direct = "https://downloads.example.org/file.apk"
     private val verified = DebridState(listOf(DebridAccount(DebridProvider.RealDebrid,
         configured = true, validated = true, hostsVerified = true,
-        hosts = listOf(SupportedHost("files.example.org", "Example host")))))
+        hosts = listOf(SupportedHost("files.example.org", "Example host")))), enabled = true)
 
     @Test fun opensResolvedLinkOnceAndCopyNeverResolves() {
         val result = CompletableDeferred<String>()
@@ -63,7 +63,7 @@ class DebridDownloadsTest {
     @Test fun unverifiedAccountsUseOrdinaryHostLinks() {
         var resolved = false
         val opened = mutableListOf<String>()
-        val unverified = DebridState(verified.accounts.map { it.copy(validated = false) })
+        val unverified = verified.copy(accounts = verified.accounts.map { it.copy(validated = false) })
         compose.setContent { MobilismTheme(reduceMotion = true) {
             DownloadLinkRow(DownloadLink(original), unverified, onOpened = {},
                 resolveLink = { resolved = true; direct }, openLink = { opened += it; true }, onCopied = {})

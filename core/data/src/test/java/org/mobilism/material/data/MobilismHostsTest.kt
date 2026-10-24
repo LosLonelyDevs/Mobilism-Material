@@ -17,8 +17,8 @@ class MobilismHostsTest {
         val hosts = MobilismHosts.shortlist(MobilismHosts.domains, supported)
         assertEquals(listOf(SupportedHost("send.now", "Send.now")), hosts)
         val account = DebridAccount(DebridProvider.RealDebrid, configured = true, hosts = hosts, validated = true)
-        assertTrue(DebridState(listOf(account)).supporting("https://send.now/file").isEmpty())
-        assertEquals(1, DebridState(listOf(account.copy(hostsVerified = true))).supporting("https://send.now/file").size)
+        assertTrue(DebridState(listOf(account), enabled = true).supporting("https://send.now/file").isEmpty())
+        assertEquals(1, DebridState(listOf(account.copy(hostsVerified = true)), enabled = true).supporting("https://send.now/file").size)
         assertTrue(MobilismHosts.shortlist(MobilismHosts.domains, emptyList()).isEmpty())
     }
 
@@ -33,6 +33,6 @@ class MobilismHostsTest {
         val account = DebridAccount(DebridProvider.RealDebrid, true, hosts)
         assertEquals(listOf("Rapidgator"), account.hostNames)
         assertEquals(2, hosts.size)
-        assertFalse(DebridState(listOf(account)).supporting("https://youtube.com/example").isNotEmpty())
+        assertFalse(DebridState(listOf(account), enabled = true).supporting("https://youtube.com/example").isNotEmpty())
     }
 }

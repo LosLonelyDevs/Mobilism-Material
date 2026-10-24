@@ -4,25 +4,32 @@ import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-data class DeveloperPreferences(val unlocked: Boolean = false, val enabled: Boolean = false)
+data class DeveloperPreferences(val enabled: Boolean = false, val verboseLogging: Boolean = false,
+    val debridEnabled: Boolean = true)
 
 class DeveloperPreferencesStore(context: Context) {
     private val preferences = context.getSharedPreferences("material-developer", Context.MODE_PRIVATE)
-    private val unlocked = preferences.getBoolean("unlocked", false)
-    private val mutableState = MutableStateFlow(DeveloperPreferences(
-        unlocked = unlocked,
-        enabled = unlocked && preferences.getBoolean("enabled", false),
-    ))
+    private val enabled = preferences.getBoolean("enabled", false)
+    private val mutableState = MutableStateFlow(DeveloperPreferences(enabled = enabled,
+        verboseLogging = enabled && preferences.getBoolean("verbose-logging", false),
+        debridEnabled = preferences.getBoolean("debrid-enabled", true)))
     val state = mutableState.asStateFlow()
 
-    fun unlock() {
-        preferences.edit().putBoolean("unlocked", true).putBoolean("enabled", true).apply()
-        mutableState.value = DeveloperPreferences(unlocked = true, enabled = true)
+    fun unlock() = save(mutableState.value.copy(enabled = true))
+
+    fun disable() = save(mutableState.value.copy(enabled = false, verboseLogging = false))
+
+    fun setVerboseLogging(enabled: Boolean) {
+        if (mutableState.value.enabled) save(mutableState.value.copy(verboseLogging = enabled))
     }
 
-    fun setEnabled(enabled: Boolean) {
-        if (!mutableState.value.unlocked) return
-        preferences.edit().putBoolean("enabled", enabled).apply()
-        mutableState.value = mutableState.value.copy(enabled = enabled)
+    fun setDebridEnabled(enabled: Boolean) {
+        if (mutableState.value.enabled) save(mutableState.value.copy(debridEnabled = enabled))
+    }
+
+    private fun save(value: DeveloperPreferences) {
+        preferences.edit().remove("unlocked").putBoolean("enabled", value.enabled)
+            .putBoolean("verbose-logging", value.verboseLogging).putBoolean("debrid-enabled", value.debridEnabled).apply()
+        mutableState.value = value
     }
 }

@@ -58,9 +58,9 @@ class MobilismViewModel(
     val debrid: DebridRepository,
     val library: org.mobilism.material.data.AppLibraryStore,
     val contentPreferences: org.mobilism.material.data.ContentPreferencesStore = org.mobilism.material.data.ContentPreferencesStore(context),
+    val developer: org.mobilism.material.settings.DeveloperPreferencesStore = org.mobilism.material.settings.DeveloperPreferencesStore(context),
 ) : ViewModel() {
     val downloads = DownloadPreferencesStore(context)
-    val developer = org.mobilism.material.settings.DeveloperPreferencesStore(context)
     private val preferences = context.getSharedPreferences("material-navigation", Context.MODE_PRIVATE)
     val preferredSection: ContentSection?
         get() = ContentSection.entries.firstOrNull { it.name == preferences.getString("section", null) }
@@ -87,11 +87,6 @@ class MobilismViewModel(
                 mutableFeed.value = newFeed(mutableFeed.value.section, mutableFeed.value.order)
                 loadFeed(refresh = true)
             }
-        }
-        viewModelScope.launch {
-            try { debrid.load() }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { /* Settings exposes retry and key replacement. */ }
         }
         viewModelScope.launch {
             try { appearance.load() }

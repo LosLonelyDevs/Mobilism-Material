@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.13
+
+- Add 12 themes with separate Light and Dark lists, alphabetical sorting, and palette previews. Includes Atom One, Tokyo, and Dracula/Alucard.
+- Preview font names in their own typeface. Bundle only open-source fonts with their licenses, and add Use custom font for local TTF, OTF, and TTC files.
+- Fix MegaDebrid sign-in to obtain a download token and check Premium access. Keep both debrid services available by default.
+- Give download buttons stronger contrast and cards more depth. Center a single release image.
+- Put the feed title beside the menu. Remove the duplicate link-handler setting; Android handles that preference.
+
 ## 0.1.12
 
 - Add a Sort tab to search filters: newest posts, oldest posts, or latest activity. Keep post dates in order across pages, with progress while checking matches.

@@ -39,11 +39,12 @@ fun MobilismTheme(
     theme: ThemeDefinition = ThemeCatalog.default,
     font: AppFont = AppFont.Geist,
     reduceMotion: Boolean = false,
+    customFont: java.io.File? = null,
     content: @Composable () -> Unit,
 ) {
     val systemReducedMotion = systemAnimationsDisabled()
     val reduced = reduceMotion || systemReducedMotion
-    val type = remember(font) { appTypography(font) }
+    val type = remember(font, customFont) { appTypography(font, customFont) }
     CompositionLocalProvider(LocalReducedMotion provides reduced, LocalAppFont provides font, LocalAppTheme provides theme) {
         MaterialExpressiveTheme(
             colorScheme = theme.colors,

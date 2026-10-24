@@ -28,7 +28,7 @@ Screenshots use sample data. CI refreshes them on each version bump.
 - Release cards and pages: separate names/versions, post dates, collapsible sections, grouped downloads, thumbs-up, comments, and an image carousel with a full-screen viewer.
 - Following: installed-version checks, background checks, and optional update notifications. My Applications keeps installed apps and downloaded marks.
 - Real-Debrid and MegaDebrid: encrypted credentials, account verification, direct download links, and an original-host fallback when resolution fails.
-- Preferred architectures and file hosts, font choices, and reduced motion.
+- Preferred architectures and file hosts, 12 light/dark themes, open-source fonts, custom fonts, and reduced motion.
 
 Downloads open in your browser. Green buttons resolve through a verified debrid account first. Native downloads and several legacy features are still pending. [Remaining work](docs/feature-parity.md).
 
@@ -50,4 +50,4 @@ CI runs tests, lint, and a build. Bump `versionName` and `versionCode`, then pus
 
 ## License
 
-[AGPL-3.0](LICENSE). Geist uses the [SIL Open Font License](core/designsystem/src/main/res/raw/geist_ofl.txt). [Third-party notices](THIRD_PARTY_NOTICES.md).
+[AGPL-3.0](LICENSE). Bundled fonts use the [SIL Open Font License](docs/font-licenses.md). [Third-party notices](THIRD_PARTY_NOTICES.md).

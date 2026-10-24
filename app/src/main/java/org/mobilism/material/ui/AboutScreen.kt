@@ -19,6 +19,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import org.mobilism.material.designsystem.AppSurface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -41,6 +42,7 @@ import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.ExpressiveCard
 
 internal const val REPOSITORY_URL = "https://github.com/LosLonelyDevs/Mobilism-Material"
+private const val DEVELOPER_UNLOCK_TAPS = 10
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,7 +50,7 @@ fun AboutScreen(onBack: () -> Unit, openRepository: ((String) -> Unit)? = null,
     developerMode: Boolean = false, onEnableDeveloperMode: () -> Unit = {}) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
-    var iconTaps by rememberSaveable { mutableIntStateOf(0) }
+    var iconTaps by rememberSaveable(developerMode) { mutableIntStateOf(0) }
     val feedback = remember { arrayOfNulls<android.widget.Toast>(1) }
     androidx.compose.runtime.DisposableEffect(Unit) {
         onDispose { feedback[0]?.cancel() }
@@ -74,12 +76,12 @@ fun AboutScreen(onBack: () -> Unit, openRepository: ((String) -> Unit)? = null,
                                 "Developer mode is already on"
                             } else {
                                 iconTaps++
-                                if (iconTaps >= 5) {
+                                if (iconTaps >= DEVELOPER_UNLOCK_TAPS) {
                                     iconTaps = 0
                                     onEnableDeveloperMode()
                                     "Developer mode enabled"
-                                } else if (iconTaps >= 3) {
-                                    val remaining = 5 - iconTaps
+                                } else if (iconTaps >= DEVELOPER_UNLOCK_TAPS - 2) {
+                                    val remaining = DEVELOPER_UNLOCK_TAPS - iconTaps
                                     "$remaining more ${if (remaining == 1) "tap" else "taps"} to enable developer mode"
                                 } else null
                             }
@@ -100,7 +102,7 @@ fun AboutScreen(onBack: () -> Unit, openRepository: ((String) -> Unit)? = null,
                 }
             }
             item {
-                Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                AppSurface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                     Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         AppHeading("What's new", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
                         notes.forEach { note ->

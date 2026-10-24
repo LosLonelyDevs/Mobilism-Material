@@ -17,15 +17,16 @@ class HostMatcherTest {
 
     @Test fun catalogAloneDoesNotEnableHighlighting() {
         val host = SupportedHost("rapidgator.net", "Rapidgator")
-        val noKey = DebridState(listOf(DebridAccount(DebridProvider.RealDebrid, hosts = listOf(host))))
+        val noKey = DebridState(listOf(DebridAccount(DebridProvider.RealDebrid, hosts = listOf(host))), enabled = true)
         assertTrue(noKey.supporting("https://rapidgator.net/file/a").isEmpty())
-        val configured = DebridState(listOf(DebridAccount(DebridProvider.RealDebrid, configured = true, hosts = listOf(host))))
+        val configured = DebridState(listOf(DebridAccount(DebridProvider.RealDebrid, configured = true, hosts = listOf(host))), enabled = true)
         assertTrue(configured.supporting("https://rapidgator.net/file/a").isEmpty())
-        val verified = DebridState(configured.accounts.map { it.copy(validated = true) })
+        val verified = configured.copy(accounts = configured.accounts.map { it.copy(validated = true) })
         assertTrue(verified.supporting("https://rapidgator.net/file/a").isEmpty())
-        val available = DebridState(verified.accounts.map { it.copy(hostsVerified = true) })
+        val available = verified.copy(accounts = verified.accounts.map { it.copy(hostsVerified = true) })
         assertEquals(1, available.supporting("https://rapidgator.net/file/a").size)
-        val refreshing = DebridState(available.accounts.map { it.copy(hostsVerified = false, busy = true) })
+        assertTrue(available.copy(enabled = false).supporting("https://rapidgator.net/file/a").isEmpty())
+        val refreshing = available.copy(accounts = available.accounts.map { it.copy(hostsVerified = false, busy = true) })
         assertTrue(refreshing.supporting("https://rapidgator.net/file/a").isEmpty())
     }
 }

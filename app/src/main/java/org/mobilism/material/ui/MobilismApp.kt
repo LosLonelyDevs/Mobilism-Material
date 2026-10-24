@@ -30,7 +30,7 @@ import org.mobilism.material.designsystem.screenMotion
 fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fromNotification: Boolean = true,
     onNotificationHandled: () -> Unit = {}) {
     val model: MobilismViewModel = viewModel(factory = viewModelFactory {
-        initializer { MobilismViewModel(app, app.repository, app.appearance, app.debrid, app.library, app.contentPreferences) }
+        initializer { MobilismViewModel(app, app.repository, app.appearance, app.debrid, app.library, app.contentPreferences, app.developer) }
     })
     val auth by model.auth.collectAsStateWithLifecycle()
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -84,9 +84,10 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     val feed by model.feed.collectAsStateWithLifecycle()
     val categories by model.categories.collectAsStateWithLifecycle()
     val appearance by model.appearance.state.collectAsStateWithLifecycle()
-    val debrid by model.debrid.state.collectAsStateWithLifecycle()
+    val debridState by model.debrid.state.collectAsStateWithLifecycle()
     val downloads by model.downloads.state.collectAsStateWithLifecycle()
     val developer by model.developer.state.collectAsStateWithLifecycle()
+    val debrid = if (developer.debridEnabled) debridState else org.mobilism.material.data.DebridState(enabled = false)
     val library by model.library.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val app = context.applicationContext as MobilismApplication
@@ -170,7 +171,15 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onDownloads = { nav.navigate("download-preferences") }, onBack = { nav.popBackStack() },
                 hideAdult = hideAdult, onHideAdult = model.contentPreferences::hideAdult,
                 onAbout = { nav.navigate("about") }, developer = developer,
-                onDeveloperMode = model.developer::setEnabled)
+                onDeveloperOptions = { nav.navigate("developer-options") })
+        }
+        composable("developer-options") {
+            LaunchedEffect(developer.enabled) {
+                if (!developer.enabled) nav.popBackStack()
+            }
+            if (developer.enabled) DeveloperOptionsRoute(developer, app.diagnostics,
+                onVerboseLogging = model.developer::setVerboseLogging, onDebridEnabled = model.developer::setDebridEnabled,
+                onDisable = model.developer::disable, onBack = { nav.popBackStack() })
         }
         composable("about") {
             AboutScreen(onBack = { nav.popBackStack() }, developerMode = developer.enabled,

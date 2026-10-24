@@ -1,6 +1,10 @@
 # Theme format, version 1
 
-Catppuccin Frappé is the initial built-in dark theme. Its palette and semantic colors come from the supplied theme definition. Wallpaper colors do not override it. Geist uses local Regular, Medium, Semibold, and Bold font files; System sans serif is also available.
+Appearance has 12 built-in themes: Catppuccin Latte/Frappé, Rosé Pine Dawn/Rosé Pine, Solarized Light/Dark, Atom One Light/Dark, Tokyo Day/Night, and Alucard/Dracula. The theme picker groups Light and Dark separately and sorts each section alphabetically. Each option shows its palette below the name.
+
+Catppuccin Frappé and Geist remain the defaults. Wallpaper colors do not override the selected palette. Font names preview their own typeface. Bundled fonts are open source; [licenses ship in the APK](font-licenses.md). System sans serif is also available.
+
+Use custom font stays last in the font menu. It accepts TTF, OTF, and TTC files up to 10 MiB, validates them, and saves a private local copy. Invalid files leave the current font unchanged.
 
 `ThemeDefinition` holds identity, display name, light/dark mode, and a complete Material `ColorScheme`. Screens use that scheme through `MaterialTheme`; palette constants belong only in theme definitions. Typography and motion are separate preferences.
 

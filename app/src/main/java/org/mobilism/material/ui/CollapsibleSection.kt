@@ -20,7 +20,7 @@ import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import org.mobilism.material.designsystem.AppSurface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -49,7 +49,7 @@ fun CollapsibleSection(
     var expanded by rememberSaveable(id, initiallyExpanded) { mutableStateOf(initiallyExpanded) }
     val rotation by animateFloatAsState(if (expanded) 180f else 0f,
         MaterialTheme.motionScheme.fastSpatialSpec(), label = "section chevron")
-    Surface(
+    AppSurface(
         modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge,
         color = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, accent, 0.08f),
     ) {

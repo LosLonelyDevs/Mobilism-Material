@@ -12,12 +12,33 @@ import org.json.JSONObject
 
 class DebridException(message: String, val invalidatesAccount: Boolean = false) : Exception(message)
 
-internal class DebridApi(client: OkHttpClient = OkHttpClient()) {
+internal class DebridApi(client: OkHttpClient = OkHttpClient(),
+    private val diagnostics: DiagnosticLogger = DiagnosticLogger.None) {
     private val client = client.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS)
         .callTimeout(45, TimeUnit.SECONDS)
         // MegaDebrid requires its token in the query. Never forward it through redirects.
         .followRedirects(false).followSslRedirects(false).build()
+
+    fun connectMegaDebrid(username: String, password: String): MegaDebridSession {
+        if (username.isBlank() || password.isEmpty() || username.length > 256 || password.length > 4096 ||
+            username.any { it.isISOControl() } || password.any { it.isISOControl() }) {
+            throw DebridException("Enter your MegaDebrid username and password.")
+        }
+        val url = "https://www.mega-debrid.eu/api.php".toHttpUrl().newBuilder()
+            .addQueryParameter("action", "connectUser")
+            .addQueryParameter("login", username.trim())
+            .addQueryParameter("password", password).build()
+        val result = request(DebridProvider.MegaDebrid, Request.Builder().url(url).build())
+        val token = result.optString("token")
+        if (token.isBlank()) throw invalidResponse()
+        checkKey(token)
+        val premiumUntil = result.optLong("vip_end")
+        if (premiumUntil <= System.currentTimeMillis() / 1000) {
+            throw DebridException("An active MegaDebrid Premium subscription is required.", true)
+        }
+        return MegaDebridSession(token, premiumUntil)
+    }
 
     fun validate(provider: DebridProvider, key: String) {
         checkKey(key)
@@ -30,7 +51,7 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient()) {
                 }
             }
             DebridProvider.MegaDebrid -> {
-                // The documented token check is authenticated history. Discard its contents.
+                // History also accepts application keys, so Premium proof must come from connectUser.
                 val url = megaUrl("getUserHistory", key).newBuilder().addQueryParameter("limit", "1").build()
                 val result = request(provider, Request.Builder().url(url).build())
                 if (!result.has("history")) throw invalidResponse()
@@ -108,11 +129,17 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient()) {
                 when (provider) {
                     DebridProvider.RealDebrid -> {
                         if (!response.isSuccessful || json?.has("error") == true || json?.has("error_code") == true) {
+                            diagnostics.record(DiagnosticEvent(DiagnosticSource.RealDebrid, DiagnosticOperation.Other,
+                                DiagnosticPhase.Failed, httpStatus = response.code, failure = DiagnosticFailure.ProviderRejected))
                             throw realError(response.code, json?.optInt("error_code", -1) ?: -1)
                         }
                     }
                     DebridProvider.MegaDebrid -> {
                         if (!response.isSuccessful || json?.optString("response_code") != "ok") {
+                            diagnostics.record(DiagnosticEvent(DiagnosticSource.MegaDebrid, DiagnosticOperation.Other,
+                                DiagnosticPhase.Failed, httpStatus = response.code,
+                                failure = if (json?.optString("response_code")?.startsWith("UNRESTRICTING_") == true)
+                                    DiagnosticFailure.Unrestricting else DiagnosticFailure.ProviderRejected))
                             throw megaError(response.code, json)
                         }
                     }
@@ -150,8 +177,10 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient()) {
         val reason = (response?.optString("response_code").orEmpty() + " " +
             response?.optString("response_text").orEmpty()).lowercase()
         return when {
+            "unknown_user" in reason ->
+                DebridException("The MegaDebrid username or password is incorrect.")
             listOf("token", "log-in", "login", "auth", "credential").any(reason::contains) ->
-                DebridException("The token is invalid or expired. Remove it and add a valid token in Settings.", true)
+                DebridException("The MegaDebrid session expired. Remove the account and sign in again.", true)
             listOf("vip", "premium", "subscription").any(reason::contains) ->
                 DebridException("An active MegaDebrid Premium subscription is required.", true)
             "password" in reason -> DebridException("This file needs a password. Open the original host to continue.")
@@ -189,3 +218,5 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient()) {
 
     private companion object { const val MAX_RESPONSE_BYTES = 512L * 1024 }
 }
+
+internal class MegaDebridSession(val token: String, val premiumUntil: Long)
