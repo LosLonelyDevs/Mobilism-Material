@@ -1,5 +1,13 @@
 # Verification
 
+## 0.1.10
+
+- Debug and Android test builds pass. All 92 unit tests and 14 emulator tests pass; lint reports no errors.
+- Provider cards use matching tonal controls and a neutral remove action. The emulator fixture checks the host dropdown and captures the updated cards with sample data.
+- Real-Debrid resolved a live supported-host link. Its direct URL returned HTTP 200 for HEAD and HTTP 206 with a valid archive signature for a four-byte range request.
+- Real-Debrid reported the original example host as down. Availability checks now exclude reported outages and unverified cached lists while preserving supported catalog hosts missing from the status feed.
+- MegaDebrid accepted the saved token and rejected an invalid token. Both the app client and an independent request returned an unexplained unrestriction error for live mirrors. Premium status and successful MegaDebrid resolution remain unverified.
+
 ## 0.1.9
 
 - Debug and Android test builds pass. All 87 unit tests pass; lint reports no errors.

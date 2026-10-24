@@ -38,6 +38,42 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient()) {
         }
     }
 
+    fun availableHosts(provider: DebridProvider, key: String, catalogDomains: List<String> = emptyList()): List<SupportedHost> {
+        checkKey(key)
+        return when (provider) {
+            DebridProvider.RealDebrid -> {
+                val result = request(provider, realRequest("hosts/status", key).build())
+                // Real-Debrid omits some working hosts from status; keep catalog entries unless status rules them out.
+                val domains = catalogDomains.ifEmpty { result.keys().asSequence().toList() }
+                domains.mapNotNull { value ->
+                    val domain = HostMatcher.domain(value) ?: return@mapNotNull null
+                    val host = result.optJSONObject(domain) ?: result.optJSONObject(HostMatcher.key(domain).orEmpty())
+                    if (host != null && (host.optInt("supported") != 1 || host.optString("status") != "up")) return@mapNotNull null
+                    SupportedHost(domain, host?.optString("name")?.takeIf(String::isNotBlank)
+                        ?: HostMatcher.displayName(domain))
+                }
+            }
+            DebridProvider.MegaDebrid -> {
+                val result = request(provider, Request.Builder()
+                    .url("https://www.mega-debrid.eu/api.php?action=getHostersList").build())
+                val hosts = result.optJSONArray("hosters") ?: throw invalidResponse()
+                buildList {
+                    for (index in 0 until hosts.length()) {
+                        val host = hosts.getJSONObject(index)
+                        if (host.optString("status") != "up") continue
+                        val domains = host.optJSONArray("domains") ?: continue
+                        for (entry in 0 until domains.length()) {
+                            val domain = HostMatcher.domain(domains.getString(entry)) ?: continue
+                            add(SupportedHost(domain, host.optString("url").ifBlank {
+                                host.optString("name").ifBlank { HostMatcher.displayName(domain) }
+                            }))
+                        }
+                    }
+                }
+            }
+        }.distinctBy { it.domain }
+    }
+
     fun resolve(provider: DebridProvider, key: String, original: String): String {
         checkKey(key)
         val source = webUrl(original) ?: throw DebridException("This download link is not a valid web address.")
@@ -123,7 +159,9 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient()) {
                 DebridException("The account's download or traffic limit has been reached.")
             listOf("host", "maintenance").any(reason::contains) ->
                 DebridException("This file host is unsupported or temporarily unavailable on MegaDebrid.")
-            listOf("link", "file", "deleted", "not found", "unrestrict").any(reason::contains) ->
+            "unrestrict" in reason ->
+                DebridException("MegaDebrid could not resolve this link. Check that Premium access is active, or open the original host.")
+            listOf("link", "file", "deleted", "not found").any(reason::contains) ->
                 DebridException("The file is unavailable or the link could not be resolved.")
             else -> httpError(status)
         }

@@ -25,6 +25,56 @@ class DebridApiTest {
                 .body(body.toResponseBody("application/json".toMediaType())).build()
         }.build())
 
+    @Test fun realDebridRequiresSupportedAndUpHosts() {
+        val result = api("""{
+            "ready.example.org":{"name":"Ready","supported":1,"status":"up"},
+            "down.example.org":{"name":"Down","supported":1,"status":"down"},
+            "unsupported.example.org":{"supported":0,"status":"up"},
+            "unknown.example.org":{"supported":1}
+        }""") { request ->
+            assertEquals("/rest/1.0/hosts/status", request.url.encodedPath)
+            assertEquals("Bearer $key", request.header("Authorization"))
+        }.availableHosts(DebridProvider.RealDebrid, key)
+        assertEquals(listOf(SupportedHost("ready.example.org", "Ready")), result)
+    }
+
+    @Test fun megaDebridRequiresUpStatusForEveryHostAlias() {
+        val result = api("""{"response_code":"ok","hosters":[
+            {"url":"Ready","status":"up","domains":["ready.example.org","alias.example.org"]},
+            {"url":"Down","status":"down","domains":["down.example.org"]},
+            {"url":"Unknown","domains":["unknown.example.org"]}
+        ]}""") { request ->
+            assertEquals("getHostersList", request.url.queryParameter("action"))
+            assertNull(request.url.queryParameter("token"))
+        }.availableHosts(DebridProvider.MegaDebrid, key)
+        assertEquals(listOf("ready.example.org", "alias.example.org"), result.map { it.domain })
+    }
+
+    @Test fun realDebridKeepsCatalogHostsMissingFromStatusWithoutRevivingDownAliases() {
+        val result = api("""{"rapidgator.net":{"supported":0,"status":"down"}}""")
+            .availableHosts(DebridProvider.RealDebrid, key, listOf("rg.to", "catalog-only.example.org"))
+        assertEquals(listOf("catalog-only.example.org"), result.map { it.domain })
+    }
+
+    @Test fun allHostsDownIsAValidEmptyAvailabilityResult() {
+        assertTrue(api("""{"down.example.org":{"supported":1,"status":"down"}}""")
+            .availableHosts(DebridProvider.RealDebrid, key).isEmpty())
+        assertTrue(api("""{"response_code":"ok","hosters":[]}""")
+            .availableHosts(DebridProvider.MegaDebrid, key).isEmpty())
+    }
+
+    @Test fun unexplainedMegaDebridFailureDoesNotClaimTheFileWasDeleted() {
+        try {
+            api("""{"response_code":"UNRESTRICTING_ERROR_1","response_text":""}""")
+                .resolve(DebridProvider.MegaDebrid, key, original)
+            fail("Expected resolution error")
+        } catch (error: DebridException) {
+            assertTrue(error.message.orEmpty().contains("Premium"))
+            assertFalse(error.message.orEmpty().contains("file is unavailable"))
+            assertFalse(error.invalidatesAccount)
+        }
+    }
+
     @Test fun realDebridValidatesPremiumUsingBearerHeader() {
         api("""{"id":1,"type":"premium","premium":3600}""") { request ->
             assertEquals("https://api.real-debrid.com/rest/1.0/user", request.url.toString())

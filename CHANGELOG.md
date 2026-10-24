@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.10
+
+- Check host availability before showing green download buttons. Stop using stale host lists while refreshing, and exclude hosts reported as down.
+- Give provider cards matching tonal controls and a quieter remove button.
+- Explain Premium requirements and keep unexplained MegaDebrid errors from implying a file was deleted.
+
 ## 0.1.9
 
 - Verify Real-Debrid keys and MegaDebrid tokens before saving. Recheck saved accounts when the app starts and when refreshing hosts.

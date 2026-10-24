@@ -20,7 +20,8 @@ class DebridDownloadsTest {
     private val original = "https://files.example.org/file"
     private val direct = "https://downloads.example.org/file.apk"
     private val verified = DebridState(listOf(DebridAccount(DebridProvider.RealDebrid,
-        configured = true, validated = true, hosts = listOf(SupportedHost("files.example.org", "Example host")))))
+        configured = true, validated = true, hostsVerified = true,
+        hosts = listOf(SupportedHost("files.example.org", "Example host")))))
 
     @Test fun opensResolvedLinkOnceAndCopyNeverResolves() {
         val result = CompletableDeferred<String>()

@@ -93,6 +93,21 @@ class ReadmeScreenshots {
         capture("appearance")
     }
 
+    @Test fun debridAccounts() {
+        val accounts = DebridState(listOf(
+            DebridAccount(DebridProvider.RealDebrid, configured = true, validated = true, hostsVerified = true,
+                hosts = listOf(SupportedHost("rapidgator.net", "Rapidgator"), SupportedHost("send.now", "send.now"))),
+            DebridAccount(DebridProvider.MegaDebrid, configured = true, validated = true, hostsVerified = true,
+                hosts = listOf(SupportedHost("rapidgator.net", "Rapidgator"))),
+        ))
+        screen { SettingsScreen(accounts, DebridRepository(compose.activity), {}, {}, {}) }
+        compose.onNodeWithText("Debrid accounts").performScrollTo()
+        capture("debrid")
+        compose.onNodeWithText("2 Mobilism hosts").performClick()
+        compose.onNodeWithText("Supported Mobilism hosts").assertIsDisplayed()
+        compose.onNodeWithText("send.now").assertIsDisplayed()
+    }
+
     @Test fun adaptiveIcon() {
         val icon = compose.activity.packageManager.getApplicationIcon(compose.activity.packageName)
         assertTrue(icon is AdaptiveIconDrawable)
@@ -206,7 +221,7 @@ class ReadmeScreenshots {
                 """.trimIndent(), liked = false), busy = false,
                 comments = CommentsState(canLoadMore = false)),
             debrid = DebridState(listOf(DebridAccount(DebridProvider.entries.first(), true,
-                listOf(SupportedHost("rapidgator.net", "Rapidgator")), validated = true))),
+                listOf(SupportedHost("rapidgator.net", "Rapidgator")), validated = true, hostsVerified = true))),
             preferences = DownloadPreferences(), onBack = {}, onRetry = {}, onMoreComments = {},
             watched = true, downloaded = false, onWatch = {}, onDownloaded = onDownloaded,
             onLike = {}, onActionMessageShown = {},

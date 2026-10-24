@@ -113,7 +113,7 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             item {
                 AppHeading("Debrid accounts", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "Green buttons resolve downloads through a verified debrid account, then open the direct link in your browser.",
+                    "Green buttons use a verified account and supported host. Hosts reported as down use normal buttons. Both services require Premium access.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
                 )
@@ -201,8 +201,8 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                     onClick = { perform { repository.refresh(account.provider) } },
                     modifier = Modifier.size(48.dp), enabled = !busy,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ),
                 ) {
                     Icon(Icons.Outlined.Refresh, "Verify account and refresh hosts")
@@ -212,8 +212,8 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                     onClick = { perform { repository.removeKey(account.provider); key = "" } },
                     modifier = Modifier.size(48.dp), enabled = !busy,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     ),
                 ) {
                     Icon(Icons.Outlined.DeleteOutline, "Remove key")
@@ -240,11 +240,12 @@ private fun DebridHostMenu(account: DebridAccount, debrid: DebridState, modifier
             { expanded = !expanded },
             Modifier.semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondary,
-                contentColor = MaterialTheme.colorScheme.onSecondary,
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             ),
         ) {
-            Text("${account.hostNames.size} Mobilism hosts")
+            val count = account.hostNames.size
+            Text("$count Mobilism ${if (count == 1) "host" else "hosts"}")
             Icon(Icons.Outlined.ExpandMore, null, Modifier.padding(start = 4.dp).size(20.dp).rotate(rotation))
         }
         DropdownMenu(
