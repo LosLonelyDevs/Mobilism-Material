@@ -43,7 +43,7 @@ Use JDK 21 and Android SDK 37. Set `ANDROID_HOME` or `sdk.dir` in `local.propert
 
 On macOS/Linux: `bash ./gradlew :app:assembleDebug`. APKs go to `build/apk/`.
 
-CI runs tests, lint, and a build. Bump `versionName` and `versionCode`, then push to `main` to publish a signed prerelease with checksums. [Release workflow](.github/workflows/release.yml).
+CI runs tests, lint, and a build. Bump `versionName` and `versionCode`, then push to `main` to publish a signed release with checksums, marked Latest on GitHub. [Release workflow](.github/workflows/release.yml).
 
 [Verification](docs/verification.md) · [Themes](docs/themes.md) · [Migration](docs/migration.md)
 
