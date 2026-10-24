@@ -138,7 +138,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$SOURCE_SHA" \
             --title "$APP_VERSION" \
-            --notes-file "$RUNNER_TEMP/release-notes.md" --prerelease \
+            --notes-file "$RUNNER_TEMP/release-notes.md" --latest \
             "build/apk/MobilismMaterial_v${APP_VERSION}-release.apk" \
             build/apk/SHA256SUMS
       - name: Remove temporary keystore
