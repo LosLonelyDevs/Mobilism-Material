@@ -38,6 +38,14 @@ class AppearanceOptionsTest {
         render(store)
         for (theme in ThemeCatalog.builtIn) {
             compose.onNodeWithContentDescription("Choose theme").performClick()
+            val label = if (theme.isDark) "Dark" else "Light"
+            compose.onNodeWithTag("theme-options").performScrollToNode(hasText(label))
+            compose.onNodeWithText(label).assert(
+                SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription,
+                    if (store.state.value.theme.isDark == theme.isDark) "Expanded" else "Collapsed"))
+            if (store.state.value.theme.isDark != theme.isDark) {
+                compose.onNodeWithText(label).performClick()
+            }
             compose.onNodeWithTag("theme-options").performScrollToNode(hasContentDescription(theme.name))
             compose.onNodeWithContentDescription(theme.name).performClick()
             compose.runOnIdle { assertEquals(theme.id, store.state.value.theme.id) }
@@ -48,12 +56,15 @@ class AppearanceOptionsTest {
         capture("appearance-light")
         compose.onNodeWithContentDescription("Choose theme").performClick()
         compose.onNodeWithText("Light").assertIsDisplayed()
+        compose.onNodeWithText("Light").performClick()
+        compose.onNodeWithContentDescription(ThemeCatalog.pairs.first().light.name).assertDoesNotExist()
+        compose.onNodeWithText("Light").performClick()
         capture("theme-picker-light")
         compose.onNodeWithContentDescription("Close themes").performClick()
         compose.runOnIdle { store.selectTheme(ThemeCatalog.default) }
         capture("appearance-dark")
         compose.onNodeWithContentDescription("Choose theme").performClick()
-        compose.onNodeWithTag("theme-options").performScrollToIndex(ThemeCatalog.forMode(false).size + 1)
+        compose.onNodeWithTag("theme-options").performScrollToIndex(1)
         compose.onNodeWithText("Dark").assertIsDisplayed()
         capture("theme-picker-dark")
         compose.onNodeWithContentDescription("Close themes").performClick()

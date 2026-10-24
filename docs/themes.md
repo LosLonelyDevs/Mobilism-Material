@@ -1,6 +1,6 @@
 # Theme format, version 1
 
-Appearance has 12 built-in themes: Catppuccin Latte/Frappé, Rosé Pine Dawn/Rosé Pine, Solarized Light/Dark, Atom One Light/Dark, Tokyo Day/Night, and Alucard/Dracula. The theme picker groups Light and Dark separately and sorts each section alphabetically. Each option shows its palette below the name.
+Appearance has 12 built-in themes: Catppuccin Latte/Frappé, Rosé Pine Dawn/Rosé Pine, Solarized Light/Dark, Atom One Light/Dark, Tokyo Day/Night, and Alucard/Dracula. One picker has collapsible Light and Dark sections, sorted alphabetically. The current theme's section opens by default. Each option shows its palette below the name.
 
 Catppuccin Frappé and Geist remain the defaults. Wallpaper colors do not override the selected palette. Font names preview their own typeface. Bundled fonts are open source; [licenses ship in the APK](font-licenses.md). System sans serif is also available.
 

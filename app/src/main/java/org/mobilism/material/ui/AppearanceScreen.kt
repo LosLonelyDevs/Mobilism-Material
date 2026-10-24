@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,6 +15,8 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -85,13 +88,18 @@ private fun ThemePicker(state: AppearanceState, onDismiss: () -> Unit, onSelect:
             LazyColumn(Modifier.weight(1f).testTag("theme-options").selectableGroup(),
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                listOf(false, true).forEach { dark ->
-                    item(key = if (dark) "dark-heading" else "light-heading") {
-                        AppHeading(if (dark) "Dark" else "Light", HeadingLevel.Subsection,
-                            Modifier.padding(top = 8.dp, bottom = 4.dp))
-                    }
-                    items(ThemeCatalog.forMode(dark, state.customThemes), key = { it.id }) { theme ->
-                        ThemeOption(theme, state.theme.id == theme.id, { onSelect(theme) }, Modifier.fillMaxWidth())
+                items(listOf(false, true), key = { if (it) "dark" else "light" }) { dark ->
+                    CollapsibleSection(
+                        id = if (dark) "dark-themes" else "light-themes",
+                        title = if (dark) "Dark" else "Light",
+                        icon = if (dark) Icons.Outlined.DarkMode else Icons.Outlined.LightMode,
+                        accent = MaterialTheme.colorScheme.primary,
+                        initiallyExpanded = state.theme.isDark == dark,
+                        headingLevel = HeadingLevel.Subsection,
+                    ) {
+                        ThemeCatalog.forMode(dark, state.customThemes).forEach { theme ->
+                            ThemeOption(theme, state.theme.id == theme.id, { onSelect(theme) }, Modifier.fillMaxWidth())
+                        }
                     }
                 }
             }
@@ -115,8 +123,12 @@ private fun ThemeOption(theme: ThemeDefinition, active: Boolean, onClick: () -> 
                 else Spacer(Modifier.size(20.dp))
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(theme.colors.primary, theme.colors.secondary, theme.reading, theme.success).forEach {
-                    Box(Modifier.size(20.dp).clip(MaterialTheme.shapes.small).background(it))
+                listOf(theme.colors.primary, theme.colors.secondary, theme.colors.tertiary,
+                    theme.reading, theme.featured, theme.personalization, theme.success, theme.colors.error,
+                    theme.colors.background, theme.colors.surface, theme.colors.surfaceContainerHigh, theme.colors.onSurface)
+                    .distinct().forEach { color ->
+                    Box(Modifier.size(24.dp).clip(MaterialTheme.shapes.small).background(color)
+                        .border(1.dp, theme.colors.outlineVariant, MaterialTheme.shapes.small))
                 }
             }
         }
