@@ -92,6 +92,28 @@ class FeedFiltersTest {
         assertEquals(2L, search.items.single().id)
     }
 
+    @Test fun searchActivityBoundarySurvivesSparseCategoryFiltering() = runBlocking {
+        val result = filteredReleasePages(1, FeedFilters(categoryIds = setOf(10))) { page ->
+            ReleasePage(listOf(release(page.toLong(), category = 20)), true,
+                nextActivityAtMost = 2_000_000_000L - page)
+        }
+        assertTrue(result.items.isEmpty())
+        assertEquals(5, result.lastPage)
+        assertEquals(1_999_999_995L, result.nextActivityAtMost)
+    }
+
+    @Test fun searchStopsWhenRemainingActivityIsOlderThanTheDateFilter() = runBlocking {
+        var calls = 0
+        val result = filteredReleasePages(1, FeedFilters(postedFrom = date)) {
+            calls++
+            ReleasePage(listOf(release(1, "2026-10-12T12:00:00Z")), true,
+                nextActivityAtMost = java.time.Instant.parse("2026-10-01T12:00:00Z").epochSecond)
+        }
+        assertEquals(1, calls)
+        assertEquals(1L, result.items.single().id)
+        assertFalse(result.canLoadMore)
+    }
+
     @Test fun errorsDoNotReturnPartialResultsAndCancellationPropagates() = runBlocking {
         val filters = FeedFilters(categoryIds = setOf(10))
         val error = runCatching { filteredReleasePages(1, filters) { page ->

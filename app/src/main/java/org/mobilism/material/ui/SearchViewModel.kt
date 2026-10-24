@@ -20,6 +20,7 @@ data class SearchState(
     val items: List<Release> = emptyList(), val page: Int = 0, val busy: Boolean = false,
     val canLoadMore: Boolean = true, val error: ScreenError? = null,
     val filters: FeedFilters = FeedFilters(), val awaitingMore: Boolean = false,
+    val sortingMatches: Int? = null,
 )
 
 class SearchViewModel(
@@ -38,6 +39,7 @@ class SearchViewModel(
     val categories = mutableCategories.asStateFlow()
     private var categoryJob: Job? = null
     private var job: Job? = null
+    private var pager: SortedSearchPager? = null
 
     init {
         if (initialQuery.isNotBlank()) submit()
@@ -99,16 +101,20 @@ class SearchViewModel(
     fun loadMore() {
         val snapshot = mutableState.value
         if (job?.isActive == true || snapshot.submitted.isBlank() || !snapshot.canLoadMore) return
+        if (snapshot.page == 0) pager = SortedSearchPager(snapshot.filters.searchSort) { page ->
+            repository.search(snapshot.submitted, snapshot.scope, page, snapshot.filters)
+        }
+        val currentPager = checkNotNull(pager)
         job = viewModelScope.launch {
             mutableState.update { it.copy(busy = true, error = null) }
             try {
-                val page = repository.search(snapshot.submitted, snapshot.scope, snapshot.page + 1, snapshot.filters)
+                val page = currentPager.next { count -> mutableState.update { it.copy(sortingMatches = count) } }
                 val items = (snapshot.items + page.items).distinctBy { it.id }
-                mutableState.update { it.copy(items = items, page = page.lastPage ?: (snapshot.page + 1), busy = false,
+                mutableState.update { it.copy(items = items, page = page.lastPage ?: (snapshot.page + 1), busy = false, sortingMatches = null,
                     awaitingMore = page.items.isEmpty() && page.canLoadMore,
                     canLoadMore = page.canLoadMore && (page.items.isEmpty() || items.size > snapshot.items.size)) }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { mutableState.update { it.copy(busy = false, error = error.forScreen()) } }
+            catch (error: Exception) { mutableState.update { it.copy(busy = false, sortingMatches = null, error = error.forScreen()) } }
         }
     }
 }

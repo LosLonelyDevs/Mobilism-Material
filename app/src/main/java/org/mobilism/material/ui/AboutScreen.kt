@@ -1,6 +1,7 @@
 package org.mobilism.material.ui
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -22,8 +23,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -38,9 +44,15 @@ internal const val REPOSITORY_URL = "https://github.com/LosLonelyDevs/Mobilism-M
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AboutScreen(onBack: () -> Unit, openRepository: ((String) -> Unit)? = null) {
+fun AboutScreen(onBack: () -> Unit, openRepository: ((String) -> Unit)? = null,
+    developerMode: Boolean = false, onEnableDeveloperMode: () -> Unit = {}) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    var iconTaps by rememberSaveable { mutableIntStateOf(0) }
+    val feedback = remember { arrayOfNulls<android.widget.Toast>(1) }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { feedback[0]?.cancel() }
+    }
     val icon = remember(context) {
         context.packageManager.getApplicationIcon(context.packageName).toBitmap(256, 256).asImageBitmap()
     }
@@ -55,7 +67,28 @@ fun AboutScreen(onBack: () -> Unit, openRepository: ((String) -> Unit)? = null) 
             item {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Image(icon, contentDescription = null, modifier = Modifier.size(112.dp))
+                    Image(icon, contentDescription = "Mobilism Material icon", modifier = Modifier.size(112.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .clickable {
+                            val message = if (developerMode) {
+                                "Developer mode is already on"
+                            } else {
+                                iconTaps++
+                                if (iconTaps >= 5) {
+                                    iconTaps = 0
+                                    onEnableDeveloperMode()
+                                    "Developer mode enabled"
+                                } else if (iconTaps >= 3) {
+                                    val remaining = 5 - iconTaps
+                                    "$remaining more ${if (remaining == 1) "tap" else "taps"} to enable developer mode"
+                                } else null
+                            }
+                            if (message != null) {
+                                feedback[0]?.cancel()
+                                feedback[0] = android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT)
+                                feedback[0]?.show()
+                            }
+                        })
                     AppHeading("Mobilism Material", HeadingLevel.Page,
                         style = MaterialTheme.typography.headlineLarge.copy(textAlign = TextAlign.Center))
                     Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.extraLarge) {

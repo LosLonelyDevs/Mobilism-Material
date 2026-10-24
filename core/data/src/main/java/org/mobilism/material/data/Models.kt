@@ -8,6 +8,10 @@ enum class FeedOrder(val label: String, val apiValue: String) {
     Latest("Latest", "date"), Top("Top", "views"),
 }
 
+enum class SearchSort(val label: String) {
+    Newest("Newest posts"), Oldest("Oldest posts"), Activity("Latest activity"),
+}
+
 data class Release(
     val id: Long,
     val title: String,
@@ -26,7 +30,8 @@ data class Release(
     val categoryId: Long? = null,
 )
 
-data class ReleasePage(val items: List<Release>, val canLoadMore: Boolean, val lastPage: Int? = null)
+data class ReleasePage(val items: List<Release>, val canLoadMore: Boolean, val lastPage: Int? = null,
+    val nextActivityAtMost: Long? = null)
 
 data class CommentQuote(val author: String, val html: String)
 data class ReleaseComment(
@@ -42,6 +47,7 @@ data class FeedFilters(
     val categoryIds: Set<Long> = emptySet(),
     val postedFrom: java.time.LocalDate? = null,
     val postedThrough: java.time.LocalDate? = null,
+    val searchSort: SearchSort = SearchSort.Newest,
 ) {
     val hasDates: Boolean get() = postedFrom != null || postedThrough != null
     val isActive: Boolean get() = categoryIds.isNotEmpty() || hasDates

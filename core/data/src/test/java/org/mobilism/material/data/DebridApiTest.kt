@@ -69,7 +69,7 @@ class DebridApiTest {
                 .resolve(DebridProvider.MegaDebrid, key, original)
             fail("Expected resolution error")
         } catch (error: DebridException) {
-            assertTrue(error.message.orEmpty().contains("Premium"))
+            assertFalse(error.message.orEmpty().contains("Premium"))
             assertFalse(error.message.orEmpty().contains("file is unavailable"))
             assertFalse(error.invalidatesAccount)
         }

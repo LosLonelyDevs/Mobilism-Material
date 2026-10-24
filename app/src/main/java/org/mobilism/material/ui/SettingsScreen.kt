@@ -17,6 +17,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Refresh
@@ -68,8 +70,11 @@ import org.mobilism.material.designsystem.LocalAppTheme
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearance: () -> Unit, onDownloads: () -> Unit, onBack: () -> Unit,
-    hideAdult: Boolean = false, onHideAdult: (Boolean) -> Unit = {}, onAbout: () -> Unit = {}) {
+    hideAdult: Boolean = false, onHideAdult: (Boolean) -> Unit = {}, onAbout: () -> Unit = {},
+    developer: org.mobilism.material.settings.DeveloperPreferences = org.mobilism.material.settings.DeveloperPreferences(),
+    onDeveloperMode: (Boolean) -> Unit = {}) {
     val theme = LocalAppTheme.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     Scaffold(topBar = {
         TopAppBar(title = { AppHeading("Settings", HeadingLevel.Page) }, navigationIcon = {
             AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack)
@@ -121,6 +126,40 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             }
             items(state.accounts, key = { it.provider }) { account ->
                 DebridAccountCard(account, repository, state)
+            }
+            item(key = "open-links") {
+                ExpressiveCard(onClick = {
+                    val action = if (android.os.Build.VERSION.SDK_INT >= 31)
+                        android.provider.Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS
+                    else android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                    context.startActivity(android.content.Intent(action,
+                        android.net.Uri.parse("package:${context.packageName}")))
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Icon(Icons.Outlined.Link, null, tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            AppHeading("Open Mobilism links", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
+                            Text("Choose whether forum links open here", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Icon(Icons.Outlined.ChevronRight, null, tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+            if (developer.unlocked) item(key = "developer") {
+                Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth().toggleable(value = developer.enabled,
+                        role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onDeveloperMode)) {
+                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Icon(Icons.Outlined.Code, null, tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp))
+                        AppHeading("Developer mode", HeadingLevel.Section, modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleLarge)
+                        androidx.compose.material3.Switch(checked = developer.enabled, onCheckedChange = null)
+                    }
+                }
             }
             item(key = "about") {
                 ExpressiveCard(onAbout, Modifier.fillMaxWidth()) {

@@ -111,9 +111,11 @@ fun CategoryFilterSheet(
     onApply: (FeedFilters) -> Unit,
     onDismiss: () -> Unit,
     showCategories: Boolean = true,
+    showSearchSort: Boolean = false,
 ) {
     var selected by remember { mutableStateOf(initial.categoryIds) }
     var dates by remember { mutableStateOf(initial) }
+    var sortTab by remember { mutableStateOf(false) }
     val sectionStyle = state.section.style()
     var search by remember { mutableStateOf("") }
     val visible = remember(state.items, search) {
@@ -126,6 +128,17 @@ fun CategoryFilterSheet(
         onApply = { onApply(dates.copy(categoryIds = selected)) },
         applyEnabled = dates.validDates,
     ) {
+        if (showSearchSort) item("filter-tabs") {
+            androidx.compose.material3.PrimaryTabRow(selectedTabIndex = if (sortTab) 1 else 0,
+                modifier = Modifier.clip(MaterialTheme.shapes.large)) {
+                androidx.compose.material3.Tab(selected = !sortTab, onClick = { sortTab = false }, text = { Text("Filters") })
+                androidx.compose.material3.Tab(selected = sortTab, onClick = { sortTab = true }, text = { Text("Sort") })
+            }
+        }
+        if (showSearchSort && sortTab) {
+            item("sort-options") { SearchSortOptions(dates.searchSort) { dates = dates.copy(searchSort = it) } }
+            return@FilterSheet
+        }
         item("post-date") { PostDateFilters(dates) { dates = it } }
         if (!showCategories) return@FilterSheet
         item("category-header") {

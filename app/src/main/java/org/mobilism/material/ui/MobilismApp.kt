@@ -27,7 +27,8 @@ import org.mobilism.material.designsystem.LoadingState
 import org.mobilism.material.designsystem.screenMotion
 
 @Composable
-fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, onNotificationHandled: () -> Unit = {}) {
+fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fromNotification: Boolean = true,
+    onNotificationHandled: () -> Unit = {}) {
     val model: MobilismViewModel = viewModel(factory = viewModelFactory {
         initializer { MobilismViewModel(app, app.repository, app.appearance, app.debrid, app.library, app.contentPreferences) }
     })
@@ -40,7 +41,7 @@ fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, onN
                     LoadingState("Opening Mobilism…")
                 }
                 AuthState.SignedOut -> AccountNavigation(model)
-                else -> MainNavigation(model, auth, notificationRelease, onNotificationHandled)
+                else -> MainNavigation(model, auth, notificationRelease, fromNotification, onNotificationHandled)
             }
         }
     }
@@ -76,7 +77,8 @@ private fun AccountNavigation(model: MobilismViewModel) {
 }
 
 @Composable
-private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificationRelease: Long?, onNotificationHandled: () -> Unit) {
+private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificationRelease: Long?, fromNotification: Boolean,
+    onNotificationHandled: () -> Unit) {
     val nav = rememberNavController()
     val motion = screenMotion()
     val feed by model.feed.collectAsStateWithLifecycle()
@@ -84,6 +86,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     val appearance by model.appearance.state.collectAsStateWithLifecycle()
     val debrid by model.debrid.state.collectAsStateWithLifecycle()
     val downloads by model.downloads.state.collectAsStateWithLifecycle()
+    val developer by model.developer.state.collectAsStateWithLifecycle()
     val library by model.library.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val app = context.applicationContext as MobilismApplication
@@ -93,7 +96,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     }
     LaunchedEffect(notificationRelease) {
         notificationRelease?.takeIf { it > 0 }?.let { id ->
-            nav.navigate("following") { launchSingleTop = true }
+            if (fromNotification) nav.navigate("following") { launchSingleTop = true }
             nav.navigate("release/$id") { launchSingleTop = true }
             onNotificationHandled()
         }
@@ -166,10 +169,12 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             SettingsScreen(debrid, model.debrid, onAppearance = { nav.navigate("appearance") },
                 onDownloads = { nav.navigate("download-preferences") }, onBack = { nav.popBackStack() },
                 hideAdult = hideAdult, onHideAdult = model.contentPreferences::hideAdult,
-                onAbout = { nav.navigate("about") })
+                onAbout = { nav.navigate("about") }, developer = developer,
+                onDeveloperMode = model.developer::setEnabled)
         }
         composable("about") {
-            AboutScreen(onBack = { nav.popBackStack() })
+            AboutScreen(onBack = { nav.popBackStack() }, developerMode = developer.enabled,
+                onEnableDeveloperMode = model.developer::unlock)
         }
         composable("download-preferences") {
             DownloadSettingsScreen(downloads, model.downloads, model.debrid, onBack = { nav.popBackStack() })

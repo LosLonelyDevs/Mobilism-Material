@@ -37,11 +37,12 @@ fun ReleasePostDate(timestamp: Long, modifier: Modifier = Modifier, textStyle: T
 }
 
 @Composable
-fun ActiveFilterSummary(filters: FeedFilters, onEdit: () -> Unit, onClear: () -> Unit) {
-    if (!filters.isActive) return
+fun ActiveFilterSummary(filters: FeedFilters, onEdit: () -> Unit, onClear: () -> Unit, showSearchSort: Boolean = false) {
+    if (!filters.isActive && !showSearchSort) return
     val formatter = dateFormatter()
     val labels = buildList {
-        if (filters.categoryIds.isNotEmpty()) add("${filters.categoryIds.size} categories")
+        if (showSearchSort) add(filters.searchSort.label)
+        if (filters.categoryIds.isNotEmpty()) add(if (filters.categoryIds.size == 1) "1 category" else "${filters.categoryIds.size} categories")
         filters.postedFrom?.let { add("From ${it.format(formatter)}") }
         filters.postedThrough?.let { add("Through ${it.format(formatter)}") }
     }
@@ -53,7 +54,8 @@ fun ActiveFilterSummary(filters: FeedFilters, onEdit: () -> Unit, onClear: () ->
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                 colors = ButtonDefaults.filledTonalButtonColors()) { Text(label) }
         }
-        AppIconButton(Icons.Outlined.Close, "Clear filters", onClear)
+        if (filters.isActive || (showSearchSort && filters.searchSort != org.mobilism.material.data.SearchSort.Newest))
+            AppIconButton(Icons.Outlined.Close, "Clear filters", onClear)
     }
 }
 

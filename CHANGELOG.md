@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.12
+
+- Add a Sort tab to search filters: newest posts, oldest posts, or latest activity. Keep post dates in order across pages, with progress while checking matches.
+- Open Mobilism release links directly in the app, including when it's already running. Keep the link pending through login or guest access.
+- Add Open Mobilism links in Settings to choose Android's default link handler. Keep About last.
+- Stop suggesting an inactive subscription when MegaDebrid returns an unexplained link error.
+
 ## 0.1.11
 
 - Bundle Mobilism's host list so a forum connection failure cannot block debrid refreshes. Keep checking account access and provider availability live.

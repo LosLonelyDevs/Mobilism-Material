@@ -120,6 +120,25 @@ class ReadmeScreenshots {
         capture("about")
     }
 
+    @Test fun searchSortTabPreservesFiltersAndResetsToNewest() {
+        var applied: FeedFilters? = null
+        val initial = FeedFilters(setOf(10), java.time.LocalDate.of(2026, 10, 1))
+        screen {
+            CategoryFilterSheet(CategoryState(items = listOf(ReleaseCategory(10, "Sample category"))),
+                initial, {}, { applied = it }, {}, showSearchSort = true)
+        }
+        compose.onNodeWithText("Sort", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("Oldest posts").performClick()
+        compose.onNode(hasText("Filters") and hasClickAction()).performClick()
+        compose.onNodeWithText("Post date").assertExists()
+        compose.onNodeWithText("Sort", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("Apply filters").performClick()
+        compose.runOnIdle { assertEquals(initial.copy(searchSort = SearchSort.Oldest), applied) }
+        compose.onNodeWithText("Reset").performClick()
+        compose.onNodeWithText("Apply filters").performClick()
+        compose.runOnIdle { assertEquals(FeedFilters(), applied) }
+    }
+
     @Test fun dateFiltersValidateResetAndUseCalendarDialog() {
         val start = java.time.LocalDate.of(2026, 10, 10)
         var applied: FeedFilters? = null
@@ -159,6 +178,7 @@ class ReadmeScreenshots {
         compose.onAllNodesWithContentDescription("Copy Rapidgator link").onFirst().performClick()
         compose.runOnIdle { assertEquals(0, downloads) }
         // The copy snackbar can cover a host button on shorter viewports.
+        compose.mainClock.advanceTimeBy(6_000)
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Link copied").fetchSemanticsNodes().isEmpty() }
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val monitor = instrumentation.addMonitor(IntentFilter(Intent.ACTION_VIEW).apply {

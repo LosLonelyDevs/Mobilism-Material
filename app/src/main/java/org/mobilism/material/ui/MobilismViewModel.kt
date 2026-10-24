@@ -60,6 +60,7 @@ class MobilismViewModel(
     val contentPreferences: org.mobilism.material.data.ContentPreferencesStore = org.mobilism.material.data.ContentPreferencesStore(context),
 ) : ViewModel() {
     val downloads = DownloadPreferencesStore(context)
+    val developer = org.mobilism.material.settings.DeveloperPreferencesStore(context)
     private val preferences = context.getSharedPreferences("material-navigation", Context.MODE_PRIVATE)
     val preferredSection: ContentSection?
         get() = ContentSection.entries.firstOrNull { it.name == preferences.getString("section", null) }
@@ -168,7 +169,10 @@ class MobilismViewModel(
         fun date(key: String) = preferences.getString("filters-${section.name}-$key", null)?.let {
             runCatching { java.time.LocalDate.parse(it) }.getOrNull()
         }
-        return FeedFilters(ids, date("from"), date("through"))
+        val sort = runCatching { org.mobilism.material.data.SearchSort.valueOf(
+            preferences.getString("filters-${section.name}-search-sort", null).orEmpty())
+        }.getOrDefault(org.mobilism.material.data.SearchSort.Newest)
+        return FeedFilters(ids, date("from"), date("through"), sort)
     }
 
     private fun newFeed(section: ContentSection, order: FeedOrder = FeedOrder.Latest) =
@@ -206,7 +210,8 @@ class MobilismViewModel(
         if (!filters.validDates || filters == filtersFor(section)) return
         preferences.edit().putStringSet("filters-${section.name}-categories", filters.categoryIds.map { it.toString() }.toSet())
             .putString("filters-${section.name}-from", filters.postedFrom?.toString())
-            .putString("filters-${section.name}-through", filters.postedThrough?.toString()).apply()
+            .putString("filters-${section.name}-through", filters.postedThrough?.toString())
+            .putString("filters-${section.name}-search-sort", filters.searchSort.name).apply()
         val snapshot = mutableFeed.value
         if (snapshot.section != section) return
         feedJob?.cancel()

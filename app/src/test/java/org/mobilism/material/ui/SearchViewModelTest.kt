@@ -21,7 +21,7 @@ class SearchViewModelTest {
         val filters = FeedFilters(postedFrom = LocalDate.of(2026, 10, 1))
         val hidden = MutableStateFlow(false)
         val repository = SearchRepository().apply {
-            response = ReleasePage(listOf(Release(1, "Example v1", "", null, 1, 0, 0)), true)
+            response = ReleasePage(listOf(Release(1, "Example v1", "", null, 2, 0, 0)), true, nextActivityAtMost = 1)
         }
         val model = SearchViewModel(repository, SearchScope.Apps, "Example",
             mapOf(ContentSection.Apps to filters), hideAdultContent = hidden)
@@ -68,7 +68,8 @@ class SearchViewModelTest {
     @Test fun anEmptyFilteredBatchDoesNotEndSearchOrRestartItsSourcePages() = runTest(dispatcher) {
         val repository = SearchRepository()
         repository.response = ReleasePage(emptyList(), true, lastPage = 5)
-        val model = SearchViewModel(repository, SearchScope.Apps, "Example")
+        val model = SearchViewModel(repository, SearchScope.Apps, "Example",
+            initialFilters = mapOf(ContentSection.Apps to FeedFilters(searchSort = SearchSort.Activity)))
         advanceUntilIdle()
         assertTrue(model.state.value.canLoadMore)
         assertTrue(model.state.value.awaitingMore)
@@ -78,7 +79,7 @@ class SearchViewModelTest {
         assertEquals(6, repository.requests.last().page)
         assertFalse(model.state.value.awaitingMore)
         assertEquals(1L, model.state.value.items.single().id)
-        model.applyFilters(FeedFilters(postedFrom = LocalDate.of(2026, 10, 1)))
+        model.applyFilters(FeedFilters(postedFrom = LocalDate.of(2026, 10, 1), searchSort = SearchSort.Activity))
         advanceUntilIdle()
         assertEquals(1, repository.requests.last().page)
     }

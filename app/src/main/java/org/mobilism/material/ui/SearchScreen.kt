@@ -64,7 +64,7 @@ fun SearchScreen(
     val submit = { keyboard?.hide(); onSubmit() }
     LaunchedEffect(state.submitted, state.scope, state.filters) { list.scrollToItem(0) }
     if (showReleaseFilters) CategoryFilterSheet(categories, state.filters, onLoadCategories, onFilters,
-        onDismiss = { showReleaseFilters = false }, showCategories = state.scope.section != null)
+        onDismiss = { showReleaseFilters = false }, showCategories = state.scope.section != null, showSearchSort = true)
     LaunchedEffect(list, state.items.size, state.busy, state.error, state.canLoadMore) {
         if (state.items.isNotEmpty() && !state.busy && state.error == null && state.canLoadMore && !state.awaitingMore) {
             snapshotFlow { (list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.items.size - 3 }
@@ -117,14 +117,15 @@ fun SearchScreen(
                     ExpressiveButton(submit, compact = true, enabled = state.query.isNotBlank()) { Text("Search") }
                     AppIconButton(Icons.Outlined.FilterList, "Release filters", openFilters)
                 }
-                ActiveFilterSummary(state.filters, openFilters, { onFilters(FeedFilters()) })
+                ActiveFilterSummary(state.filters, openFilters, { onFilters(FeedFilters()) }, showSearchSort = true)
                 LazyColumn(state = list, modifier = Modifier.weight(1f),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(state.items, key = { it.id }) { release ->
                         ReleaseCard(release, MaterialTheme.colorScheme.primary) { onRelease(release.id) }
                     }
-                    if (state.busy) item { LoadingState("Searching…", Modifier.fillMaxWidth()) }
+                    if (state.busy) item { LoadingState(state.sortingMatches?.let { "Checking post dates · $it matches…" }
+                        ?: "Searching…", Modifier.fillMaxWidth()) }
                     state.error?.let { error -> item { ErrorPanel(error, onRetry = onMore) } }
                     if (!state.busy && state.error == null && state.awaitingMore) item {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

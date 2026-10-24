@@ -160,7 +160,7 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient()) {
             listOf("host", "maintenance").any(reason::contains) ->
                 DebridException("This file host is unsupported or temporarily unavailable on MegaDebrid.")
             "unrestrict" in reason ->
-                DebridException("MegaDebrid could not resolve this link. Check that Premium access is active, or open the original host.")
+                DebridException("MegaDebrid could not resolve this link. Try another host, or open the original link.")
             listOf("link", "file", "deleted", "not found").any(reason::contains) ->
                 DebridException("The file is unavailable or the link could not be resolved.")
             else -> httpError(status)
