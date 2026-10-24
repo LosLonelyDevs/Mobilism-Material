@@ -114,6 +114,12 @@ class ReadmeScreenshots {
         if (android.os.Build.VERSION.SDK_INT >= 33) assertNotNull((icon as AdaptiveIconDrawable).monochrome)
     }
 
+    @Test fun about() {
+        screen { AboutScreen(onBack = {}) }
+        compose.onNodeWithText("v${BuildConfig.VERSION_NAME}").assertIsDisplayed()
+        capture("about")
+    }
+
     @Test fun dateFiltersValidateResetAndUseCalendarDialog() {
         val start = java.time.LocalDate.of(2026, 10, 10)
         var applied: FeedFilters? = null

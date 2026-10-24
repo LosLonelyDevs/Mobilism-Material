@@ -1,18 +1,14 @@
 package org.mobilism.material.data
 
-import org.jsoup.Jsoup
-import org.jsoup.parser.Parser
-
-/** Same publisher-maintained file-host directory used by the legacy Android client. */
 internal object MobilismHosts {
-    const val URL = "https://forum.mobilism.org/filehosts.xml"
-
-    fun parse(xml: String): List<String> {
-        val root = Jsoup.parse(xml, "", Parser.xmlParser()).selectFirst("supported-filehosts")
-            ?: error("Missing file-host directory")
-        return root.select("host[url]").mapNotNull { HostMatcher.domain(it.attr("url")) }
-            .distinct().also { check(it.isNotEmpty()) }
-    }
+    // From https://forum.mobilism.org/filehosts.xml, checked 2026-10-24.
+    // Keep this local so a forum outage cannot block either debrid provider.
+    val domains: List<String> = listOf(
+        "rapidgator.net", "rg.to", "uploadrar.com", "uploadrar.net",
+        "upfiles.com", "upfilesgo.com", "sendit.cloud", "filedot.to", "filedot.pw",
+        "devuploads.com", "10drives.com", "uploda.sh", "vikingfile.com", "send.now",
+        "cloudfam.io", "zincdrive.com", "zdrive.to", "zipyshare.com", "up-4ever.net",
+    )
 
     fun shortlist(domains: List<String>, supported: List<SupportedHost>): List<SupportedHost> =
         domains.mapNotNull { domain ->

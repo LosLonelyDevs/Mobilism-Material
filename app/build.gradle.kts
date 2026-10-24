@@ -4,6 +4,11 @@ plugins {
 }
 
 val signingPath = providers.environmentVariable("KEYSTORE_FILE").orNull
+val readme = providers.fileContents(rootProject.layout.projectDirectory.file("README.md")).asText.get()
+val changelog = providers.fileContents(rootProject.layout.projectDirectory.file("CHANGELOG.md")).asText.get().replace("\r\n", "\n")
+
+fun String.buildConfigString() = "\"" + replace("\\", "\\\\").replace("\"", "\\\"")
+    .replace("\r", "").replace("\n", "\\n") + "\""
 
 android {
     namespace = "org.mobilism.material"
@@ -14,8 +19,13 @@ android {
         applicationId = "cum.ahfu.mobi.material"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "0.1.10"
+        versionCode = 12
+        versionName = "0.1.11"
+        val releaseNotes = changelog.substringAfter("## $versionName\n", "")
+            .substringBefore("\n## ").trim()
+        check(releaseNotes.isNotBlank()) { "Add CHANGELOG.md notes for $versionName" }
+        buildConfigField("String", "ABOUT_DESCRIPTION", readme.trim().split(Regex("\\r?\\n\\s*\\r?\\n"))[1].buildConfigString())
+        buildConfigField("String", "RELEASE_NOTES", releaseNotes.buildConfigString())
         testInstrumentationRunner = "org.mobilism.material.ReadmeScreenshotRunner"
     }
 
@@ -33,7 +43,7 @@ android {
         }
     }
 
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -88,6 +98,7 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+    androidTestImplementation(libs.okhttp)
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
 }

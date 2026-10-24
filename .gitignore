@@ -36,6 +36,7 @@ local.properties
 .cxx/
 .externalNativeBuild/
 captures/
+.codex-remote-attachments/
 **/screenshots/
 *.hprof
 *.heapdump

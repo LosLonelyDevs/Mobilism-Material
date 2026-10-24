@@ -92,19 +92,19 @@ object HostMatcher {
     }
 }
 
-class DebridRepository(context: Context) {
+class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient()) {
     private val keys = DebridKeyStore(context)
     private val cache = context.getSharedPreferences("material-debrid-hosts", Context.MODE_PRIVATE)
     private val mutex = Mutex()
-    private val api = DebridApi()
+    private val api = DebridApi(client)
     private val mutableState = MutableStateFlow(DebridState())
     val state = mutableState.asStateFlow()
-    private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
+    private val client = client.newBuilder().connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS).callTimeout(30, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).build()
 
     suspend fun fileHosts(): List<SupportedHost> = withContext(Dispatchers.IO) {
-        MobilismHosts.parse(get(MobilismHosts.URL)).map { domain ->
+        MobilismHosts.domains.map { domain ->
             SupportedHost(checkNotNull(HostMatcher.key(domain)), HostMatcher.displayName(domain))
         }.distinctBy { it.domain }.sortedBy { it.name.lowercase() }
     }
@@ -160,13 +160,12 @@ class DebridRepository(context: Context) {
                     api.validate(provider, keys.read(provider).orEmpty())
                     update(provider) { it.copy(validated = true) }
                 }
-                val mobilismDomains = MobilismHosts.parse(get(MobilismHosts.URL))
                 val catalogDomains = if (provider == DebridProvider.RealDebrid) {
                     val domains = JSONArray(get("https://api.real-debrid.com/rest/1.0/hosts/domains"))
                     (0 until domains.length()).map { domains.getString(it) }
                 } else emptyList()
                 val providerHosts = api.availableHosts(provider, keys.read(provider).orEmpty(), catalogDomains)
-                val hosts = MobilismHosts.shortlist(mobilismDomains, providerHosts)
+                val hosts = MobilismHosts.shortlist(MobilismHosts.domains, providerHosts)
                 cache.edit().putString(provider.name, JSONArray().apply {
                     hosts.forEach { put(JSONObject().put("domain", it.domain).put("name", it.name)) }
                 }.toString()).putLong(provider.name + "-updated", System.currentTimeMillis())
@@ -176,7 +175,8 @@ class DebridRepository(context: Context) {
                 update(provider) { it.copy(busy = false) }
                 throw cancelled
             } catch (failure: DebridException) {
-                update(provider) { it.copy(busy = false, validated = false, error = failure.message) }
+                update(provider) { it.copy(busy = false,
+                    validated = it.validated && !failure.invalidatesAccount, error = failure.message) }
             } catch (failure: Exception) {
                 // Only exception types are logged; requests and saved credentials are never logged.
                 android.util.Log.w("DebridHosts", provider.name + ": " +
@@ -184,7 +184,7 @@ class DebridRepository(context: Context) {
                         .take(4).joinToString(" / ") { it.javaClass.simpleName })
                 update(provider) { it.copy(busy = false, error =
                     if (it.hosts.isEmpty()) "Host support could not be loaded. Try again."
-                    else "Using the saved host list. Refresh could not complete."
+                    else "Host refresh failed. Saved hosts will stay inactive until a refresh succeeds."
                 ) }
             }
         }
@@ -217,7 +217,7 @@ class DebridRepository(context: Context) {
     private fun get(url: String): String = client.newCall(Request.Builder().url(url)
         .header("User-Agent", "MobilismMaterial/0.1 (Android)")
         .build()).execute().use { response ->
-        check(response.isSuccessful)
+        if (!response.isSuccessful) throw DebridException("Real-Debrid host list returned HTTP ${response.code}. Try again later.")
         val source = checkNotNull(response.body).source()
         source.request(MAX_CATALOG_BYTES + 1)
         check(source.buffer.size <= MAX_CATALOG_BYTES)

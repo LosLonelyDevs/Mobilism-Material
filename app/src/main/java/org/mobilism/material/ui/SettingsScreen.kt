@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -67,7 +68,7 @@ import org.mobilism.material.designsystem.LocalAppTheme
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearance: () -> Unit, onDownloads: () -> Unit, onBack: () -> Unit,
-    hideAdult: Boolean = false, onHideAdult: (Boolean) -> Unit = {}) {
+    hideAdult: Boolean = false, onHideAdult: (Boolean) -> Unit = {}, onAbout: () -> Unit = {}) {
     val theme = LocalAppTheme.current
     Scaffold(topBar = {
         TopAppBar(title = { AppHeading("Settings", HeadingLevel.Page) }, navigationIcon = {
@@ -120,6 +121,24 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             }
             items(state.accounts, key = { it.provider }) { account ->
                 DebridAccountCard(account, repository, state)
+            }
+            item(key = "about") {
+                ExpressiveCard(onAbout, Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Icon(Icons.Outlined.Info, null, tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            AppHeading("About Mobilism Material", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
+                            Text("Version, release notes, and source code", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("v${org.mobilism.material.BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Icon(Icons.Outlined.ChevronRight, null, tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
             }
         }
     }

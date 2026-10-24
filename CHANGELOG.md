@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.11
+
+- Bundle Mobilism's host list so a forum connection failure cannot block debrid refreshes. Keep checking account access and provider availability live.
+- Keep verified accounts marked correctly when a host refresh fails. Make it clear that cached hosts stay inactive until refresh succeeds.
+- Add About at the bottom of Settings, with the app version, release notes, and GitHub link.
+
 ## 0.1.10
 
 - Check host availability before showing green download buttons. Stop using stale host lists while refreshing, and exclude hosts reported as down.

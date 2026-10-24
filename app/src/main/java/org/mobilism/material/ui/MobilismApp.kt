@@ -165,7 +165,11 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             val hideAdult by model.contentPreferences.hideAdult.collectAsStateWithLifecycle()
             SettingsScreen(debrid, model.debrid, onAppearance = { nav.navigate("appearance") },
                 onDownloads = { nav.navigate("download-preferences") }, onBack = { nav.popBackStack() },
-                hideAdult = hideAdult, onHideAdult = model.contentPreferences::hideAdult)
+                hideAdult = hideAdult, onHideAdult = model.contentPreferences::hideAdult,
+                onAbout = { nav.navigate("about") })
+        }
+        composable("about") {
+            AboutScreen(onBack = { nav.popBackStack() })
         }
         composable("download-preferences") {
             DownloadSettingsScreen(downloads, model.downloads, model.debrid, onBack = { nav.popBackStack() })

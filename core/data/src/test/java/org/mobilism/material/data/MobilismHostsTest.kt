@@ -4,14 +4,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MobilismHostsTest {
-    @Test fun parsesOnlyPublisherHostEntries() {
-        val domains = MobilismHosts.parse("""
-            <supported-filehosts>
-                <host url="rapidgator.net"/><host url="rg.to"/>
-                <host url="rapidgator.net"/><host url="javascript:bad"/>
-            </supported-filehosts>
-        """.trimIndent())
-        assertEquals(listOf("rapidgator.net", "rg.to"), domains)
+    @Test fun bundledDirectoryContainsValidUniqueDomainsAndAliases() {
+        val domains = MobilismHosts.domains
+        assertTrue(domains.isNotEmpty())
+        assertEquals(domains.distinct(), domains)
+        assertTrue(domains.all { it == HostMatcher.domain(it) })
+        assertTrue(domains.containsAll(listOf("rapidgator.net", "rg.to", "uploadrar.com", "uploadrar.net")))
+    }
+
+    @Test fun bundledDirectoryDoesNotGrantSupportWithoutProviderVerification() {
+        val supported = listOf(SupportedHost("send.now", "Send.now"), SupportedHost("example.org", "Other"))
+        val hosts = MobilismHosts.shortlist(MobilismHosts.domains, supported)
+        assertEquals(listOf(SupportedHost("send.now", "Send.now")), hosts)
+        val account = DebridAccount(DebridProvider.RealDebrid, configured = true, hosts = hosts, validated = true)
+        assertTrue(DebridState(listOf(account)).supporting("https://send.now/file").isEmpty())
+        assertEquals(1, DebridState(listOf(account.copy(hostsVerified = true))).supporting("https://send.now/file").size)
+        assertTrue(MobilismHosts.shortlist(MobilismHosts.domains, emptyList()).isEmpty())
     }
 
     @Test fun excludesUnrelatedProviderDomainsAndGroupsAliases() {
