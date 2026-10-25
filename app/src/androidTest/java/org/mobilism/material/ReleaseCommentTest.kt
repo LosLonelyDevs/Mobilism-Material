@@ -1,0 +1,199 @@
+package org.mobilism.material
+
+import android.content.Context
+import android.content.ContextWrapper
+import android.graphics.Bitmap
+import androidx.activity.ComponentActivity
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
+import java.io.IOException
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.runBlocking
+import okhttp3.FormBody
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.mobilism.material.data.*
+import org.mobilism.material.designsystem.MobilismTheme
+import org.mobilism.material.settings.DownloadPreferences
+import org.mobilism.material.ui.*
+
+@RunWith(AndroidJUnit4::class)
+class ReleaseCommentTest {
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun composerKeepsDraftOnCloseAndFailureThenPostsThroughAuthenticatedApi() = runBlocking {
+        val fixture = Fixture()
+        fixture.repository.signIn("Reader", "sample-password")
+        lateinit var model: ReleaseViewModel
+        compose.runOnUiThread { model = ReleaseViewModel(42, fixture.repository, androidx.lifecycle.SavedStateHandle()) }
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            val state by model.state.collectAsState()
+            ReleaseScreen(state, DebridState(), DownloadPreferences(), onBack = {}, onRetry = model::load,
+                onMoreComments = model::loadComments, watched = false, downloaded = false, onWatch = {}, onDownloaded = {},
+                onLike = model::toggleLike, onActionMessageShown = model::actionMessageShown,
+                auth = AuthState.SignedIn("Reader"), onWriteComment = model::openComposer,
+                onEditComment = model::editComment, onPostComment = model::postComment,
+                onCloseComposer = model::closeComposer, onRefreshComments = model::refreshComments)
+        } }
+        compose.waitUntil(10_000) { !model.state.value.busy }
+        compose.onNodeWithTag("write-comment").performScrollTo().performClick()
+        compose.onNodeWithTag("post-comment").assertIsNotEnabled()
+        compose.onNodeWithText("Posting publicly as Reader").assertIsDisplayed()
+        compose.onNodeWithTag("comment-draft").performTextInput("Thanks & hello\nSecond line")
+        assertTrue(fixture.posts.isEmpty())
+        compose.activityRule.scenario.onActivity { it.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+            .hideSoftInputFromWindow(it.window.decorView.windowToken, 0) }
+        compose.onNodeWithText("Close", useUnmergedTree = true).performScrollTo().performClick()
+        compose.onNodeWithText("Continue your comment").performScrollTo().performClick()
+        compose.onNodeWithTag("comment-draft").assertTextContains("Thanks & hello\nSecond line")
+        capture("comment-composer")
+        fixture.failPost = true
+        compose.onNodeWithTag("post-comment").performScrollTo().performClick()
+        compose.waitUntil(10_000) { model.state.value.composer.error != null }
+        compose.onNodeWithText("Check comments").assertExists()
+        assertEquals("Thanks & hello\nSecond line", model.state.value.composer.draft)
+        assertEquals(1, fixture.posts.size)
+        compose.onNodeWithText("Check comments").performScrollTo().performClick()
+        compose.onNodeWithText("Continue your comment").performScrollTo().performClick()
+        fixture.failPost = false
+        compose.onNodeWithTag("post-comment").performScrollTo().performClick()
+        compose.waitUntil(10_000) { model.state.value.composer.draft.isEmpty() && !model.state.value.composer.open }
+        assertEquals(2, fixture.posts.size)
+        assertEquals(99L, model.state.value.comments.items.first().id)
+        assertEquals("Comment posted", model.state.value.actionMessage)
+        val request = fixture.posts.last()
+        assertEquals("https://app.mobilism.org/api-new/release/comment", request.url.toString())
+        assertEquals("sample-session", request.header("X-Auth-Token"))
+        assertEquals("POST", request.method)
+        val form = request.body as FormBody
+        assertEquals(mapOf("id" to "42", "comment" to "Thanks & hello\nSecond line"),
+            (0 until form.size).associate { form.name(it) to form.value(it) })
+        fixture.repository.signOut()
+    }
+
+    @Test fun guestGetsSignInActionAndCannotPostThroughRepository() = runBlocking {
+        val fixture = Fixture()
+        fixture.repository.continueAsGuest()
+        var signIn = false
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            ReleaseScreen(ReleaseState(release = Release(42, "Sample release", "Author", null, 1, 0, 0), busy = false,
+                comments = CommentsState(canLoadMore = false)), DebridState(), DownloadPreferences(),
+                onBack = {}, onRetry = {}, onMoreComments = {}, watched = false, downloaded = false,
+                onWatch = {}, onDownloaded = {}, onLike = {}, onActionMessageShown = {}, onSignIn = { signIn = true })
+        } }
+        compose.onNodeWithText("Sign in to comment").performScrollTo().performClick()
+        assertTrue(signIn)
+        assertTrue(runCatching { fixture.repository.postComment(42, "Guest text") }.exceptionOrNull() is ApiFailure)
+        assertTrue(fixture.posts.isEmpty())
+        compose.onNodeWithTag("comment-draft").assertDoesNotExist()
+        fixture.repository.signOut()
+    }
+
+    @Test fun missingConfirmationAndValidationErrorsCannotReportSuccess() = runBlocking {
+        val fixture = Fixture()
+        fixture.repository.signIn("Reader", "sample-password")
+        fixture.postBody = """{"status":"success","response":{}}"""
+        assertEquals(FailureKind.InvalidResponse,
+            (runCatching { fixture.repository.postComment(42, "hello") }.exceptionOrNull() as ApiFailure).kind)
+        fixture.postStatus = 429
+        fixture.postBody = """{"status":"error","error":{"text":"Please wait before posting again."}}"""
+        val failure = runCatching { fixture.repository.postComment(42, "hello") }.exceptionOrNull() as ApiFailure
+        assertEquals(429, failure.httpStatus)
+        assertEquals("Please wait before posting again.", failure.message)
+        assertEquals(2, fixture.posts.size)
+        fixture.repository.signOut()
+    }
+
+    @Test fun largeTextKeepsComposerActionsReachable() {
+        org.junit.Assume.assumeTrue(compose.activity.resources.configuration.fontScale >= 1.8f)
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            ReleaseCommentComposer(CommentComposerState(draft = "A comment with larger text"),
+                "Reader", "A longer release title that wraps on a compact screen",
+                onEdit = {}, onPost = {}, onDismiss = {}, onCheckComments = {})
+        } }
+        compose.onNodeWithTag("post-comment").performScrollTo().assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithText("Close").assertIsDisplayed()
+        capture("comment-large-text")
+    }
+
+    @Test fun wideWindowUsesBoundedSheetAndThemeTokens() {
+        org.junit.Assume.assumeTrue(compose.activity.resources.configuration.screenWidthDp >= 840)
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            ReleaseCommentComposer(CommentComposerState(draft = "A comment in a wider window"),
+                "Reader", "Sample release", onEdit = {}, onPost = {}, onDismiss = {}, onCheckComments = {})
+        } }
+        compose.onNodeWithTag("post-comment").assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithText("Posting publicly as Reader").assertIsDisplayed()
+        capture("comment-wide")
+    }
+
+    @Test fun postingDisablesSubmissionAndDismissal() {
+        var dismissed = false
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            ReleaseCommentComposer(CommentComposerState(draft = "Sending", posting = true),
+                "Reader", "Sample release", onEdit = {}, onPost = {},
+                onDismiss = { dismissed = true }, onCheckComments = {})
+        } }
+        compose.onNodeWithTag("post-comment").assertIsNotEnabled()
+        compose.onNodeWithText("Close").assertIsNotEnabled()
+        compose.onNodeWithText("Posting comment…").assertIsDisplayed()
+        assertTrue(InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(
+            android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK))
+        compose.waitForIdle()
+        compose.onNodeWithTag("comment-composer").assertExists()
+        assertFalse(dismissed)
+    }
+
+    private fun capture(name: String) {
+        compose.waitForIdle()
+        // The sheet owns a separate window; capture the composed display, including that window.
+        val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+        val directory = File(compose.activity.getExternalFilesDir(null), "comment-screenshots")
+        check(directory.mkdirs() || directory.isDirectory)
+        File(directory, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    private class Fixture {
+        val posts = CopyOnWriteArrayList<Request>()
+        @Volatile var failPost = false
+        @Volatile var postBody = """{"status":"success","response":{"comment_id":99}}"""
+        @Volatile var postStatus = 200
+        private val context = object : ContextWrapper(InstrumentationRegistry.getInstrumentation().targetContext) {
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int) = super.getSharedPreferences("comment-test-$name", mode)
+        }
+        private val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            var status = 200
+            val body = when (request.url.encodedPath.removePrefix("/api-new/")) {
+                "auth/login" -> """{"access_token":"sample-session"}"""
+                "release/42" -> """{"response":{"id":42,"subject":"Sample release v1.0","name":"Author","section":"book"}}"""
+                "release/comment" -> {
+                    posts += request
+                    if (failPost) throw IOException("Simulated lost response")
+                    status = postStatus
+                    postBody
+                }
+                else -> {
+                    check(request.url.encodedPath.startsWith("/api-new/release/42/comments/"))
+                    """{"response":[]}"""
+                }
+            }
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(status).message("Fixture")
+                .body(body.toResponseBody()).build()
+        }.build()
+        val repository = DefaultMobilismRepository(context, client = client)
+    }
+}

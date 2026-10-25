@@ -1,72 +1,146 @@
 package org.mobilism.material.ui
 
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Element
-import org.jsoup.nodes.Node
 import org.jsoup.nodes.TextNode
-import org.jsoup.select.NodeTraversor
-import org.jsoup.select.NodeVisitor
-import org.mobilism.material.data.webUrlOrNull
 import org.mobilism.material.data.HostMatcher
+import org.mobilism.material.data.webUrlOrNull
 
-data class DownloadLink(val url: String, val section: String? = null)
-data class ReleaseContent(val bodyHtml: String, val downloads: List<DownloadLink>)
+data class DownloadLink(
+    val url: String, val section: String? = null, val groupId: Int? = null, val notesHtml: String = "",
+)
+data class ReleaseContent(val bodyHtml: String, val downloads: List<DownloadLink>, val downloadNotesHtml: String = "")
 
-/** The API URL array can omit mirrors, so the download section is also parsed. */
+/** Mirrors inherit the preceding variant, not just its CPU architecture. */
 object ReleaseContentParser {
-    private val marker = Regex("""(?i)Download\s+(?:Instructions|Links)\s*:?\s*""")
     private val plainUrl = Regex("""https?://[^\s<>"]+""", RegexOption.IGNORE_CASE)
-    private val architecture = DownloadGroups.architecturePattern
+    private val mirror = Regex("""(?i)^mirrors?\s*:?$""")
+    private val note = Regex("""(?i)^(?:notes?|password|instructions?|warning|important|install(?:ation)?|requires?)\b""")
+    private data class Block(val labels: List<DownloadLine>, val urls: MutableList<String>, val notes: MutableList<String>)
 
     fun parse(html: String, apiUrls: List<String>, baseUrl: String): ReleaseContent {
-        val boundary = marker.find(html)
-        val links = linkedMapOf<String, DownloadLink>()
-        fun add(raw: String, section: String? = null) {
-            val url = webUrlOrNull(raw) ?: return
-            if (HostMatcher.matches(url, "mobilism.org")) return
-            links.putIfAbsent(url, DownloadLink(url, section))
-        }
-        var notes: Element? = null
-        val body = if (boundary != null) {
-            val tail = Jsoup.parseBodyFragment(html.substring(boundary.range.last + 1), baseUrl)
-            var section: String? = null
-            NodeTraversor.traverse(object : NodeVisitor {
-                override fun head(node: Node, depth: Int) {
-                    if (node is Element && node.normalName() == "a") {
-                        add(node.absUrl("href").ifBlank { node.attr("href") }, section)
-                    } else if (node is TextNode && generateSequence(node.parent()) { it.parent() }
-                            .none { it.normalName() == "a" }) {
-                        val text = node.wholeText
-                        DownloadGroups.label(text)?.let { section = it }
-                        plainUrl.findAll(text).forEach { add(it.value.trimEnd('.', ',', ';'), section) }
-                    }
-                }
-                override fun tail(node: Node, depth: Int) = Unit
-            }, tail.body())
-            notes = tail.body()
-            Jsoup.parseBodyFragment(html.substring(0, boundary.range.first), baseUrl)
-        } else {
-            Jsoup.parseBodyFragment(html, baseUrl)
-        }
-        apiUrls.forEach { add(it) }
+        val api = apiUrls.mapNotNull(::downloadUrl).distinct()
+        val lines = ReleaseDownloadLines.read(html, baseUrl)
+        val boundary = lines.indexOfFirst { ReleaseDownloadLines.marker.matches(it.text) }
+        if (boundary < 0) return ReleaseContent(removeUrls(html, api.toSet(), baseUrl), api.map(::DownloadLink))
 
-        // Preserve instructions, passwords, and forum help around the download URLs.
-        val downloadArea = notes ?: body.body()
-        downloadArea.select("a[href]").filter {
-                webUrlOrNull(it.absUrl("href").ifBlank { it.attr("href") }) in links
-            }.forEach { it.remove() }
-        NodeTraversor.traverse(object : NodeVisitor {
-                override fun head(node: Node, depth: Int) {
-                    if (node is TextNode) node.text(plainUrl.replace(node.wholeText) {
-                        if (webUrlOrNull(it.value.trimEnd('.', ',', ';')) in links) "" else it.value
-                    }.let { text ->
-                        if (notes != null && (architecture.replace(text, "").trim().trim(':', '/', '+', ',', '|', ' ', '-', '[', ']', '(', ')').isEmpty() ||
-                            text.trim().matches(Regex("(?i)mirrors?\\s*:?")))) "" else text
-                    })
+        val blocks = mutableListOf<Block>()
+        val pending = mutableListOf<DownloadLine>()
+        val globalNotes = mutableListOf<String>()
+        var parents = emptyList<DownloadLine>()
+        var previousLabels = emptyList<DownloadLine>()
+        var mirrorPending = false
+        lines.drop(boundary + 1).forEach { line ->
+            if (mirror.matches(line.text) && Jsoup.parseBodyFragment(line.html).selectFirst("a[href]") == null) {
+                mirrorPending = true
+                return@forEach
+            }
+            val fragment = Jsoup.parseBodyFragment(line.html, baseUrl).body()
+            val anchors = fragment.select("a[href]")
+            val plainUrls = mutableListOf<String>()
+            fragment.forEachNode { node ->
+                if (node is TextNode && generateSequence(node.parent()) { it.parent() }.none { it.normalName() == "a" }) {
+                    plainUrls += urlsIn(node.wholeText)
                 }
-                override fun tail(node: Node, depth: Int) = Unit
-            }, downloadArea)
-        notes?.let { body.body().append(it.html()) }
-        return ReleaseContent(body.body().html(), links.values.toList())
+            }
+            val candidates = (anchors.mapNotNull { downloadUrl(it.absUrl("href")) } +
+                plainUrls).distinct()
+            val withoutAnchors = fragment.clone().apply { select("a").remove() }.text()
+            val prose = plainUrl.replace(withoutAnchors, "").trim().trim(':')
+            val inlineLabel = if (candidates.isEmpty()) null else
+                ReleaseDownloadLines.read(removeUrls(line.html, candidates.toSet(), baseUrl), baseUrl).singleOrNull()
+                    ?.takeIf { isLabel(it) && !mirror.matches(it.text) &&
+                        (it.text.endsWith(':') || DownloadGroups.isArchitectureOnly(it.text)) }
+            // An explanatory sentence with a link is a note, not another download host.
+            val downloadLine = candidates.isNotEmpty() &&
+                (prose.isBlank() || mirror.matches(prose) || inlineLabel != null || candidates.any { it in api })
+            if (!downloadLine) {
+                pending += line
+                return@forEach
+            }
+            inlineLabel?.let { pending += it }
+
+            if (mirrorPending && blocks.isNotEmpty() && pending.none(::isLabel)) {
+                blocks.last().notes += pending.map { it.html }
+                pending.clear()
+            }
+            mirrorPending = false
+
+            if (blocks.isEmpty() || pending.isNotEmpty()) {
+                val labels = pending.filter(::isLabel)
+                val notes = pending.filterNot(::isLabel).map { it.html }.toMutableList()
+                val fullLabels = when {
+                    labels.size > 1 -> {
+                        parents = labels.dropLast(1)
+                        labels
+                    }
+                    labels.size == 1 -> {
+                        val next = labels.single()
+                        val previous = previousLabels.lastOrNull()
+                        parents = when {
+                            next.headingLevel != null -> parents.takeWhile { (it.headingLevel ?: Int.MAX_VALUE) < next.headingLevel }
+                            previous == null || DownloadGroups.isArchitectureOnly(next.text) != DownloadGroups.isArchitectureOnly(previous.text) -> emptyList()
+                            else -> parents
+                        }
+                        parents + next
+                    }
+                    else -> emptyList()
+                }
+                previousLabels = fullLabels
+                val previous = blocks.lastOrNull()
+                // Only adjacent repetitions can be mirrors. A later variant may reuse the same label.
+                if (previous == null || title(previous.labels) != title(fullLabels) || previous.notes != notes) {
+                    blocks += Block(fullLabels, mutableListOf(), notes)
+                }
+                pending.clear()
+            }
+            val block = blocks.last()
+            block.urls += candidates.filterNot { it in block.urls }
+            val remainder = removeUrls(line.html, candidates.toSet(), baseUrl, keepLabels = true)
+            val remainderText = Jsoup.parseBodyFragment(remainder).text()
+            if (inlineLabel == null && remainderText.isNotBlank() && !mirror.matches(remainderText)) block.notes += remainder
+        }
+        pending.forEach { line ->
+            // Forum help is shared across variants; other trailing instructions belong to the last block.
+            if (blocks.isEmpty() || Jsoup.parseBodyFragment(line.html, baseUrl).select("a[href]")
+                    .any { HostMatcher.matches(it.absUrl("href"), "mobilism.org") }) globalNotes += line.html
+            else blocks.last().notes += line.html
+        }
+        val downloads = blocks.flatMapIndexed { index, block ->
+            block.urls.map { DownloadLink(it, title(block.labels), index, block.notes.joinToString("<br>")) }
+        }.toMutableList()
+        val found = downloads.map { it.url }.toSet()
+        downloads += api.filterNot { it in found }.map(::DownloadLink)
+        return ReleaseContent(lines.take(boundary).joinToString("<br>") { it.html }, downloads, globalNotes.joinToString("<br>"))
+    }
+
+    private fun title(labels: List<DownloadLine>): String? = labels.joinToString(" / ") {
+        DownloadGroups.normalizedLabel(it.text)
+    }.ifBlank { null }
+
+    private fun isLabel(line: DownloadLine): Boolean {
+        val text = line.text.trim()
+        return text.isNotEmpty() && text.length <= 140 && !note.containsMatchIn(text) &&
+            Jsoup.parseBodyFragment(line.html).selectFirst("a[href]") == null &&
+            (line.styled || DownloadGroups.isArchitectureOnly(text) ||
+                (text.length <= 80 && !text.contains(Regex("""[.!?]|:\s+\S"""))))
+    }
+
+    private fun downloadUrl(raw: String): String? = webUrlOrNull(raw)?.takeUnless { HostMatcher.matches(it, "mobilism.org") }
+    private fun urlsIn(text: String): List<String> = plainUrl.findAll(text).mapNotNull { downloadUrl(it.value.trimEnd('.', ',', ';')) }.toList()
+
+    private fun removeUrls(html: String, urls: Set<String>, baseUrl: String, keepLabels: Boolean = false): String {
+        val body = Jsoup.parseBodyFragment(html, baseUrl).body()
+        body.select("a[href]").filter { webUrlOrNull(it.absUrl("href")) in urls }.forEach {
+            val label = it.text()
+            if (keepLabels && label.isNotBlank() && !label.startsWith("http", ignoreCase = true) &&
+                !label.matches(Regex("""(?i)(?:mirrors?|download|file|here)\s*:?"""))) it.tagName("span").removeAttr("href")
+            else it.remove()
+        }
+        body.forEachNode { node ->
+            if (node is TextNode) node.text(plainUrl.replace(node.wholeText) {
+                if (webUrlOrNull(it.value.trimEnd('.', ',', ';')) in urls) "" else it.value
+            })
+        }
+        return body.html()
     }
 }

@@ -25,8 +25,9 @@ import okhttp3.Response
 import org.json.JSONException
 import org.json.JSONObject
 
-internal class MobilismApi(private val context: Context, diagnostics: DiagnosticLogger = DiagnosticLogger.None) {
-    private val client = OkHttpClient.Builder()
+internal class MobilismApi(private val context: Context, diagnostics: DiagnosticLogger = DiagnosticLogger.None,
+    client: OkHttpClient = OkHttpClient()) {
+    private val client = client.newBuilder()
         .addInterceptor(DiagnosticInterceptor(diagnostics))
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -102,6 +103,13 @@ internal class MobilismApi(private val context: Context, diagnostics: Diagnostic
             emptyRecordsAsArray = true).getJSONArray("response"))
     }
 
+    suspend fun postComment(id: Long, text: String, token: String): Long {
+        require(id > 0 && token.isNotBlank())
+        require(text.isNotBlank() && text.length <= ReleaseComments.MAX_LENGTH)
+        return ReleaseComments.confirmedId(request("release/comment", token,
+            form = mapOf("id" to id.toString(), "comment" to text.trim())))
+    }
+
     suspend fun search(query: String, scope: SearchScope, page: Int, token: String?, hideAdult: Boolean = false): ReleasePage {
         require(query.isNotBlank() && page > 0)
         return SearchJson.page(request("search", token, form = mapOf(
@@ -157,7 +165,7 @@ internal class MobilismApi(private val context: Context, diagnostics: Diagnostic
                         }
                         val message = json.optJSONObject("error")?.optString("text")
                             ?.takeIf { it.isNotBlank() && !it.contains('<') }?.take(240) ?: fallback
-                        throw ApiFailure(kind, message)
+                        throw ApiFailure(kind, message, response.code)
                     }
                     json
                 }

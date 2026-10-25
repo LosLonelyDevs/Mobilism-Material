@@ -7,8 +7,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class DefaultMobilismRepository(context: Context, private val contentPreferences: ContentPreferencesStore = ContentPreferencesStore(context),
-    diagnostics: DiagnosticLogger = DiagnosticLogger.None) : MobilismRepository {
-    private val api = MobilismApi(context.applicationContext, diagnostics)
+    diagnostics: DiagnosticLogger = DiagnosticLogger.None, client: okhttp3.OkHttpClient = okhttp3.OkHttpClient()) : MobilismRepository {
+    private val api = MobilismApi(context.applicationContext, diagnostics, client)
     private val store = SessionStore(context.applicationContext)
     private val reactions = context.getSharedPreferences("release-reactions", Context.MODE_PRIVATE)
     private val authMutex = Mutex()
@@ -130,6 +130,12 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         .joinToString("") { "%02x".format(it) } + ":$id"
 
     override suspend fun comments(id: Long, page: Int): CommentPage = withSession { token -> api.comments(id, page, token) }
+
+    override suspend fun postComment(id: Long, text: String): Long = withSession { token ->
+        val account = session?.takeIf { it.accessToken == token }
+            ?: throw ApiFailure(FailureKind.Credentials, "Sign in to post a comment.")
+        api.postComment(id, text, account.accessToken)
+    }
 
     override suspend fun search(query: String, scope: SearchScope, page: Int, filters: FeedFilters): ReleasePage {
         val hideAdult = contentPreferences.hideAdult.value

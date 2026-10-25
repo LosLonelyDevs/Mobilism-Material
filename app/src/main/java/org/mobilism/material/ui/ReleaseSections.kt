@@ -24,12 +24,15 @@ object ReleaseSections {
     private val heading = Regex("""(?ix)^\s*(
         description | overview | more\s+info |
         what['’]?s\s+new(?:\s+in\s+this\s+version)? | changelog | change\s+log |
-        mod(?:ded)?(?:\s+(?:info(?:rmation)?|features|details|notes|version))?(?:\s*[/&+]\s*(?:info|features|details))? |
+        (?:custom\s+)?mod(?:ded)?(?:\s+(?:info(?:rmation)?|features|details|notes|version))?(?:\s*[/&+]\s*(?:info|features|details))? |
         modifications? | what['’]?s\s+(?:modded|modified) | about\s+(?:this\s+)?mod |
         patch(?:ed)?\s+(?:info|details|features)
         )\s*(?::\s*(.*))?$""")
     private val decoration = Regex("""^[\s\p{So}\p{Sk}\p{Cf}\uFFFD*#_\[\]<>|=~\-]+|[\s\p{So}\p{Sk}\p{Cf}\uFFFD*#_\[\]<>|=~\-]+$""")
     private val modCredit = Regex("""(?i)^(?:mod(?:ded|ified)?|patched|cracked|repacked)\s+by\s+\S.{0,80}$""")
+    private val attributedModHeading = Regex("""(?ix)^(?:custom\s+)?
+        (?:mod(?:ded)?\s+(?:info(?:rmation)?|features|details|notes|version)|patch(?:ed)?\s+(?:info|details|features))
+        \s+(?:by|from)\s+[^:!?\n]{1,80}:?$""")
     private val advertising = Regex("""(?i)^this\s+(?:app|application|game)\s+(?:has|contains|includes|does\s+not\s+contain)\s+(?:[\w-]+\s+){0,3}(?:advertisements?|ads)[.!]?$""")
     private val styledTags = setOf("b", "strong", "u", "h1", "h2", "h3", "h4", "h5", "h6")
 
@@ -62,7 +65,8 @@ object ReleaseSections {
                         }
                     }
                 }
-                modCredit.matches(labelText) -> {
+                !line.linkOnly && (modCredit.matches(labelText) || (attributedModHeading.matches(labelText) &&
+                    !labelText.endsWith('.') && (line.styled || labelText.endsWith(':')))) -> {
                     current = ReleaseSection.Mod
                     line.kind = current
                     line.boundary = true

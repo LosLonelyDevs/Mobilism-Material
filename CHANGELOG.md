@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Open forum topic links from release text inside the app, including links with shortened display text.
+- Recognize custom mod headings with author credits. Keep download variants, support notes, and their mirrors together, including GmsCore builds and alternate app icons.
+- Post comments on release pages from an M3E composer. Keep drafts when closing or after connection errors, block duplicate taps, and refresh comments after confirmed posts.
 - Rename Debrid settings to Premium and add Mobilism Premium sign-in, live supported-host checks, and direct link resolution. Keep credentials encrypted on-device.
 - Use shared A-Z sorting for categories, settings choices, hosts, and named libraries. Keep Latest, Top, and search date ordering.
 - Separate book titles, authors, series, and formats on cards and release pages. Keep ambiguous title text intact.

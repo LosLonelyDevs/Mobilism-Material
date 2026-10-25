@@ -6,6 +6,17 @@ import org.mobilism.material.settings.CpuArchitecture
 import org.mobilism.material.settings.DownloadPreferences
 
 class DownloadGroupsTest {
+    @Test fun keepsNonCpuVariantsAndSupportLabelsDistinct() {
+        val links = listOf(DownloadLink("https://files.example.org/a", "arm64 / Original icon"),
+            DownloadLink("https://files.example.org/b", "arm64 / Alternate icon"),
+            DownloadLink("https://files.example.org/c", "GmsCore support / arm64"),
+            DownloadLink("https://files.example.org/d", "Companion app"))
+        val groups = DownloadGroups.group(links, DownloadPreferences(architecture = CpuArchitecture.Arm64))
+        assertEquals(4, groups.size)
+        assertTrue(groups.none { it.collapsed })
+        assertTrue(groups.any { it.title == "GmsCore support / arm64" })
+    }
+
     @Test fun groupsAliasesAndAlphabetizesWithinFavoriteAndOtherHosts() {
         val links = listOf(
             DownloadLink("https://upfiles.com/a", "ARM64"),

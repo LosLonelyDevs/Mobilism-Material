@@ -80,7 +80,7 @@ internal data class Session(val username: String, val accessToken: String, val r
 
 enum class FailureKind { Permission, Dns, Connection, Challenge, Credentials, Session, Server, InvalidResponse }
 
-class ApiFailure(val kind: FailureKind, override val message: String) : Exception(message)
+class ApiFailure(val kind: FailureKind, override val message: String, val httpStatus: Int? = null) : Exception(message)
 
 interface MobilismRepository {
     val auth: kotlinx.coroutines.flow.StateFlow<AuthState>
@@ -95,5 +95,6 @@ interface MobilismRepository {
     suspend fun release(id: Long): Release
     suspend fun toggleLike(release: Release): Boolean
     suspend fun comments(id: Long, page: Int): CommentPage
+    suspend fun postComment(id: Long, text: String): Long
     suspend fun search(query: String, scope: SearchScope, page: Int, filters: FeedFilters = FeedFilters()): ReleasePage
 }

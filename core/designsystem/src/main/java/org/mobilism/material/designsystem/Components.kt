@@ -104,10 +104,10 @@ fun AppTextButton(label: String, onClick: () -> Unit, modifier: Modifier = Modif
 }
 
 @Composable
-fun AppIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun AppIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val interaction = remember { MutableInteractionSource() }
     IconButton(
-        onClick = onClick, interactionSource = interaction,
+        onClick = onClick, interactionSource = interaction, enabled = enabled,
         modifier = modifier.size(48.dp).focusOutline(interaction),
     ) { Icon(icon, contentDescription = label) }
 }

@@ -5,6 +5,31 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReleaseSectionsTest {
+    @Test fun recognizesCustomAttributedModBlocksWithoutNeedingKnownFeatureWords() {
+        listOf("Custom Mod Info By Example", "Mod Features from Another Author", "Patched Details by Team.Name").forEach { heading ->
+            val html = "<p>Original app description.</p><b>Custom Mod Tested On Many Devices</b><br>" +
+                "<a href='https://forum.mobilism.org/viewtopic.php?t=6286022'>Another release</a><br>" +
+                "<b>$heading:<br>Arm7/Arm64 Splits<br>Camera disabled<br>Unfamiliar device adjustment applied<br>Full root support</b><br>" +
+                "<u>What's New:</u><br>Upstream changes.<br><u>More Info:</u><a href='https://example.org'>Project</a>"
+            val result = ReleaseSections.parse(html)
+            val mod = org.jsoup.Jsoup.parse(result.single { it.kind == ReleaseSection.Mod }.html).text()
+            assertTrue(heading, mod.contains(heading))
+            assertTrue(heading, mod.contains("Arm7/Arm64 Splits"))
+            assertTrue(heading, mod.contains("Unfamiliar device adjustment applied"))
+            assertFalse(heading, mod.contains("Upstream changes"))
+            val description = result.single { it.kind == ReleaseSection.Description }.html
+            assertTrue(description.contains("Custom Mod Tested"))
+            assertTrue(description.contains("viewtopic.php?t=6286022"))
+        }
+    }
+
+    @Test fun customModMentionsAndAttributedLinksDoNotStartAModBlock() {
+        val html = "<p>Read custom mod info by the author before installing.</p>" +
+            "<p>Custom Mod Info By Example explains the release.</p>" +
+            "<a href='https://example.org'>Custom Mod Info By Example:</a><p>Ordinary description.</p>"
+        assertEquals(listOf(ReleaseSection.Description), ReleaseSections.parse(html).map { it.kind })
+    }
+
     @Test fun findsUnlabelledModDetailsOnEitherSideOfAdvertisementStatements() {
         val statements = listOf("This app has no advertisements", "This app has advertisements", "This app has no credit advertisements")
         statements.forEach { statement ->

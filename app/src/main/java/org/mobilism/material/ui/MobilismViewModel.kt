@@ -3,6 +3,7 @@ package org.mobilism.material.ui
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -20,6 +21,7 @@ import org.mobilism.material.data.FeedFilters
 import org.mobilism.material.data.ReleaseCategory
 import org.mobilism.material.data.MobilismRepository
 import org.mobilism.material.data.Release
+import org.mobilism.material.data.ReleaseComments
 import org.mobilism.material.settings.AppearanceStore
 import org.mobilism.material.settings.DownloadPreferencesStore
 
@@ -74,6 +76,15 @@ class MobilismViewModel(
     private var categoryJob: Job? = null
     private var feedJob: Job? = null
     private var loginJob: Job? = null
+    var releaseAfterSignIn: Long? = null
+        private set
+
+    fun signInForRelease(id: Long) {
+        releaseAfterSignIn = id
+        signOut()
+    }
+
+    fun releaseSignInHandled() { releaseAfterSignIn = null }
 
     init {
         var previousVisibility = contentPreferences.hideAdult.value
@@ -119,7 +130,10 @@ class MobilismViewModel(
         }
     }
 
-    fun continueAsGuest() = authAction { repository.continueAsGuest() }
+    fun continueAsGuest() = authAction {
+        repository.continueAsGuest()
+        releaseAfterSignIn = null
+    }
 
     private fun authAction(block: suspend () -> Unit) {
         if (loginJob?.isActive == true) return
@@ -243,15 +257,27 @@ data class CommentsState(
     val items: List<org.mobilism.material.data.ReleaseComment> = emptyList(), val page: Int = 0,
     val busy: Boolean = false, val canLoadMore: Boolean = true, val error: ScreenError? = null,
 )
-data class ReleaseState(val release: Release? = null, val busy: Boolean = true, val error: ScreenError? = null,
-    val comments: CommentsState = CommentsState(), val likeBusy: Boolean = false, val actionMessage: String? = null)
+data class CommentComposerState(
+    val open: Boolean = false, val draft: String = "", val posting: Boolean = false,
+    val error: String? = null,
+)
 
-class ReleaseViewModel(private val id: Long, private val repository: MobilismRepository) : ViewModel() {
-    private val mutableState = MutableStateFlow(ReleaseState())
+data class ReleaseState(val release: Release? = null, val busy: Boolean = true, val error: ScreenError? = null,
+    val comments: CommentsState = CommentsState(), val likeBusy: Boolean = false, val actionMessage: String? = null,
+    val composer: CommentComposerState = CommentComposerState())
+
+class ReleaseViewModel(private val id: Long, private val repository: MobilismRepository,
+    private val savedState: SavedStateHandle) : ViewModel() {
+    private val mutableState = MutableStateFlow(ReleaseState(composer = CommentComposerState(
+        draft = savedState["comment-draft"] ?: "",
+        open = savedState["comment-open"] ?: false,
+        error = if (savedState.get<Boolean>("comment-pending") == true) UNCONFIRMED_COMMENT else null,
+    )))
     val state = mutableState.asStateFlow()
     private var job: Job? = null
     private var commentsJob: Job? = null
     private var likeJob: Job? = null
+    private var postJob: Job? = null
 
     init { load() }
 
@@ -272,8 +298,71 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
 
     fun actionMessageShown() { mutableState.update { it.copy(actionMessage = null) } }
 
+    fun openComposer() {
+        if (repository.auth.value !is AuthState.SignedIn) return
+        savedState["comment-open"] = true
+        mutableState.update { it.copy(composer = it.composer.copy(open = true)) }
+    }
+
+    fun closeComposer() {
+        if (mutableState.value.composer.posting) return
+        savedState["comment-open"] = false
+        mutableState.update { it.copy(composer = it.composer.copy(open = false)) }
+    }
+
+    fun editComment(text: String) {
+        if (mutableState.value.composer.posting || text.length > ReleaseComments.MAX_LENGTH) return
+        savedState["comment-draft"] = text
+        mutableState.update { it.copy(composer = it.composer.copy(draft = text)) }
+    }
+
+    fun postComment() {
+        val snapshot = mutableState.value
+        val author = (repository.auth.value as? AuthState.SignedIn)?.username ?: return
+        val text = snapshot.composer.draft.trim()
+        if (snapshot.release == null || snapshot.busy || snapshot.composer.posting || postJob?.isActive == true ||
+            text.isBlank() || text.length > ReleaseComments.MAX_LENGTH) return
+        savedState["comment-pending"] = true
+        mutableState.update { it.copy(composer = it.composer.copy(posting = true, error = null)) }
+        postJob = viewModelScope.launch {
+            try {
+                val commentId = repository.postComment(id, text)
+                val posted = ReleaseComments.posted(commentId, author, text, System.currentTimeMillis() / 1000)
+                commentsJob?.cancel()
+                commentsJob = null
+                savedState["comment-draft"] = ""
+                savedState["comment-open"] = false
+                savedState["comment-pending"] = false
+                mutableState.update { it.copy(
+                    composer = CommentComposerState(), actionMessage = "Comment posted",
+                    release = it.release?.copy(replies = it.release.replies + 1),
+                    comments = CommentsState(items = listOf(posted)),
+                ) }
+                loadComments()
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                // A successful HTTP status can still carry the API's explicit error response.
+                val rejected = error is ApiFailure && (error.httpStatus in 200..299 || error.httpStatus in 400..499 || error.kind in setOf(
+                    FailureKind.Credentials, FailureKind.Session, FailureKind.Permission, FailureKind.Dns))
+                if (rejected) savedState["comment-pending"] = false
+                val message = if (rejected) error.forScreen().message else UNCONFIRMED_COMMENT
+                mutableState.update { it.copy(composer = it.composer.copy(error = message)) }
+            } finally {
+                mutableState.update { it.copy(composer = it.composer.copy(posting = false)) }
+            }
+        }
+    }
+
+    fun refreshComments() {
+        if (mutableState.value.composer.posting) return
+        commentsJob?.cancel()
+        commentsJob = null
+        mutableState.update { it.copy(comments = CommentsState()) }
+        loadComments()
+    }
+
     fun load() {
-        if (likeJob?.isActive == true) return
+        if (likeJob?.isActive == true || mutableState.value.composer.posting) return
         job?.cancel()
         job = viewModelScope.launch {
             mutableState.update { it.copy(busy = true, error = null) }
@@ -283,7 +372,7 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
                 if (mutableState.value.comments.page == 0) loadComments()
             }
             catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { mutableState.value = ReleaseState(busy = false, error = error.forScreen()) }
+            catch (error: Exception) { mutableState.update { it.copy(busy = false, error = error.forScreen()) } }
         }
     }
 
@@ -294,15 +383,20 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
             mutableState.update { it.copy(comments = snapshot.copy(busy = true, error = null)) }
             try {
                 val result = repository.comments(id, snapshot.page + 1)
-                val items = (snapshot.items + result.items).distinctBy { it.id }
+                val items = if (snapshot.page == 0) (result.items + snapshot.items).distinctBy { it.id }.sortedByDescending { it.publishedAt }
+                    else (snapshot.items + result.items).distinctBy { it.id }
                 mutableState.update { it.copy(comments = CommentsState(
                     items = items, page = snapshot.page + 1,
-                    canLoadMore = result.canLoadMore && items.size > snapshot.items.size,
+                    canLoadMore = result.canLoadMore && (snapshot.page == 0 || items.size > snapshot.items.size),
                 )) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 mutableState.update { it.copy(comments = snapshot.copy(error = error.forScreen())) }
             }
         }
+    }
+
+    private companion object {
+        const val UNCONFIRMED_COMMENT = "Posting could not be confirmed. Your draft is kept. Check the comments before posting again to avoid a duplicate."
     }
 }

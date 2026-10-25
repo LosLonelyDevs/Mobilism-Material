@@ -26,7 +26,8 @@ import java.text.DateFormat
 import java.util.Date
 
 @Composable
-fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onImage: (List<String>, Int) -> Unit) {
+fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRelease: ((Long) -> Unit)? = null,
+    onImage: (List<String>, Int) -> Unit) {
     AppSurface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -43,11 +44,11 @@ fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onImage: (List<
                 Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(quote.author, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
-                        ReleaseBody(quote.html, baseUrl)
+                        ReleaseBody(quote.html, baseUrl, onRelease)
                     }
                 }
             }
-            ReleaseBody(comment.contentHtml, baseUrl)
+            ReleaseBody(comment.contentHtml, baseUrl, onRelease)
             if (comment.images.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed(comment.images) { index, url ->
                     AsyncImage(url, "Open comment image ${index + 1}", Modifier.size(120.dp).clip(MaterialTheme.shapes.large)

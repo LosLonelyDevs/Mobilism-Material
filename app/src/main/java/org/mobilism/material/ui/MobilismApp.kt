@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalAutofillManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -94,6 +95,10 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     val start = androidx.compose.runtime.remember { if (model.preferredSection == null) "favourite" else "feed" }
     LaunchedEffect(Unit) {
         if (start == "feed") model.loadFeed(refresh = true)
+        if (auth is AuthState.SignedIn) model.releaseAfterSignIn?.let {
+            nav.navigate("release/$it") { launchSingleTop = true }
+            model.releaseSignInHandled()
+        }
     }
     LaunchedEffect(notificationRelease) {
         notificationRelease?.takeIf { it > 0 }?.let { id ->
@@ -194,11 +199,16 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         composable("release/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
             val id = requireNotNull(entry.arguments).getLong("id")
             val detail: ReleaseViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
-                initializer { ReleaseViewModel(id, model.repository) }
+                initializer { ReleaseViewModel(id, model.repository, createSavedStateHandle()) }
             })
             val state by detail.state.collectAsStateWithLifecycle()
             ReleaseScreen(state, debrid, downloads, onBack = { nav.popBackStack() }, onRetry = detail::load, onMoreComments = detail::loadComments,
                 onLike = detail::toggleLike, onActionMessageShown = detail::actionMessageShown,
+                auth = auth, onSignIn = { model.signInForRelease(id) },
+                onWriteComment = detail::openComposer, onEditComment = detail::editComment,
+                onPostComment = detail::postComment, onCloseComposer = detail::closeComposer,
+                onRefreshComments = detail::refreshComments,
+                onRelease = { topic -> if (topic != id) nav.navigate("release/$topic") { launchSingleTop = true } },
                 onResolveDownload = model.debrid::resolve,
                 watched = library.any { item -> item.watched && state.release?.let { org.mobilism.material.data.ReleaseVersions.sameApp(item.release, it) } == true },
                 downloaded = library.any { it.downloaded && it.release.id == state.release?.id },

@@ -26,9 +26,11 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.filled.ThumbUp
@@ -68,6 +70,9 @@ import org.jsoup.safety.Safelist
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.designsystem.AppFont
 import org.mobilism.material.designsystem.AppIconButton
+import org.mobilism.material.designsystem.ExpressiveButton
+import org.mobilism.material.data.AuthState
+import org.mobilism.material.data.ReleaseTitles
 import org.mobilism.material.designsystem.AppIconToggleButton
 import org.mobilism.material.designsystem.LoadingState
 import org.mobilism.material.designsystem.LocalAppFont
@@ -88,6 +93,10 @@ fun ReleaseScreen(
     onResolveDownload: suspend (String) -> String = {
         throw org.mobilism.material.data.DebridException("Debrid is not available. Try again.")
     },
+    auth: AuthState = AuthState.Guest, onSignIn: () -> Unit = {},
+    onWriteComment: () -> Unit = {}, onEditComment: (String) -> Unit = {},
+    onPostComment: () -> Unit = {}, onCloseComposer: () -> Unit = {}, onRefreshComments: () -> Unit = {},
+    onRelease: (Long) -> Unit = {},
 ) {
     val theme = LocalAppTheme.current
     val context = LocalContext.current
@@ -113,6 +122,11 @@ fun ReleaseScreen(
     }
     val groups = remember(content, preferences) { DownloadGroups.group(content?.downloads.orEmpty(), preferences) }
     gallery?.let { (urls, index) -> ReleaseImageViewer(urls, index, onDismiss = { gallery = null }) }
+    if (state.composer.open && release != null && auth is AuthState.SignedIn) {
+        ReleaseCommentComposer(state.composer, auth.username, ReleaseTitles.parse(release.title, release.section).name,
+            onEditComment, onPostComment, onCloseComposer,
+            onCheckComments = { onCloseComposer(); onRefreshComments() })
+    }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbar) },
@@ -228,20 +242,26 @@ fun ReleaseScreen(
                         }
                         CollapsibleSection("${release.id}-${section.kind}", section.kind.title, icon, accent,
                             headingStyle = MaterialTheme.typography.titleMedium) {
-                            ReleaseBody(section.html, release.browserUrl ?: "https://forum.mobilism.org/")
+                            ReleaseBody(section.html, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
                         }
                     }
-                    if (groups.isNotEmpty()) item("downloads") {
+                    if (groups.isNotEmpty() || !content?.downloadNotesHtml.isNullOrBlank()) item("downloads") {
                         CollapsibleSection("${release.id}-downloads", "Downloads", Icons.Outlined.Download, theme.success,
                             headingStyle = MaterialTheme.typography.titleMedium) {
+                            content?.downloadNotesHtml?.takeIf { it.isNotBlank() }?.let {
+                                ReleaseBody(it, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
+                            }
                             groups.forEach { group ->
                                 CollapsibleSection(
-                                    "${release.id}-${group.title}", group.title, Icons.Outlined.Memory,
+                                    "${release.id}-${group.id}", group.title, Icons.Outlined.Layers,
                                     if (group.collapsed) MaterialTheme.colorScheme.onSurfaceVariant else theme.reading,
                                     initiallyExpanded = !group.collapsed,
                                     headingLevel = HeadingLevel.Subsection,
                                     headingStyle = MaterialTheme.typography.titleSmall,
                                 ) {
+                                    if (group.notesHtml.isNotBlank()) {
+                                        ReleaseBody(group.notesHtml, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
+                                    }
                                     group.links.forEach { link ->
                                         DownloadLinkRow(link, debrid, resolveLink = onResolveDownload, onOpened = {
                                             if (release.section == ContentSection.Apps) onDownloaded(true)
@@ -252,13 +272,28 @@ fun ReleaseScreen(
                         }
                     }
                     item("comments-heading") {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            AppHeading("Comments", HeadingLevel.Section, style = MaterialTheme.typography.titleMedium)
-                            Text("Newest first", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    AppHeading("Comments", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
+                                    Text("Newest first", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                AppIconButton(Icons.Outlined.Refresh, "Refresh comments", onRefreshComments,
+                                    enabled = !state.comments.busy && !state.composer.posting)
+                            }
+                            ExpressiveButton(if (auth is AuthState.SignedIn) onWriteComment else onSignIn,
+                                Modifier.fillMaxWidth().testTag("write-comment"),
+                                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors()) {
+                                Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null)
+                                Text(if (auth !is AuthState.SignedIn) "Sign in to comment"
+                                    else if (state.composer.draft.isNotBlank()) "Continue your comment" else "Write a comment",
+                                    Modifier.padding(start = 8.dp))
+                            }
                         }
                     }
                     items(state.comments.items, key = { "comment-${it.id}" }) { comment ->
-                        ReleaseCommentCard(comment, release.browserUrl ?: "https://forum.mobilism.org/",
+                        ReleaseCommentCard(comment, release.browserUrl ?: "https://forum.mobilism.org/", onRelease = onRelease,
                             onImage = { urls, index -> gallery = urls to index })
                     }
                     item("comments-status") {
@@ -278,8 +313,9 @@ fun ReleaseScreen(
 
 /** Native text bridge preserves formatted forum posts without JavaScript or a WebView. */
 @Composable
-internal fun ReleaseBody(html: String, baseUrl: String) {
+internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Unit)? = null) {
     val context = LocalContext.current
+    val currentOnRelease = androidx.compose.runtime.rememberUpdatedState(onRelease)
     val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
     val textSize = MaterialTheme.typography.bodyLarge.fontSize.value
@@ -305,7 +341,11 @@ internal fun ReleaseBody(html: String, baseUrl: String) {
                 val flags = getSpanFlags(link)
                 removeSpan(link)
                 setSpan(object : ClickableSpan() {
-                    override fun onClick(widget: View) { openWeb(context, link.url) }
+                    override fun onClick(widget: View) {
+                        val topic = org.mobilism.material.ReleaseLinks.topicId(link.url)
+                        val navigate = currentOnRelease.value
+                        if (topic != null && navigate != null) navigate(topic) else openWeb(context, link.url)
+                    }
                 }, start, end, flags)
             }
         }

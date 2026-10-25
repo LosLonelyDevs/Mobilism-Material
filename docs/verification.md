@@ -1,5 +1,24 @@
 # Verification
 
+## Unreleased: release parsing and links
+
+- 150 unit tests pass; the opt-in live Premium test is skipped. Debug and Android test APKs build. Lint reports zero errors and 35 existing warnings.
+- Parser regressions cover standard and GmsCore builds, arbitrary icon and app variants, nested labels, inline labels, repeated mirrors, linked instructions, passwords, and full text retention. Custom mod headings accept author credits without treating ordinary mentions or links as headings.
+- Five emulator UI checks pass: the two new checks cover shortened relative topic links and variant notes beside their mirrors; three existing checks cover release rendering, downloads, and host-open/copy behavior. A separate read-only live check passes for topics 6439280 and 6433144, including the linked topic 6286022, the custom mod block, two TV variants, and four navigation-app variants.
+- Run the live check with instrumentation class `org.mobilism.material.ui.LiveReleaseParsingTest` and argument `liveReleaseParsing=true`. It reads release data without credentials or posting content.
+
+## Unreleased: release comments
+
+- Debug and Android test APKs build. Unit tests: 138 passed, one opt-in live Premium test skipped. Lint: zero errors and 35 existing warnings.
+- Comment tests cover explicit submission, duplicate taps, blank/overlong input, guests, server validation, uncertain delivery, draft restoration, refresh failure after acceptance, deduplication, and cancellation of an older pagination request.
+- All 27 existing emulator checks passed. Four comment-flow checks passed after clearing a separate emulator System UI ANR. The two layout checks also passed with Android font scale set to 2.0 and an expanded 2400x1600 window at 240 dpi. Screenshots were reviewed, and the emulator's original font scale, size, and density were restored. The opt-in multi-provider live test remains skipped.
+- The API fixture verifies the release ID, form text, authentication header, and positive comment-ID confirmation. Request bodies and tokens stay out of diagnostics.
+- No live forum comment was posted. Live comment delivery still needs a deliberate post from an account. No physical device was changed.
+
+Scope and behavior: [release comments](release-comments.md). Version remains 0.1.13.
+
+The two layout tests skip unless the emulator has the matching configuration. Run `ReleaseCommentTest#largeTextKeepsComposerActionsReachable` at font scale 2.0 and `ReleaseCommentTest#wideWindowUsesBoundedSheetAndThemeTokens` at a width of at least 840 dp. Restore the original settings afterward.
+
 ## Unreleased: Premium, sorting, and book titles
 
 - All 129 unit tests pass, including an opt-in live Mobilism Premium check. Debug and Android test builds pass. Android lint reports zero errors and 35 warnings.
@@ -10,7 +29,7 @@
 
 Commands: `:core:data:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug`. Set `MOBILISM_PREMIUM_TEST_ENV` to a local `.env` path to opt into the live test. The local file supplies forum and Premium credentials only during testing; it is not bundled in the APK.
 
-Exact-value scans found no local credentials in changed sources or the debug APK. No physical device was changed. Version remains 0.1.13; no commit or push was made.
+Exact-value scans found no local credentials in changed sources or the debug APK. No physical device was changed. Version remains 0.1.13. These changes were later committed locally as `164d681f`; nothing was pushed.
 
 ## 0.1.10
 
