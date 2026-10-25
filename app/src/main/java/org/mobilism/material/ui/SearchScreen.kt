@@ -78,7 +78,7 @@ fun SearchScreen(
             onApply = { onScope(selection) }, applyEnabled = true,
         ) {
             item { FilterSectionHeader("Search in", "Choose the release section to search.") }
-            items(SearchScope.entries) { scope ->
+            items(org.mobilism.material.data.Alphabetical.sorted(SearchScope.entries) { it.label }) { scope ->
                 Surface(shape = MaterialTheme.shapes.large,
                     color = if (selection == scope) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {

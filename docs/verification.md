@@ -1,5 +1,17 @@
 # Verification
 
+## Unreleased: Premium, sorting, and book titles
+
+- All 129 unit tests pass, including an opt-in live Mobilism Premium check. Debug and Android test builds pass. Android lint reports zero errors and 35 warnings.
+- Mobilism Premium authenticated, loaded the current 19-domain host list, and resolved a supported Rapidgator mirror through both resolver steps. A four-byte range request to the generated URL returned HTTP 206, `application/pdf`, and a valid PDF signature. This verifies one live mirror, not every supported host.
+- The emulator suite completed with 27 passing tests and one skipped opt-in multi-provider live test. New checks cover Mobilism sign-in controls, encrypted storage and reload, account removal, alphabetical category rows with stable selection IDs, and separate book title/author/series/format rendering.
+- API fixtures cover unsupported hosts, lookalike domains, invalid credentials, expired subscriptions, unsafe URLs, redirects, oversized responses, repeated forms, and the resolver's success response inside an `htmlerror` container.
+- Shared A-Z sorting preserves preferred-host priority and release feed ordering. Book parsing covers Mobilism's dotted formats, series numbers, multiple authors, dates, numeric titles, and conservative fallback.
+
+Commands: `:core:data:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug`. Set `MOBILISM_PREMIUM_TEST_ENV` to a local `.env` path to opt into the live test. The local file supplies forum and Premium credentials only during testing; it is not bundled in the APK.
+
+Exact-value scans found no local credentials in changed sources or the debug APK. No physical device was changed. Version remains 0.1.13; no commit or push was made.
+
 ## 0.1.10
 
 - Debug and Android test builds pass. All 92 unit tests and 14 emulator tests pass; lint reports no errors.

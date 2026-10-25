@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import org.mobilism.material.data.AppLibraryStore
 import org.mobilism.material.data.LibraryEntry
 import org.mobilism.material.data.ReleaseTitles
+import org.mobilism.material.data.Alphabetical
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.ExpressiveCard
 import org.mobilism.material.designsystem.LoadingState
@@ -75,7 +76,7 @@ fun LibraryScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    val apps = installed.apps.filter { (showSystem || !it.system) &&
+                    val apps = Alphabetical.sorted(installed.apps) { it.label }.filter { (showSystem || !it.system) &&
                         (it.label.contains(query, true) || it.packageName.contains(query, true)) }
                     if (installed.busy) item { LoadingState("Reading installed apps…", Modifier.fillMaxWidth()) }
                     installed.error?.let { item { ErrorPanel(it, onRetry = onRefresh) } }
@@ -98,17 +99,18 @@ fun LibraryScreen(
                         Text("No matching apps. Try including system apps.", Modifier.padding(16.dp))
                     }
                 } else {
-                    val saved = entries.filter { it.downloaded }
+                    val saved = Alphabetical.sorted(entries.filter { it.downloaded }) { ReleaseTitles.parse(it.release.title, it.release.section).name }
                     if (saved.isEmpty()) item { Text("Releases you mark as downloaded appear here.", Modifier.padding(16.dp)) }
                     items(saved, key = { it.release.id }) { entry ->
-                        val title = remember(entry.release.title) { ReleaseTitles.parse(entry.release.title) }
+                        val title = remember(entry.release.title, entry.release.section) { ReleaseTitles.parse(entry.release.title, entry.release.section) }
                         ExpressiveCard({ onRelease(entry.release.id) }, Modifier.fillMaxWidth()) {
                             Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 AsyncImage(entry.release.thumbnail, null, Modifier.size(56.dp).clip(MaterialTheme.shapes.medium))
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     AppHeading(title.name, HeadingLevel.Subsection, style = MaterialTheme.typography.titleMedium)
-                                    Text(listOfNotNull(title.version?.let { "v$it" }, title.build?.let { "build $it" }).joinToString(" · ")
-                                        .ifBlank { "Version not detected" }, style = MaterialTheme.typography.bodySmall)
+                                    title.subtitle.takeIf { it.isNotBlank() }?.let {
+                                        Text(it, style = MaterialTheme.typography.bodySmall)
+                                    }
                                     ReleasePostDate(entry.release.publishedAt)
                                 }
                                 AppIconButton(Icons.Outlined.DeleteOutline, "Remove ${title.name} from downloaded", {

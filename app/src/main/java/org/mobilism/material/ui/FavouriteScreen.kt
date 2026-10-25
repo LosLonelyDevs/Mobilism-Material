@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import org.mobilism.material.data.ContentSection
+import org.mobilism.material.data.Alphabetical
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.ExpressiveCard
 
@@ -40,7 +41,7 @@ fun FavouriteScreen(onChoose: (ContentSection) -> Unit) {
         Box(Modifier.safeDrawingPadding(), contentAlignment = Alignment.TopCenter) {
             Column(Modifier.widthIn(max = 480.dp).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 AppHeading("Favourite section", HeadingLevel.Page, Modifier.padding(top = 48.dp, bottom = 16.dp), style = MaterialTheme.typography.headlineLarge)
-                ContentSection.entries.forEach { section ->
+                Alphabetical.sorted(ContentSection.entries) { it.label }.forEach { section ->
                     val style = section.style()
                     val chosen = section.name == selection
                     ExpressiveCard(

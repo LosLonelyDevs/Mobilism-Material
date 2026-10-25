@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.mobilism.material.data.DebridRepository
+import org.mobilism.material.data.Alphabetical
 import org.mobilism.material.data.HostMatcher
 import org.mobilism.material.data.SupportedHost
 import org.mobilism.material.designsystem.AppIconButton
@@ -109,7 +110,7 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = MaterialTheme.shapes.extraLarge) {
                             RoundedMenuItem("All architectures", { store.architecture(null); menu = false }, theme.reading)
-                            CpuArchitecture.entries.forEach { architecture ->
+                            Alphabetical.sorted(CpuArchitecture.entries) { it.label }.forEach { architecture ->
                                 RoundedMenuItem(architecture.label, { store.architecture(architecture); menu = false }, theme.reading)
                             }
                         }
@@ -122,8 +123,8 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (busy && state.hosts.isEmpty()) LoadingState("Loading Mobilism hosts…", Modifier.fillMaxWidth())
                     error?.let { ErrorPanel(it, onRetry = { scope.launch { loadHosts() } }) }
-                    val hosts = (state.hosts + state.preferredHosts.map { SupportedHost(it, HostMatcher.displayName(it)) })
-                        .distinctBy { it.domain }.sortedBy { it.name.lowercase() }
+                    val hosts = Alphabetical.sorted((state.hosts + state.preferredHosts.map { SupportedHost(it, HostMatcher.displayName(it)) })
+                        .distinctBy { it.domain }) { it.name }
                     hosts.forEach { host ->
                         val checked = host.domain in state.preferredHosts
                         Row(

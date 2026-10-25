@@ -110,7 +110,7 @@ class ReadmeScreenshots {
         ))
         screen { SettingsScreen(accounts, DebridRepository(compose.activity), {}, {}, {},
             developer = org.mobilism.material.settings.DeveloperPreferences(enabled = true, debridEnabled = true)) }
-        compose.onNodeWithText("Debrid accounts").performScrollTo()
+        compose.onNodeWithText("Premium").performScrollTo()
         capture("debrid")
         compose.onNodeWithText("2 Mobilism hosts").performClick()
         compose.onNodeWithText("Supported Mobilism hosts").assertIsDisplayed()

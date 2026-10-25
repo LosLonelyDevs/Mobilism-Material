@@ -6,7 +6,7 @@ import org.mobilism.material.settings.CpuArchitecture
 import org.mobilism.material.settings.DownloadPreferences
 
 class DownloadGroupsTest {
-    @Test fun groupsAliasesAndPrioritizesFavoriteHostsInsideEachArchitecture() {
+    @Test fun groupsAliasesAndAlphabetizesWithinFavoriteAndOtherHosts() {
         val links = listOf(
             DownloadLink("https://upfiles.com/a", "ARM64"),
             DownloadLink("https://rg.to/b", "arm64-v8a"),
@@ -15,7 +15,7 @@ class DownloadGroupsTest {
         val groups = DownloadGroups.group(links, DownloadPreferences(preferredHosts = setOf("rapidgator.net", "devuploads.com")))
         assertEquals(1, groups.size)
         assertEquals("arm64-v8a", groups.single().title)
-        assertEquals(listOf(links[1], links[2], links[0]), groups.single().links)
+        assertEquals(listOf(links[2], links[1], links[0]), groups.single().links)
     }
 
     @Test fun collapsesOnlyExplicitNonMatchingArchitecturesAndKeepsUniversalAndUnknownVisible() {

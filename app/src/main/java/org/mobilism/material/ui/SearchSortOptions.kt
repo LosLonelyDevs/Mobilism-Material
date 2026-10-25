@@ -17,12 +17,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import org.mobilism.material.data.SearchSort
+import org.mobilism.material.data.Alphabetical
 
 @Composable
 internal fun SearchSortOptions(selected: SearchSort, onSelect: (SearchSort) -> Unit) {
     Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         AppHeading("Sort search results", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-        SearchSort.entries.forEach { sort ->
+        Alphabetical.sorted(SearchSort.entries) { it.label }.forEach { sort ->
             Surface(shape = MaterialTheme.shapes.large, color = if (sort == selected)
                 MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh) {
                 Row(Modifier.fillMaxWidth().selectable(sort == selected, role = Role.RadioButton,

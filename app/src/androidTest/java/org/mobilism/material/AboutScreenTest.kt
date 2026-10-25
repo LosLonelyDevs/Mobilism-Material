@@ -55,8 +55,8 @@ class AboutScreenTest {
             assertFalse(developer.state.value.enabled)
             assertTrue(developer.state.value.debridEnabled)
         }
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Debrid accounts"))
-        compose.onNodeWithText("Debrid accounts").assertIsDisplayed()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Premium"))
+        compose.onNodeWithText("Premium").assertIsDisplayed()
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("About Mobilism Material"))
         compose.onNodeWithText("Developer options").assertDoesNotExist()
         compose.onNodeWithText("Open Mobilism links").assertDoesNotExist()
@@ -82,7 +82,7 @@ class AboutScreenTest {
             compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
         }
         compose.onNodeWithText("Verbose logging").assertIsOff().performClick().assertIsOn()
-        compose.onNodeWithText("Experimental debrid services").performScrollTo().assertIsOn().performClick().assertIsOff()
+        compose.onNodeWithText("Experimental premium services").performScrollTo().assertIsOn().performClick().assertIsOff()
         compose.onNodeWithText("Export logs").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(1, exports) }
         compose.onNodeWithText("Developer mode").performScrollTo().assertIsOn().performClick()

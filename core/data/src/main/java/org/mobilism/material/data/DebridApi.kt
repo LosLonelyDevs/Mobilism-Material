@@ -19,6 +19,10 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient(),
         .callTimeout(45, TimeUnit.SECONDS)
         // MegaDebrid requires its token in the query. Never forward it through redirects.
         .followRedirects(false).followSslRedirects(false).build()
+    private val mobilism = MobilismPremiumApi(this.client)
+
+    fun connectMobilism(username: String, password: String): String =
+        mobilism.credentials(username, password).also(mobilism::validate)
 
     fun connectMegaDebrid(username: String, password: String): MegaDebridSession {
         if (username.isBlank() || password.isEmpty() || username.length > 256 || password.length > 4096 ||
@@ -41,8 +45,10 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient(),
     }
 
     fun validate(provider: DebridProvider, key: String) {
+        if (provider == DebridProvider.Mobilism) return mobilism.validate(key)
         checkKey(key)
         when (provider) {
+            DebridProvider.Mobilism -> error("Handled above")
             DebridProvider.RealDebrid -> {
                 val user = request(provider, realRequest("user", key).build())
                 if (user.optLong("id") <= 0 || !user.has("type")) throw invalidResponse()
@@ -60,8 +66,10 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient(),
     }
 
     fun availableHosts(provider: DebridProvider, key: String, catalogDomains: List<String> = emptyList()): List<SupportedHost> {
+        if (provider == DebridProvider.Mobilism) return mobilism.hosts()
         checkKey(key)
         return when (provider) {
+            DebridProvider.Mobilism -> error("Handled above")
             DebridProvider.RealDebrid -> {
                 val result = request(provider, realRequest("hosts/status", key).build())
                 // Real-Debrid omits some working hosts from status; keep catalog entries unless status rules them out.
@@ -78,7 +86,7 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient(),
                 val result = request(provider, Request.Builder()
                     .url("https://www.mega-debrid.eu/api.php?action=getHostersList").build())
                 val hosts = result.optJSONArray("hosters") ?: throw invalidResponse()
-                buildList {
+                buildList<SupportedHost> {
                     for (index in 0 until hosts.length()) {
                         val host = hosts.getJSONObject(index)
                         if (host.optString("status") != "up") continue
@@ -96,10 +104,12 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient(),
     }
 
     fun resolve(provider: DebridProvider, key: String, original: String): String {
+        if (provider == DebridProvider.Mobilism) return mobilism.resolve(key, original)
         checkKey(key)
         val source = webUrl(original) ?: throw DebridException("This download link is not a valid web address.")
         val body = FormBody.Builder().add("link", source).build()
         val request = when (provider) {
+            DebridProvider.Mobilism -> error("Handled above")
             DebridProvider.RealDebrid -> realRequest("unrestrict/link", key).post(body).build()
             DebridProvider.MegaDebrid -> Request.Builder().url(megaUrl("getLink", key)).post(body).build()
         }
@@ -127,6 +137,7 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient(),
                 if (source.buffer.size > MAX_RESPONSE_BYTES) throw invalidResponse()
                 val json = runCatching { JSONObject(source.readUtf8()) }.getOrNull()
                 when (provider) {
+                    DebridProvider.Mobilism -> error("Mobilism uses its HTML resolver")
                     DebridProvider.RealDebrid -> {
                         if (!response.isSuccessful || json?.has("error") == true || json?.has("error_code") == true) {
                             diagnostics.record(DiagnosticEvent(DiagnosticSource.RealDebrid, DiagnosticOperation.Other,

@@ -72,6 +72,7 @@ import org.mobilism.material.data.FeedOrder
 import org.mobilism.material.data.FeedFilters
 import org.mobilism.material.data.Release
 import org.mobilism.material.data.ReleaseTitles
+import org.mobilism.material.data.Alphabetical
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.ExpressiveCard
 import org.mobilism.material.designsystem.LoadingState
@@ -122,7 +123,7 @@ fun FeedScreen(
             ModalDrawerSheet {
                 AppHeading("Mobilism", HeadingLevel.Page, Modifier.padding(24.dp), style = MaterialTheme.typography.headlineMedium)
                 Text((auth as? AuthState.SignedIn)?.username ?: "Guest", Modifier.padding(horizontal = 24.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                ContentSection.entries.forEach { section ->
+                Alphabetical.sorted(ContentSection.entries) { it.label }.forEach { section ->
                     val style = section.style()
                     val interaction = remember { MutableInteractionSource() }
                     NavigationDrawerItem(
@@ -238,7 +239,7 @@ fun FeedScreen(
 
 @Composable
 internal fun ReleaseCard(release: Release, accent: Color, onClick: () -> Unit) {
-    val title = remember(release.title) { ReleaseTitles.parse(release.title) }
+    val title = remember(release.title, release.section) { ReleaseTitles.parse(release.title, release.section) }
     val theme = LocalAppTheme.current
     ExpressiveCard(onClick, Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
         containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, accent, 0.06f),
@@ -251,9 +252,8 @@ internal fun ReleaseCard(release: Release, accent: Color, onClick: () -> Unit) {
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 AppHeading(title.name, HeadingLevel.Subsection, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                val details = listOfNotNull(title.version?.let { "v$it" }, title.build?.let { "build $it" }) + title.tags
-                if (details.isNotEmpty()) Text(
-                    details.joinToString(" · "), style = MaterialTheme.typography.bodySmall,
+                if (title.subtitle.isNotBlank()) Text(
+                    title.subtitle, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis,
                 )
                 Text(release.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

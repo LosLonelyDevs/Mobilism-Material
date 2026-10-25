@@ -2,7 +2,11 @@ package org.mobilism.material.data
 
 import org.jsoup.Jsoup
 
-data class ReleaseTitle(val name: String, val version: String? = null, val build: String? = null, val tags: List<String> = emptyList())
+data class ReleaseTitle(val name: String, val version: String? = null, val build: String? = null,
+    val tags: List<String> = emptyList(), val bookAuthor: String? = null, val series: String? = null) {
+    val subtitle: String get() = (listOfNotNull(bookAuthor?.let { "by $it" }, series,
+        version?.let { "v$it" }, build?.let { "build $it" }) + tags).joinToString(" · ")
+}
 
 /** A confident version boundary survives unfamiliar or truncated metadata. */
 object ReleaseTitles {
@@ -14,8 +18,11 @@ object ReleaseTitles {
     private val channel = Regex("""(?i)^(alpha|beta|rc|stable|final|fixed|hotfix|release)(?:\s+(\d+))?(?=\s|[\[(]|$)\s*""")
     private val standaloneTags = setOf("premium", "pro", "paid", "mod", "unlocked", "patched", "adfree", "ad-free", "free")
 
-    fun parse(html: String): ReleaseTitle {
+    fun parse(html: String, section: ContentSection? = null): ReleaseTitle {
         val original = Jsoup.parseBodyFragment(html).text().replace('\u00a0', ' ').trim()
+        if (section == ContentSection.Books || (section == null && BookTitles.hasBookMetadata(original))) {
+            return BookTitles.parse(original)
+        }
         val marker = version.findAll(original).firstOrNull { match ->
             match.groupValues[1].contains('.') || understoodSuffix(original.substring(match.range.last + 1))
         } ?: bareVersion.findAll(original).firstOrNull { match ->

@@ -26,7 +26,7 @@ class DownloadPreferencesStore(context: Context) {
         hosts = preferences.getStringSet("host-catalog", emptySet()).orEmpty().mapNotNull { value ->
             val parts = value.split('|', limit = 2)
             if (parts.size == 2) SupportedHost(parts[0], parts[1]) else null
-        }.sortedBy { it.name.lowercase() },
+        }.let { org.mobilism.material.data.Alphabetical.sorted(it) { host -> host.name } },
     ))
     val state = mutableState.asStateFlow()
 

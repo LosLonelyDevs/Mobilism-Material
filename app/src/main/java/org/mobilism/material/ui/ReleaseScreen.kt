@@ -200,7 +200,7 @@ fun ReleaseScreen(
                 state.error?.let { item { ErrorPanel(it, onRetry = onRetry) } }
                 if (release != null) {
                     item {
-                        ReleaseTitleHeader(release.title)
+                         ReleaseTitleHeader(release.title, release.section)
                     }
                     item {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),

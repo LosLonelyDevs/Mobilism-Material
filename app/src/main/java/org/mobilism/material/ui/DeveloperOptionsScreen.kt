@@ -110,7 +110,7 @@ fun DeveloperOptionsScreen(state: DeveloperPreferences, onVerboseLogging: (Boole
                 }
             }
             item {
-                DeveloperToggle("Experimental debrid services", "Real-Debrid and MegaDebrid",
+                DeveloperToggle("Experimental premium services", "Mobilism Premium, MegaDebrid, and Real-Debrid",
                     state.debridEnabled, onDebridEnabled)
             }
         }

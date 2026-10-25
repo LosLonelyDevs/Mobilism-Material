@@ -55,7 +55,9 @@ internal class MobilismApi(private val context: Context, diagnostics: Diagnostic
         val category = categoryId?.toString() ?: "all"
         val path = "release/${section.apiPath}/category/$category/page/$page/limit/$PAGE_SIZE/orderby/${order.apiValue}/desc/0"
         val response = request(path, token, emptyRecordsAsArray = true, hideAdult = hideAdult).getJSONArray("response")
-        return ReleaseJson.page(response)
+        return ReleaseJson.page(response).let { result ->
+            result.copy(items = result.items.map { it.copy(section = it.section ?: section) })
+        }
     }
 
     suspend fun register(username: String, email: String, password: String) {

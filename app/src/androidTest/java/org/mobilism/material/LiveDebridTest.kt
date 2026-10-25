@@ -73,11 +73,16 @@ class LiveDebridTest {
                     scrollTo("Real-Debrid API key")
                     compose.onNodeWithText("Real-Debrid API key").performTextInput(credentials.getString("realToken"))
                     compose.onNodeWithText("Verify and save").performScrollTo().performClick()
-                } else {
+                } else if (provider == DebridProvider.MegaDebrid) {
                     scrollTo("MegaDebrid username")
                     compose.onNodeWithText("MegaDebrid username").performTextInput(credentials.getString("megaUsername"))
                     compose.onNodeWithText("MegaDebrid password").performScrollTo().performTextInput(credentials.getString("megaPassword"))
                     compose.onNodeWithText("Sign in to MegaDebrid").performScrollTo().performClick()
+                } else {
+                    scrollTo("Mobilism username")
+                    compose.onNodeWithText("Mobilism username").performTextInput(credentials.getString("mobilismUsername"))
+                    compose.onNodeWithText("Mobilism Premium password").performScrollTo().performTextInput(credentials.getString("mobilismPassword"))
+                    compose.onNodeWithText("Sign in to Mobilism Premium").performScrollTo().performClick()
                 }
                 compose.waitUntil(75_000) {
                     app.debrid.state.value.accounts.single { it.provider == provider }.let { it.validated && it.hostsVerified && !it.busy }

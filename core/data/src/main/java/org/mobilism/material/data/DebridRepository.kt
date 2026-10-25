@@ -17,7 +17,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 enum class DebridProvider(val label: String) {
-    RealDebrid("Real-Debrid"), MegaDebrid("MegaDebrid"),
+    RealDebrid("Real-Debrid"), MegaDebrid("MegaDebrid"), Mobilism("Mobilism Premium"),
 }
 
 data class SupportedHost(val domain: String, val name: String)
@@ -32,7 +32,7 @@ data class DebridAccount(
     val hostsVerified: Boolean = false,
 ) {
     val hostNames: List<String>
-        get() = hosts.map { it.name }.distinctBy { it.lowercase() }.sortedBy { it.lowercase() }
+        get() = Alphabetical.sorted(hosts.map { it.name }.distinctBy { it.lowercase(java.util.Locale.ROOT) }) { it }
 }
 
 data class DebridState(val accounts: List<DebridAccount> = DebridProvider.entries.map { DebridAccount(it) },
@@ -105,7 +105,7 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
         .readTimeout(20, TimeUnit.SECONDS).callTimeout(30, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false)
         .addInterceptor { chain ->
-            if (!isEnabled()) throw java.io.IOException("Debrid services disabled")
+            if (!isEnabled()) throw java.io.IOException("Premium services disabled")
             chain.proceed(chain.request())
         }.addInterceptor(DiagnosticInterceptor(diagnostics)).build()
     private val api = DebridApi(this.client, diagnostics)
@@ -116,13 +116,13 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
     }
 
     private fun requireEnabled() {
-        if (!isEnabled()) throw DebridException("Experimental debrid services are disabled.")
+        if (!isEnabled()) throw DebridException("Experimental premium services are disabled.")
     }
 
     suspend fun fileHosts(): List<SupportedHost> = withContext(Dispatchers.IO) {
-        MobilismHosts.domains.map { domain ->
+        Alphabetical.sorted(MobilismHosts.domains.map { domain ->
             SupportedHost(checkNotNull(HostMatcher.key(domain)), HostMatcher.displayName(domain))
-        }.distinctBy { it.domain }.sortedBy { it.name.lowercase() }
+        }.distinctBy { it.domain }) { it.name }
     }
 
     suspend fun load() = withContext(Dispatchers.IO) {
@@ -148,8 +148,8 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
     suspend fun saveKey(provider: DebridProvider, value: String) = withContext(Dispatchers.IO) {
         mutex.withLock {
             requireEnabled()
-            if (provider == DebridProvider.MegaDebrid) {
-                throw DebridException("Sign in to MegaDebrid to connect your Premium account.", true)
+            if (provider != DebridProvider.RealDebrid) {
+                throw DebridException("Sign in to ${provider.label} to connect your Premium account.", true)
             }
             update(provider) { it.copy(busy = true, error = null) }
             try {
@@ -192,6 +192,23 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
         }
     }
 
+    suspend fun connectMobilism(username: String, password: String) = withContext(Dispatchers.IO) {
+        val provider = DebridProvider.Mobilism
+        mutex.withLock {
+            requireEnabled()
+            update(provider) { it.copy(busy = true, error = null) }
+            try {
+                val credentials = api.connectMobilism(username, password)
+                requireEnabled()
+                keys.write(provider, credentials)
+                update(provider) { it.copy(configured = true, validated = true, hostsVerified = false, error = null) }
+            } finally {
+                update(provider) { it.copy(busy = false) }
+            }
+        }
+        refreshHosts(provider, validate = false)
+    }
+
     suspend fun refresh(provider: DebridProvider) = refreshHosts(provider, validate = true)
 
     private suspend fun refreshHosts(provider: DebridProvider, validate: Boolean) = withContext(Dispatchers.IO) {
@@ -212,7 +229,8 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
                 } else emptyList()
                 val providerHosts = api.availableHosts(provider, keys.read(provider).orEmpty(), catalogDomains)
                 requireEnabled()
-                val hosts = MobilismHosts.shortlist(MobilismHosts.domains, providerHosts)
+                val hosts = Alphabetical.sorted(if (provider == DebridProvider.Mobilism) providerHosts
+                    else MobilismHosts.shortlist(MobilismHosts.domains, providerHosts)) { it.name }
                 cache.edit().putString(provider.name, JSONArray().apply {
                     hosts.forEach { put(JSONObject().put("domain", it.domain).put("name", it.name)) }
                 }.toString()).putLong(provider.name + "-updated", System.currentTimeMillis())
@@ -226,7 +244,11 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
                     validated = it.validated && !failure.invalidatesAccount, error = failure.message) }
             } catch (failure: Exception) {
                 diagnostics.record(DiagnosticEvent(
-                    if (provider == DebridProvider.RealDebrid) DiagnosticSource.RealDebrid else DiagnosticSource.MegaDebrid,
+                    when (provider) {
+                        DebridProvider.RealDebrid -> DiagnosticSource.RealDebrid
+                        DebridProvider.MegaDebrid -> DiagnosticSource.MegaDebrid
+                        DebridProvider.Mobilism -> DiagnosticSource.MobilismPremium
+                    },
                     DiagnosticOperation.Hosts, DiagnosticPhase.Failed, failure = DiagnosticFailure.Unexpected))
                 update(provider) { it.copy(busy = false, error =
                     if (it.hosts.isEmpty()) "Host support could not be loaded. Try again."
@@ -241,7 +263,7 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
         val candidates = mutex.withLock {
             state.value.supporting(url).map { it.provider to keys.read(it.provider).orEmpty() }
         }
-        if (candidates.isEmpty()) throw DebridException("No verified account supports this host. Check Debrid accounts in Settings.")
+        if (candidates.isEmpty()) throw DebridException("No verified account supports this host. Check Premium accounts in Settings.")
         val failures = mutableListOf<String>()
         for ((provider, key) in candidates) {
             requireEnabled()

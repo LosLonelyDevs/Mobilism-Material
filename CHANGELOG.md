@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Rename Debrid settings to Premium and add Mobilism Premium sign-in, live supported-host checks, and direct link resolution. Keep credentials encrypted on-device.
+- Use shared A-Z sorting for categories, settings choices, hosts, and named libraries. Keep Latest, Top, and search date ordering.
+- Separate book titles, authors, series, and formats on cards and release pages. Keep ambiguous title text intact.
+
 ## 0.1.13
 
 - Add 12 themes in one picker with collapsible Light and Dark sections, alphabetical sorting, and palette previews. Includes Atom One, Tokyo, and Dracula/Alucard.

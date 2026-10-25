@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.mobilism.material.data.DebridAccount
+import org.mobilism.material.data.Alphabetical
+import org.mobilism.material.data.DebridProvider
 import org.mobilism.material.data.DebridRepository
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.designsystem.AppIconButton
@@ -120,14 +122,14 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             }
             if (developer.debridEnabled) {
                 item {
-                    AppHeading("Debrid accounts", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall)
+                    AppHeading("Premium", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall)
                     Text(
-                        "Experimental. Green buttons resolve links through a verified account and supported host. Both services require Premium access.",
+                        "Green buttons resolve supported links through a verified Premium account. Choose Mobilism Premium, MegaDebrid, or Real-Debrid.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
-                items(state.accounts, key = { it.provider }) { account ->
+                items(Alphabetical.sorted(state.accounts) { it.provider.label }, key = { it.provider }) { account ->
                     DebridAccountCard(account, repository, state)
                 }
             }
@@ -222,18 +224,21 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                 )
             }
             if (!account.configured) {
-              if (account.provider == org.mobilism.material.data.DebridProvider.MegaDebrid) {
-                Text("Sign in with your Premium account", color = MaterialTheme.colorScheme.onSurfaceVariant)
+              if (account.provider != DebridProvider.RealDebrid) {
+                val mobilism = account.provider == DebridProvider.Mobilism
+                val service = if (mobilism) "Mobilism" else account.provider.label
+                Text(if (mobilism) "Use your Mobilism username and Premium password. Your forum password may be different."
+                    else "Sign in with your Premium account", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(
                     value = username, onValueChange = { if (it.length <= 256) username = it },
-                    label = { Text("MegaDebrid username") }, singleLine = true, enabled = !busy,
+                    label = { Text("$service username") }, singleLine = true, enabled = !busy,
                     keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
                     modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Username },
                     shape = MaterialTheme.shapes.large,
                 )
                 OutlinedTextField(
                     value = password, onValueChange = { if (it.length <= 4096) password = it },
-                    label = { Text("MegaDebrid password") }, singleLine = true, enabled = !busy,
+                    label = { Text(if (mobilism) "Mobilism Premium password" else "$service password") }, singleLine = true, enabled = !busy,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Password },
@@ -241,13 +246,14 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                 )
                 ExpressiveButton(
                     onClick = { perform {
-                        repository.connectMegaDebrid(username, password)
+                        if (mobilism) repository.connectMobilism(username, password)
+                        else repository.connectMegaDebrid(username, password)
                         username = ""
                         password = ""
                     } },
                     enabled = username.isNotBlank() && password.isNotEmpty() && !busy,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Sign in to MegaDebrid") }
+                ) { Text("Sign in to ${account.provider.label}") }
               } else {
               Text("No key saved", color = MaterialTheme.colorScheme.onSurfaceVariant)
               OutlinedTextField(
@@ -290,7 +296,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     ),
                 ) {
-                    Icon(Icons.Outlined.DeleteOutline, "Remove key")
+                    Icon(Icons.Outlined.DeleteOutline, "Remove account")
                 }
             }
             if (busy) LoadingState("Checking account and hosts…", Modifier.fillMaxWidth())

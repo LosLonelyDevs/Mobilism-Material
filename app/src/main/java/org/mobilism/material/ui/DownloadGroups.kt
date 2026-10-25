@@ -1,6 +1,7 @@
 package org.mobilism.material.ui
 
 import org.mobilism.material.data.HostMatcher
+import org.mobilism.material.data.Alphabetical
 import org.mobilism.material.settings.CpuArchitecture
 import org.mobilism.material.settings.DownloadPreferences
 
@@ -21,19 +22,19 @@ object DownloadGroups {
     }.toSet()
 
     fun label(value: String): String? = architectures(value).takeIf { it.isNotEmpty() }
-        ?.sortedBy { it.ordinal }?.joinToString(" / ") { it.label }
+        ?.let { Alphabetical.sorted(it) { architecture -> architecture.label } }?.joinToString(" / ") { it.label }
 
     fun group(links: List<DownloadLink>, preferences: DownloadPreferences): List<DownloadGroup> =
         links.groupBy { link -> architectures(link.section.orEmpty()) }.map { (architectures, items) ->
             val preferred = preferences.architecture
             DownloadGroup(
-                title = architectures.sortedBy { it.ordinal }.joinToString(" / ") { it.label }.ifEmpty { "Unspecified architecture" },
-                links = items.sortedBy { link -> preferences.preferredHosts.none {
+                title = Alphabetical.sorted(architectures) { it.label }.joinToString(" / ") { it.label }.ifEmpty { "Unspecified architecture" },
+                links = Alphabetical.sorted(items) { HostMatcher.displayName(it.url) }.sortedBy { link -> preferences.preferredHosts.none {
                     HostMatcher.key(link.url) == it || HostMatcher.matches(link.url, it)
                 } },
                 // Unlabeled downloads stay visible: their compatibility is unknown.
                 collapsed = preferred != null && architectures.isNotEmpty() && preferred !in architectures &&
                     CpuArchitecture.Universal !in architectures,
             )
-        }.sortedBy { it.collapsed }
+        }.let { Alphabetical.sorted(it) { group -> group.title } }.sortedBy { it.collapsed }
 }

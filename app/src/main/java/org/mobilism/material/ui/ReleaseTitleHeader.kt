@@ -15,13 +15,18 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import org.mobilism.material.designsystem.LocalAppTheme
 import org.mobilism.material.data.ReleaseTitles
+import org.mobilism.material.data.ContentSection
 
 @Composable
-fun ReleaseTitleHeader(title: String) {
-    val parsed = remember(title) { ReleaseTitles.parse(title) }
+fun ReleaseTitleHeader(title: String, section: ContentSection? = null) {
+    val parsed = remember(title, section) { ReleaseTitles.parse(title, section) }
     val theme = LocalAppTheme.current
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         AppHeading(parsed.name, HeadingLevel.Page, style = MaterialTheme.typography.headlineSmall)
+        parsed.bookAuthor?.let { Text("by $it", style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        parsed.series?.let { Text(it, style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant) }
         if (parsed.version != null || parsed.tags.isNotEmpty()) FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {

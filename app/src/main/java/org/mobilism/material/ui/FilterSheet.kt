@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.mobilism.material.data.FeedFilters
+import org.mobilism.material.data.Alphabetical
 import org.mobilism.material.designsystem.AppTextButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.LoadingState
@@ -119,7 +120,7 @@ fun CategoryFilterSheet(
     val sectionStyle = state.section.style()
     var search by remember { mutableStateOf("") }
     val visible = remember(state.items, search) {
-        state.items.filter { it.name.contains(search.trim(), ignoreCase = true) ||
+        Alphabetical.sorted(state.items) { it.name }.filter { it.name.contains(search.trim(), ignoreCase = true) ||
             it.group.orEmpty().contains(search.trim(), ignoreCase = true) }
     }
     FilterSheet(

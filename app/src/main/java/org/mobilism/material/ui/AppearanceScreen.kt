@@ -97,7 +97,7 @@ private fun ThemePicker(state: AppearanceState, onDismiss: () -> Unit, onSelect:
                         initiallyExpanded = state.theme.isDark == dark,
                         headingLevel = HeadingLevel.Subsection,
                     ) {
-                        ThemeCatalog.forMode(dark, state.customThemes).forEach { theme ->
+                        org.mobilism.material.data.Alphabetical.sorted(ThemeCatalog.forMode(dark, state.customThemes)) { it.name }.forEach { theme ->
                             ThemeOption(theme, state.theme.id == theme.id, { onSelect(theme) }, Modifier.fillMaxWidth())
                         }
                     }
@@ -154,7 +154,9 @@ private fun FontPicker(state: AppearanceState, store: AppearanceStore) {
         }
     }
     val selectedName = if (state.font == AppFont.Custom) state.customFontName ?: "Custom font" else state.font.title
-    val options = AppFont.entries.filter { it != AppFont.Custom || state.customFontFile != null }
+    val options = org.mobilism.material.data.Alphabetical.sorted(AppFont.entries.filter { it != AppFont.Custom || state.customFontFile != null }) {
+        if (it == AppFont.Custom) state.customFontName ?: it.title else it.title
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ExposedDropdownMenuBox(expanded, onExpandedChange = { if (!importing) expanded = it }) {
             OutlinedTextField(selectedName, onValueChange = {}, readOnly = true, enabled = !importing,

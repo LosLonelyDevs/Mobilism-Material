@@ -18,5 +18,6 @@ class InstalledApps(context: Context) {
     @Suppress("DEPRECATION")
     fun list(): List<InstalledVersion> = manager.queryIntentActivities(
         Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0,
-    ).map { it.activityInfo.packageName }.distinct().mapNotNull(::read).sortedBy { it.name.lowercase() }
+    ).map { it.activityInfo.packageName }.distinct().mapNotNull(::read)
+        .let { org.mobilism.material.data.Alphabetical.sorted(it) { app -> app.name } }
 }

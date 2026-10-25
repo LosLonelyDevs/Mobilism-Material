@@ -45,7 +45,7 @@ fun FollowingScreen(
     var allowed by remember { mutableStateOf(notifications.allowed()) }
     var frequencyMenu by remember { mutableStateOf(false) }
     var linkEntry by remember { mutableStateOf<LibraryEntry?>(null) }
-    val followed = entries.filter { it.watched }
+    val followed = Alphabetical.sorted(entries.filter { it.watched }) { ReleaseTitles.parse(it.release.title).name }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         settings.notifications(granted)
         allowed = notifications.allowed()
@@ -190,7 +190,7 @@ private fun InstalledAppSheet(apps: List<InstalledVersion>, onDismiss: () -> Uni
                 shape = MaterialTheme.shapes.extraLarge, leadingIcon = { Icon(Icons.Outlined.Search, null) })
             FilledTonalButton(onClick = { onChoose(null) }) { Text("Match automatically") }
             LazyColumn(Modifier.heightIn(max = 480.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(apps.filter { it.name.contains(query, true) || it.packageName.contains(query, true) }, key = { it.packageName }) { app ->
+                items(Alphabetical.sorted(apps.filter { it.name.contains(query, true) || it.packageName.contains(query, true) }) { it.name }, key = { it.packageName }) { app ->
                     ExpressiveCard({ onChoose(app) }, Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(app.name, style = MaterialTheme.typography.titleSmall)

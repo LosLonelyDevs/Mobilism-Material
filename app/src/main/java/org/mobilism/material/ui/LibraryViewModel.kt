@@ -42,7 +42,7 @@ class LibraryViewModel(context: Context) : ViewModel() {
                                 InstalledApp(info.packageName, info.loadLabel(manager).toString(), version, info.loadIcon(manager),
                                     info.flags and ApplicationInfo.FLAG_SYSTEM != 0)
                             }.getOrNull()
-                        }.sortedBy { it.label.lowercase() }
+                        }.let { org.mobilism.material.data.Alphabetical.sorted(it) { app -> app.label } }
                 }
                 mutableInstalled.value = InstalledState(apps)
             } catch (cancelled: CancellationException) { throw cancelled }

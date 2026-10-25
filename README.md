@@ -25,12 +25,13 @@ Screenshots use sample data. CI refreshes them on each version bump.
 ## What works
 
 - Apps, Games, and Books: search, Latest/Top feeds, category/date filters, and infinite scrolling. Search keeps your section's filters.
-- Release cards and pages: separate names/versions, post dates, collapsible sections, grouped downloads, thumbs-up, comments, and an image carousel with a full-screen viewer.
+- Release cards and pages: separate app names/versions and book titles/authors/series/formats, post dates, collapsible sections, grouped downloads, thumbs-up, comments, and an image carousel with a full-screen viewer.
 - Following: installed-version checks, background checks, and optional update notifications. My Applications keeps installed apps and downloaded marks.
-- Real-Debrid and MegaDebrid: encrypted credentials, account verification, direct download links, and an original-host fallback when resolution fails.
+- Premium: Mobilism Premium, MegaDebrid, and Real-Debrid accounts with encrypted credentials, account verification, direct download links, and an original-host fallback when resolution fails. Mobilism uses your Premium password and checks its current supported-host list.
+- Shared A-Z sorting for categories, named settings choices, file hosts, and saved libraries. Release feeds keep their selected ordering.
 - Preferred architectures and file hosts, 12 light/dark themes, open-source fonts, custom fonts, and reduced motion.
 
-Downloads open in your browser. Green buttons resolve through a verified debrid account first. Native downloads and several legacy features are still pending. [Remaining work](docs/feature-parity.md).
+Downloads open in your browser. Green buttons resolve through a verified Premium account first. Native downloads and several legacy features are still pending. [Remaining work](docs/feature-parity.md).
 
 Opening a file host marks that release downloaded as a rough record. Auto-watch is on by default; you can turn it off in Download settings.
 

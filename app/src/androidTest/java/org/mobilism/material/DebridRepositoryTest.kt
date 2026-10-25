@@ -57,7 +57,7 @@ class DebridRepositoryTest {
             assertTrue(repository.state.value.supporting("https://unrelated.example.org/file").isEmpty())
             failHostRefresh = true
             for (provider in DebridProvider.entries) repository.refresh(provider)
-            assertTrue(repository.state.value.accounts.all { it.validated && !it.hostsVerified && it.error != null })
+            assertTrue(repository.state.value.accounts.filter { it.configured }.all { it.validated && !it.hostsVerified && it.error != null })
             assertTrue(repository.state.value.supporting("https://send.now/file").isEmpty())
             failHostRefresh = false
             for (provider in DebridProvider.entries) repository.refresh(provider)
@@ -76,7 +76,8 @@ class DebridRepositoryTest {
             assertTrue(repository.state.value.supporting("https://send.now/file").isEmpty())
             enabled = true
             repository.load()
-            assertTrue(repository.state.value.accounts.all { it.configured })
+            assertEquals(setOf(DebridProvider.RealDebrid, DebridProvider.MegaDebrid),
+                repository.state.value.accounts.filter { it.configured }.map { it.provider }.toSet())
             assertEquals(2, repository.state.value.supporting("https://send.now/file").size)
             context.getSharedPreferences("material-debrid-hosts", 0).edit().remove("mega-premium-until").commit()
             val beforeLegacyRefresh = requestedHosts.size

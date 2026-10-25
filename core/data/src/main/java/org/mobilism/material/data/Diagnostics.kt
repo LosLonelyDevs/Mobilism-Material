@@ -7,7 +7,7 @@ import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 
-enum class DiagnosticSource { App, Forum, RealDebrid, MegaDebrid }
+enum class DiagnosticSource { App, Forum, RealDebrid, MegaDebrid, MobilismPremium }
 enum class DiagnosticOperation { Startup, Settings, Export, Login, Categories, Releases, Search, Comments, Reaction, Account, Hosts, Resolve, Other }
 enum class DiagnosticPhase { Started, Completed, Failed }
 enum class DiagnosticFailure { Timeout, Network, Cancelled, ProviderRejected, Unrestricting, Unexpected }
@@ -34,6 +34,7 @@ internal class DiagnosticInterceptor(private val logger: DiagnosticLogger) : Int
         val source = when (request.url.host) {
             "api.real-debrid.com" -> DiagnosticSource.RealDebrid
             "www.mega-debrid.eu" -> DiagnosticSource.MegaDebrid
+            "mblservices.org" -> DiagnosticSource.MobilismPremium
             else -> DiagnosticSource.Forum
         }
         val event = DiagnosticEvent(source, operation(request, source), DiagnosticPhase.Started,
@@ -60,6 +61,7 @@ internal class DiagnosticInterceptor(private val logger: DiagnosticLogger) : Int
     private fun operation(request: Request, source: DiagnosticSource): DiagnosticOperation {
         val path = request.url.encodedPath
         return when (source) {
+            DiagnosticSource.MobilismPremium -> DiagnosticOperation.Resolve
             DiagnosticSource.RealDebrid -> when {
                 path.endsWith("/user") -> DiagnosticOperation.Account
                 "/hosts" in path -> DiagnosticOperation.Hosts
