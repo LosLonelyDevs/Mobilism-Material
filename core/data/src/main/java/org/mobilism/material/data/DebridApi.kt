@@ -10,7 +10,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 
-class DebridException(message: String, val invalidatesAccount: Boolean = false) : Exception(message)
+class DebridException(message: String, val invalidatesAccount: Boolean = false,
+    val sessionExpired: Boolean = false) : Exception(message)
 
 internal class DebridApi(client: OkHttpClient = OkHttpClient(),
     private val diagnostics: DiagnosticLogger = DiagnosticLogger.None) {
@@ -147,11 +148,15 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient(),
                     }
                     DebridProvider.MegaDebrid -> {
                         if (!response.isSuccessful || json?.optString("response_code") != "ok") {
+                            val failure = megaError(response.code, json)
                             diagnostics.record(DiagnosticEvent(DiagnosticSource.MegaDebrid, DiagnosticOperation.Other,
                                 DiagnosticPhase.Failed, httpStatus = response.code,
-                                failure = if (json?.optString("response_code")?.startsWith("UNRESTRICTING_") == true)
-                                    DiagnosticFailure.Unrestricting else DiagnosticFailure.ProviderRejected))
-                            throw megaError(response.code, json)
+                                failure = when {
+                                    failure.sessionExpired -> DiagnosticFailure.SessionExpired
+                                    json?.optString("response_code")?.startsWith("UNRESTRICTING_") == true -> DiagnosticFailure.Unrestricting
+                                    else -> DiagnosticFailure.ProviderRejected
+                                }))
+                            throw failure
                         }
                     }
                 }
@@ -189,9 +194,10 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient(),
             response?.optString("response_text").orEmpty()).lowercase()
         return when {
             "unknown_user" in reason ->
-                DebridException("The MegaDebrid username or password is incorrect.")
-            listOf("token", "log-in", "login", "auth", "credential").any(reason::contains) ->
-                DebridException("The MegaDebrid session expired. Remove the account and sign in again.", true)
+                DebridException("The MegaDebrid username or password is incorrect.", true)
+            response?.optString("response_code").orEmpty().contains("token", ignoreCase = true) ||
+                "token error" in reason || "invalid token" in reason || "expired token" in reason ->
+                DebridException("The MegaDebrid session could not be renewed. Sign in again.", true, sessionExpired = true)
             listOf("vip", "premium", "subscription").any(reason::contains) ->
                 DebridException("An active MegaDebrid Premium subscription is required.", true)
             "password" in reason -> DebridException("This file needs a password. Open the original host to continue.")
@@ -203,6 +209,7 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient(),
                 DebridException("MegaDebrid could not resolve this link. Try another host, or open the original link.")
             listOf("link", "file", "deleted", "not found").any(reason::contains) ->
                 DebridException("The file is unavailable or the link could not be resolved.")
+            status == 401 -> DebridException("The MegaDebrid session could not be renewed. Sign in again.", true, sessionExpired = true)
             else -> httpError(status)
         }
     }

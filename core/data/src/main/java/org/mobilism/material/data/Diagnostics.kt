@@ -1,16 +1,16 @@
 package org.mobilism.material.data
 
 import java.io.IOException
-import java.net.SocketTimeoutException
 import java.util.concurrent.atomic.AtomicLong
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 
 enum class DiagnosticSource { App, Forum, RealDebrid, MegaDebrid, MobilismPremium }
-enum class DiagnosticOperation { Startup, Settings, Export, Login, Categories, Releases, Search, Comments, Reaction, Account, Hosts, Resolve, Other }
-enum class DiagnosticPhase { Started, Completed, Failed }
-enum class DiagnosticFailure { Timeout, Network, Cancelled, ProviderRejected, Unrestricting, Unexpected }
+enum class DiagnosticOperation { Startup, Settings, Export, Login, Categories, Releases, Search, Comments, Reaction, Account, Hosts, Resolve, SessionRenewal, Other }
+enum class DiagnosticPhase { Started, Completed, Failed, Retrying }
+enum class DiagnosticFailure { Timeout, Network, Cancelled, ProviderRejected, Unrestricting, Unexpected,
+    Dns, Tls, Permission, Challenge, Server, InvalidResponse, SessionExpired, Credentials }
 
 data class DiagnosticEvent(
     val source: DiagnosticSource,
@@ -51,8 +51,7 @@ internal class DiagnosticInterceptor(private val logger: DiagnosticLogger) : Int
                 elapsedMillis = (System.nanoTime() - start) / 1_000_000,
                 failure = when {
                     chain.call().isCanceled() -> DiagnosticFailure.Cancelled
-                    failure is SocketTimeoutException -> DiagnosticFailure.Timeout
-                    else -> DiagnosticFailure.Network
+                    else -> NetworkFailures.category(failure)
                 }))
             throw failure
         }
@@ -78,7 +77,7 @@ internal class DiagnosticInterceptor(private val logger: DiagnosticLogger) : Int
             else -> when {
                 "/auth/" in path -> DiagnosticOperation.Login
                 path.endsWith("/search") -> DiagnosticOperation.Search
-                "/comments/" in path -> DiagnosticOperation.Comments
+                "/comments/" in path || path.endsWith("/comment") -> DiagnosticOperation.Comments
                 path.endsWith("/category") -> DiagnosticOperation.Categories
                 "/release" in path -> DiagnosticOperation.Releases
                 "/post/" in path -> DiagnosticOperation.Reaction

@@ -174,6 +174,15 @@ class DebridApiTest {
         }
     }
 
+    @Test fun hostAuthenticationFailureDoesNotExpireTheMegaDebridSession() {
+        val error = assertThrows(DebridException::class.java) {
+            api("""{"response_code":"HOST_ERROR","response_text":"Host authentication unavailable"}""")
+                .resolve(DebridProvider.MegaDebrid, key, original)
+        }
+        assertFalse(error.sessionExpired)
+        assertFalse(error.invalidatesAccount)
+    }
+
     @Test fun rejectsUnsafeMissingAndUnresolvedDownloadUrls() {
         for (value in listOf("", "javascript:alert(1)", "intent://example", "https://user:pass@example.org/a", original, "https://example.org/$key")) {
             assertThrows(DebridException::class.java) {

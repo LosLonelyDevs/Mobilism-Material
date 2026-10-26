@@ -19,8 +19,8 @@ android {
         applicationId = "cum.ahfu.mobi.material"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "0.1.13"
+        versionCode = 15
+        versionName = "0.1.14"
         val releaseNotes = changelog.substringAfter("## $versionName\n", "")
             .substringBefore("\n## ").trim()
         check(releaseNotes.isNotBlank()) { "Add CHANGELOG.md notes for $versionName" }

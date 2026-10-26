@@ -77,9 +77,10 @@ class ReleaseCommentTest {
         assertEquals("https://app.mobilism.org/api-new/release/comment", request.url.toString())
         assertEquals("sample-session", request.header("X-Auth-Token"))
         assertEquals("POST", request.method)
-        val form = request.body as FormBody
-        assertEquals(mapOf("id" to "42", "comment" to "Thanks & hello\nSecond line"),
-            (0 until form.size).associate { form.name(it) to form.value(it) })
+        val body = checkNotNull(request.body)
+        assertTrue(body.isOneShot())
+        val expected = FormBody.Builder().add("id", "42").add("comment", "Thanks & hello\nSecond line").build()
+        assertEquals(okio.Buffer().also(expected::writeTo).readUtf8(), okio.Buffer().also(body::writeTo).readUtf8())
         fixture.repository.signOut()
     }
 

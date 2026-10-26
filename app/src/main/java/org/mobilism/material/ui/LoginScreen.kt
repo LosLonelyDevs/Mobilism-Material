@@ -57,6 +57,7 @@ fun LoginScreen(
     onGuest: () -> Unit,
     onRegister: () -> Unit,
     onForgot: () -> Unit,
+    diagnostics: org.mobilism.material.settings.DiagnosticLogStore? = null,
 ) {
     var username by rememberSaveable { mutableStateOf("") }
     // Password intentionally does not enter SavedStateHandle or saved instance state.
@@ -117,6 +118,7 @@ fun LoginScreen(
                     AppTextButton("Forgot password?", onForgot, enabled = !state.busy)
                     AppTextButton("Register", onRegister, enabled = !state.busy)
                 }
+                diagnostics?.let { DiagnosticLogsCard(it) }
             }
         }
     }

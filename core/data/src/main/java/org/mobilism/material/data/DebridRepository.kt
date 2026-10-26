@@ -109,6 +109,10 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
             chain.proceed(chain.request())
         }.addInterceptor(DiagnosticInterceptor(diagnostics)).build()
     private val api = DebridApi(this.client, diagnostics)
+    private val megaSessions = MegaDebridSessions(api,
+        read = { keys.read(DebridProvider.MegaDebrid) },
+        save = { value -> requireEnabled(); keys.write(DebridProvider.MegaDebrid, value) },
+        legacyPremiumUntil = { cache.getLong("mega-premium-until", 0) }, diagnostics = diagnostics)
 
     fun deactivate() {
         client.dispatcher.cancelAll()
@@ -170,10 +174,7 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
             requireEnabled()
             update(provider) { it.copy(busy = true, error = null) }
             try {
-                val session = api.connectMegaDebrid(username, password)
-                requireEnabled()
-                keys.write(provider, session.token)
-                cache.edit().putLong("mega-premium-until", session.premiumUntil).apply()
+                megaSessions.connect(username, password)
                 update(provider) { it.copy(configured = true, validated = true, hostsVerified = false, error = null) }
             } finally {
                 update(provider) { it.copy(busy = false) }
@@ -219,15 +220,14 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
             try {
                 if (validate) {
                     update(provider) { it.copy(validated = false) }
-                    requirePremiumProof(provider)
-                    api.validate(provider, keys.read(provider).orEmpty())
+                    withAccount(provider) { key -> api.validate(provider, key) }
                     update(provider) { it.copy(validated = true) }
                 }
                 val catalogDomains = if (provider == DebridProvider.RealDebrid) {
                     val domains = JSONArray(get("https://api.real-debrid.com/rest/1.0/hosts/domains"))
                     (0 until domains.length()).map { domains.getString(it) }
                 } else emptyList()
-                val providerHosts = api.availableHosts(provider, keys.read(provider).orEmpty(), catalogDomains)
+                val providerHosts = withAccount(provider) { key -> api.availableHosts(provider, key, catalogDomains) }
                 requireEnabled()
                 val hosts = Alphabetical.sorted(if (provider == DebridProvider.Mobilism) providerHosts
                     else MobilismHosts.shortlist(MobilismHosts.domains, providerHosts)) { it.name }
@@ -261,38 +261,33 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
     suspend fun resolve(url: String): String = withContext(Dispatchers.IO) {
         requireEnabled()
         val candidates = mutex.withLock {
-            state.value.supporting(url).map { it.provider to keys.read(it.provider).orEmpty() }
+            state.value.supporting(url).map { it.provider }
         }
         if (candidates.isEmpty()) throw DebridException("No verified account supports this host. Check Premium accounts in Settings.")
         val failures = mutableListOf<String>()
-        for ((provider, key) in candidates) {
+        for (provider in candidates) {
             requireEnabled()
-            try {
-                requirePremiumProof(provider)
-                val resolved = api.resolve(provider, key, url)
-                requireEnabled()
-                val unchanged = mutex.withLock { keys.read(provider) == key }
-                if (!unchanged) throw DebridException("The saved account changed. Try again.")
-                return@withContext resolved
-            } catch (failure: DebridException) {
-                requireEnabled()
-                if (failure.invalidatesAccount) mutex.withLock {
-                    if (keys.read(provider) == key) update(provider) {
+            mutex.withLock {
+                if (state.value.supporting(url).none { it.provider == provider }) return@withLock
+                try {
+                    val resolved = withAccount(provider) { key -> api.resolve(provider, key, url) }
+                    requireEnabled()
+                    return@withContext resolved
+                } catch (failure: DebridException) {
+                    requireEnabled()
+                    if (failure.invalidatesAccount) update(provider) {
                         it.copy(validated = false, error = failure.message)
                     }
+                    failures += "${provider.label}: ${failure.message}"
                 }
-                failures += "${provider.label}: ${failure.message}"
             }
         }
-        throw DebridException(failures.joinToString("\n\n"))
+        throw DebridException(failures.joinToString("\n\n").ifEmpty { "The saved account changed. Try again." })
     }
 
-    private fun requirePremiumProof(provider: DebridProvider) {
-        if (provider == DebridProvider.MegaDebrid &&
-            cache.getLong("mega-premium-until", 0) <= System.currentTimeMillis() / 1000) {
-            throw DebridException("Remove the MegaDebrid account and sign in again to verify Premium access.", true)
-        }
-    }
+    private fun <T> withAccount(provider: DebridProvider, block: (String) -> T): T =
+        if (provider == DebridProvider.MegaDebrid) megaSessions.use(block)
+        else block(keys.read(provider).orEmpty())
 
     private fun get(url: String): String = client.newCall(Request.Builder().url(url)
         .header("User-Agent", "MobilismMaterial/0.1 (Android)")

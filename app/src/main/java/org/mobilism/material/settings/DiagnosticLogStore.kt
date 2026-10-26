@@ -6,13 +6,14 @@ import org.mobilism.material.data.DiagnosticEvent
 import org.mobilism.material.data.DiagnosticLogger
 
 class DiagnosticLogStore(private val directory: File, private val isEnabled: () -> Boolean,
-    private val maxFileBytes: Long = 256 * 1024) : DiagnosticLogger {
+    private val maxFileBytes: Long = 256 * 1024, private val isVerbose: () -> Boolean = { true }) : DiagnosticLogger {
     private val current get() = File(directory, "current.jsonl")
     private val previous get() = File(directory, "previous.jsonl")
 
     @Synchronized
     override fun record(event: DiagnosticEvent) {
         if (!isEnabled()) return
+        if (!isVerbose() && event.phase == org.mobilism.material.data.DiagnosticPhase.Started) return
         runCatching {
             directory.mkdirs()
             val line = buildString {

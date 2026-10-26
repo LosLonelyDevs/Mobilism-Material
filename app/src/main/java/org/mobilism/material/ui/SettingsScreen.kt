@@ -77,7 +77,7 @@ import org.mobilism.material.designsystem.LocalAppTheme
 fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearance: () -> Unit, onDownloads: () -> Unit, onBack: () -> Unit,
     hideAdult: Boolean = false, onHideAdult: (Boolean) -> Unit = {}, onAbout: () -> Unit = {},
     developer: org.mobilism.material.settings.DeveloperPreferences = org.mobilism.material.settings.DeveloperPreferences(),
-    onDeveloperOptions: () -> Unit = {}) {
+    onDeveloperOptions: () -> Unit = {}, diagnostics: org.mobilism.material.settings.DiagnosticLogStore? = null) {
     val theme = LocalAppTheme.current
     Scaffold(topBar = {
         TopAppBar(title = { AppHeading("Settings", HeadingLevel.Page) }, navigationIcon = {
@@ -129,7 +129,8 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
-                items(Alphabetical.sorted(state.accounts) { it.provider.label }, key = { it.provider }) { account ->
+                items(Alphabetical.sorted(state.accounts) { it.provider.label }
+                    .sortedBy { it.provider != DebridProvider.Mobilism }, key = { it.provider }) { account ->
                     DebridAccountCard(account, repository, state)
                 }
             }
@@ -145,6 +146,7 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
                     }
                 }
             }
+            diagnostics?.let { logs -> item(key = "diagnostics") { DiagnosticLogsCard(logs) } }
             item(key = "about") {
                 ExpressiveCard(onAbout, Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
@@ -195,6 +197,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
     var password by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<ScreenError?>(null) }
+    var signingInAgain by remember(account.provider) { mutableStateOf(false) }
     val busy = working || account.busy
     fun perform(block: suspend () -> Unit) {
         if (busy) return
@@ -223,12 +226,13 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                     modifier = Modifier.padding(start = 12.dp).size(24.dp),
                 )
             }
-            if (!account.configured) {
+            if (!account.configured || signingInAgain) {
               if (account.provider != DebridProvider.RealDebrid) {
                 val mobilism = account.provider == DebridProvider.Mobilism
                 val service = if (mobilism) "Mobilism" else account.provider.label
                 Text(if (mobilism) "Use your Mobilism username and Premium password. Your forum password may be different."
-                    else "Sign in with your Premium account", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    else "Sign in with your Premium account. Credentials stay encrypted on this device so expired sessions can renew automatically.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(
                     value = username, onValueChange = { if (it.length <= 256) username = it },
                     label = { Text("$service username") }, singleLine = true, enabled = !busy,
@@ -250,6 +254,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                         else repository.connectMegaDebrid(username, password)
                         username = ""
                         password = ""
+                        signingInAgain = false
                     } },
                     enabled = username.isNotBlank() && password.isNotEmpty() && !busy,
                     modifier = Modifier.fillMaxWidth(),
@@ -271,6 +276,9 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                 modifier = Modifier.fillMaxWidth(),
               ) { Text("Verify and save") }
               }
+            }
+            if (account.configured && account.provider == DebridProvider.MegaDebrid && !signingInAgain) {
+                ExpressiveButton({ signingInAgain = true }, enabled = !busy) { Text("Sign in again") }
             }
             if (account.configured) Row(
                 Modifier.fillMaxWidth(),

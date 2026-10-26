@@ -3,6 +3,7 @@ package org.mobilism.material
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
@@ -14,6 +15,54 @@ import org.mobilism.material.data.*
 
 @RunWith(AndroidJUnit4::class)
 class DebridRepositoryTest {
+    @Test fun expiredMegaSessionRenewsAfterReloadAndDuringConcurrentDownloads() = runBlocking {
+        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        val context = object : android.content.ContextWrapper(base) {
+            override fun getSharedPreferences(name: String, mode: Int) = base.getSharedPreferences("renewal-test-$name", mode)
+        }
+        var signIns = 0
+        var rejectedToken = "renewal-token-1"
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            val body = when (request.url.queryParameter("action")) {
+                "connectUser" -> {
+                    signIns++
+                    """{"response_code":"ok","token":"renewal-token-$signIns","vip_end":${System.currentTimeMillis() / 1000 + 3600}}"""
+                }
+                "getHostersList" -> """{"response_code":"ok","hosters":[{"name":"Send.now","domains":["send.now"],"status":"up"}]}"""
+                "getUserHistory", "getLink" -> when {
+                    request.url.queryParameter("token") == rejectedToken -> """{"response_code":"TOKEN_ERROR"}"""
+                    request.url.queryParameter("action") == "getLink" -> """{"response_code":"ok","debridLink":"https://example.org/direct"}"""
+                    else -> """{"response_code":"ok","history":[]}"""
+                }
+                else -> error("Unexpected action")
+            }
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body(body.toResponseBody()).build()
+        }.build()
+        val first = DebridRepository(context, client)
+        try {
+            first.connectMegaDebrid("sample-user", "private-password")
+            val saved = context.getSharedPreferences("material-debrid-keys", 0).getString("MegaDebrid", "").orEmpty()
+            assertTrue(saved.isNotBlank())
+            for (secret in listOf("sample-user", "private-password", "renewal-token-1")) assertFalse(saved.contains(secret))
+            val restored = DebridRepository(context, client)
+            restored.load()
+            assertEquals(2, signIns)
+            assertTrue(restored.state.value.accounts.single { it.provider == DebridProvider.MegaDebrid }.validated)
+            rejectedToken = "renewal-token-2"
+            val results = kotlinx.coroutines.coroutineScope {
+                listOf(async { restored.resolve("https://send.now/file") },
+                    async { restored.resolve("https://send.now/other") }).map { it.await() }
+            }
+            assertEquals(listOf("https://example.org/direct", "https://example.org/direct"), results)
+            assertEquals(3, signIns)
+            restored.removeKey(DebridProvider.MegaDebrid)
+            assertFalse(context.getSharedPreferences("material-debrid-keys", 0).contains("MegaDebrid"))
+            assertTrue(restored.state.value.supporting("https://send.now/file").isEmpty())
+        } finally { first.removeKey(DebridProvider.MegaDebrid) }
+    }
+
     @Test fun bothProvidersRefreshWithoutContactingMobilismAndKeepStaleHostsInactive() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val requestedHosts = mutableListOf<String>()
@@ -80,14 +129,10 @@ class DebridRepositoryTest {
                 repository.state.value.accounts.filter { it.configured }.map { it.provider }.toSet())
             assertEquals(2, repository.state.value.supporting("https://send.now/file").size)
             context.getSharedPreferences("material-debrid-hosts", 0).edit().remove("mega-premium-until").commit()
-            val beforeLegacyRefresh = requestedHosts.size
             repository.refresh(DebridProvider.MegaDebrid)
-            val legacy = repository.state.value.accounts.single { it.provider == DebridProvider.MegaDebrid }
-            assertTrue(legacy.configured)
-            assertFalse(legacy.validated)
-            assertFalse(legacy.hostsVerified)
-            assertTrue(legacy.error.orEmpty().contains("sign in"))
-            assertEquals(beforeLegacyRefresh, requestedHosts.size)
+            val restored = repository.state.value.accounts.single { it.provider == DebridProvider.MegaDebrid }
+            assertTrue(restored.configured && restored.validated && restored.hostsVerified)
+            assertNull(restored.error)
         } finally {
             for (provider in DebridProvider.entries) repository.removeKey(provider)
         }

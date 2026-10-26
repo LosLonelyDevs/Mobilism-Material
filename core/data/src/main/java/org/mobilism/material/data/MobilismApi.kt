@@ -5,13 +5,12 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import java.io.IOException
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.Call
@@ -21,20 +20,24 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.Response
+import okio.BufferedSink
 import org.json.JSONException
 import org.json.JSONObject
 
-internal class MobilismApi(private val context: Context, diagnostics: DiagnosticLogger = DiagnosticLogger.None,
+internal class MobilismApi(private val context: Context, private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
     client: OkHttpClient = OkHttpClient()) {
     private val client = client.newBuilder()
-        .addInterceptor(DiagnosticInterceptor(diagnostics))
+        .apply { interceptors().add(0, DiagnosticInterceptor(diagnostics)) }
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .callTimeout(45, TimeUnit.SECONDS)
         .followRedirects(false)
         .retryOnConnectionFailure(false)
         .build()
+    // Connection recovery can resend a request. Keep writes on the non-retrying client.
+    private val readClient = this.client.newBuilder().retryOnConnectionFailure(true).build()
 
     suspend fun signIn(username: String, password: String): Session {
         val result = request("auth/login", form = mapOf("username" to username, "password" to password))
@@ -82,7 +85,7 @@ internal class MobilismApi(private val context: Context, diagnostics: Diagnostic
         // Current release responses can omit like_id. The API expects the first post ID, not the topic ID.
         val postId = release.likeId ?: withContext(Dispatchers.IO) {
             val request = Request.Builder().url("https://forum.mobilism.org/viewtopic.php?t=${release.id}").build()
-            client.newCall(request).await().use { response ->
+            readClient.newCall(request).await().use { response ->
                 if (!response.isSuccessful) throw ApiFailure(FailureKind.Server, "The forum could not load this post. Try again later.")
                 val source = response.body?.source()
                     ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum returned an empty post.")
@@ -121,7 +124,17 @@ internal class MobilismApi(private val context: Context, diagnostics: Diagnostic
     private suspend fun request(path: String, token: String? = null, form: Map<String, String>? = null,
         emptyRecordsAsArray: Boolean = false, hideAdult: Boolean = false): JSONObject =
         withContext(Dispatchers.IO) {
+            val operation = when {
+                path.startsWith("auth/") -> DiagnosticOperation.Login
+                path == "search" -> DiagnosticOperation.Search
+                "comment" in path -> DiagnosticOperation.Comments
+                path.endsWith("category") -> DiagnosticOperation.Categories
+                path.startsWith("post/") -> DiagnosticOperation.Reaction
+                else -> DiagnosticOperation.Releases
+            }
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.INTERNET) != PackageManager.PERMISSION_GRANTED) {
+                diagnostics.record(DiagnosticEvent(DiagnosticSource.Forum, operation, DiagnosticPhase.Failed,
+                    failure = DiagnosticFailure.Permission))
                 throw ApiFailure(FailureKind.Permission, "Network access is disabled for Mobilism. Enable Network in app permissions.")
             }
             val url = BASE_URL.resolve(path)!!.newBuilder().apply {
@@ -131,10 +144,29 @@ internal class MobilismApi(private val context: Context, diagnostics: Diagnostic
             // This client is used only for the API origin, never images or download URLs.
             token?.let { builder.header("X-Auth-Token", it) }
             form?.let { fields ->
-                builder.post(FormBody.Builder().apply { fields.forEach { (name, value) -> add(name, value) } }.build())
+                val body = FormBody.Builder().apply { fields.forEach { (name, value) -> add(name, value) } }.build()
+                // Even HTTP follow-ups must not replay a comment or another account action.
+                builder.post(if (path == "search") body else object : RequestBody() {
+                    override fun contentType() = body.contentType()
+                    override fun contentLength() = body.contentLength()
+                    override fun writeTo(sink: BufferedSink) = body.writeTo(sink)
+                    override fun isOneShot() = true
+                })
             }
             try {
-                client.newCall(builder.build()).await().use { response ->
+                val readOnly = form == null || path == "search"
+                val request = builder.build()
+                val transport = if (readOnly) readClient else client
+                var result = transport.newCall(request).await()
+                if (readOnly && result.code in setOf(502, 503, 504, 520, 521, 522, 523, 524) &&
+                    result.header("cf-mitigated") != "challenge") {
+                    diagnostics.record(DiagnosticEvent(DiagnosticSource.Forum, operation, DiagnosticPhase.Retrying,
+                        httpStatus = result.code, failure = DiagnosticFailure.Server))
+                    result.close()
+                    delay(500)
+                    result = transport.newCall(request).await()
+                }
+                result.use { response ->
                     val body = response.body ?: throw ApiFailure(FailureKind.InvalidResponse, "The server returned an empty response.")
                     val source = body.source()
                     source.request(MAX_RESPONSE_BYTES + 1)
@@ -142,9 +174,7 @@ internal class MobilismApi(private val context: Context, diagnostics: Diagnostic
                         FailureKind.InvalidResponse, "The server response was too large.",
                     )
                     val text = source.readUtf8()
-                    if (response.header("cf-mitigated") == "challenge" || text.trimStart().startsWith('<')) {
-                        throw ApiFailure(FailureKind.Challenge, "The server returned a web security page instead of app data. Try again later or use the forum in your browser.")
-                    }
+                    NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", text)?.let { throw it }
                     val json = try { JSONObject(text) } catch (_: JSONException) {
                         throw ApiFailure(FailureKind.InvalidResponse, "The server returned an unreadable response.")
                     }
@@ -161,7 +191,8 @@ internal class MobilismApi(private val context: Context, diagnostics: Diagnostic
                         val fallback = when (kind) {
                             FailureKind.Credentials -> "Login was rejected. Check your username and password."
                             FailureKind.Session -> "Your session has expired. Sign in again."
-                            else -> "Mobilism could not complete the request (HTTP ${response.code})."
+                            else -> if (response.code == 429) "Mobilism is limiting requests. Wait a moment and try again."
+                                else "Mobilism could not complete the request (HTTP ${response.code})."
                         }
                         val message = json.optJSONObject("error")?.optString("text")
                             ?.takeIf { it.isNotBlank() && !it.contains('<') }?.take(240) ?: fallback
@@ -171,14 +202,24 @@ internal class MobilismApi(private val context: Context, diagnostics: Diagnostic
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: UnknownHostException) {
-                throw ApiFailure(FailureKind.Dns, "Mobilism's server address could not be resolved. Check Network permission, DNS, and your connection.")
-            } catch (_: SocketTimeoutException) {
-                throw ApiFailure(FailureKind.Connection, "The server took too long to respond. Try again.")
+            } catch (failure: ApiFailure) {
+                diagnostics.record(DiagnosticEvent(DiagnosticSource.Forum, operation, DiagnosticPhase.Failed,
+                    httpStatus = failure.httpStatus, failure = when (failure.kind) {
+                        FailureKind.Challenge -> DiagnosticFailure.Challenge
+                        FailureKind.Credentials -> DiagnosticFailure.Credentials
+                        FailureKind.Session -> DiagnosticFailure.SessionExpired
+                        FailureKind.InvalidResponse -> DiagnosticFailure.InvalidResponse
+                        else -> DiagnosticFailure.Server
+                    }))
+                throw failure
             } catch (_: SecurityException) {
+                diagnostics.record(DiagnosticEvent(DiagnosticSource.Forum, operation, DiagnosticPhase.Failed,
+                    failure = DiagnosticFailure.Permission))
                 throw ApiFailure(FailureKind.Permission, "Network access is blocked. Check Mobilism's app permissions.")
-            } catch (_: IOException) {
-                throw ApiFailure(FailureKind.Connection, "Could not connect securely to Mobilism. Check your connection and try again.")
+            } catch (failure: IOException) {
+                diagnostics.record(DiagnosticEvent(DiagnosticSource.Forum, operation, DiagnosticPhase.Failed,
+                    failure = NetworkFailures.category(failure)))
+                throw NetworkFailures.forScreen(failure)
             }
         }
 

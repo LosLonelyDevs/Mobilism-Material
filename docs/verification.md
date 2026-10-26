@@ -1,13 +1,20 @@
 # Verification
 
-## Unreleased: release parsing and links
+## 0.1.14
+
+- 163 unit tests pass; one opt-in live Premium test is skipped. Debug and test APKs build. Android lint reports zero errors and 35 existing warnings.
+- Emulator checks: 13 pass, including the live reported comment; two existing checks skip because they require large-font or expanded-window settings. Coverage includes transient server recovery, Cloudflare classification, no comment replay, MegaDebrid renewal after restart and during concurrent downloads, encrypted persistence, account removal, and log export. Screenshots confirm rendered emojis, Mobilism first under Premium, and log controls on Settings and login.
+- The live app repository read topic 6437968 and decoded comment 12726994 to the expected emoji. Direct desktop requests encountered Cloudflare challenges while the emulator succeeded. The two forum reports remain unconfirmed without affected-device logs.
+- MegaDebrid expiry and rejected credentials were tested with provider fixtures. No real account was forced to expire. No live comment was posted, and no physical device was changed. [Troubleshooting and log export](troubleshooting.md).
+
+## 0.1.14: earlier release parsing and links checks
 
 - 150 unit tests pass; the opt-in live Premium test is skipped. Debug and Android test APKs build. Lint reports zero errors and 35 existing warnings.
 - Parser regressions cover standard and GmsCore builds, arbitrary icon and app variants, nested labels, inline labels, repeated mirrors, linked instructions, passwords, and full text retention. Custom mod headings accept author credits without treating ordinary mentions or links as headings.
 - Five emulator UI checks pass: the two new checks cover shortened relative topic links and variant notes beside their mirrors; three existing checks cover release rendering, downloads, and host-open/copy behavior. A separate read-only live check passes for topics 6439280 and 6433144, including the linked topic 6286022, the custom mod block, two TV variants, and four navigation-app variants.
 - Run the live check with instrumentation class `org.mobilism.material.ui.LiveReleaseParsingTest` and argument `liveReleaseParsing=true`. It reads release data without credentials or posting content.
 
-## Unreleased: release comments
+## 0.1.14: earlier release comment checks
 
 - Debug and Android test APKs build. Unit tests: 138 passed, one opt-in live Premium test skipped. Lint: zero errors and 35 existing warnings.
 - Comment tests cover explicit submission, duplicate taps, blank/overlong input, guests, server validation, uncertain delivery, draft restoration, refresh failure after acceptance, deduplication, and cancellation of an older pagination request.
@@ -15,11 +22,11 @@
 - The API fixture verifies the release ID, form text, authentication header, and positive comment-ID confirmation. Request bodies and tokens stay out of diagnostics.
 - No live forum comment was posted. Live comment delivery still needs a deliberate post from an account. No physical device was changed.
 
-Scope and behavior: [release comments](release-comments.md). Version remains 0.1.13.
+Scope and behavior: [release comments](release-comments.md).
 
 The two layout tests skip unless the emulator has the matching configuration. Run `ReleaseCommentTest#largeTextKeepsComposerActionsReachable` at font scale 2.0 and `ReleaseCommentTest#wideWindowUsesBoundedSheetAndThemeTokens` at a width of at least 840 dp. Restore the original settings afterward.
 
-## Unreleased: Premium, sorting, and book titles
+## 0.1.14: earlier Premium, sorting, and book title checks
 
 - All 129 unit tests pass, including an opt-in live Mobilism Premium check. Debug and Android test builds pass. Android lint reports zero errors and 35 warnings.
 - Mobilism Premium authenticated, loaded the current 19-domain host list, and resolved a supported Rapidgator mirror through both resolver steps. A four-byte range request to the generated URL returned HTTP 206, `application/pdf`, and a valid PDF signature. This verifies one live mirror, not every supported host.

@@ -9,6 +9,17 @@ import org.mobilism.material.data.*
 class DiagnosticLogStoreTest {
     @get:Rule val temporary = TemporaryFolder()
 
+    @Test fun basicLogsKeepFailuresRetriesAndOutcomesWithoutVerboseStarts() {
+        val logs = DiagnosticLogStore(temporary.newFolder(), { true }, isVerbose = { false })
+        for (phase in DiagnosticPhase.entries) logs.record(DiagnosticEvent(DiagnosticSource.MegaDebrid,
+            DiagnosticOperation.SessionRenewal, phase, failure = DiagnosticFailure.SessionExpired))
+        val text = logs.snapshot()
+        assertFalse(text.contains("Started"))
+        assertTrue(text.contains("Retrying"))
+        assertTrue(text.contains("Failed"))
+        assertTrue(text.contains("Completed"))
+    }
+
     @Test fun loggingRequiresOptInAndStopsImmediatelyWhenDisabled() {
         var enabled = false
         val logs = DiagnosticLogStore(temporary.newFolder(), { enabled })

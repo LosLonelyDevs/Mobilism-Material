@@ -34,6 +34,8 @@ Screenshots use sample data. CI refreshes them on each version bump.
 
 Downloads open in your browser. Green buttons resolve through a verified Premium account first. Native downloads and several legacy features are still pending. [Remaining work](docs/feature-parity.md).
 
+Connection trouble? Reproduce it, then use **Export logs** in Settings or on the login screen. [Troubleshooting](docs/troubleshooting.md).
+
 Opening a file host marks that release downloaded as a rough record. Auto-watch is on by default; you can turn it off in Download settings.
 
 ## Build

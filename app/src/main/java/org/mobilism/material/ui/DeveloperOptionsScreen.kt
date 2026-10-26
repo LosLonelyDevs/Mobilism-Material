@@ -54,7 +54,7 @@ fun DeveloperOptionsRoute(state: DeveloperPreferences, logs: DiagnosticLogStore,
                 exportMessage = null
                 try {
                     val uri = DiagnosticLogExporter.export(context, logs)
-                    if (uri == null) exportMessage = "No logs yet. Enable verbose logging and reproduce the issue."
+                    if (uri == null) exportMessage = "No logs yet. Reproduce the issue and try again."
                     else {
                         val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                             type = "text/plain"

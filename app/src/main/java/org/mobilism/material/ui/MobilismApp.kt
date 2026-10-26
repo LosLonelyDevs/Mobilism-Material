@@ -41,7 +41,7 @@ fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fro
                 AuthState.Restoring -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     LoadingState("Opening Mobilism…")
                 }
-                AuthState.SignedOut -> AccountNavigation(model)
+                AuthState.SignedOut -> AccountNavigation(model, app.diagnostics)
                 else -> MainNavigation(model, auth, notificationRelease, fromNotification, onNotificationHandled)
             }
         }
@@ -49,7 +49,7 @@ fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fro
 }
 
 @Composable
-private fun AccountNavigation(model: MobilismViewModel) {
+private fun AccountNavigation(model: MobilismViewModel, diagnostics: org.mobilism.material.settings.DiagnosticLogStore) {
     val autofill = LocalAutofillManager.current
     val nav = rememberNavController()
     val motion = screenMotion()
@@ -66,6 +66,7 @@ private fun AccountNavigation(model: MobilismViewModel) {
                 onGuest = { autofill?.cancel(); model.continueAsGuest() },
                 onRegister = { autofill?.cancel(); nav.navigate("register") { launchSingleTop = true } },
                 onForgot = { autofill?.cancel(); nav.navigate("recover") { launchSingleTop = true } },
+                diagnostics = diagnostics,
             )
         }
         composable("register") {
@@ -176,7 +177,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onDownloads = { nav.navigate("download-preferences") }, onBack = { nav.popBackStack() },
                 hideAdult = hideAdult, onHideAdult = model.contentPreferences::hideAdult,
                 onAbout = { nav.navigate("about") }, developer = developer,
-                onDeveloperOptions = { nav.navigate("developer-options") })
+                onDeveloperOptions = { nav.navigate("developer-options") }, diagnostics = app.diagnostics)
         }
         composable("developer-options") {
             LaunchedEffect(developer.enabled) {
