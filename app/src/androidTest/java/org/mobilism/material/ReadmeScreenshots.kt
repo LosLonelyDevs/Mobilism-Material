@@ -112,7 +112,8 @@ class ReadmeScreenshots {
             developer = org.mobilism.material.settings.DeveloperPreferences(enabled = true, debridEnabled = true)) }
         compose.onNodeWithText("Premium").performScrollTo()
         capture("debrid")
-        compose.onNodeWithText("2 Mobilism hosts").performClick()
+        compose.onNode(verticalList).performScrollToNode(hasText("2 Mobilism hosts"))
+        compose.onNodeWithText("2 Mobilism hosts").assertIsDisplayed().performClick()
         compose.onNodeWithText("Supported Mobilism hosts").assertIsDisplayed()
         compose.onNodeWithText("send.now").assertIsDisplayed()
     }
