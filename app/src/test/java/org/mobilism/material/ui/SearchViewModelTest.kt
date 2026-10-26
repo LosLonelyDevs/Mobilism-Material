@@ -104,6 +104,6 @@ class SearchViewModelTest {
         override suspend fun release(id: Long): Release = error("Unused")
         override suspend fun toggleLike(release: Release): Boolean = error("Unused")
         override suspend fun comments(id: Long, page: Int): CommentPage = error("Unused")
-        override suspend fun postComment(id: Long, text: String): Long = error("Unused")
+        override suspend fun postComment(id: Long, text: String, replyTo: Long?): Long = error("Unused")
     }
 }

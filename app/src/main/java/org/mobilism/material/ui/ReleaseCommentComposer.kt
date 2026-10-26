@@ -38,6 +38,7 @@ import org.mobilism.material.designsystem.LoadingState
 internal fun ReleaseCommentComposer(
     state: CommentComposerState, username: String, releaseTitle: String,
     onEdit: (String) -> Unit, onPost: () -> Unit, onDismiss: () -> Unit, onCheckComments: () -> Unit,
+    onRemoveReply: () -> Unit = {},
 ) {
     ModalBottomSheet(
         modifier = Modifier.testTag("comment-composer"),
@@ -51,11 +52,16 @@ internal fun ReleaseCommentComposer(
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)
             .padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                AppHeading("Write a comment", HeadingLevel.Page, style = MaterialTheme.typography.headlineSmall)
+                AppHeading(if (state.replyTo == null) "Write a comment" else "Reply to comment",
+                    HeadingLevel.Page, style = MaterialTheme.typography.headlineSmall)
                 Text(releaseTitle, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Posting publicly as $username", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            state.replyTo?.let { target ->
+                QuotedReply(target.author, target.html, "https://forum.mobilism.org/",
+                    onRemove = onRemoveReply.takeUnless { state.posting })
             }
             OutlinedTextField(
                 value = state.draft, onValueChange = onEdit, readOnly = state.posting,
@@ -77,7 +83,7 @@ internal fun ReleaseCommentComposer(
                 ExpressiveButton(onPost, Modifier.weight(1f).testTag("post-comment"),
                     enabled = !state.posting && state.draft.isNotBlank() && state.draft.length <= ReleaseComments.MAX_LENGTH) {
                     Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Text("Post comment", Modifier.padding(start = 8.dp))
+                    Text(if (state.replyTo == null) "Post comment" else "Post reply", Modifier.padding(start = 8.dp))
                 }
             }
             Text("Your draft stays here when you close this sheet.", style = MaterialTheme.typography.bodySmall,

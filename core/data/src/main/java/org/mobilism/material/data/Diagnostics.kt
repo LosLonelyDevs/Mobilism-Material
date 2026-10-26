@@ -7,7 +7,7 @@ import okhttp3.Request
 import okhttp3.Response
 
 enum class DiagnosticSource { App, Forum, RealDebrid, MegaDebrid, MobilismPremium }
-enum class DiagnosticOperation { Startup, Settings, Export, Login, Categories, Releases, Search, Comments, Reaction, Account, Hosts, Resolve, SessionRenewal, Other }
+enum class DiagnosticOperation { Startup, Settings, Export, Login, Categories, Releases, Search, Comments, Messages, Reaction, Account, Hosts, Resolve, SessionRenewal, Other }
 enum class DiagnosticPhase { Started, Completed, Failed, Retrying }
 enum class DiagnosticFailure { Timeout, Network, Cancelled, ProviderRejected, Unrestricting, Unexpected,
     Dns, Tls, Permission, Challenge, Server, InvalidResponse, SessionExpired, Credentials }
@@ -78,6 +78,7 @@ internal class DiagnosticInterceptor(private val logger: DiagnosticLogger) : Int
                 "/auth/" in path -> DiagnosticOperation.Login
                 path.endsWith("/search") -> DiagnosticOperation.Search
                 "/comments/" in path || path.endsWith("/comment") -> DiagnosticOperation.Comments
+                "/message/" in path -> DiagnosticOperation.Messages
                 path.endsWith("/category") -> DiagnosticOperation.Categories
                 "/release" in path -> DiagnosticOperation.Releases
                 "/post/" in path -> DiagnosticOperation.Reaction

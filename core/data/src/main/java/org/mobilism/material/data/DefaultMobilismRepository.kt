@@ -7,7 +7,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class DefaultMobilismRepository(context: Context, private val contentPreferences: ContentPreferencesStore = ContentPreferencesStore(context),
-    diagnostics: DiagnosticLogger = DiagnosticLogger.None, client: okhttp3.OkHttpClient = okhttp3.OkHttpClient()) : MobilismRepository {
+    diagnostics: DiagnosticLogger = DiagnosticLogger.None, client: okhttp3.OkHttpClient = okhttp3.OkHttpClient()) : MobilismRepository, MessagesRepository {
     private val api = MobilismApi(context.applicationContext, diagnostics, client)
     private val store = SessionStore(context.applicationContext)
     private val reactions = context.getSharedPreferences("release-reactions", Context.MODE_PRIVATE)
@@ -131,10 +131,30 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
 
     override suspend fun comments(id: Long, page: Int): CommentPage = withSession { token -> api.comments(id, page, token) }
 
-    override suspend fun postComment(id: Long, text: String): Long = withSession { token ->
+    override suspend fun postComment(id: Long, text: String, replyTo: Long?): Long = withSession { token ->
         val account = session?.takeIf { it.accessToken == token }
             ?: throw ApiFailure(FailureKind.Credentials, "Sign in to post a comment.")
-        api.postComment(id, text, account.accessToken)
+        api.postComment(id, text, account.accessToken, replyTo)
+    }
+
+    override suspend fun messages(folder: MessageFolder, page: Int): MessagePage = withMessageSession { account ->
+        val userId = account.userId ?: throw ApiFailure(FailureKind.Credentials,
+            "Sign in again to load your messages. Your saved login needs to be updated.")
+        api.messages(folder, userId, page, account.accessToken)
+    }
+
+    override suspend fun conversation(id: Long): List<PrivateMessage> = withMessageSession { api.conversation(id, it.accessToken) }
+
+    override suspend fun markMessageRead(id: Long) = withMessageSession { api.markMessageRead(id, it.accessToken) }
+
+    override suspend fun replyToMessage(message: PrivateMessage, text: String) = withMessageSession {
+        api.replyToMessage(message, text, it)
+    }
+
+    private suspend fun <T> withMessageSession(block: suspend (Session) -> T): T = withSession { token ->
+        val account = session?.takeIf { it.accessToken == token }
+            ?: throw ApiFailure(FailureKind.Credentials, "Sign in to read and reply to messages.")
+        block(account)
     }
 
     override suspend fun search(query: String, scope: SearchScope, page: Int, filters: FeedFilters): ReleasePage {

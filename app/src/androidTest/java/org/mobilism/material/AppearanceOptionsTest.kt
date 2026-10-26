@@ -32,6 +32,21 @@ class AppearanceOptionsTest {
         File(compose.activity.filesDir, "fonts").deleteRecursively()
     }
 
+    @Test fun amoledBlackIsSelectableAndPersists() = runBlocking {
+        val store = AppearanceStore(compose.activity)
+        store.load()
+        render(store)
+        compose.onNodeWithContentDescription("Choose theme").performClick()
+        compose.onNodeWithTag("theme-options").performScrollToNode(hasContentDescription("AMOLED Black"))
+        compose.onNodeWithContentDescription("AMOLED Black").performClick()
+        compose.runOnIdle { assertEquals("amoled-black", store.state.value.themeId) }
+        val restored = AppearanceStore(compose.activity)
+        restored.load()
+        assertEquals("amoled-black", restored.state.value.themeId)
+        assertEquals(androidx.compose.ui.graphics.Color.Black, restored.state.value.theme.colors.background)
+        capture("appearance-amoled")
+    }
+
     @Test fun pairedThemesAndFontPreviewsPersistSelections() = runBlocking {
         val store = AppearanceStore(compose.activity)
         store.load()

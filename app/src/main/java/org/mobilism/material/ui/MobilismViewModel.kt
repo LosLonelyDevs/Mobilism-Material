@@ -259,8 +259,10 @@ data class CommentsState(
 )
 data class CommentComposerState(
     val open: Boolean = false, val draft: String = "", val posting: Boolean = false,
-    val error: String? = null,
+    val error: String? = null, val replyTo: CommentReplyTarget? = null,
 )
+
+data class CommentReplyTarget(val id: Long, val author: String, val html: String)
 
 data class ReleaseState(val release: Release? = null, val busy: Boolean = true, val error: ScreenError? = null,
     val comments: CommentsState = CommentsState(), val likeBusy: Boolean = false, val actionMessage: String? = null,
@@ -272,6 +274,9 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
         draft = savedState["comment-draft"] ?: "",
         open = savedState["comment-open"] ?: false,
         error = if (savedState.get<Boolean>("comment-pending") == true) UNCONFIRMED_COMMENT else null,
+        replyTo = savedState.get<Long>("comment-reply-id")?.let {
+            CommentReplyTarget(it, savedState["comment-reply-author"] ?: "", savedState["comment-reply-html"] ?: "")
+        },
     )))
     val state = mutableState.asStateFlow()
     private var job: Job? = null
@@ -310,6 +315,24 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
         mutableState.update { it.copy(composer = it.composer.copy(open = false)) }
     }
 
+    fun replyToComment(comment: org.mobilism.material.data.ReleaseComment) {
+        if (repository.auth.value !is AuthState.SignedIn || mutableState.value.composer.posting) return
+        val target = CommentReplyTarget(comment.id, comment.author, comment.contentHtml.take(20_000))
+        savedState["comment-reply-id"] = target.id
+        savedState["comment-reply-author"] = target.author
+        savedState["comment-reply-html"] = target.html
+        mutableState.update { it.copy(composer = it.composer.copy(replyTo = target)) }
+        openComposer()
+    }
+
+    fun clearCommentReply() {
+        if (mutableState.value.composer.posting) return
+        savedState.remove<Long>("comment-reply-id")
+        savedState.remove<String>("comment-reply-author")
+        savedState.remove<String>("comment-reply-html")
+        mutableState.update { it.copy(composer = it.composer.copy(replyTo = null)) }
+    }
+
     fun editComment(text: String) {
         if (mutableState.value.composer.posting || text.length > ReleaseComments.MAX_LENGTH) return
         savedState["comment-draft"] = text
@@ -326,13 +349,18 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
         mutableState.update { it.copy(composer = it.composer.copy(posting = true, error = null)) }
         postJob = viewModelScope.launch {
             try {
-                val commentId = repository.postComment(id, text)
-                val posted = ReleaseComments.posted(commentId, author, text, System.currentTimeMillis() / 1000)
+                val target = snapshot.composer.replyTo
+                val commentId = repository.postComment(id, text, target?.id)
+                val posted = ReleaseComments.posted(commentId, author, text, System.currentTimeMillis() / 1000).copy(
+                    quotes = target?.let { listOf(org.mobilism.material.data.CommentQuote(it.author, it.html)) }.orEmpty())
                 commentsJob?.cancel()
                 commentsJob = null
                 savedState["comment-draft"] = ""
                 savedState["comment-open"] = false
                 savedState["comment-pending"] = false
+                savedState.remove<Long>("comment-reply-id")
+                savedState.remove<String>("comment-reply-author")
+                savedState.remove<String>("comment-reply-html")
                 mutableState.update { it.copy(
                     composer = CommentComposerState(), actionMessage = "Comment posted",
                     release = it.release?.copy(replies = it.release.replies + 1),

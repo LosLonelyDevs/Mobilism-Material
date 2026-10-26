@@ -2,8 +2,6 @@ package org.mobilism.material.ui
 
 import android.content.ClipData
 import android.graphics.Typeface
-import android.text.Html
-import android.text.SpannableStringBuilder
 import android.text.method.LinkMovementMethod
 import android.text.style.ClickableSpan
 import android.text.style.URLSpan
@@ -66,7 +64,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.launch
 import org.jsoup.Jsoup
-import org.jsoup.safety.Safelist
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.designsystem.AppFont
 import org.mobilism.material.designsystem.AppIconButton
@@ -96,6 +93,7 @@ fun ReleaseScreen(
     auth: AuthState = AuthState.Guest, onSignIn: () -> Unit = {},
     onWriteComment: () -> Unit = {}, onEditComment: (String) -> Unit = {},
     onPostComment: () -> Unit = {}, onCloseComposer: () -> Unit = {}, onRefreshComments: () -> Unit = {},
+    onReplyToComment: (org.mobilism.material.data.ReleaseComment) -> Unit = {}, onRemoveReply: () -> Unit = {},
     onRelease: (Long) -> Unit = {},
 ) {
     val theme = LocalAppTheme.current
@@ -125,7 +123,7 @@ fun ReleaseScreen(
     if (state.composer.open && release != null && auth is AuthState.SignedIn) {
         ReleaseCommentComposer(state.composer, auth.username, ReleaseTitles.parse(release.title, release.section).name,
             onEditComment, onPostComment, onCloseComposer,
-            onCheckComments = { onCloseComposer(); onRefreshComments() })
+            onCheckComments = { onCloseComposer(); onRefreshComments() }, onRemoveReply = onRemoveReply)
     }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -294,6 +292,8 @@ fun ReleaseScreen(
                     }
                     items(state.comments.items, key = { "comment-${it.id}" }) { comment ->
                         ReleaseCommentCard(comment, release.browserUrl ?: "https://forum.mobilism.org/", onRelease = onRelease,
+                            onReply = { if (auth is AuthState.SignedIn) onReplyToComment(comment) else onSignIn() },
+                            replyEnabled = !state.composer.posting,
                             onImage = { urls, index -> gallery = urls to index })
                     }
                     item("comments-status") {
@@ -326,15 +326,7 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
         else Typeface.create("sans-serif", Typeface.NORMAL)
     }
     val richText = remember(html, baseUrl, context) {
-        val allowed = Safelist.basic().removeProtocols("a", "href", "ftp", "mailto")
-        val cleaned = Jsoup.clean(html, baseUrl, allowed)
-        SpannableStringBuilder(Html.fromHtml(cleaned, Html.FROM_HTML_MODE_LEGACY)).apply {
-            // Removed download anchors can leave many empty forum markup lines.
-            Regex("\n(?:[ \\t\\u00a0]*\n){2,}").findAll(this).toList().asReversed().forEach {
-                replace(it.range.first, it.range.last + 1, "\n\n")
-            }
-            while (isNotEmpty() && last().isWhitespace()) delete(length - 1, length)
-            while (isNotEmpty() && first().isWhitespace()) delete(0, 1)
+        forumText(html, baseUrl).apply {
             getSpans(0, length, URLSpan::class.java).forEach { link ->
                 val start = getSpanStart(link)
                 val end = getSpanEnd(link)

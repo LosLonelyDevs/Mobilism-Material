@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
@@ -97,6 +98,7 @@ fun FeedScreen(
     categories: CategoryState,
     onLoadCategories: () -> Unit,
     onFilters: (FeedFilters) -> Unit,
+    onMessages: () -> Unit = {},
 ) {
     val theme = LocalAppTheme.current
     val sectionStyle = state.section.style()
@@ -150,6 +152,12 @@ fun FeedScreen(
                     label = { Text("My Applications") }, selected = false,
                     icon = { Icon(Icons.Outlined.PhoneAndroid, null, tint = theme.featured) },
                     onClick = { scope.launch { drawer.close() }; onLibrary() },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+                if (auth is AuthState.SignedIn) NavigationDrawerItem(
+                    label = { Text("Messages") }, selected = false,
+                    icon = { Icon(Icons.Outlined.MailOutline, null, tint = theme.reading) },
+                    onClick = { scope.launch { drawer.close() }; onMessages() },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
                 val settingsInteraction = remember { MutableInteractionSource() }

@@ -29,8 +29,9 @@ Screenshots use sample data. CI refreshes them on each version bump.
 - Following: installed-version checks, background checks, and optional update notifications. My Applications keeps installed apps and downloaded marks.
 - Premium: Mobilism Premium, MegaDebrid, and Real-Debrid accounts with encrypted credentials, account verification, direct download links, and an original-host fallback when resolution fails. Mobilism uses your Premium password and checks its current supported-host list.
 - Shared A-Z sorting for categories, named settings choices, file hosts, and saved libraries. Release feeds keep their selected ordering.
-- Release comments: sign in, write in an M3E sheet, and post. Drafts survive closing the sheet and connection errors. [Scope and behavior](docs/release-comments.md).
-- Preferred architectures and file hosts, 12 light/dark themes, open-source fonts, custom fonts, and reduced motion.
+- Release comments: post or reply with quoted context. Drafts survive closing the sheet and connection errors. Plain URLs are clickable in release text and comments. [Scope and behavior](docs/release-comments.md).
+- Messages: Inbox and Sent tabs, conversation history, mark as read, and replies. Older saved logins need one fresh sign-in for inbox access.
+- Preferred architectures and file hosts, 13 light/dark themes including AMOLED Black, open-source fonts, custom fonts, and reduced motion.
 
 Downloads open in your browser. Green buttons resolve through a verified Premium account first. Native downloads and several legacy features are still pending. [Remaining work](docs/feature-parity.md).
 

@@ -165,16 +165,56 @@ class ReleaseCommentsViewModelTest {
         assertEquals(listOf(1, 2, 1), repo.pages)
     }
 
+    @Test fun replyTargetSurvivesCloseAndRestoreAndPostsTheCommentId() = runTest(dispatcher) {
+        val repo = Repository()
+        val saved = SavedStateHandle()
+        val model = ReleaseViewModel(42, repo, saved)
+        advanceUntilIdle()
+        model.editComment("My draft")
+        model.replyToComment(ReleaseComments.posted(77, "Author", "Original text", 1))
+        model.closeComposer()
+        val restored = ReleaseViewModel(42, repo, saved)
+        advanceUntilIdle()
+        assertEquals(77L, restored.state.value.composer.replyTo!!.id)
+        assertEquals("My draft", restored.state.value.composer.draft)
+        restored.openComposer()
+        restored.postComment()
+        runCurrent()
+        assertEquals(listOf(77L), repo.replyTargets)
+        repo.result.complete(99)
+        advanceUntilIdle()
+        assertNull(restored.state.value.composer.replyTo)
+        assertEquals("Author", restored.state.value.comments.items.first().quotes.single().author)
+        assertNull(saved.get<Long>("comment-reply-id"))
+    }
+
+    @Test fun removingReplyPreservesDraftAndGuestCannotSelectTarget() = runTest(dispatcher) {
+        val repo = Repository()
+        val model = ReleaseViewModel(42, repo, SavedStateHandle())
+        advanceUntilIdle()
+        val comment = ReleaseComments.posted(77, "Author", "Original", 1)
+        model.editComment("Keep this")
+        model.replyToComment(comment)
+        model.clearCommentReply()
+        assertNull(model.state.value.composer.replyTo)
+        assertEquals("Keep this", model.state.value.composer.draft)
+        repo.auth.value = AuthState.Guest
+        model.replyToComment(comment)
+        assertNull(model.state.value.composer.replyTo)
+    }
+
     private class Repository : MobilismRepository {
         override val auth = MutableStateFlow<AuthState>(AuthState.SignedIn("Reader"))
         val posts = mutableListOf<Pair<Long, String>>()
+        val replyTargets = mutableListOf<Long?>()
         val pages = mutableListOf<Int>()
         val result = CompletableDeferred<Long>()
         var comments = CommentPage(emptyList(), false)
         var commentFailure: Exception? = null
         var pendingPageTwo: CompletableDeferred<CommentPage>? = null
-        override suspend fun postComment(id: Long, text: String): Long {
+        override suspend fun postComment(id: Long, text: String, replyTo: Long?): Long {
             posts += id to text
+            replyTargets += replyTo
             return result.await()
         }
         override suspend fun comments(id: Long, page: Int): CommentPage {

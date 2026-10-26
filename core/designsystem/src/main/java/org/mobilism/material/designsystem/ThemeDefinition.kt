@@ -33,7 +33,7 @@ object ThemeCatalog {
         ThemePair("Rosé Pine", RosePineDawn, RosePine), ThemePair("Solarized", SolarizedLight, SolarizedDark),
         ThemePair("Atom One", AtomOneLight, AtomOneDark), ThemePair("Tokyo", TokyoDay, TokyoNight),
         ThemePair("Dracula", Alucard, Dracula))
-    val builtIn: List<ThemeDefinition> = pairs.flatMap { listOf(it.light, it.dark) }
+    val builtIn: List<ThemeDefinition> = pairs.flatMap { listOf(it.light, it.dark) } + AmoledBlack
 
     fun forMode(dark: Boolean, custom: List<ThemeDefinition> = emptyList()): List<ThemeDefinition> =
         (builtIn + custom).filter { it.isDark == dark }.sortedBy { it.name.lowercase(Locale.ROOT) }

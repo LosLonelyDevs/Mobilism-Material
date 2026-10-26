@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add Inbox and Sent tabs, conversation history, mark as read, and private message replies.
+- Reply to release comments with quoted context. Keep reply targets with unfinished drafts.
+- Make plain URLs clickable in release text, comments, and messages.
+- Add AMOLED Black to the theme picker.
+
 ## 0.1.14
 
 - Add Mobilism Premium accounts and direct downloads. Renew MegaDebrid sessions automatically after signing in once.

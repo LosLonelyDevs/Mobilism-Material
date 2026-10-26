@@ -60,6 +60,17 @@ private fun contrast(first: Color, second: Color): Float {
     return (maxOf(a, b) + 0.05f) / (minOf(a, b) + 0.05f)
 }
 
+val AmoledBlack = paletteTheme(
+    id = "amoled-black", name = "AMOLED Black", dark = true,
+    background = Color.Black, surface = Color.Black, surfaceAlt = Color(0xFF121212),
+    text = Color(0xFFF2F2F2), subtext = Color(0xFFBDBDBD), outline = Color(0xFF757575),
+    primary = Color(0xFFA8C7FA), onPrimary = Color.Black,
+    success = Color(0xFF8BD5A0), onSuccess = Color.Black,
+    warning = Color(0xFFFFD180), onWarning = Color.Black,
+    error = Color(0xFFFFB4AB), onError = Color.Black,
+    info = Color(0xFF80DEEA), onInfo = Color.Black,
+).let { it.copy(colors = it.colors.copy(surfaceTint = Color.Transparent)) }
+
 val AtomOneLight = paletteTheme(
     id = "atom-one-light", name = "Atom One Light", dark = false,
     background = Color(0xFFFAFAFA),

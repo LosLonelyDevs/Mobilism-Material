@@ -27,7 +27,8 @@ internal class SessionStore(context: Context) {
             val json = JSONObject(String(cipher.doFinal(decode(parts[1])), Charsets.UTF_8))
             val token = json.getString("accessToken")
             require(token.isNotBlank())
-            Session(json.getString("username"), token, json.optString("refreshToken").ifBlank { null })
+            Session(json.getString("username"), token, json.optString("refreshToken").ifBlank { null },
+                json.optLong("userId").takeIf { it > 0 })
         } catch (_: java.security.GeneralSecurityException) {
             preferences.edit().remove("encrypted-session").commit()
             null
@@ -43,6 +44,7 @@ internal class SessionStore(context: Context) {
     suspend fun write(session: Session) = withContext(Dispatchers.IO) {
         val json = JSONObject().put("username", session.username).put("accessToken", session.accessToken)
         session.refreshToken?.let { json.put("refreshToken", it) }
+        session.userId?.let { json.put("userId", it) }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val encrypted = encode(cipher.iv) + ":" + encode(cipher.doFinal(json.toString().toByteArray(Charsets.UTF_8)))

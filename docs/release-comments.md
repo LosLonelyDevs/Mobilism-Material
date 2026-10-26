@@ -1,10 +1,12 @@
 # Release comments
 
-First scope: signed-in users can post a new comment on an Apps, Games, or Books release. Existing comments stay newest first. Replies, quotes, editing, deletion, attachments, and other forum sections are outside this change.
+Signed-in users can post a comment or reply to an existing comment on an Apps, Games, or Books release. Comments stay newest first. Editing, deletion, attachments, and other forum sections remain pending.
 
 ## Flow
 
 - The Comments section has Write a comment and Refresh actions. Guests get Sign in to comment and return to the release after signing in.
+- Each comment has Reply. The composer shows the quoted author and text; Remove reply keeps the draft and turns it into a normal comment. Reply targets survive closing the sheet and saved-state restoration.
+- Quoted replies show a short preview with Show quote to expand the formatted text. Plain URLs in comments and release text become clickable links. Existing named links keep their original destination.
 - An expanded modal sheet shows the release title, account name, multiline field, character count, Close, and Post comment. Comments are public. The app limits a draft to 10,000 characters.
 - Closing the sheet keeps the draft for that release. Rotation and saved-state restoration keep it too. Leaving the release or changing accounts ends that draft's lifetime.
 - Posting disables editing, dismissal, and repeat submission. A confirmed comment ID clears the draft, closes the sheet, shows success, adds the comment, and reloads page one.
@@ -20,7 +22,7 @@ The sheet uses Material's default maximum width on larger windows. Hierarchy com
 
 ## API and privacy
 
-The legacy contract is `POST release/comment`, form fields `id` and `comment`, authenticated with `X-Auth-Token`. Success requires a positive `response.comment_id`. The request uses the existing API origin, bounded responses, and disabled redirects and connection retries.
+The legacy contract is `POST release/comment`, form fields `id` and `comment`, authenticated with `X-Auth-Token`. Replies also send the selected comment's ID as `msg_id`. Success requires a positive `response.comment_id`. The request uses the existing API origin, bounded responses, and disabled redirects and connection retries.
 
 Drafts are not sent until Post comment is tapped. Diagnostics do not log comment bodies or tokens. The immediate local display escapes HTML and is replaced by the server's formatted comment when the refreshed page includes it.
 

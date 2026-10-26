@@ -45,7 +45,8 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         if (token.isBlank() || token == "null") throw ApiFailure(
             FailureKind.InvalidResponse, "The server did not return a login session. Please try again.",
         )
-        return Session(username, token, result.optString("refresh_token").takeUnless { it.isBlank() || it == "null" })
+        return Session(username, token, result.optString("refresh_token").takeUnless { it.isBlank() || it == "null" },
+            result.optLong("id").takeIf { it > 0 })
     }
 
     suspend fun categories(token: String?, hideAdult: Boolean = false): Map<ContentSection, List<ReleaseCategory>> {
@@ -106,11 +107,43 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             emptyRecordsAsArray = true).getJSONArray("response"))
     }
 
-    suspend fun postComment(id: Long, text: String, token: String): Long {
+    suspend fun postComment(id: Long, text: String, token: String, replyTo: Long? = null): Long {
         require(id > 0 && token.isNotBlank())
         require(text.isNotBlank() && text.length <= ReleaseComments.MAX_LENGTH)
+        require(replyTo == null || replyTo > 0)
         return ReleaseComments.confirmedId(request("release/comment", token,
-            form = mapOf("id" to id.toString(), "comment" to text.trim())))
+            form = buildMap {
+                put("id", id.toString()); put("comment", text.trim())
+                replyTo?.let { put("msg_id", it.toString()) }
+            }))
+    }
+
+    suspend fun messages(folder: MessageFolder, userId: Long, page: Int, token: String): MessagePage {
+        require(userId > 0 && page > 0)
+        val items = PrivateMessages.parse(request(
+            "message/${folder.apiPath}/$userId/page/$page/limit/$PAGE_SIZE/orderby/times/desc", token,
+            emptyRecordsAsArray = true))
+        return MessagePage(items, items.isNotEmpty())
+    }
+
+    suspend fun conversation(id: Long, token: String): List<PrivateMessage> {
+        require(id > 0)
+        return PrivateMessages.parse(request("message/$id/orderby/times/asc", token))
+    }
+
+    suspend fun markMessageRead(id: Long, token: String) {
+        require(id > 0)
+        PrivateMessages.confirm(request("message/$id/read", token, retryRead = false))
+    }
+
+    suspend fun replyToMessage(message: PrivateMessage, text: String, account: Session) {
+        val recipient = message.recipient(account.username)
+        require(message.messageId > 0 && recipient.isNotBlank())
+        require(text.isNotBlank() && text.length <= PrivateMessages.MAX_LENGTH)
+        PrivateMessages.confirm(request("message/reply/send", account.accessToken, form = mapOf(
+            "to" to recipient, "from" to account.username, "subject" to message.subject,
+            "content" to text.trim(), "reply" to message.messageId.toString(),
+        )))
     }
 
     suspend fun search(query: String, scope: SearchScope, page: Int, token: String?, hideAdult: Boolean = false): ReleasePage {
@@ -122,12 +155,13 @@ internal class MobilismApi(private val context: Context, private val diagnostics
     }
 
     private suspend fun request(path: String, token: String? = null, form: Map<String, String>? = null,
-        emptyRecordsAsArray: Boolean = false, hideAdult: Boolean = false): JSONObject =
+        emptyRecordsAsArray: Boolean = false, hideAdult: Boolean = false, retryRead: Boolean = true): JSONObject =
         withContext(Dispatchers.IO) {
             val operation = when {
                 path.startsWith("auth/") -> DiagnosticOperation.Login
                 path == "search" -> DiagnosticOperation.Search
                 "comment" in path -> DiagnosticOperation.Comments
+                path.startsWith("message/") -> DiagnosticOperation.Messages
                 path.endsWith("category") -> DiagnosticOperation.Categories
                 path.startsWith("post/") -> DiagnosticOperation.Reaction
                 else -> DiagnosticOperation.Releases
@@ -154,7 +188,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                 })
             }
             try {
-                val readOnly = form == null || path == "search"
+                val readOnly = retryRead && (form == null || path == "search")
                 val request = builder.build()
                 val transport = if (readOnly) readClient else client
                 var result = transport.newCall(request).await()

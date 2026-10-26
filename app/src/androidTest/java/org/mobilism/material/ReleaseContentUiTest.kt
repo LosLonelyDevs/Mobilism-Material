@@ -65,6 +65,24 @@ class ReleaseContentUiTest {
         assertNull(target)
     }
 
+    @Test fun bareReleaseUrlNavigatesInsideApp() {
+        var target: Long? = null
+        val url = "https://forum.mobilism.org/viewtopic.php?t=12345"
+        compose.setContent { MobilismTheme(reduceMotion = true) { TestRelease("<p>See $url.</p>") { target = it } } }
+        onView(allOf(isAssignableFrom(TextView::class.java), withText(containsString(url)))).perform(
+            GeneralClickAction(Tap.SINGLE, { view ->
+                val text = view as TextView
+                val spanned = text.text as Spanned
+                val span = spanned.getSpans(0, spanned.length, ClickableSpan::class.java).single()
+                val offset = spanned.getSpanStart(span) + 2
+                val line = text.layout.getLineForOffset(offset)
+                val position = IntArray(2).also(text::getLocationOnScreen)
+                floatArrayOf(position[0] + text.totalPaddingLeft + text.layout.getPrimaryHorizontal(offset) - text.scrollX,
+                    position[1] + text.totalPaddingTop + (text.layout.getLineTop(line) + text.layout.getLineBottom(line)) / 2f - text.scrollY)
+            }, Press.FINGER))
+        compose.runOnIdle { assertEquals(12345L, target) }
+    }
+
     @Test fun variantHeadingsAndNotesAreVisibleWithTheirMirrors() {
         val html = "<p>Two packages for different setups.</p><b>Download Instructions:</b><br>" +
             "<b>arm64-v8a:</b><br><a href='https://files.example.org/standard'>File</a><br>" +

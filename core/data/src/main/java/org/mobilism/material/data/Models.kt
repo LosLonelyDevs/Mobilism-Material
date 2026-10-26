@@ -74,7 +74,7 @@ sealed interface AuthState {
     data class SignedIn(val username: String) : AuthState
 }
 
-internal data class Session(val username: String, val accessToken: String, val refreshToken: String?) {
+internal data class Session(val username: String, val accessToken: String, val refreshToken: String?, val userId: Long? = null) {
     override fun toString(): String = "Session([redacted])"
 }
 
@@ -95,6 +95,6 @@ interface MobilismRepository {
     suspend fun release(id: Long): Release
     suspend fun toggleLike(release: Release): Boolean
     suspend fun comments(id: Long, page: Int): CommentPage
-    suspend fun postComment(id: Long, text: String): Long
+    suspend fun postComment(id: Long, text: String, replyTo: Long? = null): Long
     suspend fun search(query: String, scope: SearchScope, page: Int, filters: FeedFilters = FeedFilters()): ReleasePage
 }

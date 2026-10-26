@@ -6,9 +6,10 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 
 - Login, guest entry, account registration/password recovery screens, sign-out, and encrypted session storage.
 - Favourite starting section, Apps/Games/Books navigation, Latest/Top feeds, category multiselect, inclusive post-date filters, and pagination.
-- Release details, formatted text, parsed title metadata, collapsible description/changelog/mod/download sections, and paginated comments with signed-in posting.
+- Release details, formatted text with clickable URLs, parsed title metadata, collapsible description/changelog/mod/download sections, and paginated comments with signed-in posting and targeted replies.
+- Inbox and Sent tabs, conversation history, mark as read, and private message replies. Existing saved sessions need a fresh sign-in to store the account ID. Message deletion, new conversations, and notifications remain pending.
 - Full-screen images, zoom/paging, architecture groups, preferred hosts, host links, clipboard actions, and browser opening.
-- Material 3 Expressive components and motion, Frappé/Geist defaults, theme support, appearance preferences, and reduced motion. Theme import is hidden for now.
+- Material 3 Expressive components and motion, Frappé/Geist defaults, 13 themes including AMOLED Black, appearance preferences, and reduced motion. Theme import is hidden for now.
 - Premium settings for Mobilism Premium, MegaDebrid, and Real-Debrid, with encrypted credentials, account verification, supported-host indicators, and direct link resolution. Mobilism checks its live host list. Errors offer the original host; downloads still open in the browser.
 - Native release search with saved section/category/date filters, paginated results, artwork, empty/error states, and retry. Cards and release pages show the original post date.
 - My Applications with launcher-app discovery, installed-app search, optional system apps, downloaded marks, removal and Undo.
@@ -20,13 +21,13 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 | Area | Missing behavior | Main legacy reference |
 | --- | --- | --- |
 | Search and discovery | Discussion/other-result search, legacy advanced search filters, and remaining feed filters | `UI/Main/SearchActivity.java`, `logic/network/MobilismService.java` |
-| Release interaction | Reply/quote comments, editing/deletion, previous-version history, library actions beyond Apps | `UI/Release/ReleaseActivtiy.java`, `UI/Discussion/CommentActivity.java`, `res/menu/menu_releases.xml` |
+| Release interaction | Comment editing/deletion, previous-version history, library actions beyond Apps | `UI/Release/ReleaseActivtiy.java`, `UI/Discussion/CommentActivity.java`, `res/menu/menu_releases.xml` |
 | Forum sections | Announcements, Contests, Chitchat, Services, Suggestions & Feedback, discussion categories/topics/comments | `res/menu/activity_main_drawer.xml`, `UI/Discussion/` |
 | My Applications | Full non-launcher discovery, batch actions, save/copy/export, legacy data import | `UI/MyApplications/`, installed/downloaded/favorites action menus |
 | Version tracker | Full version history, broader matching for ambiguous/unversioned releases, large-library performance | `UI/VersionTracker/` |
 | Downloads | Native queue/progress, download state and files, destination selection, background operation, completion notifications, archive extraction, opening/installing APKs, failure/retry handling | `logic/download/`, `UI/Release/DownloadsActivity.java`, `UI/Settings/FilePickerActivity.java` |
 | Premium | Mobilism Premium trial/plans/payment flows | `UI/AMember/`, premium/payment API endpoints |
-| Messages | Message lists, conversation history, compose/reply, read state, deletion, unread notifications | `UI/Messages/`, message API endpoints |
+| Messages | New conversations, deletion, unread notifications | `UI/Messages/`, message API endpoints |
 | Settings and utilities | Notification preferences/sounds, content filters, cache controls, old listing options, download/extraction options, QR scanner, About, app-update flow | `res/xml/pref_general.xml`, `UI/QRCodeScanner/`, `UI/Settings/AboutActivity.java`, `logic/updater/` |
 
 ## Complete Compose and migration work
@@ -41,7 +42,7 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 
 1. Finish Apps: batch/library actions, release history, and broader matching coverage.
 2. Native download pipeline and Mobilism Premium trial/plans/payment flows.
-3. Comment replies/quotes, forum sections, private messages, and notifications.
+3. Forum sections, remaining private message actions, and notifications.
 4. Remaining settings/utilities, pure-Compose rich text, migration, and final parity testing.
 
 Following checks inspect up to three Apps search pages per app. A failed check preserves prior results; a missing match does not prove there is no newer version. Android controls background timing. Notifications need permission and are sent once per version. Without an installed match, checks use the followed release as the baseline. The library stays local and does not sync with the forum account.

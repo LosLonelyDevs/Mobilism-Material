@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import org.mobilism.material.designsystem.AppSurface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +26,7 @@ import java.util.Date
 
 @Composable
 fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRelease: ((Long) -> Unit)? = null,
+    onReply: (() -> Unit)? = null, replyEnabled: Boolean = true,
     onImage: (List<String>, Int) -> Unit) {
     AppSurface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -41,12 +41,7 @@ fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRelease: ((Lo
                 }
             }
             comment.quotes.forEach { quote ->
-                Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(quote.author, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
-                        ReleaseBody(quote.html, baseUrl, onRelease)
-                    }
-                }
+                QuotedReply(quote.author, quote.html, baseUrl, onRelease)
             }
             ReleaseBody(comment.contentHtml, baseUrl, onRelease)
             if (comment.images.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -55,6 +50,7 @@ fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRelease: ((Lo
                         .clickable { onImage(comment.images, index) }, contentScale = ContentScale.Fit)
                 }
             }
+            onReply?.let { org.mobilism.material.designsystem.AppTextButton("Reply", it, enabled = replyEnabled) }
         }
     }
 }

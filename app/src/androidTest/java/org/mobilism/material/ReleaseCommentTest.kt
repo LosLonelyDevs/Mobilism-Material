@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -155,6 +156,33 @@ class ReleaseCommentTest {
         compose.waitForIdle()
         compose.onNodeWithTag("comment-composer").assertExists()
         assertFalse(dismissed)
+    }
+
+    @Test fun replyButtonShowsQuotedContextAndRemovalKeepsDraft() {
+        val comment = ReleaseComment(77, "Author", null, 1, "Original comment",
+            quotes = listOf(CommentQuote("Earlier author", "Earlier comment")))
+        var composer by androidx.compose.runtime.mutableStateOf(CommentComposerState())
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            if (composer.open) ReleaseCommentComposer(composer, "Reader", "Sample release",
+                onEdit = { composer = composer.copy(draft = it) }, onPost = {},
+                onDismiss = { composer = composer.copy(open = false) }, onCheckComments = {},
+                onRemoveReply = { composer = composer.copy(replyTo = null) })
+            ReleaseCommentCard(comment, "https://forum.mobilism.org/", onReply = {
+                composer = composer.copy(open = true, replyTo = CommentReplyTarget(comment.id, comment.author, comment.contentHtml))
+            }, onImage = { _, _ -> })
+        } }
+        compose.onNodeWithText("Replying to Earlier author").assertIsDisplayed()
+        compose.onNodeWithText("Show quote").performClick()
+        compose.onNodeWithText("Hide quote").assertIsDisplayed()
+        compose.onNodeWithText("Reply", substring = false).performClick()
+        compose.onNodeWithText("Reply to comment").assertIsDisplayed()
+        compose.onNodeWithText("Replying to Author").assertIsDisplayed()
+        compose.onNodeWithTag("comment-draft").performTextInput("My reply")
+        capture("comment-reply")
+        compose.onNodeWithText("Remove reply").performScrollTo().performClick()
+        compose.onNodeWithTag("comment-draft").assertTextContains("My reply")
+        compose.onNodeWithText("Post comment").assertExists()
+        assertNull(composer.replyTo)
     }
 
     private fun capture(name: String) {

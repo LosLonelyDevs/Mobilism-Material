@@ -129,6 +129,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onSearch = { nav.navigate("search") { launchSingleTop = true } },
                 onLibrary = { nav.navigate("library") { launchSingleTop = true } },
                 onFollowing = { nav.navigate("following") { launchSingleTop = true } },
+                onMessages = { nav.navigate("messages") { launchSingleTop = true } },
                 onSignOut = model::signOut,
                 categories = categories, onLoadCategories = model::loadCategories, onFilters = model::applyFilters,
             )
@@ -171,6 +172,22 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 app.followNotifications, model.library, followingModel::refresh, followingModel::checkNow, followingModel::link,
                 onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() })
         }
+        composable("messages") { entry ->
+            if (auth is AuthState.SignedIn) {
+                val messages: MessagesViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
+                    initializer { MessagesViewModel(app.repository, auth.username, createSavedStateHandle()) }
+                })
+                val state by messages.state.collectAsStateWithLifecycle()
+                MessagesScreen(state, auth.username, onFolder = messages::selectFolder,
+                    onRefresh = { messages.loadMailbox(refresh = true) }, onMore = { messages.loadMailbox() },
+                    onOpen = messages::openMessage, onRead = messages::markRead,
+                    onBack = { if (state.conversationId != null) messages.closeConversation() else nav.popBackStack() },
+                    onSignIn = model::signOut, onRefreshConversation = messages::loadConversation,
+                    onReply = messages::openReply, onEdit = messages::editReply, onSend = messages::sendReply,
+                    onCloseReply = messages::closeReply, onNoticeShown = messages::noticeShown,
+                    onRelease = { nav.navigate("release/$it") })
+            }
+        }
         composable("settings") {
             val hideAdult by model.contentPreferences.hideAdult.collectAsStateWithLifecycle()
             SettingsScreen(debrid, model.debrid, onAppearance = { nav.navigate("appearance") },
@@ -209,6 +226,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onWriteComment = detail::openComposer, onEditComment = detail::editComment,
                 onPostComment = detail::postComment, onCloseComposer = detail::closeComposer,
                 onRefreshComments = detail::refreshComments,
+                onReplyToComment = detail::replyToComment, onRemoveReply = detail::clearCommentReply,
                 onRelease = { topic -> if (topic != id) nav.navigate("release/$topic") { launchSingleTop = true } },
                 onResolveDownload = model.debrid::resolve,
                 watched = library.any { item -> item.watched && state.release?.let { org.mobilism.material.data.ReleaseVersions.sameApp(item.release, it) } == true },
