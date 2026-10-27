@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add Home tabs for Apps, Books, and Games with featured releases, latest and popular collections, category shortcuts, reviews, and recent discussions. Adapt Orion Store's hero and shape patterns for Material 3 Expressive.
+- Add Discussions with Apps, Games, Books, and Community forums, topic search, original posts, and paged comments. Keep drafts and quoted replies with their topic.
 - Add Inbox and Sent tabs, conversation history, mark as read, and private message replies.
 - Reply to release comments with quoted context. Keep reply targets with unfinished drafts.
 - Make plain URLs clickable in release text, comments, and messages.

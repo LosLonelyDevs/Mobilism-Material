@@ -1,6 +1,8 @@
 package org.mobilism.material.ui
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +52,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,6 +82,7 @@ import org.mobilism.material.designsystem.ExpressiveCard
 import org.mobilism.material.designsystem.LoadingState
 import org.mobilism.material.designsystem.LocalAppTheme
 import org.mobilism.material.designsystem.focusOutline
+import org.mobilism.material.designsystem.StoreTabContent
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -99,12 +103,18 @@ fun FeedScreen(
     onLoadCategories: () -> Unit,
     onFilters: (FeedFilters) -> Unit,
     onMessages: () -> Unit = {},
+    onDiscussions: () -> Unit = {},
+    tab: BrowseTab = if (state.order == FeedOrder.Latest) BrowseTab.Latest else BrowseTab.Top,
+    onTab: (BrowseTab) -> Unit = { onOrder(if (it == BrowseTab.Top) FeedOrder.Top else FeedOrder.Latest) },
+    onHomeRefresh: () -> Unit = {},
+    homeContent: (@Composable (() -> Unit) -> Unit)? = null,
 ) {
     val theme = LocalAppTheme.current
     val sectionStyle = state.section.style()
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val savedTabs = rememberSaveableStateHolder()
     val scroll = TopAppBarDefaults.pinnedScrollBehavior()
     var showFilters by remember { mutableStateOf(false) }
     val openFilters = { onLoadCategories(); showFilters = true }
@@ -113,8 +123,8 @@ fun FeedScreen(
         state = categories, initial = state.filters, onRetry = onLoadCategories,
         onApply = onFilters, onDismiss = { showFilters = false },
     )
-    LaunchedEffect(listState, state.items.size, state.busy, state.canLoadMore, state.error) {
-        if (state.items.isNotEmpty() && !state.busy && state.canLoadMore && state.error == null && !state.awaitingMore) {
+    LaunchedEffect(tab, listState, state.items.size, state.busy, state.canLoadMore, state.error) {
+        if (tab != BrowseTab.Home && state.items.isNotEmpty() && !state.busy && state.canLoadMore && state.error == null && !state.awaitingMore) {
             snapshotFlow { (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.items.size - 3 }
                 .distinctUntilChanged().filter { it }.collect { onMore() }
         }
@@ -122,7 +132,7 @@ fun FeedScreen(
     ModalNavigationDrawer(
         drawerState = drawer,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(Modifier.verticalScroll(rememberScrollState())) {
                 AppHeading("Mobilism", HeadingLevel.Page, Modifier.padding(24.dp), style = MaterialTheme.typography.headlineMedium)
                 Text((auth as? AuthState.SignedIn)?.username ?: "Guest", Modifier.padding(horizontal = 24.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Alphabetical.sorted(ContentSection.entries) { it.label }.forEach { section ->
@@ -142,6 +152,14 @@ fun FeedScreen(
                     )
                 }
                 HorizontalDivider(Modifier.padding(16.dp))
+                val discussionsInteraction = remember { MutableInteractionSource() }
+                NavigationDrawerItem(
+                    label = { Text("Discussions") }, selected = false,
+                    icon = { Icon(Icons.Outlined.ChatBubbleOutline, null, tint = theme.reading) },
+                    onClick = { scope.launch { drawer.close() }; onDiscussions() },
+                    interactionSource = discussionsInteraction,
+                    modifier = Modifier.padding(horizontal = 12.dp).focusOutline(discussionsInteraction),
+                )
                 NavigationDrawerItem(
                     label = { Text("Following") }, selected = false,
                     icon = { Icon(Icons.Outlined.Bookmarks, null, tint = theme.success) },
@@ -191,7 +209,7 @@ fun FeedScreen(
                     actions = {
                         AppIconButton(Icons.Outlined.Search, "Search releases", onSearch)
                         AppIconButton(Icons.Outlined.FilterList, "Filters", openFilters)
-                        AppIconButton(Icons.Outlined.Refresh, "Refresh", onRefresh)
+                        AppIconButton(Icons.Outlined.Refresh, "Refresh", if (tab == BrowseTab.Home) onHomeRefresh else onRefresh)
                     },
                     scrollBehavior = scroll,
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -203,40 +221,48 @@ fun FeedScreen(
             },
         ) { padding ->
             Column(Modifier.padding(padding)) {
-                PrimaryTabRow(selectedTabIndex = state.order.ordinal) {
-                    FeedOrder.entries.forEach { order ->
+                val tabs = if (homeContent != null) BrowseTab.entries else listOf(BrowseTab.Latest, BrowseTab.Top)
+                PrimaryTabRow(selectedTabIndex = tabs.indexOf(tab).coerceAtLeast(0)) {
+                    tabs.forEach { item ->
                         val interaction = remember { MutableInteractionSource() }
                         Tab(
-                            selected = state.order == order, onClick = { onOrder(order) },
-                            selectedContentColor = if (order == FeedOrder.Latest) MaterialTheme.colorScheme.tertiary else theme.featured,
+                            selected = tab == item, onClick = { onTab(item) },
+                            selectedContentColor = sectionStyle.accent,
                             interactionSource = interaction, modifier = Modifier.focusOutline(interaction),
-                            text = { Text(order.label) },
+                            text = { Text(item.label) },
                         )
                     }
                 }
-                ActiveFilterSummary(state.filters, openFilters, { onFilters(FeedFilters()) })
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.widthIn(max = 840.dp).fillMaxSize(),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(state.items, key = { it.id }, contentType = { "release" }) { release ->
-                            ReleaseCard(release, sectionStyle.accent, { onRelease(release.id) })
-                        }
-                        if (state.busy) item(key = "loading") { LoadingState("Loading releases…", Modifier.fillMaxWidth()) }
-                        state.error?.let { error -> item(key = "error") {
-                            ErrorPanel(error, onRetry = if (state.items.isEmpty()) onRefresh else onMore)
-                        } }
-                        if (!state.busy && state.error == null && state.awaitingMore) item(key = "continue") {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("No matches in the posts just checked.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                org.mobilism.material.designsystem.ExpressiveButton(onMore, Modifier.fillMaxWidth()) { Text("Keep looking") }
+                StoreTabContent(tab, Modifier.weight(1f)) { selectedTab ->
+                    savedTabs.SaveableStateProvider("${state.section}-$selectedTab") {
+                        if (selectedTab == BrowseTab.Home && homeContent != null) homeContent(openFilters)
+                        else Column {
+                            ActiveFilterSummary(state.filters, openFilters, { onFilters(FeedFilters()) })
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier.widthIn(max = 840.dp).fillMaxSize(),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    items(state.items, key = { it.id }, contentType = { "release" }) { release ->
+                                        ReleaseCard(release, sectionStyle.accent, { onRelease(release.id) })
+                                    }
+                                    if (state.busy) item(key = "loading") { LoadingState("Loading releases…", Modifier.fillMaxWidth()) }
+                                    state.error?.let { error -> item(key = "error") {
+                                        ErrorPanel(error, onRetry = if (state.items.isEmpty()) onRefresh else onMore)
+                                    } }
+                                    if (!state.busy && state.error == null && state.awaitingMore) item(key = "continue") {
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text("No matches in the posts just checked.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            org.mobilism.material.designsystem.ExpressiveButton(onMore, Modifier.fillMaxWidth()) { Text("Keep looking") }
+                                        }
+                                    }
+                                    if (!state.busy && state.error == null && state.items.isEmpty() && !state.canLoadMore) item(key = "empty") {
+                                        Text("No releases found.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge)
+                                    }
+                                }
                             }
-                        }
-                        if (!state.busy && state.error == null && state.items.isEmpty() && !state.canLoadMore) item(key = "empty") {
-                            Text("No releases found.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge)
                         }
                     }
                 }

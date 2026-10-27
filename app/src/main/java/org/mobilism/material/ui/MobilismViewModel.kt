@@ -86,6 +86,16 @@ class MobilismViewModel(
 
     fun releaseSignInHandled() { releaseAfterSignIn = null }
 
+    var discussionAfterSignIn: Pair<org.mobilism.material.data.DiscussionTopic, org.mobilism.material.data.DiscussionCategory?>? = null
+        private set
+
+    fun signInForDiscussion(topic: org.mobilism.material.data.DiscussionTopic, category: org.mobilism.material.data.DiscussionCategory?) {
+        discussionAfterSignIn = topic to category
+        signOut()
+    }
+
+    fun discussionSignInHandled() { discussionAfterSignIn = null }
+
     init {
         var previousVisibility = contentPreferences.hideAdult.value
         viewModelScope.launch {
@@ -133,6 +143,7 @@ class MobilismViewModel(
     fun continueAsGuest() = authAction {
         repository.continueAsGuest()
         releaseAfterSignIn = null
+        discussionAfterSignIn = null
     }
 
     private fun authAction(block: suspend () -> Unit) {

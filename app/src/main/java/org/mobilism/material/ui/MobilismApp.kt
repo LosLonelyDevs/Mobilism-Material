@@ -8,6 +8,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -24,6 +28,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import org.mobilism.material.MobilismApplication
 import org.mobilism.material.data.AuthState
+import org.mobilism.material.data.DiscussionCategory
+import org.mobilism.material.data.DiscussionTopic
+import org.mobilism.material.data.FeedFilters
+import org.mobilism.material.data.FeedOrder
 import org.mobilism.material.designsystem.LoadingState
 import org.mobilism.material.designsystem.screenMotion
 
@@ -93,6 +101,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     val library by model.library.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val app = context.applicationContext as MobilismApplication
+    var homeForum by remember { mutableStateOf<Pair<DiscussionTopic?, DiscussionCategory>?>(null) }
     val start = androidx.compose.runtime.remember { if (model.preferredSection == null) "favourite" else "feed" }
     LaunchedEffect(Unit) {
         if (start == "feed") model.loadFeed(refresh = true)
@@ -100,6 +109,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             nav.navigate("release/$it") { launchSingleTop = true }
             model.releaseSignInHandled()
         }
+        if (auth is AuthState.SignedIn && model.discussionAfterSignIn != null) nav.navigate("discussions") { launchSingleTop = true }
     }
     LaunchedEffect(notificationRelease) {
         notificationRelease?.takeIf { it > 0 }?.let { id ->
@@ -119,19 +129,54 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 nav.navigate("feed") { popUpTo("favourite") { inclusive = true }; launchSingleTop = true }
             }
         }
-        composable("feed") {
+        composable("feed") { entry ->
+            val home: HomeViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
+                initializer { HomeViewModel(app.repository, feed.section, model.contentPreferences.hideAdult) }
+            })
+            val homeState by home.state.collectAsStateWithLifecycle()
+            var tab by rememberSaveable(feed.section) { mutableStateOf(BrowseTab.Home) }
+            LaunchedEffect(feed.section) { home.selectSection(feed.section) }
+            val openRelease: (Long) -> Unit = { nav.navigate("release/$it") { launchSingleTop = true } }
+            val openFeed: (FeedOrder, FeedFilters) -> Unit = { order, filters ->
+                model.selectOrder(order)
+                model.applyFilters(filters)
+                tab = if (order == FeedOrder.Top) BrowseTab.Top else BrowseTab.Latest
+            }
             FeedScreen(
                 state = feed, auth = auth,
-                onSection = model::selectSection, onOrder = model::selectOrder,
+                onSection = { home.selectSection(it); model.selectSection(it) }, onOrder = model::selectOrder,
                 onRefresh = { model.loadFeed(refresh = true) }, onMore = { model.loadFeed() },
-                onRelease = { id -> nav.navigate("release/$id") { launchSingleTop = true } },
+                onRelease = openRelease,
                 onSettings = { nav.navigate("settings") { launchSingleTop = true } },
                 onSearch = { nav.navigate("search") { launchSingleTop = true } },
                 onLibrary = { nav.navigate("library") { launchSingleTop = true } },
                 onFollowing = { nav.navigate("following") { launchSingleTop = true } },
                 onMessages = { nav.navigate("messages") { launchSingleTop = true } },
+                onDiscussions = { nav.navigate("discussions") { launchSingleTop = true } },
                 onSignOut = model::signOut,
-                categories = categories, onLoadCategories = model::loadCategories, onFilters = model::applyFilters,
+                categories = categories, onLoadCategories = model::loadCategories,
+                onFilters = { filters -> openFeed(if (tab == BrowseTab.Top) FeedOrder.Top else FeedOrder.Latest, filters) },
+                tab = tab, onTab = { selected ->
+                    tab = selected
+                    if (selected != BrowseTab.Home) model.selectOrder(if (selected == BrowseTab.Top) FeedOrder.Top else FeedOrder.Latest)
+                },
+                onHomeRefresh = home::refresh,
+                homeContent = { openCategories ->
+                    key(homeState.section) {
+                        HomeScreen(homeState, home::retry, openRelease,
+                            onMore = { openFeed(it, FeedFilters()) },
+                            onCategory = { openFeed(FeedOrder.Latest, FeedFilters(categoryIds = setOf(it.id))) },
+                            onCategories = openCategories,
+                            onTopic = { topic, category ->
+                                homeForum = topic to category
+                                nav.navigate("discussions") { launchSingleTop = true }
+                            },
+                            onForum = { category ->
+                                homeForum = null to category
+                                nav.navigate("discussions") { launchSingleTop = true }
+                            })
+                    }
+                },
             )
         }
         composable("search?query={query}", arguments = listOf(navArgument("query") { defaultValue = "" })) { entry ->
@@ -171,6 +216,17 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             FollowingScreen(library, installed, check, error, preferences, followingModel.preferences,
                 app.followNotifications, model.library, followingModel::refresh, followingModel::checkNow, followingModel::link,
                 onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() })
+        }
+        composable("discussions") { entry ->
+            val discussions: DiscussionsViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
+                initializer {
+                    val pending = model.discussionAfterSignIn ?: homeForum
+                    homeForum = null
+                    model.discussionSignInHandled()
+                    DiscussionsViewModel(app.repository, (auth as? AuthState.SignedIn)?.username, createSavedStateHandle(), pending?.first, pending?.second)
+                }
+            })
+            DiscussionsScreen(discussions, auth, onBack = { nav.popBackStack() }, onSignIn = model::signInForDiscussion)
         }
         composable("messages") { entry ->
             if (auth is AuthState.SignedIn) {

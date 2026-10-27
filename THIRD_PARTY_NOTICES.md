@@ -20,6 +20,18 @@ Themes use the supplied Catppuccin, Rosé Pine, Solarized, Atom One, Tokyo, and 
 
 Project: https://github.com/catppuccin/catppuccin
 
+## Orion Store
+
+The Home hero composition, category shape selection, and polygon morph implementation adapt code from Orion Store by RookieEnough and contributors, at commit `bffea4103b05120904a9e0d1a8f3f0cac594c553`.
+
+Source files: `app/src/main/java/com/orion/store/ui/Common.kt` and `app/src/main/java/com/orion/store/ui/StoreScreen.kt`.
+
+Project: https://github.com/RookieEnough/Orion-Store
+
+License: GNU General Public License, version 3. The full license is bundled in `core/designsystem/src/main/res/raw/orion_gpl3.txt`. Adapted portions retain GPL-3.0 terms; the combined app remains AGPL-3.0 under the licenses' section 13 combination provision.
+
+Changes: Mobilism content and theme roles, shared focus/state feedback, manual hero paging, reduced-motion behavior, and section-specific layouts. Orion branding, catalog data, and installer code are not included.
+
 ## Libraries
 
 Gradle resolves AndroidX/Jetpack Compose, Kotlin, coroutines, OkHttp, Coil, and jsoup from their configured repositories. Their upstream licenses remain applicable. The app's project license does not replace bundled assets' or dependencies' licenses.

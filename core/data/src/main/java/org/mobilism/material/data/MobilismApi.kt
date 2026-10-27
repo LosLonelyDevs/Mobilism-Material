@@ -118,6 +118,36 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             }))
     }
 
+    suspend fun discussionCategories(area: DiscussionArea, token: String?): List<DiscussionCategory> =
+        DiscussionJson.categories(request(if (area == DiscussionArea.Community) "other/category" else "discussion/categories", token), area)
+
+    suspend fun discussionTopics(category: DiscussionCategory, page: Int, query: String, token: String?, includePinned: Boolean = true): DiscussionPage {
+        require(page > 0)
+        if (query.isNotBlank()) return DiscussionJson.page(request("search", token, form = mapOf(
+            "search" to query.trim(), "count" to page.toString(), "limits" to PAGE_SIZE.toString(),
+            "isrelease" to "0", "isdiscussion" to if (category.kind == DiscussionKind.Discussion) "1" else "0",
+            "isother" to if (category.kind == DiscussionKind.Other) "1" else "0",
+            "id" to if (category.id == 12L) "all" else category.id.toString(),
+        )), category.kind, search = true)
+        return DiscussionJson.page(request("${category.kind.path}/category/${category.apiId}/page/$page/limit/$PAGE_SIZE/orderby/topic_last_post_time/desc/${if (includePinned) 1 else 0}",
+            token, emptyRecordsAsArray = true), category.kind)
+    }
+
+    suspend fun discussionComments(topic: DiscussionTopic, page: Int, token: String?): CommentPage {
+        require(topic.id > 0 && page > 0)
+        return CommentJson.page(request("${topic.kind.path}/${topic.id}/comments/page/$page/limit/$PAGE_SIZE/orderby/date/desc",
+            token, emptyRecordsAsArray = true).getJSONArray("response"))
+    }
+
+    suspend fun postDiscussionComment(topic: DiscussionTopic, text: String, replyTo: Long?, token: String): Long {
+        require(topic.id > 0 && token.isNotBlank() && text.isNotBlank() && text.length <= ReleaseComments.MAX_LENGTH)
+        require(replyTo == null || replyTo > 0)
+        return ReleaseComments.confirmedId(request("${topic.kind.path}/comment", token, form = buildMap {
+            put("id", topic.id.toString()); put("comment", text.trim())
+            replyTo?.let { put("msg_id", it.toString()) }
+        }))
+    }
+
     suspend fun messages(folder: MessageFolder, userId: Long, page: Int, token: String): MessagePage {
         require(userId > 0 && page > 0)
         val items = PrivateMessages.parse(request(

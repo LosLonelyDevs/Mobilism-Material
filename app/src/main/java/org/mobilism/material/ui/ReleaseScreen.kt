@@ -316,6 +316,7 @@ fun ReleaseScreen(
 internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Unit)? = null) {
     val context = LocalContext.current
     val currentOnRelease = androidx.compose.runtime.rememberUpdatedState(onRelease)
+    val currentForumLinkHandler = androidx.compose.runtime.rememberUpdatedState(LocalForumLinkHandler.current)
     val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
     val textSize = MaterialTheme.typography.bodyLarge.fontSize.value
@@ -336,7 +337,9 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
                     override fun onClick(widget: View) {
                         val topic = org.mobilism.material.ReleaseLinks.topicId(link.url)
                         val navigate = currentOnRelease.value
-                        if (topic != null && navigate != null) navigate(topic) else openWeb(context, link.url)
+                        val forumHandler = currentForumLinkHandler.value
+                        if (forumHandler != null) forumHandler(link.url)
+                        else if (topic != null && navigate != null) navigate(topic) else openWeb(context, link.url)
                     }
                 }, start, end, flags)
             }

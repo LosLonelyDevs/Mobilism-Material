@@ -7,7 +7,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class DefaultMobilismRepository(context: Context, private val contentPreferences: ContentPreferencesStore = ContentPreferencesStore(context),
-    diagnostics: DiagnosticLogger = DiagnosticLogger.None, client: okhttp3.OkHttpClient = okhttp3.OkHttpClient()) : MobilismRepository, MessagesRepository {
+    diagnostics: DiagnosticLogger = DiagnosticLogger.None, client: okhttp3.OkHttpClient = okhttp3.OkHttpClient()) : MobilismRepository, MessagesRepository, DiscussionsRepository, HomeRepository {
     private val api = MobilismApi(context.applicationContext, diagnostics, client)
     private val store = SessionStore(context.applicationContext)
     private val reactions = context.getSharedPreferences("release-reactions", Context.MODE_PRIVATE)
@@ -135,6 +135,36 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         val account = session?.takeIf { it.accessToken == token }
             ?: throw ApiFailure(FailureKind.Credentials, "Sign in to post a comment.")
         api.postComment(id, text, account.accessToken, replyTo)
+    }
+
+    override suspend fun discussionCategories(area: DiscussionArea) = withSession { api.discussionCategories(area, it) }
+
+    override suspend fun homeReleases(section: ContentSection, order: FeedOrder) =
+        releases(section, order, 1, FeedFilters()).items.take(12)
+
+    override suspend fun homeCategories(section: ContentSection) = categories(section)
+
+    override suspend fun homeReviews(section: ContentSection): HomeTopics? = withSession { token ->
+        val category = api.discussionCategories(section.discussionArea(), token)
+            .firstOrNull { Regex("\\breviews?\\b", RegexOption.IGNORE_CASE).containsMatchIn(it.name) }
+            ?: return@withSession null
+        HomeTopics(category, api.discussionTopics(category, 1, "", token, includePinned = false).items.take(3))
+    }
+
+    override suspend fun homeDiscussions(section: ContentSection): HomeTopics = withSession { token ->
+        val category = DiscussionCategory(12, "Recent discussions", section.discussionArea())
+        HomeTopics(category, api.discussionTopics(category, 1, "", token, includePinned = false).items.take(3))
+    }
+
+    override suspend fun discussionTopics(category: DiscussionCategory, page: Int, query: String) =
+        withSession { api.discussionTopics(category, page, query, it) }
+
+    override suspend fun discussionComments(topic: DiscussionTopic, page: Int) = withSession { api.discussionComments(topic, page, it) }
+
+    override suspend fun postDiscussionComment(topic: DiscussionTopic, text: String, replyTo: Long?) = withSession { token ->
+        val account = session?.takeIf { it.accessToken == token }
+            ?: throw ApiFailure(FailureKind.Credentials, "Sign in to join this discussion.")
+        api.postDiscussionComment(topic, text, replyTo, account.accessToken)
     }
 
     override suspend fun messages(folder: MessageFolder, page: Int): MessagePage = withMessageSession { account ->
