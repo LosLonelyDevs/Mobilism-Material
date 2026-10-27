@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.1.15
+## 0.1.16
 
 - Keep your app list and search scroll position when returning from a release.
 - Add Home tabs for Apps, Books, and Games with featured releases, latest and popular collections, categories, reviews, and recent discussions.
