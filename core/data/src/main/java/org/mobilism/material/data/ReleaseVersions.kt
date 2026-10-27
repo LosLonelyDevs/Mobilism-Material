@@ -54,7 +54,8 @@ object ReleaseVersions {
     }
 
     private fun numeric(version: String?): List<BigInteger>? = version?.let {
-        if (!Regex("(?i)^\\d+(?:\\.\\d+)*(?:[-.]?(?:alpha|beta|rc)\\d*)?(?:\\+[\\w.-]+)?$").matches(it)) return null
+        // Single-letter distribution suffixes keep numeric ordering; unknown qualifiers stay uncomparable.
+        if (!Regex("(?i)^\\d+(?:\\.\\d+)*(?:[-.]?(?:alpha|beta|rc)\\d*)?(?:-[a-z])?(?:\\+[\\w.-]+)?$").matches(it)) return null
         Regex("^\\d+(?:\\.\\d+)*").find(it)?.value?.split('.')?.map(String::toBigInteger)
     }
     private fun compareParts(a: List<BigInteger>, b: List<BigInteger>): Int {

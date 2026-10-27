@@ -3,6 +3,9 @@ package org.mobilism.material
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -19,6 +22,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mobilism.material.data.*
 import org.mobilism.material.designsystem.MobilismTheme
+import org.mobilism.material.designsystem.SolarizedDark
+import org.mobilism.material.settings.DeveloperPreferences
 import org.mobilism.material.ui.*
 
 @RunWith(AndroidJUnit4::class)
@@ -76,6 +81,58 @@ class PremiumSettingsTest {
         compose.onNodeWithText("by A. Writer").assertIsDisplayed()
         compose.onNodeWithText("Night Watch #2").assertIsDisplayed()
         compose.onNodeWithText("ePUB").assertIsDisplayed()
+    }
+
+    @Test fun verifiedMegaAccountOnlyOffersSignInAgainWhenValidationFails() {
+        var state by mutableStateOf(DebridState(listOf(DebridAccount(DebridProvider.MegaDebrid,
+            configured = true, validated = true, hostsVerified = true,
+            hosts = listOf(SupportedHost("send.now", "Send.now"))))))
+        compose.setContent { MobilismTheme(theme = SolarizedDark, reduceMotion = true) {
+            SettingsScreen(state, DebridRepository(compose.activity), {}, {}, {},
+                developer = DeveloperPreferences(debridEnabled = true))
+        } }
+        scrollTo("1 Mobilism host")
+        compose.onNodeWithContentDescription("Account verified").assertIsDisplayed()
+        compose.onNodeWithText("Sign in again").assertDoesNotExist()
+        compose.runOnIdle { state = state.copy(accounts = state.accounts.map { it.copy(validated = false) }) }
+        scrollTo("Sign in again")
+        compose.onNodeWithText("Sign in again").assertIsDisplayed().performClick()
+        scrollTo("MegaDebrid username")
+        compose.onNodeWithText("MegaDebrid username").assertIsDisplayed()
+    }
+
+    @Test fun hostMenuUsesRowCenterAndFitsAllProviderNamesOnOneLine() {
+        val rapidgator = SupportedHost("rapidgator.net", "Rapidgator")
+        val state = DebridState(DebridProvider.entries.map { provider ->
+            DebridAccount(provider, configured = true, validated = true, hostsVerified = true,
+                hosts = if (provider == DebridProvider.RealDebrid) listOf(rapidgator, SupportedHost("send.now", "Send.now"))
+                    else listOf(rapidgator))
+        })
+        compose.setContent { MobilismTheme(theme = SolarizedDark, reduceMotion = true) {
+            SettingsScreen(state, DebridRepository(compose.activity), {}, {}, {},
+                developer = DeveloperPreferences(debridEnabled = true))
+        } }
+        scrollTo("2 Mobilism hosts")
+        val label = compose.onNodeWithText("2 Mobilism hosts")
+        val bounds = label.fetchSemanticsNode().boundsInRoot
+        val left = compose.onAllNodesWithContentDescription("Verify account and refresh hosts").onLast().fetchSemanticsNode().boundsInRoot
+        val right = compose.onAllNodesWithContentDescription("Remove account").onLast().fetchSemanticsNode().boundsInRoot
+        assertEquals((left.right + right.left) / 2, bounds.center.x, 1f)
+        label.performClick()
+        val providers = compose.onNodeWithText("Real-Debrid · MegaDebrid · Mobilism Premium", useUnmergedTree = true)
+        providers.assertIsDisplayed()
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        providers.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertEquals(1, layouts.single().lineCount)
+        val bitmap = compose.onNode(isPopup()).captureToImage().asAndroidBitmap()
+        val directory = java.io.File(compose.activity.getExternalFilesDir(null), "download-polish")
+        check(directory.mkdirs() || directory.isDirectory)
+        java.io.File(directory, "host-menu.png").outputStream().use {
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+        }
+        val layout = layouts.single()
+        assertFalse("Provider names should fit without truncation", layout.isLineEllipsized(0))
+        assertTrue("Provider names should fit within the menu", layout.multiParagraph.maxIntrinsicWidth <= layout.size.width)
     }
 
     @Test fun categoriesRenderAlphabeticallyAndKeepTheirIds() {

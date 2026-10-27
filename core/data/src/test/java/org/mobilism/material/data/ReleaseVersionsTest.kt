@@ -24,4 +24,19 @@ class ReleaseVersionsTest {
     @Test fun unknownVersionDoesNotInventAnUpdate() {
         assertFalse(ReleaseVersions.isNewer(release(2, "Tool"), release(1, "Tool")))
     }
+
+    @Test fun singleLetterDistributionSuffixesKeepNumericOrderingWithoutLexicalUpdates() {
+        fun version(value: String) = ReleaseTitles.parse("Tool v$value")
+        assertTrue(ReleaseVersions.compare(version("1.9.9.43-g"), version("1.9.9.31-g"))!! > 0)
+        assertTrue(ReleaseVersions.compare(version("1.9.9.43-d"), version("1.9.9.31-g"))!! > 0)
+        assertTrue(ReleaseVersions.compare(version("1.10-f"), version("1.9-g"))!! > 0)
+        assertEquals(0, ReleaseVersions.compare(version("1.9.9.43-g"), version("1.9.9.43-d")))
+        assertEquals(0, ReleaseVersions.compare(version("1.9.9.43-g"), version("1.9.9.43")))
+        assertFalse(ReleaseVersions.newerThan(version("1.9.3.21"), version("1.9.9.31-g")))
+        assertNull(ReleaseVersions.compare(ReleaseTitle("Tool", "custom"), version("1.0-g")))
+        assertNull(ReleaseVersions.compare(version("1.0--broken"), version("1.0-g")))
+        assertNull(ReleaseVersions.compare(version("2.0-unknown"), version("1.0-g")))
+        assertFalse(ReleaseVersions.newerThan(version("2.0-rc1-g"), version("1.0-g")))
+        assertFalse(ReleaseVersions.newerThan(version("2.0-nightly"), version("1.0-g")))
+    }
 }

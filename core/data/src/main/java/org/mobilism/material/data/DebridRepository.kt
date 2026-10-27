@@ -77,6 +77,7 @@ object HostMatcher {
             matches(url, "rapidgator.net") || matches(url, "rg.to") -> "Rapidgator"
             matches(url, "mega.nz") -> "MEGA"
             matches(url, "mediafire.com") -> "MediaFire"
+            matches(url, "github.com") -> "GitHub"
             matches(url, "1fichier.com") -> "1fichier"
             matches(url, "upfilesgo.com") || matches(url, "upfiles.com") -> "UpFiles"
             matches(url, "uploadrar.com") || matches(url, "uploadrar.net") -> "Uploadrar"

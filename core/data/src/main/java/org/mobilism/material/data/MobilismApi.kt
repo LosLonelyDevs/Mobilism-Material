@@ -93,7 +93,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                 source.request(MAX_RESPONSE_BYTES + 1)
                 if (source.buffer.size > MAX_RESPONSE_BYTES) throw ApiFailure(FailureKind.InvalidResponse, "The forum response was too large.")
                 ReleaseLikes.postId(source.readUtf8())
-                    ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum did not return this post's thumbs-up action.")
+                    ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum did not return the original post. Try again later.")
             }
         }
         val response = request("post/like", token, mapOf("id" to postId.toString())).getJSONObject("response")

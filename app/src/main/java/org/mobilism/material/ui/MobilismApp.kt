@@ -285,6 +285,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onReplyToComment = detail::replyToComment, onRemoveReply = detail::clearCommentReply,
                 onRelease = { topic -> if (topic != id) nav.navigate("release/$topic") { launchSingleTop = true } },
                 onResolveDownload = model.debrid::resolve,
+                onDownloadHosts = model.downloads::discover,
                 watched = library.any { item -> item.watched && state.release?.let { org.mobilism.material.data.ReleaseVersions.sameApp(item.release, it) } == true },
                 downloaded = library.any { it.downloaded && it.release.id == state.release?.id },
                 onWatch = { enabled -> state.release?.let { model.library.watch(it, enabled) } },

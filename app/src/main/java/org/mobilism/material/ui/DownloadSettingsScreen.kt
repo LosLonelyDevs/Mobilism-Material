@@ -3,6 +3,7 @@ package org.mobilism.material.ui
 import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.lerp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -61,6 +61,7 @@ import org.mobilism.material.settings.DownloadPreferencesStore
 @Composable
 fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreferencesStore, repository: DebridRepository, onBack: () -> Unit) {
     val theme = LocalAppTheme.current
+    val colors = MaterialTheme.colorScheme
     val debrid by repository.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
@@ -118,7 +119,7 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
                 }
             }
             item {
-                CollapsibleSection("host-preferences", "Preferred file hosts", Icons.Outlined.StarOutline, theme.featured) {
+                CollapsibleSection("host-preferences", "Preferred file hosts", Icons.Outlined.StarOutline, colors.primary) {
                     Text("Selected hosts appear first within each architecture group. Other mirrors remain available.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (busy && state.hosts.isEmpty()) LoadingState("Loading Mobilism hosts…", Modifier.fillMaxWidth())
@@ -129,17 +130,20 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
                         val checked = host.domain in state.preferredHosts
                         Row(
                             Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large)
-                                .background(lerp(MaterialTheme.colorScheme.surfaceContainerHighest, theme.featured, if (checked) 0.2f else 0.06f))
+                                .background(if (checked) colors.surfaceContainerHighest else colors.surfaceContainerLow)
+                                .border(1.dp, if (checked) colors.primary else colors.outlineVariant, MaterialTheme.shapes.large)
                                 .heightIn(min = 64.dp).toggleable(checked, role = Role.Checkbox, onValueChange = {
                                 store.hosts(if (it) state.preferredHosts + host.domain else state.preferredHosts - host.domain)
-                            }), verticalAlignment = Alignment.CenterVertically,
+                            }).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Checkbox(checked, onCheckedChange = null, colors = CheckboxDefaults.colors(checkedColor = theme.featured, checkmarkColor = theme.onFeatured))
+                            Checkbox(checked, onCheckedChange = null, colors = CheckboxDefaults.colors(
+                                checkedColor = colors.primary, checkmarkColor = colors.onPrimary,
+                                uncheckedColor = colors.onSurfaceVariant))
                             Column(Modifier.weight(1f)) {
-                                Text(host.name, color = if (checked) theme.featured else MaterialTheme.colorScheme.onSurface)
+                                Text(host.name, color = colors.onSurface)
                                 debrid.supportLabel("https://${host.domain}")?.let {
-                                    Text(it, style = MaterialTheme.typography.labelMedium, color = theme.success)
+                                    Text(it, style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
                                 }
                             }
                         }

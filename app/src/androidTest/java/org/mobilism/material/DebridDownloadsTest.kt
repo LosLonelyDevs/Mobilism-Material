@@ -33,6 +33,7 @@ class DebridDownloadsTest {
                 resolveLink = { assertEquals(original, it); resolved++; result.await() },
                 openLink = { opened += it; true }, onCopied = {})
         } }
+        compose.onNodeWithText("Real-Debrid", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("Copy Example host link").performClick()
         compose.runOnIdle { assertEquals(0, resolved); assertEquals(0, downloads) }
         compose.onNodeWithText("Example host").performClick()

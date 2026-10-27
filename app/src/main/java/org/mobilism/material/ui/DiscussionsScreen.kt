@@ -109,7 +109,7 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
                         ExpressiveButton({ if (auth is AuthState.SignedIn) model.openComposer() else onSignIn(topic, state.category) },
                             Modifier.widthIn(max = 680.dp).fillMaxWidth(), enabled = !state.composer.posting) {
                             Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(20.dp))
-                            Text(if (auth is AuthState.SignedIn) if (state.composer.draft.isNotEmpty()) "Continue draft" else "Write a comment"
+                            Text(if (auth is AuthState.SignedIn) if (state.composer.draft.isNotEmpty()) "Continue draft" else "Comment"
                                 else "Sign in to comment", Modifier.padding(start = 8.dp))
                         }
                     }

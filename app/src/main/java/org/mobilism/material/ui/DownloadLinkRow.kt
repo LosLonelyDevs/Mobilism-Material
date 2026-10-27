@@ -8,10 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.AlertDialog
@@ -91,8 +89,10 @@ fun DownloadLinkRow(
                 compact = true,
             ) {
                 if (resolving) LoadingIndicator(Modifier.padding(end = 8.dp).size(24.dp))
-                else if (supported) Icon(Icons.Outlined.CheckCircle, null, Modifier.padding(end = 8.dp))
-                Text(if (resolving) "Resolving $name" else name, style = MaterialTheme.typography.labelLarge)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(if (resolving) "Resolving $name" else name, style = MaterialTheme.typography.labelLarge)
+                    if (providers.isNotEmpty()) Text(providers.joinToString(" · "), style = MaterialTheme.typography.labelSmall)
+                }
             }
             AppIconButton(Icons.Outlined.ContentCopy, "Copy $name link", {
                 scope.launch {

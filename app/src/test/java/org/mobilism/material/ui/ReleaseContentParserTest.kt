@@ -4,6 +4,36 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReleaseContentParserTest {
+    @Test fun githubDirectAndMirrorsFromReportedReleaseShareUniversalGroup() {
+        val html = """<u>More Info:</u><br/><a href='https://github.com/LosLonelyDevs/Mobilism-Material'>Project</a><br/>
+            <u>Download Instructions:</u> Download and install the APK. <br/><br/>
+            GitHub direct APK:<br/>
+            <a class="postlink" href="https://github.com/LosLonelyDevs/Mobilism-Material/releases/download/v0.1.8/MobilismMaterial_v0.1.8-release.apk">https://github.com/LosLonelyDevs/Mobili ... elease.apk</a><br/><br/>
+            Mirrors:<br/><a href="https://send.now/pvzgpt5x1kjp">https://send.now/pvzgpt5x1kjp</a><br/>
+            <a href="https://zipyshare.com/file/d3yQMgUk">https://zipyshare.com/file/d3yQMgUk</a><br/><br/>
+            Trouble downloading? Read <a href='https://forum.mobilism.org/viewtopic.php?f=399&amp;t=1489943'><b>This</b></a>."""
+        val parsed = ReleaseContentParser.parse(html, emptyList(), "https://forum.mobilism.org/")
+        val group = DownloadGroups.group(parsed.downloads, org.mobilism.material.settings.DownloadPreferences()).single()
+        assertEquals("Universal", group.title)
+        assertEquals(3, group.links.size)
+        assertTrue(group.notesHtml.contains("Download and install the APK"))
+        assertTrue(parsed.downloadNotesHtml.contains("1489943"))
+        assertTrue(parsed.bodyHtml.contains("Project"))
+    }
+
+    @Test fun hostDeliveryHeadingsKeepArchitectureAndDoNotEraseRealVariants() {
+        val parsed = ReleaseContentParser.parse("""Download Links:<br>arm64-v8a:<br>
+            Direct APK:<br><a href='https://files.example.org/a.apk'>File</a><br>
+            MediaFire mirror:<br><a href='https://mediafire.com/file/a'>Mirror</a><br>
+            <b>Original APK:</b><br><a href='https://files.example.org/original.apk'>File</a><br>
+            <b>GitHub dark icon:</b><br><a href='https://github.com/example/app/releases/download/v1/dark.apk'>File</a>
+        """, emptyList(), "https://forum.mobilism.org/")
+        val groups = DownloadGroups.group(parsed.downloads, org.mobilism.material.settings.DownloadPreferences())
+        assertEquals(2, groups.single { it.title == "arm64-v8a" }.links.size)
+        assertTrue(groups.any { it.title == "Original APK" })
+        assertTrue(groups.any { it.title == "GitHub dark icon" })
+    }
+
     @Test fun preservesDownloadNotesWithoutTurningForumHelpIntoAHost() {
         val parsed = ReleaseContentParser.parse(
             """<p>Overview</p><b>Download Instructions:</b>

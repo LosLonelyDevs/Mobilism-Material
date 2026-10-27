@@ -43,14 +43,30 @@ interface DiscussionsRepository {
 }
 
 internal object DiscussionJson {
+    private val gameForums = Regex("\\b(?:games?|gaming)\\b", RegexOption.IGNORE_CASE)
+    private val appForums = Regex("\\b(?:apps?|applications?|software)\\b", RegexOption.IGNORE_CASE)
+
     fun categories(json: JSONObject, area: DiscussionArea): List<DiscussionCategory> {
         if (area != DiscussionArea.Community) {
             return categories(json.getJSONObject("response").getJSONArray(area.categoryKey), area, "")
+                .filter { belongsToArea(it, area) }
         }
         return listOf("announcements" to "Announcements", "contests" to "Contests", "talk" to "Chitchat",
             "services" to "Services", "feedback" to "Suggestions & Feedback").flatMap { (key, label) ->
             if (!json.has(key)) throw ApiFailure(FailureKind.InvalidResponse, "The forum categories could not be read.")
             categories(if (json.isNull(key)) JSONArray() else json.getJSONArray(key), area, label)
+        }
+    }
+
+    private fun belongsToArea(category: DiscussionCategory, area: DiscussionArea): Boolean {
+        if (category.id == 12L || category.id == 13L) return true
+        val games = gameForums.containsMatchIn(category.name)
+        val apps = appForums.containsMatchIn(category.name)
+        // The API combines app and game forums. Unscoped forums stay in both tabs.
+        return when (area) {
+            DiscussionArea.Apps -> !games || apps
+            DiscussionArea.Games -> !apps || games
+            else -> true
         }
     }
 

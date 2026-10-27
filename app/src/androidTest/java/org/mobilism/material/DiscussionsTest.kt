@@ -80,6 +80,32 @@ class DiscussionsTest {
         assertNull(fixture.repository.discussionLastActivity(category))
     }
 
+    @Test fun dedicatedGameForumsStayOutOfAppsWhenSwitchingTabs() {
+        val fixture = Fixture()
+        fixture.categoriesBody = """{"response":{"app|game":[
+            {"id":500,"name":"Reviews"},{"id":502,"name":"Software"},
+            {"id":503,"name":"Games"},{"id":504,"name":"Game Codes"}
+        ],"books":[]}}"""
+        lateinit var model: DiscussionsViewModel
+        compose.runOnUiThread { model = DiscussionsViewModel(fixture.repository, null, SavedStateHandle()) }
+        compose.setContent { MobilismTheme(theme = SolarizedDark, reduceMotion = true) {
+            DiscussionsScreen(model, AuthState.Guest, {}, { _, _ -> })
+        } }
+        compose.waitUntil(10_000) { !model.state.value.loading && model.state.value.categories.isNotEmpty() }
+        compose.onNodeWithText("Software").assertIsDisplayed()
+        compose.onNodeWithText("Reviews").assertIsDisplayed()
+        compose.onNodeWithText("Game Codes").assertDoesNotExist()
+        compose.onNodeWithText("Games").performClick()
+        compose.waitUntil(10_000) { model.state.value.area == DiscussionArea.Games && !model.state.value.loading }
+        compose.onNodeWithText("Game Codes").assertIsDisplayed()
+        compose.onNodeWithText("Reviews").assertIsDisplayed()
+        compose.onNodeWithText("Software").assertDoesNotExist()
+        compose.onNodeWithText("Apps").performClick()
+        compose.waitUntil(10_000) { model.state.value.area == DiscussionArea.Apps && !model.state.value.loading }
+        compose.onNodeWithText("Game Codes").assertDoesNotExist()
+        compose.onNodeWithText("Software").assertIsDisplayed()
+    }
+
     @Test fun failuresNeverReplayWritesAndExpiredSessionClearsAccount() = runBlocking {
         val fixture = Fixture()
         fixture.repository.signIn("Reader", "sample-password")
@@ -192,7 +218,7 @@ class DiscussionsTest {
         compose.onNodeWithText("Help & support").performClick()
         compose.waitUntil(10_000) { model.state.value.topics.items.isNotEmpty() }
         compose.onNodeWithText("Getting started with Mobilism").performClick()
-        compose.onNodeWithText("Write a comment").performClick()
+        compose.onNodeWithText("Comment").performClick()
         compose.onNodeWithTag("comment-draft").performTextInput("Keep this draft")
         compose.onNodeWithText("Close", substring = false).performScrollTo().performClick()
         compose.onNodeWithText("Continue draft").assertIsDisplayed().performClick()
@@ -217,6 +243,7 @@ class DiscussionsTest {
         @Volatile var postBody = """{"response":{"comment_id":99}}"""
         @Volatile var listStatus = 200
         @Volatile var topicsBody = """{"response":[$TOPIC]}"""
+        @Volatile var categoriesBody = """{"response":{"app|game":[{"id":500,"name":"Help &amp; support","topics":42}],"books":[{"id":501,"name":"Book discussions"}]}}"""
         private val context = object : ContextWrapper(InstrumentationRegistry.getInstrumentation().targetContext) {
             override fun getApplicationContext(): Context = this
             override fun getSharedPreferences(name: String, mode: Int) = super.getSharedPreferences("discussions-test-$name", mode)
@@ -228,7 +255,7 @@ class DiscussionsTest {
             var status = 200
             val response = when {
                 path == "auth/login" -> """{"access_token":"sample-session","id":7}"""
-                path == "discussion/categories" -> """{"response":{"app|game":[{"id":500,"name":"Help &amp; support","topics":42}],"books":[{"id":501,"name":"Book discussions"}]}}"""
+                path == "discussion/categories" -> categoriesBody
                 path == "other/category" -> """{"announcements":[],"contests":[],"talk":[{"id":66,"name":"General chat"}],"services":[],"feedback":[]}"""
                 path.endsWith("/comment") -> { status = postStatus; postBody }
                 path == "search" -> if (body(request).contains("missing")) """{"discussions":[],"others":[]}""" else """{"discussions":[$TOPIC],"others":[$TOPIC]}"""

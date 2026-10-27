@@ -11,7 +11,8 @@ internal object ReleaseLikes {
         else -> null
     }
 
-    fun postId(html: String): Long? = Jsoup.parse(html).select("div.post[id]")
+    fun postId(html: String): Long? = Jsoup.parse(html)
+        .select("div.post[id], div[id]:has(> article .postbody)")
         .firstNotNullOfOrNull { post ->
             Regex("p([1-9][0-9]*)").matchEntire(post.id())?.groupValues?.get(1)?.toLongOrNull()
         }

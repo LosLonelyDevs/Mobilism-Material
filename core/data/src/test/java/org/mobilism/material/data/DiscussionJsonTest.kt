@@ -24,6 +24,40 @@ class DiscussionJsonTest {
         assertTrue(items.all { it.kind == DiscussionKind.Other })
     }
 
+    @Test fun sharedAppGameCategoriesSeparateDedicatedForumsAndPreserveMetadata() {
+        val json = JSONObject("""{"response":{"app|game":[
+            {"id":100,"name":"Reviews"},
+            {"id":101,"name":"General Talk"},
+            {"id":102,"name":"Software","topics":873},
+            {"id":103,"name":"Games","topics":375},
+            {"id":104,"name":"Game Codes","topics":27}
+        ]}}""")
+        val apps = DiscussionJson.categories(json, DiscussionArea.Apps)
+        val games = DiscussionJson.categories(json, DiscussionArea.Games)
+        assertEquals(listOf(100L, 101L, 102L), apps.map { it.id })
+        assertEquals(listOf(100L, 101L, 103L, 104L), games.map { it.id })
+        assertEquals(27L, games.last().topics)
+        assertEquals("104", games.last().apiId)
+        assertTrue(apps.all { it.area == DiscussionArea.Apps })
+        assertTrue(games.all { it.area == DiscussionArea.Games })
+    }
+
+    @Test fun categoryScopeUsesDecodedWordsAndKeepsSharedAndBookForums() {
+        val json = JSONObject("""{"response":{"app|game":[
+            {"id":12,"name":"All games"},
+            {"id":13,"name":"App announcements"},
+            {"id":200,"name":"<b>GAMING</b> help"},
+            {"id":201,"name":"Application support"},
+            {"id":202,"name":"Apps &amp; Games"},
+            {"id":203,"name":"Gameloft news"}
+        ],"books":[{"id":300,"name":"Game guides"}]}}""")
+        assertEquals(listOf(12L, 13L, 201L, 202L, 203L),
+            DiscussionJson.categories(json, DiscussionArea.Apps).map { it.id })
+        assertEquals(listOf(12L, 13L, 200L, 202L, 203L),
+            DiscussionJson.categories(json, DiscussionArea.Games).map { it.id })
+        assertEquals(listOf(300L), DiscussionJson.categories(json, DiscussionArea.Books).map { it.id })
+    }
+
     @Test fun topicPreservesOriginalPostAndStickyStatusWithoutConfusingItWithLocked() {
         val topic = DiscussionJson.page(JSONObject("""{"response":[{"id":80,"subject":"Help &amp; tips","name":"Reader","content":"<p>Original https://example.org</p>","status":2,"forum_id":500,"date":12,"topic_last_post_time":99,"replies":4,"views":9,"browser_url":"javascript:alert(1)","images":["https://example.org/image.png","javascript:alert(1)"]}]}"""), DiscussionKind.Discussion).items.single()
         assertEquals("Help & tips", topic.title)

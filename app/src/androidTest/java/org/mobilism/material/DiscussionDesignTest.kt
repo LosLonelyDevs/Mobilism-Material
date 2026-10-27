@@ -115,9 +115,9 @@ class DiscussionDesignTest {
         compose.onNodeWithText("Show quote").performClick()
         compose.onAllNodesWithText("Hide quote").assertCountEquals(2)
         capture("nested-context-dark")
-        compose.onNodeWithText("Collapse", substring = false).performClick()
+        compose.onNodeWithContentDescription("Collapse comment").performClick()
         compose.onNodeWithTag("comment-body-91").assertDoesNotExist()
-        compose.onNodeWithText("Expand", substring = false).performClick()
+        compose.onNodeWithContentDescription("Expand comment").performClick()
         compose.onNodeWithText("Replying to Earlier reader").assertIsDisplayed()
         compose.onNodeWithText("Reply", substring = false).assertIsDisplayed()
     }

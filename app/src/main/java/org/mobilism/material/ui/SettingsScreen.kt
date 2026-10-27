@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -56,8 +56,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -277,7 +280,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
               ) { Text("Verify and save") }
               }
             }
-            if (account.configured && account.provider == DebridProvider.MegaDebrid && !signingInAgain) {
+            if (account.configured && !account.validated && account.provider == DebridProvider.MegaDebrid && !signingInAgain) {
                 ExpressiveButton({ signingInAgain = true }, enabled = !busy) { Text("Sign in again") }
             }
             if (account.configured) Row(
@@ -317,28 +320,31 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DebridHostMenu(account: DebridAccount, debrid: DebridState, modifier: Modifier = Modifier) {
-    val theme = LocalAppTheme.current
+    val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val menuWidth = (windowWidth - 64.dp).coerceIn(240.dp, 560.dp)
     var expanded by remember(account.provider) { mutableStateOf(false) }
     val rotation by animateFloatAsState(
         if (expanded) 180f else 0f,
         MaterialTheme.motionScheme.fastSpatialSpec(), label = "host menu chevron",
     )
-    Box(modifier, contentAlignment = Alignment.CenterEnd) {
+    Box(modifier, contentAlignment = Alignment.Center) {
         ExpressiveButton(
             { expanded = !expanded },
-            Modifier.semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
+            Modifier.fillMaxWidth().semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             ),
         ) {
             val count = account.hostNames.size
-            Text("$count Mobilism ${if (count == 1) "host" else "hosts"}")
+            Text("$count Mobilism ${if (count == 1) "host" else "hosts"}", Modifier.weight(1f, fill = false),
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
             Icon(Icons.Outlined.ExpandMore, null, Modifier.padding(start = 4.dp).size(20.dp).rotate(rotation))
         }
         DropdownMenu(
             expanded = expanded, onDismissRequest = { expanded = false },
-            modifier = Modifier.widthIn(min = 240.dp, max = 320.dp).heightIn(max = 360.dp),
+            modifier = Modifier.width(menuWidth).heightIn(max = 360.dp),
             shape = MaterialTheme.shapes.extraLarge,
             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         ) {
@@ -354,11 +360,11 @@ private fun DebridHostMenu(account: DebridAccount, debrid: DebridState, modifier
             account.hostNames.forEach { name ->
                 val domains = account.hosts.filter { it.name.equals(name, ignoreCase = true) }.map { it.domain }
                 RoundedMenuItem(
-                    label = name, onClick = { expanded = false }, accent = theme.success,
-                    icon = Icons.Outlined.CheckCircle,
+                    label = name, onClick = { expanded = false }, accent = MaterialTheme.colorScheme.primary,
                     supportLabel = debrid.accounts.filter { other ->
                         other.configured && other.hosts.any { it.domain in domains }
                     }.map { it.provider.label }.takeIf { it.isNotEmpty() }?.joinToString(" · "),
+                    singleLine = true,
                 )
             }
         }

@@ -16,6 +16,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -33,7 +34,7 @@ internal fun DiagnosticLogsCard(logs: DiagnosticLogStore) {
     AppSurface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             AppHeading("Diagnostic logs", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-            Text("Reproduce the issue, then export logs to share for support. Logs stay on this device until you share them. Passwords, tokens, and page content are excluded.",
+            Text("Export logs for troubleshooting.", maxLines = 1, overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             ExpressiveButton(onClick = {
                 if (!exporting) scope.launch {

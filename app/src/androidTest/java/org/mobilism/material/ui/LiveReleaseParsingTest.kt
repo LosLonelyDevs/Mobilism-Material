@@ -52,5 +52,13 @@ class LiveReleaseParsingTest {
         assertTrue(groups.all { it.links.size == 3 })
         assertEquals(2, groups.count { it.title.contains("GmsCore") })
         assertTrue(navigation.downloadNotesHtml.contains("649944"))
+
+        val mobilism = parse(release(6437968))
+        val mirrors = DownloadGroups.group(mobilism.downloads, DownloadPreferences()).single()
+        assertEquals("Universal", mirrors.title)
+        assertEquals(3, mirrors.links.size)
+        assertTrue(mirrors.links.any { it.url.startsWith("https://github.com/") })
+        assertTrue(mirrors.links.any { it.url.startsWith("https://send.now/") })
+        assertTrue(mobilism.downloadNotesHtml.contains("1489943"))
     }
 }

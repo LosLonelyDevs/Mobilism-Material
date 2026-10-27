@@ -8,6 +8,36 @@ class FollowingVersionsTest {
         contentHtml = "<a href=\"https://play.google.com/store/apps/details?id=org.example\">Play</a>")
     private fun installed(version: String, code: Long = 10) = InstalledVersion("org.example", "Example", version, code)
 
+    @Test fun televizoFlavorSuffixesDoNotFallBackToAnOlderSuffixFreeRelease() {
+        fun televizo(id: Long, version: String) = release(id, version).copy(
+            title = "Televizo - IPTV player v$version [Final] [Pro] [Mod]")
+        val followed = televizo(6362786, "1.9.9.31-g")
+        val stale = televizo(4694627, "1.9.3.21")
+        val newer = televizo(6422874, "1.9.9.43-d")
+        val entry = LibraryEntry(followed, watched = true, latest = stale)
+        val current = installed("1.9.9.31-g").copy(name = "Televizo")
+        val result = FollowingVersions.evaluate(entry, current, listOf(followed, newer, stale))
+        assertEquals(newer, result.latest)
+        assertEquals(newer, result.update)
+        assertTrue(result.comparable)
+        val saved = entry.copy(latest = result.latest, update = result.update)
+        assertEquals(newer, FollowingVersions.evaluate(saved, current, listOf(stale)).latest)
+        assertNull(FollowingVersions.evaluate(saved, current.copy(version = "1.9.9.43-g"), emptyList()).update)
+        assertNull(FollowingVersions.evaluate(saved, current.copy(version = "1.9.9.44-g"), emptyList()).update)
+    }
+
+    @Test fun flavorSuffixesPreserveStableChannelAndAppIdentityGuards() {
+        val entry = LibraryEntry(release(1, "1.9.9.31-g"), watched = true)
+        val current = installed("1.9.9.31-g")
+        val result = FollowingVersions.evaluate(entry, current, listOf(
+            release(2, "1.9.9.50-beta1-g"), release(3, "1.9.9.60-nightly"),
+            release(4, "1.9.9.70-g").copy(contentHtml = "<a href='https://play.google.com/store/apps/details?id=org.other'>Play</a>"),
+        ))
+        assertEquals(entry.release, result.latest)
+        assertNull(result.update)
+        assertTrue(result.comparable)
+    }
+
     @Test fun installedVersionTakesPriorityOverFollowedRelease() {
         val entry = LibraryEntry(release(1, "3.0"), watched = true)
         assertEquals(1L, FollowingVersions.evaluate(entry, installed("2.0"), emptyList()).update?.id)

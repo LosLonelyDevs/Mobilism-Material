@@ -36,7 +36,7 @@ object DownloadGroups {
     fun group(links: List<DownloadLink>, preferences: DownloadPreferences): List<DownloadGroup> =
         links.groupBy { link -> link.groupId?.let { "section-$it" }
             ?: "label-${normalizedLabel(link.section.orEmpty()).lowercase(java.util.Locale.ROOT)}" }.map { (id, items) ->
-            val title = normalizedLabel(items.first().section.orEmpty()).ifEmpty { "Download links" }
+            val title = normalizedLabel(items.first().section.orEmpty()).ifEmpty { "Universal" }
             val architectures = architectures(items.first().section.orEmpty())
             val preferred = preferences.architecture
             DownloadGroup(

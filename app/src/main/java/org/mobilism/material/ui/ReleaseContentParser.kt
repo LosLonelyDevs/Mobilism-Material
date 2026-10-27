@@ -15,6 +15,7 @@ object ReleaseContentParser {
     private val plainUrl = Regex("""https?://[^\s<>"]+""", RegexOption.IGNORE_CASE)
     private val mirror = Regex("""(?i)^mirrors?\s*:?$""")
     private val note = Regex("""(?i)^(?:notes?|password|instructions?|warning|important|install(?:ation)?|requires?)\b""")
+    private val deliveryWords = Regex("""(?i)\b(?:direct|downloads?|links?|mirrors?|apk|files?|host(?:ed)?|via|from|on)\b""")
     private data class Block(val labels: List<DownloadLine>, val urls: MutableList<String>, val notes: MutableList<String>)
 
     fun parse(html: String, apiUrls: List<String>, baseUrl: String): ReleaseContent {
@@ -58,6 +59,7 @@ object ReleaseContentParser {
                 return@forEach
             }
             inlineLabel?.let { pending += it }
+            pending.removeAll { isDeliveryLabel(it, candidates) }
 
             if (mirrorPending && blocks.isNotEmpty() && pending.none(::isLabel)) {
                 blocks.last().notes += pending.map { it.html }
@@ -123,6 +125,19 @@ object ReleaseContentParser {
             Jsoup.parseBodyFragment(line.html).selectFirst("a[href]") == null &&
             (line.styled || DownloadGroups.isArchitectureOnly(text) ||
                 (text.length <= 80 && !text.contains(Regex("""[.!?]|:\s+\S"""))))
+    }
+
+    private fun isDeliveryLabel(line: DownloadLine, urls: List<String>): Boolean {
+        if (!isLabel(line) || DownloadGroups.architectures(line.text).isNotEmpty()) return false
+        val hostNames = urls.flatMap { url ->
+            val domain = HostMatcher.domain(url).orEmpty()
+            listOf(HostMatcher.displayName(url), domain) + domain.split('.').dropLast(1)
+        }.filter { it.length > 2 }.distinct().sortedByDescending { it.length }
+        var remaining = line.text
+        hostNames.forEach { host ->
+            remaining = Regex("(?i)(?<![\\p{L}\\p{N}])${Regex.escape(host)}(?![\\p{L}\\p{N}])").replace(remaining, " ")
+        }
+        return deliveryWords.replace(remaining, "").none { it.isLetterOrDigit() }
     }
 
     private fun downloadUrl(raw: String): String? = webUrlOrNull(raw)?.takeUnless { HostMatcher.matches(it, "mobilism.org") }

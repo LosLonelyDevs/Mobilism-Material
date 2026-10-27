@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import org.mobilism.material.data.SupportedHost
+import org.mobilism.material.data.HostMatcher
+import org.mobilism.material.data.Alphabetical
 
 enum class CpuArchitecture(val label: String) {
     Arm64("arm64-v8a"), Arm32("armeabi-v7a"), ArmLegacy("armeabi"), X64("x86_64"), X86("x86"), Universal("Universal"),
@@ -46,7 +48,24 @@ class DownloadPreferencesStore(context: Context) {
     }
 
     fun catalog(values: List<SupportedHost>) {
-        preferences.edit().putStringSet("host-catalog", values.map { it.domain + "|" + it.name }.toSet()).apply()
-        mutableState.update { it.copy(hosts = values) }
+        mergeCatalog(values, existingFirst = false)
+    }
+
+    fun discover(urls: List<String>) {
+        mergeCatalog(urls.mapNotNull { url ->
+            HostMatcher.key(url)?.takeUnless { HostMatcher.matches(it, "mobilism.org") }
+                ?.let { SupportedHost(it, HostMatcher.displayName(url)) }
+        }, existingFirst = true)
+    }
+
+    @Synchronized
+    private fun mergeCatalog(values: List<SupportedHost>, existingFirst: Boolean) {
+        val existing = mutableState.value.hosts
+        val merged = (if (existingFirst) existing + values else values + existing)
+            .mapNotNull { host -> HostMatcher.key(host.domain)?.let { host.copy(domain = it) } }
+            .distinctBy { it.domain }.let { Alphabetical.sorted(it) { host -> host.name } }
+        if (merged == existing) return
+        preferences.edit().putStringSet("host-catalog", merged.map { it.domain + "|" + it.name }.toSet()).apply()
+        mutableState.update { it.copy(hosts = merged) }
     }
 }

@@ -79,7 +79,7 @@ fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRelease: ((Lo
                         Text(date, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                if (!expanded) CommentCollapsePill(false, { expanded = true })
+                if (!expanded) CommentCollapseButton(false, { expanded = true })
             }
             AnimatedVisibility(expanded,
                 enter = if (reduced) EnterTransition.None else expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
@@ -105,7 +105,7 @@ fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRelease: ((Lo
                                 }
                             }
                             Spacer(Modifier.weight(1f))
-                            CommentCollapsePill(true, { expanded = false })
+                            CommentCollapseButton(true, { expanded = false })
                         }
                     }
                 }

@@ -95,6 +95,7 @@ fun ReleaseScreen(
     onPostComment: () -> Unit = {}, onCloseComposer: () -> Unit = {}, onRefreshComments: () -> Unit = {},
     onReplyToComment: (org.mobilism.material.data.ReleaseComment) -> Unit = {}, onRemoveReply: () -> Unit = {},
     onRelease: (Long) -> Unit = {},
+    onDownloadHosts: (List<String>) -> Unit = {},
 ) {
     val theme = LocalAppTheme.current
     val context = LocalContext.current
@@ -115,6 +116,7 @@ fun ReleaseScreen(
     val content = remember(release) {
         release?.let { ReleaseContentParser.parse(it.contentHtml, it.downloadLinks, it.browserUrl ?: "https://forum.mobilism.org/") }
     }
+    LaunchedEffect(content) { onDownloadHosts(content?.downloads.orEmpty().map { it.url }) }
     val sections = remember(content, release?.title) {
         ReleaseSections.parse(content?.bodyHtml.orEmpty(), release?.title.orEmpty())
     }
@@ -132,7 +134,7 @@ fun ReleaseScreen(
             TopAppBar(
                 title = { AppHeading("Release", HeadingLevel.Page, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack) },
-                actions = { release?.let {
+                actions = { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { release?.let {
                     AppIconToggleButton(
                         if (it.liked == true) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
                         if (it.liked == true) "Remove thumbs up" else "Thumbs up",
@@ -195,7 +197,7 @@ fun ReleaseScreen(
                             )
                         }
                     }
-                } },
+                } } },
             )
         },
     ) { padding ->
@@ -287,7 +289,7 @@ fun ReleaseScreen(
                                 colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors()) {
                                 Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null)
                                 Text(if (auth !is AuthState.SignedIn) "Sign in to comment"
-                                    else if (state.composer.draft.isNotBlank()) "Continue your comment" else "Write a comment",
+                                    else if (state.composer.draft.isNotBlank()) "Continue your comment" else "Comment",
                                     Modifier.padding(start = 8.dp))
                             }
                         }

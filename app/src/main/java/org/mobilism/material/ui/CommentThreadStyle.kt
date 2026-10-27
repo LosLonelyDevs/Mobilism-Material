@@ -3,7 +3,6 @@
 package org.mobilism.material.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -18,25 +17,19 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import org.mobilism.material.designsystem.AppIconButton
 
 @Composable
-internal fun CommentCollapsePill(expanded: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val cs = MaterialTheme.colorScheme
-    val label = if (expanded) "Collapse" else "Expand"
-    Row(modifier.heightIn(min = 48.dp).clip(MaterialTheme.shapes.extraLarge)
-        .background(cs.secondaryContainer)
-        .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
-        .padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(if (expanded) Icons.Outlined.UnfoldLess else Icons.Outlined.UnfoldMore, null,
-            Modifier.size(16.dp), tint = cs.onSecondaryContainer)
-        Spacer(Modifier.width(4.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
-            color = cs.onSecondaryContainer)
-    }
+internal fun CommentCollapseButton(expanded: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    AppIconButton(
+        icon = if (expanded) Icons.Outlined.UnfoldLess else Icons.Outlined.UnfoldMore,
+        label = if (expanded) "Collapse comment" else "Expand comment",
+        onClick = onClick,
+        modifier = modifier,
+    )
 }
 
 @Composable
