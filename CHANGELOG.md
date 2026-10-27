@@ -4,6 +4,10 @@
 
 - Add Home tabs for Apps, Books, and Games with featured releases, latest and popular collections, category shortcuts, reviews, and recent discussions. Adapt Orion Store's hero and shape patterns for Material 3 Expressive.
 - Add Discussions with Apps, Games, Books, and Community forums, topic search, original posts, and paged comments. Keep drafts and quoted replies with their topic.
+- Add discussion category colors, single-line topic titles and previews, and a pinned badge beside reply counts. Remove extra list headings. Move URL actions into the options menu and refresh discussions by pulling down.
+- Show right-aligned last activity on forum category cards without navigation arrows. Load it in the background and update it on refresh.
+- Restyle comments with compact author rows, visible collapse controls, and indented quote context. Adapt LuliReddit's MIT-licensed comment controls and thread guides.
+- Download manual builds directly as APK files without a ZIP wrapper.
 - Add Inbox and Sent tabs, conversation history, mark as read, and private message replies.
 - Decode escaped emojis in Inbox and Sent message previews.
 - Keep the navigation drawer full height and remove Home section subtitles.

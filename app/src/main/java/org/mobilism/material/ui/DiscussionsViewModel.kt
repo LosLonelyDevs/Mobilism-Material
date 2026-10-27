@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import org.mobilism.material.data.*
 
 data class DiscussionListState(
@@ -24,6 +26,7 @@ data class DiscussionsState(
     val topic: DiscussionTopic? = null, val comments: CommentsState = CommentsState(),
     val commentRefreshFailed: Boolean = false, val composer: CommentComposerState = CommentComposerState(),
     val notice: String? = null, val forward: Boolean = true,
+    val categoryActivity: Map<String, Long> = emptyMap(),
 ) {
     val destination: String get() = topic?.let { "topic:${it.key}" } ?: category?.let { "category:${it.key}" } ?: "categories"
 }
@@ -40,9 +43,11 @@ class DiscussionsViewModel(
     private var topicsJob: Job? = null
     private var commentsJob: Job? = null
     private val confirmed = mutableMapOf<String, List<ReleaseComment>>()
+    private val activityRequests = Semaphore(3)
+    private val activityCache = mutableMapOf<String, Pair<Long, Long?>>()
 
     init {
-        loadCategories()
+        loadCategories(refreshActivity = false)
         initialCategory?.let(::openCategory)
         initialTopic?.let(::openTopic)
     }
@@ -50,11 +55,13 @@ class DiscussionsViewModel(
     fun selectArea(area: DiscussionArea) {
         if (state.value.area == area) return
         saved["discussion-area"] = area.name
-        mutableState.update { it.copy(area = area, categories = emptyList(), error = null) }
-        loadCategories()
+        mutableState.update { it.copy(area = area, categories = emptyList(), categoryActivity = emptyMap(), error = null) }
+        loadCategories(refreshActivity = false)
     }
 
-    fun loadCategories() {
+    fun loadCategories() = loadCategories(refreshActivity = true)
+
+    private fun loadCategories(refreshActivity: Boolean) {
         categoriesJob?.cancel()
         val area = state.value.area
         mutableState.update { it.copy(loading = true, error = null) }
@@ -62,7 +69,24 @@ class DiscussionsViewModel(
             try {
                 val result = repository.discussionCategories(area)
                 ensureActive()
-                mutableState.update { it.copy(categories = result, loading = false) }
+                val cached = result.mapNotNull { category -> activityCache[category.key]?.second?.let { category.key to it } }.toMap()
+                mutableState.update { it.copy(categories = result, loading = false, categoryActivity = cached) }
+                result.filter { it.topics != 0L }.forEach { category ->
+                    val checkedAt = activityCache[category.key]?.first
+                    if (!refreshActivity && checkedAt != null && System.currentTimeMillis() - checkedAt < 5 * 60_000) return@forEach
+                    launch {
+                        activityRequests.withPermit {
+                            try {
+                                val timestamp = repository.discussionLastActivity(category)?.takeIf { it > 0 }
+                                ensureActive()
+                                activityCache[category.key] = System.currentTimeMillis() to timestamp
+                                mutableState.update { it.copy(categoryActivity = if (timestamp == null) it.categoryActivity - category.key
+                                    else it.categoryActivity + (category.key to timestamp)) }
+                            } catch (cancelled: CancellationException) { throw cancelled }
+                            catch (_: Exception) { /* Optional activity must not block forum browsing. */ }
+                        }
+                    }
+                }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) { mutableState.update { it.copy(loading = false, error = failure.forScreen()) } }
         }

@@ -1,25 +1,40 @@
 package org.mobilism.material.ui
 
+import android.content.ClipData
+import android.text.format.DateUtils
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import org.jsoup.Jsoup
 import org.mobilism.material.data.*
 import org.mobilism.material.designsystem.*
 import java.text.DateFormat
@@ -41,9 +56,18 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
     val state by model.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     val savedScreens = rememberSaveableStateHolder()
+    var menu by remember(state.destination) { mutableStateOf(false) }
     var gallery by remember { mutableStateOf<Pair<List<String>, Int>?>(null) }
+    val busy = when { state.topic != null -> state.comments.busy; state.category != null -> state.topics.busy; else -> state.loading }
+    val refresh = {
+        if (!state.composer.posting && !busy) {
+            when { state.topic != null -> model.loadComments(true); state.category != null -> model.loadTopics(true); else -> model.loadCategories() }
+        }
+    }
     val back = { if (!model.back()) onBack() }
     BackHandler(onBack = back)
     LaunchedEffect(state.notice) {
@@ -60,11 +84,21 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
                 HeadingLevel.Page, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", back, enabled = !state.composer.posting) },
                 actions = {
-                    val url = state.topic?.browserUrl ?: state.category?.browserUrl
-                    if (url != null) AppIconButton(Icons.Outlined.OpenInBrowser, "Open in browser", { openForumBrowser(context, url) })
-                    AppIconButton(Icons.Outlined.Refresh, "Refresh", {
-                        when { state.topic != null -> model.loadComments(true); state.category != null -> model.loadTopics(true); else -> model.loadCategories() }
-                    }, enabled = !state.composer.posting && !state.loading && !state.topics.busy && !state.comments.busy)
+                    val url = state.topic?.browserUrl ?: state.category?.browserUrl ?: "https://forum.mobilism.org/"
+                    Box {
+                        AppIconButton(Icons.Outlined.MoreVert, "Discussion options", { menu = true })
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = MaterialTheme.shapes.extraLarge) {
+                            RoundedMenuItem("Copy URL", accent = LocalAppTheme.current.featured, icon = Icons.Outlined.ContentCopy, onClick = {
+                                menu = false
+                                scope.launch {
+                                    clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Discussion URL", url)))
+                                    snackbar.showSnackbar("URL copied")
+                                }
+                            })
+                            RoundedMenuItem("Open in browser", accent = MaterialTheme.colorScheme.tertiary, icon = Icons.Outlined.OpenInBrowser,
+                                onClick = { menu = false; openForumBrowser(context, url) })
+                        }
+                    }
                 })
         },
         bottomBar = {
@@ -85,7 +119,12 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            Box(Modifier.widthIn(max = 760.dp).fillMaxSize()) {
+            PullToRefreshBox(isRefreshing = busy, onRefresh = refresh,
+                modifier = Modifier.widthIn(max = 760.dp).fillMaxSize().semantics {
+                    customActions = listOf(CustomAccessibilityAction("Refresh") {
+                        if (state.composer.posting || busy) false else { refresh(); true }
+                    })
+                }) {
                 AppScreenContent(state, { it.destination }, state.forward) { screen ->
                     savedScreens.SaveableStateProvider(screen.destination) {
                         when {
@@ -106,36 +145,47 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
 @Composable
 private fun DiscussionCategories(state: DiscussionsState, onArea: (DiscussionArea) -> Unit,
     onCategory: (DiscussionCategory) -> Unit, onRetry: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val accents = listOf(colors.primary, colors.tertiary, colors.secondary)
+    val now by produceState(System.currentTimeMillis()) {
+        while (true) { delay(60_000); value = System.currentTimeMillis() }
+    }
     Column(Modifier.fillMaxSize()) {
         AppChoiceTabs(DiscussionArea.entries.map { it.label }, state.area.ordinal) { onArea(DiscussionArea.entries[it]) }
         key(state.area) {
             LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize().testTag("discussion-categories")) {
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        AppHeading(if (state.area == DiscussionArea.Community) "Around the community" else "${state.area.label} discussions",
-                            HeadingLevel.Section, style = MaterialTheme.typography.headlineMedium)
-                        Text("Find help, share ideas, and join a conversation.", style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
                 if (state.loading) item { LoadingState("Loading forums…", Modifier.fillMaxWidth()) }
                 state.error?.let { item { ErrorPanel(it, onRetry = onRetry) } }
                 state.categories.groupBy { it.section }.forEach { (section, categories) ->
                     if (section.isNotBlank()) item(key = "section:$section") {
                         AppHeading(section, HeadingLevel.Section, Modifier.padding(top = 12.dp), style = MaterialTheme.typography.titleMedium)
                     }
-                    items(categories, key = { it.key }) { category ->
-                        ExpressiveCard({ onCategory(category) }, Modifier.fillMaxWidth()) {
-                            Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
+                    itemsIndexed(categories, key = { _, category -> category.key }) { index, category ->
+                        val accent = accents[index % accents.size]
+                        ExpressiveCard({ onCategory(category) }, Modifier.fillMaxWidth(),
+                            border = BorderStroke(1.dp, accent.copy(alpha = 0.45f))) {
+                            Row(Modifier.padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                Icon(Icons.Outlined.Forum, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Text(category.name, style = MaterialTheme.typography.titleMedium)
-                                    Text(category.topics?.let { "$it topics" } ?: "Browse conversations",
-                                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Surface(color = accent.copy(alpha = 0.14f), shape = MaterialTheme.shapes.medium) {
+                                    Icon(Icons.Outlined.Forum, null, Modifier.padding(12.dp).size(28.dp), tint = accent)
                                 }
-                                Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(category.name, style = MaterialTheme.typography.titleMedium, color = accent)
+                                    Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically) {
+                                        Text(category.topics?.let { "$it topics" } ?: "Browse conversations",
+                                            modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        state.categoryActivity[category.key]?.let { timestamp ->
+                                            Text(DateUtils.getRelativeTimeSpanString(timestamp * 1000, now,
+                                                DateUtils.MINUTE_IN_MILLIS, DateUtils.FORMAT_ABBREV_RELATIVE).toString(),
+                                                modifier = Modifier.weight(1.5f).testTag("discussion-activity:${category.key}"),
+                                                style = MaterialTheme.typography.bodySmall, color = accent, textAlign = TextAlign.End,
+                                                maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -159,28 +209,47 @@ private fun DiscussionTopics(state: DiscussionsState, onTopic: (DiscussionTopic)
         key(state.submittedQuery) {
             LazyColumn(state = rememberLazyListState(), modifier = Modifier.fillMaxSize().testTag("discussion-topics"),
                 contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                item {
+                if (state.submittedQuery.isNotBlank()) item {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (state.submittedQuery.isBlank()) "Latest activity · pinned topics included" else "Results for “${state.submittedQuery}”",
+                        Text("Results for “${state.submittedQuery}”",
                             Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (state.submittedQuery.isNotBlank()) AppTextButton("Clear", onClear)
+                        AppTextButton("Clear", onClear)
                     }
                 }
                 items(state.topics.items, key = { it.key }) { topic ->
+                    val preview = remember(topic.contentHtml) { Jsoup.parse(topic.contentHtml).text() }
                     ExpressiveCard({ onTopic(topic) }, Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            if (topic.pinned) Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Outlined.PushPin, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                                Text("Pinned", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                            }
-                            Text(topic.title, style = MaterialTheme.typography.titleLarge, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                            Text(topic.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary,
+                                fontSize = (MaterialTheme.typography.titleMedium.fontSize.value + 1).sp,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag("discussion-title:${topic.key}"))
+                            if (preview.isNotBlank()) Text(preview, style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag("discussion-preview:${topic.key}"))
                             Text(topic.author, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                                Text("${topic.replies} replies", style = MaterialTheme.typography.labelMedium)
-                                Text("${topic.views} views", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                DiscussionDate(topic.activityAt)
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                        Text("${topic.replies} replies", Modifier.weight(1f, fill = false),
+                                            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text("${topic.views} views", Modifier.weight(1f, fill = false),
+                                            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    if (topic.pinned) Surface(color = MaterialTheme.colorScheme.tertiaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer, shape = MaterialTheme.shapes.small) {
+                                        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Outlined.PushPin, null, Modifier.size(14.dp))
+                                            Text("Pinned", style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                                        }
+                                    }
+                                }
                             }
-                            DiscussionDate(topic.activityAt)
                         }
                     }
                 }

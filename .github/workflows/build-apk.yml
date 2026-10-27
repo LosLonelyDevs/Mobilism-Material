@@ -76,8 +76,8 @@ jobs:
           "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose build/apk/*-release.apk
       - uses: actions/upload-artifact@v7.0.2
         with:
-          name: MobilismMaterial_v${{ steps.version.outputs.version }}-${{ inputs.build_type }}
-          path: build/apk/*-${{ inputs.build_type }}.apk
+          path: build/apk/MobilismMaterial_v${{ steps.version.outputs.version }}-${{ inputs.build_type }}.apk
+          archive: false
           if-no-files-found: error
           retention-days: 14
       - name: Remove temporary keystore

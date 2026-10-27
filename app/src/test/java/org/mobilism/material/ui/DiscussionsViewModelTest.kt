@@ -17,6 +17,74 @@ class DiscussionsViewModelTest {
     @Before fun setup() = Dispatchers.setMain(dispatcher)
     @After fun teardown() = Dispatchers.resetMain()
 
+    @Test fun activityLoadsAfterCategoriesAndReusesCacheUntilRefresh() = runTest(dispatcher) {
+        val repo = Repository()
+        val pending = CompletableDeferred<Long?>()
+        repo.activity = { pending.await() }
+        val model = model(repo)
+        runCurrent()
+        assertFalse(model.state.value.loading)
+        assertEquals(listOf(category), model.state.value.categories)
+        assertTrue(model.state.value.categoryActivity.isEmpty())
+        pending.complete(1234L)
+        advanceUntilIdle()
+        assertEquals(1234L, model.state.value.categoryActivity[category.key])
+        model.selectArea(DiscussionArea.Games)
+        advanceUntilIdle()
+        model.selectArea(DiscussionArea.Apps)
+        advanceUntilIdle()
+        assertEquals(1, repo.activityKeys.count { it == category.key })
+        assertEquals(1234L, model.state.value.categoryActivity[category.key])
+        repo.activity = { 2000L }
+        model.loadCategories()
+        advanceUntilIdle()
+        assertEquals(2, repo.activityKeys.count { it == category.key })
+        assertEquals(2000L, model.state.value.categoryActivity[category.key])
+    }
+
+    @Test fun activityIgnoresStaleTabsAndDoesNotTurnMetadataFailuresIntoPageErrors() = runTest(dispatcher) {
+        val repo = Repository()
+        val pending = CompletableDeferred<Long?>()
+        repo.activity = { if (it.area == DiscussionArea.Apps) pending.await() else 5000L }
+        val model = model(repo)
+        runCurrent()
+        model.selectArea(DiscussionArea.Games)
+        advanceUntilIdle()
+        pending.complete(9000L)
+        advanceUntilIdle()
+        val gameKey = category.copy(area = DiscussionArea.Games).key
+        assertEquals(mapOf(gameKey to 5000L), model.state.value.categoryActivity)
+        repo.activity = { throw ApiFailure(FailureKind.Connection, "Offline") }
+        model.loadCategories()
+        advanceUntilIdle()
+        assertNull(model.state.value.error)
+        assertFalse(model.state.value.loading)
+        assertTrue(model.state.value.categories.isNotEmpty())
+        assertEquals(5000L, model.state.value.categoryActivity[gameKey])
+    }
+
+    @Test fun activityLimitsConcurrentRequestsAndSkipsEmptyForums() = runTest(dispatcher) {
+        val repo = Repository()
+        repo.categories = (1L..8L).map { category.copy(id = it, topics = if (it == 8L) 0 else 1) }
+        val pending = CompletableDeferred<Unit>()
+        var active = 0
+        var maximum = 0
+        repo.activity = {
+            active++
+            maximum = maxOf(maximum, active)
+            try { pending.await(); 1234L } finally { active-- }
+        }
+        val model = model(repo)
+        runCurrent()
+        assertFalse(model.state.value.loading)
+        assertEquals(3, active)
+        pending.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(3, maximum)
+        assertEquals(7, repo.activityKeys.size)
+        assertEquals(7, model.state.value.categoryActivity.size)
+    }
+
     @Test fun paginationDeduplicatesAndFailedRefreshRetriesFirstPage() = runTest(dispatcher) {
         val repo = Repository()
         val model = model(repo)
@@ -156,8 +224,15 @@ class DiscussionsViewModelTest {
         var fail = false
         var replyTo: Long? = null
         var wait: CompletableDeferred<DiscussionPage>? = null
+        var categories = listOf(category)
+        var activity: suspend (DiscussionCategory) -> Long? = { null }
+        val activityKeys = mutableListOf<String>()
         val postResult = CompletableDeferred<Long>()
-        override suspend fun discussionCategories(area: DiscussionArea) = listOf(category.copy(area = area))
+        override suspend fun discussionCategories(area: DiscussionArea) = categories.map { it.copy(area = area) }
+        override suspend fun discussionLastActivity(category: DiscussionCategory): Long? {
+            activityKeys += category.key
+            return activity(category)
+        }
         override suspend fun discussionTopics(category: DiscussionCategory, page: Int, query: String): DiscussionPage {
             pages += page; queries += query
             if (fail) throw ApiFailure(FailureKind.Connection, "Offline")

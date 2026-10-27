@@ -69,6 +69,17 @@ class DiscussionsTest {
         fixture.repository.signOut()
     }
 
+    @Test fun categoryActivityUsesNewestTimestampRatherThanPinnedPosition() = runBlocking {
+        val fixture = Fixture()
+        val category = fixture.repository.discussionCategories(DiscussionArea.Apps).single()
+        fixture.topicsBody = """{"response":[{"id":80,"status":1,"topic_last_post_time":10},{"id":81,"topic_last_post_time":500}]}"""
+        assertEquals(500L, fixture.repository.discussionLastActivity(category))
+        fixture.topicsBody = """{"response":[]}"""
+        assertNull(fixture.repository.discussionLastActivity(category))
+        fixture.topicsBody = """{"response":[{"id":80}]}"""
+        assertNull(fixture.repository.discussionLastActivity(category))
+    }
+
     @Test fun failuresNeverReplayWritesAndExpiredSessionClearsAccount() = runBlocking {
         val fixture = Fixture()
         fixture.repository.signIn("Reader", "sample-password")
@@ -205,6 +216,7 @@ class DiscussionsTest {
         @Volatile var postStatus = 200
         @Volatile var postBody = """{"response":{"comment_id":99}}"""
         @Volatile var listStatus = 200
+        @Volatile var topicsBody = """{"response":[$TOPIC]}"""
         private val context = object : ContextWrapper(InstrumentationRegistry.getInstrumentation().targetContext) {
             override fun getApplicationContext(): Context = this
             override fun getSharedPreferences(name: String, mode: Int) = super.getSharedPreferences("discussions-test-$name", mode)
@@ -221,7 +233,7 @@ class DiscussionsTest {
                 path.endsWith("/comment") -> { status = postStatus; postBody }
                 path == "search" -> if (body(request).contains("missing")) """{"discussions":[],"others":[]}""" else """{"discussions":[$TOPIC],"others":[$TOPIC]}"""
                 path.contains("/comments/") -> { status = listStatus; """{"response":[{"id":44,"name":"Helpful reader","date":1700000000,"content":"Welcome! Take a look at https://example.org/help for more details."}]}""" }
-                path.contains("/category/") -> { status = listStatus; """{"response":[$TOPIC]}""" }
+                path.contains("/category/") -> { status = listStatus; topicsBody }
                 else -> error("Unexpected discussion fixture path: $path")
             }
             val payload = if (status == 400) """{"status":"error","error":{"text":"No records found."}}"""

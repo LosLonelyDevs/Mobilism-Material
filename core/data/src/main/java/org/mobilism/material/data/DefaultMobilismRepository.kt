@@ -139,6 +139,10 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
 
     override suspend fun discussionCategories(area: DiscussionArea) = withSession { api.discussionCategories(area, it) }
 
+    override suspend fun discussionLastActivity(category: DiscussionCategory): Long? = withSession { token ->
+        api.discussionTopics(category, 1, "", token).items.maxOfOrNull { it.activityAt }?.takeIf { it > 0 }
+    }
+
     override suspend fun homeReleases(section: ContentSection, order: FeedOrder) =
         releases(section, order, 1, FeedFilters()).items.take(12)
 
