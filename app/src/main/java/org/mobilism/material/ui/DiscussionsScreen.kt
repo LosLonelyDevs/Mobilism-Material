@@ -119,7 +119,7 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            PullToRefreshBox(isRefreshing = busy, onRefresh = refresh,
+            PullToRefreshBox(isRefreshing = busy, onRefresh = refresh, indicator = {},
                 modifier = Modifier.widthIn(max = 760.dp).fillMaxSize().semantics {
                     customActions = listOf(CustomAccessibilityAction("Refresh") {
                         if (state.composer.posting || busy) false else { refresh(); true }

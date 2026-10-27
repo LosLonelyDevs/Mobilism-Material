@@ -2,14 +2,17 @@ package org.mobilism.material.ui
 
 import android.content.ClipData
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.AlertDialog
@@ -30,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
@@ -88,10 +92,12 @@ fun DownloadLinkRow(
                 colors = colors,
                 compact = true,
             ) {
-                if (resolving) LoadingIndicator(Modifier.padding(end = 8.dp).size(24.dp))
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(if (resolving) "Resolving $name" else name, style = MaterialTheme.typography.labelLarge)
-                    if (providers.isNotEmpty()) Text(providers.joinToString(" · "), style = MaterialTheme.typography.labelSmall)
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(if (resolving) "Resolving $name" else name, Modifier.padding(horizontal = 28.dp),
+                        style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (resolving) LoadingIndicator(Modifier.align(Alignment.CenterStart).size(20.dp))
+                    else if (supported) Icon(Icons.Outlined.Check, null,
+                        Modifier.align(Alignment.CenterStart).size(20.dp).testTag("premium-download-check"))
                 }
             }
             AppIconButton(Icons.Outlined.ContentCopy, "Copy $name link", {

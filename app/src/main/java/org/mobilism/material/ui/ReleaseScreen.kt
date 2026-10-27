@@ -28,7 +28,6 @@ import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.filled.ThumbUp
@@ -44,6 +43,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,6 +59,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -96,6 +99,7 @@ fun ReleaseScreen(
     onReplyToComment: (org.mobilism.material.data.ReleaseComment) -> Unit = {}, onRemoveReply: () -> Unit = {},
     onRelease: (Long) -> Unit = {},
     onDownloadHosts: (List<String>) -> Unit = {},
+    onRefresh: () -> Unit = onRetry,
 ) {
     val theme = LocalAppTheme.current
     val context = LocalContext.current
@@ -120,7 +124,9 @@ fun ReleaseScreen(
     val sections = remember(content, release?.title) {
         ReleaseSections.parse(content?.bodyHtml.orEmpty(), release?.title.orEmpty())
     }
-    val groups = remember(content, preferences) { DownloadGroups.group(content?.downloads.orEmpty(), preferences) }
+    val groups = remember(content, preferences, debrid) { DownloadGroups.group(content?.downloads.orEmpty(), preferences, debrid) }
+    val canRefresh = !state.busy && !state.likeBusy && !state.composer.posting
+    val refresh = { if (canRefresh) onRefresh() }
     gallery?.let { (urls, index) -> ReleaseImageViewer(urls, index, onDismiss = { gallery = null }) }
     if (state.composer.open && release != null && auth is AuthState.SignedIn) {
         ReleaseCommentComposer(state.composer, auth.username, ReleaseTitles.parse(release.title, release.section).name,
@@ -201,7 +207,12 @@ fun ReleaseScreen(
             )
         },
     ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        PullToRefreshBox(isRefreshing = state.busy, onRefresh = refresh, indicator = {},
+            modifier = Modifier.padding(padding).fillMaxSize().semantics {
+                customActions = listOf(CustomAccessibilityAction("Refresh") {
+                    if (!canRefresh) false else { onRefresh(); true }
+                })
+            }, contentAlignment = Alignment.TopCenter) {
             if (state.busy && release == null) {
                 LoadingState("Loading release…", Modifier.align(Alignment.Center), indicatorSize = 96.dp)
             }
@@ -275,14 +286,9 @@ fun ReleaseScreen(
                     }
                     item("comments-heading") {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically) {
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    AppHeading("Comments", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                                    Text("Newest first", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                AppIconButton(Icons.Outlined.Refresh, "Refresh comments", onRefreshComments,
-                                    enabled = !state.comments.busy && !state.composer.posting)
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                AppHeading("Comments", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
+                                Text("Newest first", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             ExpressiveButton(if (auth is AuthState.SignedIn) onWriteComment else onSignIn,
                                 Modifier.fillMaxWidth().testTag("write-comment"),

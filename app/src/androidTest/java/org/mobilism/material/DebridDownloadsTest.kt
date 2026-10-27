@@ -33,7 +33,8 @@ class DebridDownloadsTest {
                 resolveLink = { assertEquals(original, it); resolved++; result.await() },
                 openLink = { opened += it; true }, onCopied = {})
         } }
-        compose.onNodeWithText("Real-Debrid", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Real-Debrid", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("premium-download-check", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("Copy Example host link").performClick()
         compose.runOnIdle { assertEquals(0, resolved); assertEquals(0, downloads) }
         compose.onNodeWithText("Example host").performClick()
@@ -69,6 +70,7 @@ class DebridDownloadsTest {
             DownloadLinkRow(DownloadLink(original), unverified, onOpened = {},
                 resolveLink = { resolved = true; direct }, openLink = { opened += it; true }, onCopied = {})
         } }
+        compose.onNodeWithTag("premium-download-check", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithText("Example host").performClick()
         compose.runOnIdle { assertFalse(resolved); assertEquals(listOf(original), opened) }
     }

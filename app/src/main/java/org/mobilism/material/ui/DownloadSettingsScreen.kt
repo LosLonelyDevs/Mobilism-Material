@@ -48,6 +48,7 @@ import kotlinx.coroutines.launch
 import org.mobilism.material.data.DebridRepository
 import org.mobilism.material.data.Alphabetical
 import org.mobilism.material.data.HostMatcher
+import org.mobilism.material.data.HostOrder
 import org.mobilism.material.data.SupportedHost
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.ExpressiveButton
@@ -120,12 +121,12 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
             }
             item {
                 CollapsibleSection("host-preferences", "Preferred file hosts", Icons.Outlined.StarOutline, colors.primary) {
-                    Text("Selected hosts appear first within each architecture group. Other mirrors remain available.",
+                    Text("Hosts sort by preferred with Premium access, Premium access, preferred, then other. Each group sorts alphabetically.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (busy && state.hosts.isEmpty()) LoadingState("Loading Mobilism hosts…", Modifier.fillMaxWidth())
                     error?.let { ErrorPanel(it, onRetry = { scope.launch { loadHosts() } }) }
-                    val hosts = Alphabetical.sorted((state.hosts + state.preferredHosts.map { SupportedHost(it, HostMatcher.displayName(it)) })
-                        .distinctBy { it.domain }) { it.name }
+                    val hosts = HostOrder.sorted((state.hosts + state.preferredHosts.map { SupportedHost(it, HostMatcher.displayName(it)) })
+                        .distinctBy { it.domain }, state.preferredHosts, debrid, { it.domain }) { it.name }
                     hosts.forEach { host ->
                         val checked = host.domain in state.preferredHosts
                         Row(

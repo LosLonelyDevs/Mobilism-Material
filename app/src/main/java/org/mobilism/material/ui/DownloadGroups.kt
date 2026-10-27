@@ -1,7 +1,8 @@
 package org.mobilism.material.ui
 
-import org.mobilism.material.data.HostMatcher
 import org.mobilism.material.data.Alphabetical
+import org.mobilism.material.data.DebridState
+import org.mobilism.material.data.HostOrder
 import org.mobilism.material.settings.CpuArchitecture
 import org.mobilism.material.settings.DownloadPreferences
 
@@ -33,7 +34,7 @@ object DownloadGroups {
     fun normalizedLabel(value: String): String = if (isArchitectureOnly(value)) label(value).orEmpty()
         else value.trim().trimEnd(':').trim()
 
-    fun group(links: List<DownloadLink>, preferences: DownloadPreferences): List<DownloadGroup> =
+    fun group(links: List<DownloadLink>, preferences: DownloadPreferences, debrid: DebridState = DebridState()): List<DownloadGroup> =
         links.groupBy { link -> link.groupId?.let { "section-$it" }
             ?: "label-${normalizedLabel(link.section.orEmpty()).lowercase(java.util.Locale.ROOT)}" }.map { (id, items) ->
             val title = normalizedLabel(items.first().section.orEmpty()).ifEmpty { "Universal" }
@@ -41,9 +42,7 @@ object DownloadGroups {
             val preferred = preferences.architecture
             DownloadGroup(
                 title = title,
-                links = Alphabetical.sorted(items) { HostMatcher.displayName(it.url) }.sortedBy { link -> preferences.preferredHosts.none {
-                    HostMatcher.key(link.url) == it || HostMatcher.matches(link.url, it)
-                } },
+                links = HostOrder.sorted(items, preferences.preferredHosts, debrid, { it.url }) { debrid.hostName(it.url) },
                 // Unlabeled downloads stay visible: their compatibility is unknown.
                 collapsed = preferred != null && architectures.isNotEmpty() && preferred !in architectures &&
                     CpuArchitecture.Universal !in architectures,

@@ -99,7 +99,8 @@ class ReleaseCommentTest {
                 onLike = model::toggleLike, onActionMessageShown = model::actionMessageShown,
                 auth = AuthState.SignedIn("Reader"), onWriteComment = model::openComposer,
                 onEditComment = model::editComment, onPostComment = model::postComment,
-                onCloseComposer = model::closeComposer, onRefreshComments = model::refreshComments)
+                onCloseComposer = model::closeComposer, onRefreshComments = model::refreshComments,
+                onRefresh = model::refresh)
         } }
         compose.waitUntil(10_000) { !model.state.value.busy }
         compose.onNodeWithTag("write-comment").performScrollTo().performClick()

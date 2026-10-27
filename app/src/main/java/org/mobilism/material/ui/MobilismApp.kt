@@ -250,7 +250,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onDownloads = { nav.navigate("download-preferences") }, onBack = { nav.popBackStack() },
                 hideAdult = hideAdult, onHideAdult = model.contentPreferences::hideAdult,
                 onAbout = { nav.navigate("about") }, developer = developer,
-                onDeveloperOptions = { nav.navigate("developer-options") }, diagnostics = app.diagnostics)
+                onDeveloperOptions = { nav.navigate("developer-options") }, diagnostics = app.diagnostics,
+                preferredHosts = downloads.preferredHosts)
         }
         composable("developer-options") {
             LaunchedEffect(developer.enabled) {
@@ -282,6 +283,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onWriteComment = detail::openComposer, onEditComment = detail::editComment,
                 onPostComment = detail::postComment, onCloseComposer = detail::closeComposer,
                 onRefreshComments = detail::refreshComments,
+                onRefresh = detail::refresh,
                 onReplyToComment = detail::replyToComment, onRemoveReply = detail::clearCommentReply,
                 onRelease = { topic -> if (topic != id) nav.navigate("release/$topic") { launchSingleTop = true } },
                 onResolveDownload = model.debrid::resolve,

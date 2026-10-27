@@ -392,6 +392,13 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
         }
     }
 
+    fun refresh() {
+        val snapshot = mutableState.value
+        if (snapshot.busy || job?.isActive == true || snapshot.likeBusy || snapshot.composer.posting) return
+        load()
+        refreshComments()
+    }
+
     fun refreshComments() {
         if (mutableState.value.composer.posting) return
         commentsJob?.cancel()

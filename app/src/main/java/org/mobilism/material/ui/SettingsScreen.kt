@@ -69,6 +69,7 @@ import org.mobilism.material.data.Alphabetical
 import org.mobilism.material.data.DebridProvider
 import org.mobilism.material.data.DebridRepository
 import org.mobilism.material.data.DebridState
+import org.mobilism.material.data.HostOrder
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.ExpressiveCard
@@ -80,7 +81,8 @@ import org.mobilism.material.designsystem.LocalAppTheme
 fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearance: () -> Unit, onDownloads: () -> Unit, onBack: () -> Unit,
     hideAdult: Boolean = false, onHideAdult: (Boolean) -> Unit = {}, onAbout: () -> Unit = {},
     developer: org.mobilism.material.settings.DeveloperPreferences = org.mobilism.material.settings.DeveloperPreferences(),
-    onDeveloperOptions: () -> Unit = {}, diagnostics: org.mobilism.material.settings.DiagnosticLogStore? = null) {
+    onDeveloperOptions: () -> Unit = {}, diagnostics: org.mobilism.material.settings.DiagnosticLogStore? = null,
+    preferredHosts: Set<String> = emptySet()) {
     val theme = LocalAppTheme.current
     Scaffold(topBar = {
         TopAppBar(title = { AppHeading("Settings", HeadingLevel.Page) }, navigationIcon = {
@@ -134,7 +136,7 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
                 }
                 items(Alphabetical.sorted(state.accounts) { it.provider.label }
                     .sortedBy { it.provider != DebridProvider.Mobilism }, key = { it.provider }) { account ->
-                    DebridAccountCard(account, repository, state)
+                    DebridAccountCard(account, repository, state, preferredHosts)
                 }
             }
             if (developer.enabled) item(key = "developer") {
@@ -190,7 +192,7 @@ internal fun ContentVisibilitySetting(hideAdult: Boolean, onHideAdult: (Boolean)
 }
 
 @Composable
-private fun DebridAccountCard(account: DebridAccount, repository: DebridRepository, debrid: DebridState) {
+private fun DebridAccountCard(account: DebridAccount, repository: DebridRepository, debrid: DebridState, preferredHosts: Set<String>) {
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
@@ -298,7 +300,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                 ) {
                     Icon(Icons.Outlined.Refresh, "Verify account and refresh hosts")
                 }
-                DebridHostMenu(account, debrid, Modifier.weight(1f))
+                DebridHostMenu(account, debrid, preferredHosts, Modifier.weight(1f))
                 FilledTonalIconButton(
                     onClick = { perform { repository.removeKey(account.provider); key = "" } },
                     modifier = Modifier.size(48.dp), enabled = !busy,
@@ -319,7 +321,9 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun DebridHostMenu(account: DebridAccount, debrid: DebridState, modifier: Modifier = Modifier) {
+private fun DebridHostMenu(account: DebridAccount, debrid: DebridState, preferredHosts: Set<String>, modifier: Modifier = Modifier) {
+    val hosts = HostOrder.sorted(account.hosts, preferredHosts, debrid, { it.domain }) { it.name }
+        .distinctBy { it.name.lowercase(java.util.Locale.ROOT) }
     val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
     val menuWidth = (windowWidth - 64.dp).coerceIn(240.dp, 560.dp)
     var expanded by remember(account.provider) { mutableStateOf(false) }
@@ -337,7 +341,7 @@ private fun DebridHostMenu(account: DebridAccount, debrid: DebridState, modifier
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             ),
         ) {
-            val count = account.hostNames.size
+            val count = hosts.size
             Text("$count Mobilism ${if (count == 1) "host" else "hosts"}", Modifier.weight(1f, fill = false),
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             Icon(Icons.Outlined.ExpandMore, null, Modifier.padding(start = 4.dp).size(20.dp).rotate(rotation))
@@ -352,12 +356,13 @@ private fun DebridHostMenu(account: DebridAccount, debrid: DebridState, modifier
                 "Supported Mobilism hosts", Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                 style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
             )
-            if (account.hostNames.isEmpty()) Text(
+            if (hosts.isEmpty()) Text(
                 if (account.busy) "Loading hosts…" else "No matching hosts. Try Refresh hosts.",
                 Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                 style = MaterialTheme.typography.bodyMedium,
             )
-            account.hostNames.forEach { name ->
+            hosts.forEach { host ->
+                val name = host.name
                 val domains = account.hosts.filter { it.name.equals(name, ignoreCase = true) }.map { it.domain }
                 RoundedMenuItem(
                     label = name, onClick = { expanded = false }, accent = MaterialTheme.colorScheme.primary,

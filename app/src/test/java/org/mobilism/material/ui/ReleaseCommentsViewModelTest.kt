@@ -30,6 +30,8 @@ class ReleaseCommentsViewModelTest {
         runCurrent()
         assertEquals(listOf(42L to "Thanks & hello\nSecond line"), repo.posts)
         assertTrue(model.state.value.composer.posting)
+        model.refresh()
+        assertEquals(1, repo.releaseRequests)
         model.editComment("changed while posting")
         model.closeComposer()
         assertTrue(model.state.value.composer.open)
@@ -203,6 +205,35 @@ class ReleaseCommentsViewModelTest {
         assertNull(model.state.value.composer.replyTo)
     }
 
+    @Test fun refreshReloadsReleaseAndFirstCommentPageWithoutLosingDraftOrAcceptingStalePagination() = runTest(dispatcher) {
+        val repo = Repository()
+        val original = ReleaseComments.posted(77, "Author", "Original", 1)
+        repo.comments = CommentPage(listOf(original), true)
+        val model = ReleaseViewModel(42, repo, SavedStateHandle())
+        advanceUntilIdle()
+        model.editComment("Unfinished reply")
+        model.replyToComment(original)
+        repo.pendingPageTwo = CompletableDeferred()
+        model.loadComments()
+        runCurrent()
+        val fresh = ReleaseComments.posted(88, "Reader", "New comment", 2)
+        repo.comments = CommentPage(listOf(fresh), false)
+        repo.releaseTitle = "Updated release"
+        model.refresh()
+        model.refresh()
+        advanceUntilIdle()
+        assertEquals(2, repo.releaseRequests)
+        assertEquals("Updated release", model.state.value.release!!.title)
+        assertEquals(listOf(1, 2, 1), repo.pages)
+        assertEquals(listOf(fresh), model.state.value.comments.items)
+        assertEquals(1, model.state.value.comments.page)
+        assertEquals("Unfinished reply", model.state.value.composer.draft)
+        assertEquals(77L, model.state.value.composer.replyTo!!.id)
+        repo.pendingPageTwo!!.complete(CommentPage(listOf(original), false))
+        advanceUntilIdle()
+        assertEquals(listOf(fresh), model.state.value.comments.items)
+    }
+
     private class Repository : MobilismRepository {
         override val auth = MutableStateFlow<AuthState>(AuthState.SignedIn("Reader"))
         val posts = mutableListOf<Pair<Long, String>>()
@@ -212,6 +243,8 @@ class ReleaseCommentsViewModelTest {
         var comments = CommentPage(emptyList(), false)
         var commentFailure: Exception? = null
         var pendingPageTwo: CompletableDeferred<CommentPage>? = null
+        var releaseRequests = 0
+        var releaseTitle = "Sample release"
         override suspend fun postComment(id: Long, text: String, replyTo: Long?): Long {
             posts += id to text
             replyTargets += replyTo
@@ -223,7 +256,10 @@ class ReleaseCommentsViewModelTest {
             if (page == 2) pendingPageTwo?.let { return it.await() }
             return comments
         }
-        override suspend fun release(id: Long) = Release(id, "Sample release", "Author", null, 1, 0, 0)
+        override suspend fun release(id: Long): Release {
+            releaseRequests++
+            return Release(id, releaseTitle, "Author", null, 1, 0, 0)
+        }
         override suspend fun toggleLike(release: Release) = true
         override suspend fun restoreSession() = Unit
         override suspend fun signIn(username: String, password: String) = Unit

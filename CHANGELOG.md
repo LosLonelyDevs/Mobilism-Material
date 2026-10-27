@@ -2,24 +2,18 @@
 
 ## Unreleased
 
-- Add Home tabs for Apps, Books, and Games with featured releases, latest and popular collections, category shortcuts, reviews, and recent discussions. Adapt Orion Store's hero and shape patterns for Material 3 Expressive.
-- Add Discussions with Apps, Games, Books, and Community forums, topic search, original posts, and paged comments. Keep drafts and quoted replies with their topic.
-- Add discussion category colors, single-line topic titles and previews, and a pinned badge beside reply counts. Remove extra list headings. Move URL actions into the options menu and refresh discussions by pulling down.
-- Show right-aligned last activity on forum category cards without navigation arrows. Load it in the background and update it on refresh.
-- Restyle comments with compact author rows, icon-only collapse controls, and indented quote context. Adapt LuliReddit's MIT-licensed comment controls and thread guides.
-- Separate app and game discussion forums, shorten Comment actions, and improve preferred-host colors and checkbox spacing.
-- Keep direct APK links and mirrors in the same download group, show Premium providers below host names, and add hosts found in releases to download preferences.
-- Widen account host menus, hide Sign in again for verified MegaDebrid accounts, and shorten the diagnostic logs description.
-- Fix thumbs up for the current forum layout and add space between release action buttons.
-- Compare versions with distribution suffixes correctly so Following finds newer releases such as Televizo instead of falling back to older versions.
+## 0.1.15
+
+- Add Home tabs for Apps, Books, and Games with featured releases, latest and popular collections, categories, reviews, and recent discussions.
+- Add Discussions with separate app and game forums, topic search, original posts, and paged comments. Show forum activity, compact topic previews, and pinned badges.
+- Restyle comments with compact author rows, icon-only collapse controls, and indented quotes. Keep quoted replies with unfinished drafts and make plain URLs clickable.
+- Add pull-to-refresh for discussions and release pages, URL actions in the options menu, and a single Expressive loading indicator in Discussions.
+- Add Inbox and Sent tabs, conversation history, mark as read, and private message replies. Fix escaped emojis in message previews.
+- Group direct APK links with their mirrors and add discovered hosts to preferences. Show a checkmark for verified Premium access and sort hosts by preferred with Premium access, Premium access, preferred, then other, alphabetically within each group.
+- Improve host selection spacing and account menus. Hide Sign in again for verified MegaDebrid accounts and shorten diagnostic log text.
+- Fix thumbs up and space apart release action buttons. Fix version comparison so Following finds newer releases such as Televizo instead of falling back to older versions.
+- Add AMOLED Black, keep the navigation drawer full height, and remove extra Home headings.
 - Download manual builds directly as APK files without a ZIP wrapper.
-- Add Inbox and Sent tabs, conversation history, mark as read, and private message replies.
-- Decode escaped emojis in Inbox and Sent message previews.
-- Keep the navigation drawer full height and remove Home section subtitles.
-- Reduce vertical padding and gaps in comments. Tap a comment's author row to collapse its text, quoted replies, and images.
-- Reply to release comments with quoted context. Keep reply targets with unfinished drafts.
-- Make plain URLs clickable in release text, comments, and messages.
-- Add AMOLED Black to the theme picker.
 
 ## 0.1.14
 
