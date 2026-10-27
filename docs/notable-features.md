@@ -1,0 +1,10 @@
+- Rebuilt in Kotlin and Jetpack Compose, with Material 3 Expressive components and motion.
+- Catppuccin Frappé dark theme, Geist or system fonts, and a reduced-motion option.
+- Browse and search Apps, Games, and Books, with Latest/Top feeds, category filters, and infinite scrolling.
+- Release pages split into collapsible Description, What's new, Mod info, and Downloads sections, with comments, quoted replies, and saved drafts.
+- Swipe through release screenshots and open them full screen with zoom and gallery navigation.
+- Follow apps and check for newer versions against what's installed. Supports manual checks, background checks, and optional notifications, while keeping phone/TV and stable/preview releases separate.
+- Manage installed apps and downloaded marks in My Applications. Find matching releases, keep download history when following a newer version, and undo removals.
+- Group download links by architecture and put preferred file hosts first. Open links in your browser or copy them.
+- Like, watch, and mark releases downloaded from the release page. Opening a file host adds a downloaded mark and can automatically follow the app.
+- Save Premium and debrid accounts encrypted and resolve supported file hosts before opening them in your browser. Native downloads are still pending.

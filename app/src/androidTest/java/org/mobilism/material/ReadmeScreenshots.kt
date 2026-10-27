@@ -63,8 +63,10 @@ class ReadmeScreenshots {
         )
         screen {
             FeedScreen(FeedState(items = releases, canLoadMore = false), AuthState.Guest,
-                {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, CategoryState(), {}, {})
+                {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, CategoryState(), {}, {}, homeContent = {})
         }
+        compose.onNodeWithText("Home", substring = false).assertExists()
+        compose.onNodeWithText("Latest", substring = false).assertIsSelected()
         awaitImages(releases.mapNotNull { it.thumbnail })
         capture("apps")
     }

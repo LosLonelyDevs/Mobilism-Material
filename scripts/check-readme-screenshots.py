@@ -1,10 +1,10 @@
-"""Check the four generated screenshots before CI publishes them."""
+"""Check generated README screenshots before CI publishes them."""
 
 from pathlib import Path
 import struct
 
 ROOT = Path(__file__).resolve().parents[1]
-for name in ("apps", "release", "downloads", "appearance"):
+for name in ("apps", "release", "downloads", "appearance", "apps-hero", "books-hero", "games-hero"):
     path = ROOT / "docs" / "images" / f"{name}.png"
     data = path.read_bytes()
     assert data[:8] == b"\x89PNG\r\n\x1a\n", f"Invalid PNG: {name}"

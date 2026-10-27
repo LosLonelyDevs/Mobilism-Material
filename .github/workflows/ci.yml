@@ -116,7 +116,7 @@ jobs:
             echo 'Main moved during capture. Leaving its screenshots unchanged.'
             exit 0
           fi
-          git add -- docs/images/apps.png docs/images/release.png docs/images/downloads.png docs/images/appearance.png
+          git add -- docs/images/apps.png docs/images/release.png docs/images/downloads.png docs/images/appearance.png docs/images/apps-hero.png docs/images/books-hero.png docs/images/games-hero.png
           if git diff --cached --quiet; then exit 0; fi
           git config user.name "$(git show -s --format=%an "$GITHUB_SHA")"
           git config user.email "$(git show -s --format=%ae "$GITHUB_SHA")"

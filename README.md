@@ -14,27 +14,36 @@ Still a work in progress. Requires Android 8+. Installs alongside the old app an
 ## Screenshots
 
 <p>
-  <img src="docs/images/apps.png" alt="Apps feed with separate names and version details" width="200">
+  <img src="docs/images/apps-hero.png" alt="Apps Home with featured releases and latest apps" width="200">
+  <img src="docs/images/books-hero.png" alt="Books Home with featured reads in the light theme" width="200">
+  <img src="docs/images/games-hero.png" alt="Games Home with featured games in AMOLED Black" width="200">
+</p>
+<p>
+  <img src="docs/images/apps.png" alt="Latest apps with separate names and version details" width="200">
   <img src="docs/images/release.png" alt="Release details with the Material 3 Expressive image carousel" width="200">
   <img src="docs/images/downloads.png" alt="Downloads grouped by architecture with file host buttons" width="200">
   <img src="docs/images/appearance.png" alt="Catppuccin Frappé theme, fonts, and motion settings" width="200">
 </p>
 
-Screenshots use sample data. CI refreshes them on each version bump.
+Screenshots use sample data. CI refreshes them on version bumps and screenshot test changes.
 
-## What works
+## Features
 
-- Apps, Games, and Books: Home with featured releases, latest/popular collections, category shortcuts, reviews, and recent discussions. Search, Latest/Top feeds, category/date filters, and infinite scrolling remain available. [Home design and code credits](docs/home.md).
-- Release cards and pages: separate app names/versions and book titles/authors/series/formats, post dates, collapsible sections, grouped downloads, thumbs-up, comments, and an image carousel with a full-screen viewer.
-- Following: installed-version checks, background checks, and optional update notifications. My Applications keeps installed apps and downloaded marks.
-- Premium: Mobilism Premium, MegaDebrid, and Real-Debrid accounts with encrypted credentials, account verification, direct download links, and an original-host fallback when resolution fails. Mobilism uses your Premium password and checks its current supported-host list.
-- Shared A-Z sorting for categories, named settings choices, file hosts, and saved libraries. Release feeds keep their selected ordering.
-- Release comments: post or reply with quoted context. Drafts survive closing the sheet and connection errors. Plain URLs are clickable in release text and comments. [Scope and behavior](docs/release-comments.md).
-- Messages: Inbox and Sent tabs, conversation history, mark as read, and replies. Older saved logins need one fresh sign-in for inbox access.
-- Discussions: Apps, Games, Books, and Community forums with category browsing, topic search, original posts, paged comments, and quoted replies. [Scope and behavior](docs/discussions.md).
-- Preferred architectures and file hosts, 13 light/dark themes including AMOLED Black, open-source fonts, custom fonts, and reduced motion.
+- [Home tabs](docs/home.md) for Apps, Books, and Games, with featured releases, categories, reviews, and discussions.
+- Search, Latest and Top feeds, date/category filters, and infinite scrolling.
+- Clear app versions and book details, collapsible release sections, and full-screen images.
+- [Comments](docs/release-comments.md) with quoted replies, saved drafts, compact spacing, and individual collapse controls.
+- [Discussions](docs/discussions.md) with forum browsing, topic search, and replies.
+- Inbox, Sent, conversation history, mark as read, and message replies.
+- Clickable URLs and emoji support in release text, comments, and messages.
+- Following with background update checks and optional notifications. My Applications tracks installed and downloaded apps.
+- Mobilism Premium, MegaDebrid, and Real-Debrid links with encrypted account storage.
+- Grouped downloads, preferred architectures, and preferred file hosts.
+- 13 themes including AMOLED Black, bundled and custom fonts, and reduced motion.
 
 Downloads open in your browser. Green buttons resolve through a verified Premium account first. Native downloads and several legacy features are still pending. [Remaining work](docs/feature-parity.md).
+
+Older saved logins need one fresh sign-in for Inbox access.
 
 Connection trouble? Reproduce it, then use **Export logs** in Settings or on the login screen. [Troubleshooting](docs/troubleshooting.md).
 
