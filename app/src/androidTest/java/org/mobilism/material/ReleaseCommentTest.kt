@@ -4,11 +4,23 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
@@ -33,6 +45,47 @@ import org.mobilism.material.ui.*
 @RunWith(AndroidJUnit4::class)
 class ReleaseCommentTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun commentsCollapseIndependentlyAndRestoreQuotedReplies() {
+        val restoration = StateRestorationTester(compose)
+        val comments = listOf(
+            ReleaseComment(77, "Author", null, 1700000000, "A comment with a quoted reply and an attached image.",
+                images = listOf("android.resource://cum.ahfu.mobi.material/drawable/ic_mobilism"),
+                quotes = listOf(CommentQuote("Earlier author", "Earlier comment"))),
+            ReleaseComment(78, "Another reader", null, 1700000000, "An independent comment."))
+        restoration.setContent { MobilismTheme(reduceMotion = true) {
+            Surface(Modifier.fillMaxSize().safeDrawingPadding()) {
+                LazyColumn(contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.testTag("collapse-test")) {
+                    items(comments, key = { it.id }) { comment ->
+                        ReleaseCommentCard(comment, "https://forum.mobilism.org/", onReply = {}, onImage = { _, _ -> })
+                    }
+                }
+            }
+        } }
+        compose.onNodeWithText("Show quote").performClick()
+        compose.onNodeWithText("Hide quote").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open comment image 1").assertExists()
+        compose.onNodeWithTag("comment-toggle-77").performClick()
+        compose.onNodeWithTag("comment-toggle-77").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Collapsed"))
+        compose.onNodeWithTag("comment-body-77").assertDoesNotExist()
+        compose.onNodeWithText("Replying to Earlier author").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Open comment image 1").assertDoesNotExist()
+        compose.onNodeWithTag("comment-body-78").assertIsDisplayed()
+        compose.onNodeWithTag("comment-toggle-77").assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithTag("comment-77").assertHeightIsEqualTo(48.dp)
+        capture("collapsed-comment")
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("comment-body-77").assertDoesNotExist()
+        compose.onNodeWithTag("comment-toggle-77").performClick()
+        compose.onNodeWithTag("comment-body-77").assertExists()
+        compose.onNodeWithText("Hide quote").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open comment image 1").assertExists()
+        val shortComment = compose.onNodeWithTag("comment-78").fetchSemanticsNode().boundsInRoot
+        val density = compose.activity.resources.displayMetrics.density
+        assertTrue("A short comment should fit within 136 dp", shortComment.height <= 136 * density + 1)
+        capture("expanded-comment")
+    }
 
     @Test fun composerKeepsDraftOnCloseAndFailureThenPostsThroughAuthenticatedApi() = runBlocking {
         val fixture = Fixture()

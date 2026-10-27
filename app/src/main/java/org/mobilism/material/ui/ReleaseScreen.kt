@@ -206,15 +206,15 @@ fun ReleaseScreen(
             LazyColumn(
                 modifier = Modifier.widthIn(max = 840.dp).fillMaxSize().testTag("release-content"),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (state.busy && release != null) item { LoadingState("Updating release…", Modifier.fillMaxWidth()) }
-                state.error?.let { item { ErrorPanel(it, onRetry = onRetry) } }
+                if (state.busy && release != null) releaseDetailItem { LoadingState("Updating release…", Modifier.fillMaxWidth()) }
+                state.error?.let { releaseDetailItem { ErrorPanel(it, onRetry = onRetry) } }
                 if (release != null) {
-                    item {
+                    releaseDetailItem {
                          ReleaseTitleHeader(release.title, release.section)
                     }
-                    item {
+                    releaseDetailItem {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Text(release.author, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
@@ -224,7 +224,7 @@ fun ReleaseScreen(
                             ReleasePostDate(release.publishedAt)
                         }
                     }
-                    if (images.isNotEmpty()) item("images-${release.id}") {
+                    if (images.isNotEmpty()) releaseDetailItem("images-${release.id}") {
                         ReleaseImageCarousel(images) { index -> gallery = images to index }
                     }
                     items(sections, key = { it.kind }) { section ->
@@ -238,12 +238,14 @@ fun ReleaseScreen(
                             ReleaseSection.Changes -> Icons.Outlined.NewReleases
                             ReleaseSection.Mod -> Icons.Outlined.Tune
                         }
-                        CollapsibleSection("${release.id}-${section.kind}", section.kind.title, icon, accent,
-                            headingStyle = MaterialTheme.typography.titleMedium) {
-                            ReleaseBody(section.html, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
+                        Box(Modifier.padding(bottom = 12.dp)) {
+                            CollapsibleSection("${release.id}-${section.kind}", section.kind.title, icon, accent,
+                                headingStyle = MaterialTheme.typography.titleMedium) {
+                                ReleaseBody(section.html, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
+                            }
                         }
                     }
-                    if (groups.isNotEmpty() || !content?.downloadNotesHtml.isNullOrBlank()) item("downloads") {
+                    if (groups.isNotEmpty() || !content?.downloadNotesHtml.isNullOrBlank()) releaseDetailItem("downloads") {
                         CollapsibleSection("${release.id}-downloads", "Downloads", Icons.Outlined.Download, theme.success,
                             headingStyle = MaterialTheme.typography.titleMedium) {
                             content?.downloadNotesHtml?.takeIf { it.isNotBlank() }?.let {
@@ -309,6 +311,10 @@ fun ReleaseScreen(
             }
         }
     }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.releaseDetailItem(key: Any? = null, content: @Composable () -> Unit) {
+    item(key = key) { Box(Modifier.padding(bottom = 12.dp)) { content() } }
 }
 
 /** Native text bridge preserves formatted forum posts without JavaScript or a WebView. */

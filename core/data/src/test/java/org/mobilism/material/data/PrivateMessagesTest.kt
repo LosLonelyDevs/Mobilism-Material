@@ -30,6 +30,22 @@ class PrivateMessagesTest {
         assertFalse(messages.single().toString().contains("content"))
     }
 
+    @Test fun decodesEscapedSmileyMarkupInMailboxPreviews() {
+        val messages = PrivateMessages.parse(JSONObject("""{"response":[
+            {"id":1,"preview":"<b>Premium support added</b> [smile]\\ud83d\\ude0a[/smile]"},
+            {"id":2,"preview":"Thanks &amp; welcome [SMILE]&#128522;[/SMILE] ❤️"}
+        ]}"""))
+        assertEquals("Premium support added 😊", messages[0].preview)
+        assertEquals("Thanks & welcome 😊 ❤️", messages[1].preview)
+    }
+
+    @Test fun previewDecodingPreservesLiteralEscapesAndPlainEmoji() {
+        val message = PrivateMessages.parse(JSONObject("""{"response":[{
+            "id":1,"preview":"Code \\u1234 [smile]\\ud83d\\udc4d\\ud83c\\udffd[/smile] ❤️"
+        }]}""")).single()
+        assertEquals("""Code \u1234 👍🏽 ❤️""", message.preview)
+    }
+
     @Test fun deduplicatesMessagesAndAcceptsEmptyMailboxes() {
         assertTrue(PrivateMessages.parse(JSONObject("""{"response":[]}""")).isEmpty())
         assertEquals(1, PrivateMessages.parse(JSONObject("""{"response":[{"id":1,"msg_id":2},{"id":1,"msg_id":2}]}""")).size)

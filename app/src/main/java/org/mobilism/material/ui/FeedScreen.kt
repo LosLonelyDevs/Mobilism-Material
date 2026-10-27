@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -61,6 +62,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -132,67 +134,69 @@ fun FeedScreen(
     ModalNavigationDrawer(
         drawerState = drawer,
         drawerContent = {
-            ModalDrawerSheet(Modifier.verticalScroll(rememberScrollState())) {
-                AppHeading("Mobilism", HeadingLevel.Page, Modifier.padding(24.dp), style = MaterialTheme.typography.headlineMedium)
-                Text((auth as? AuthState.SignedIn)?.username ?: "Guest", Modifier.padding(horizontal = 24.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Alphabetical.sorted(ContentSection.entries) { it.label }.forEach { section ->
-                    val style = section.style()
-                    val interaction = remember { MutableInteractionSource() }
+            ModalDrawerSheet(Modifier.fillMaxHeight().testTag("navigation-drawer")) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    AppHeading("Mobilism", HeadingLevel.Page, Modifier.padding(24.dp), style = MaterialTheme.typography.headlineMedium)
+                    Text((auth as? AuthState.SignedIn)?.username ?: "Guest", Modifier.padding(horizontal = 24.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Alphabetical.sorted(ContentSection.entries) { it.label }.forEach { section ->
+                        val style = section.style()
+                        val interaction = remember { MutableInteractionSource() }
+                        NavigationDrawerItem(
+                            label = { Text(section.label) }, selected = state.section == section,
+                            icon = { Icon(style.icon, null) },
+                            colors = NavigationDrawerItemDefaults.colors(
+                                selectedContainerColor = style.accent, selectedTextColor = style.onAccent,
+                                selectedIconColor = style.onAccent, unselectedTextColor = style.accent,
+                                unselectedIconColor = style.accent,
+                            ),
+                            onClick = { scope.launch { drawer.close() }; onSection(section) },
+                            interactionSource = interaction,
+                            modifier = Modifier.padding(horizontal = 12.dp).focusOutline(interaction),
+                        )
+                    }
+                    HorizontalDivider(Modifier.padding(16.dp))
+                    val discussionsInteraction = remember { MutableInteractionSource() }
                     NavigationDrawerItem(
-                        label = { Text(section.label) }, selected = state.section == section,
-                        icon = { Icon(style.icon, null) },
-                        colors = NavigationDrawerItemDefaults.colors(
-                            selectedContainerColor = style.accent, selectedTextColor = style.onAccent,
-                            selectedIconColor = style.onAccent, unselectedTextColor = style.accent,
-                            unselectedIconColor = style.accent,
-                        ),
-                        onClick = { scope.launch { drawer.close() }; onSection(section) },
-                        interactionSource = interaction,
-                        modifier = Modifier.padding(horizontal = 12.dp).focusOutline(interaction),
+                        label = { Text("Discussions") }, selected = false,
+                        icon = { Icon(Icons.Outlined.ChatBubbleOutline, null, tint = theme.reading) },
+                        onClick = { scope.launch { drawer.close() }; onDiscussions() },
+                        interactionSource = discussionsInteraction,
+                        modifier = Modifier.padding(horizontal = 12.dp).focusOutline(discussionsInteraction),
+                    )
+                    NavigationDrawerItem(
+                        label = { Text("Following") }, selected = false,
+                        icon = { Icon(Icons.Outlined.Bookmarks, null, tint = theme.success) },
+                        onClick = { scope.launch { drawer.close() }; onFollowing() },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                    NavigationDrawerItem(
+                        label = { Text("My Applications") }, selected = false,
+                        icon = { Icon(Icons.Outlined.PhoneAndroid, null, tint = theme.featured) },
+                        onClick = { scope.launch { drawer.close() }; onLibrary() },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                    if (auth is AuthState.SignedIn) NavigationDrawerItem(
+                        label = { Text("Messages") }, selected = false,
+                        icon = { Icon(Icons.Outlined.MailOutline, null, tint = theme.reading) },
+                        onClick = { scope.launch { drawer.close() }; onMessages() },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                    val settingsInteraction = remember { MutableInteractionSource() }
+                    NavigationDrawerItem(
+                        label = { Text("Settings") }, selected = false,
+                        icon = { Icon(Icons.Outlined.Settings, null, tint = theme.personalization) },
+                        onClick = { scope.launch { drawer.close() }; onSettings() },
+                        interactionSource = settingsInteraction,
+                        modifier = Modifier.padding(horizontal = 12.dp).focusOutline(settingsInteraction),
+                    )
+                    val logoutInteraction = remember { MutableInteractionSource() }
+                    NavigationDrawerItem(
+                        label = { Text(if (auth is AuthState.Guest) "Login" else "Logout") }, selected = false,
+                        icon = { Icon(Icons.AutoMirrored.Outlined.ExitToApp, null) }, onClick = onSignOut,
+                        interactionSource = logoutInteraction,
+                        modifier = Modifier.padding(horizontal = 12.dp).focusOutline(logoutInteraction),
                     )
                 }
-                HorizontalDivider(Modifier.padding(16.dp))
-                val discussionsInteraction = remember { MutableInteractionSource() }
-                NavigationDrawerItem(
-                    label = { Text("Discussions") }, selected = false,
-                    icon = { Icon(Icons.Outlined.ChatBubbleOutline, null, tint = theme.reading) },
-                    onClick = { scope.launch { drawer.close() }; onDiscussions() },
-                    interactionSource = discussionsInteraction,
-                    modifier = Modifier.padding(horizontal = 12.dp).focusOutline(discussionsInteraction),
-                )
-                NavigationDrawerItem(
-                    label = { Text("Following") }, selected = false,
-                    icon = { Icon(Icons.Outlined.Bookmarks, null, tint = theme.success) },
-                    onClick = { scope.launch { drawer.close() }; onFollowing() },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                NavigationDrawerItem(
-                    label = { Text("My Applications") }, selected = false,
-                    icon = { Icon(Icons.Outlined.PhoneAndroid, null, tint = theme.featured) },
-                    onClick = { scope.launch { drawer.close() }; onLibrary() },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                if (auth is AuthState.SignedIn) NavigationDrawerItem(
-                    label = { Text("Messages") }, selected = false,
-                    icon = { Icon(Icons.Outlined.MailOutline, null, tint = theme.reading) },
-                    onClick = { scope.launch { drawer.close() }; onMessages() },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                val settingsInteraction = remember { MutableInteractionSource() }
-                NavigationDrawerItem(
-                    label = { Text("Settings") }, selected = false,
-                    icon = { Icon(Icons.Outlined.Settings, null, tint = theme.personalization) },
-                    onClick = { scope.launch { drawer.close() }; onSettings() },
-                    interactionSource = settingsInteraction,
-                    modifier = Modifier.padding(horizontal = 12.dp).focusOutline(settingsInteraction),
-                )
-                val logoutInteraction = remember { MutableInteractionSource() }
-                NavigationDrawerItem(
-                    label = { Text(if (auth is AuthState.Guest) "Login" else "Logout") }, selected = false,
-                    icon = { Icon(Icons.AutoMirrored.Outlined.ExitToApp, null) }, onClick = onSignOut,
-                    interactionSource = logoutInteraction,
-                    modifier = Modifier.padding(horizontal = 12.dp).focusOutline(logoutInteraction),
-                )
             }
         },
     ) {

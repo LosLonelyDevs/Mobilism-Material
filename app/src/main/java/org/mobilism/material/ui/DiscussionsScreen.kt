@@ -201,7 +201,7 @@ private fun DiscussionTopics(state: DiscussionsState, onTopic: (DiscussionTopic)
 private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit, onReply: (ReleaseComment) -> Unit,
     onImage: (List<String>, Int) -> Unit) {
     val topic = state.topic ?: return
-    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp),
+    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize().testTag("discussion-reader")) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

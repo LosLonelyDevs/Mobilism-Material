@@ -6,6 +6,7 @@ Signed-in users can post a comment or reply to an existing comment on an Apps, G
 
 - The Comments section has Write a comment and Refresh actions. Guests get Sign in to comment and return to the release after signing in.
 - Each comment has Reply. The composer shows the quoted author and text; Remove reply keeps the draft and turns it into a normal comment. Reply targets survive closing the sheet and saved-state restoration.
+- Tap a comment's author row to collapse or reopen its body, quoted replies, images, and Reply action. Each comment keeps its own state, including across saved-state restoration. Comments use less top and bottom padding and smaller gaps on release and discussion pages. Side margins stay the same.
 - Quoted replies show a short preview with Show quote to expand the formatted text. Plain URLs in comments and release text become clickable links. Existing named links keep their original destination.
 - An expanded modal sheet shows the release title, account name, multiline field, character count, Close, and Post comment. Comments are public. The app limits a draft to 10,000 characters.
 - Closing the sheet keeps the draft for that release. Rotation and saved-state restoration keep it too. Leaving the release or changing accounts ends that draft's lifetime.
@@ -27,3 +28,5 @@ The legacy contract is `POST release/comment`, form fields `id` and `comment`, a
 Drafts are not sent until Post comment is tapped. Diagnostics do not log comment bodies or tokens. The immediate local display escapes HTML and is replaced by the server's formatted comment when the refreshed page includes it.
 
 Posting tests use intercepted API responses. No live forum comment is published by the test suite.
+
+The API returns a flat list and quoted reply text, without parent comment IDs. Collapsing a comment hides its own quoted context; it does not infer a thread or hide separate comments.

@@ -7,16 +7,22 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.InputModeManager
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
@@ -35,6 +41,30 @@ import org.mobilism.material.ui.*
 @RunWith(AndroidJUnit4::class)
 class HomeTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun drawerFillsViewportAndScrollsOnShortScreens() {
+        var short by mutableStateOf(false)
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (short) 1.5f else 1f)) {
+                Box(Modifier.fillMaxWidth().height(if (short) 320.dp else 800.dp).testTag("drawer-frame")) {
+                    FeedScreen(FeedState(), AuthState.SignedIn("Reader"), {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, CategoryState(), {}, {})
+                }
+            }
+        } }
+        compose.onNodeWithContentDescription("Open navigation drawer").performClick()
+        fun assertFullHeight() {
+            val frame = compose.onNodeWithTag("drawer-frame").fetchSemanticsNode().boundsInRoot
+            val drawer = compose.onNodeWithTag("navigation-drawer").fetchSemanticsNode().boundsInRoot
+            assertEquals(frame.top, drawer.top, 1f)
+            assertEquals(frame.bottom, drawer.bottom, 1f)
+        }
+        assertFullHeight()
+        capture("drawer-full-height")
+        compose.runOnIdle { short = true }
+        assertFullHeight()
+        compose.onNodeWithText("Logout").performScrollTo().assertIsDisplayed()
+        capture("drawer-short-large-text")
+    }
 
     @Test fun allThreeSectionsExposeHeroCollectionsAndWorkingShortcuts() {
         var section by mutableStateOf(ContentSection.Apps)

@@ -99,7 +99,7 @@ class MessagesTest {
     }
 
     @Test fun inboxSentReadAndReplyControlsWorkTogether() = runBlocking {
-        val fixture = Fixture()
+        val fixture = Fixture().apply { preview = """Premium support added [smile]\\ud83d\\ude0a[/smile]""" }
         fixture.repository.signIn("Reader", "sample-password")
         lateinit var model: MessagesViewModel
         compose.runOnUiThread { model = MessagesViewModel(fixture.repository, "Reader", SavedStateHandle()) }
@@ -114,6 +114,8 @@ class MessagesTest {
         compose.waitUntil(10_000) { model.state.value.mailbox.items.isNotEmpty() }
         compose.onNodeWithText("Inbox").assertIsSelected()
         compose.onNodeWithText("Unread").assertIsDisplayed()
+        compose.onNodeWithText("Premium support added 😊").assertIsDisplayed()
+        compose.onNodeWithText("[smile]", substring = true).assertDoesNotExist()
         capture("inbox")
         compose.onNodeWithText("Mark as read").performClick()
         compose.waitUntil(10_000) { model.state.value.mailbox.items.single().read }
@@ -121,6 +123,9 @@ class MessagesTest {
         compose.onNodeWithText("Sent").performClick()
         compose.waitUntil(10_000) { model.state.value.mailbox.page == 1 }
         compose.onNodeWithText("To Author").assertIsDisplayed()
+        compose.onNodeWithText("Premium support added 😊").assertIsDisplayed()
+        compose.onNodeWithText("[smile]", substring = true).assertDoesNotExist()
+        capture("sent-emoji")
         compose.onNodeWithText("Inbox").performClick()
         compose.onNodeWithText("Question").performClick()
         compose.waitUntil(10_000) { model.state.value.conversation.isNotEmpty() }
@@ -153,6 +158,7 @@ class MessagesTest {
         var actionBody = """{"status":"success"}"""
         var listStatus = 200
         var listBody: String? = null
+        var preview = "Hello"
         val context = object : ContextWrapper(InstrumentationRegistry.getInstrumentation().targetContext) {
             override fun getApplicationContext(): Context = this
             override fun getSharedPreferences(name: String, mode: Int) = super.getSharedPreferences("messages-test-$name", mode)
@@ -170,7 +176,7 @@ class MessagesTest {
                 path.startsWith("message/to/") || path.startsWith("message/from/") -> {
                     status = listStatus
                     val sent = path.startsWith("message/from/")
-                    listBody ?: """{"response":[{"id":10,"msg_id":42,"subject":"Question","from_user":"${if (sent) "Reader" else "Author"}","to_user":"${if (sent) "Author" else "Reader"}","preview":"Hello","times":1700000000,"readed":0}]}"""
+                    listBody ?: """{"response":[{"id":10,"msg_id":42,"subject":"Question","from_user":"${if (sent) "Reader" else "Author"}","to_user":"${if (sent) "Author" else "Reader"}","preview":"$preview","times":1700000000,"readed":0}]}"""
                 }
                 else -> error("Unexpected fixture path")
             }

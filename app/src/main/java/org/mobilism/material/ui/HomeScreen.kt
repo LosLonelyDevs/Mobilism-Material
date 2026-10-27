@@ -97,7 +97,7 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
             }
             item(key = "latest") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HomeHeading("Latest ${section.label.lowercase()}", "New releases", { onMore(FeedOrder.Latest) })
+                    HomeHeading("Latest ${section.label.lowercase()}", { onMore(FeedOrder.Latest) })
                     if (state.latest.items.isNotEmpty()) LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(state.latest.items, key = { it.id }) { release -> LatestTile(release, section, onRelease) }
                     }
@@ -106,7 +106,7 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
             }
             item(key = "popular") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HomeHeading("Popular in ${section.label}", "Most viewed on Mobilism", { onMore(FeedOrder.Top) })
+                    HomeHeading("Popular in ${section.label}", { onMore(FeedOrder.Top) })
                     if (state.popular.items.isNotEmpty()) LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         itemsIndexed(state.popular.items, key = { _, item -> item.id }) { index, release -> PopularTile(release, section, index, onRelease) }
                     }
@@ -115,7 +115,7 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
             }
             item(key = "categories") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HomeHeading("Browse by category", "A shortcut to what you enjoy", onCategories)
+                    HomeHeading("Browse by category", onCategories)
                     if (state.categories.items.isNotEmpty()) LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(Alphabetical.sorted(state.categories.items) { it.name }, key = { _, item -> item.id }) { index, category ->
                             CategoryTile(category, section, index) { onCategory(category) }
@@ -125,11 +125,11 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
                 }
             }
             item(key = "reviews") {
-                HomeForumShelf("Reviews", "From the community", state.reviews, true,
+                HomeForumShelf("Reviews", state.reviews, true,
                     onRetry = { onRetry(HomeCollection.Reviews) }, onTopic, onForum)
             }
             item(key = "discussions") {
-                HomeForumShelf("Recent discussions", "Join the conversation", state.discussions, false,
+                HomeForumShelf("Recent discussions", state.discussions, false,
                     onRetry = { onRetry(HomeCollection.Discussions) }, onTopic, onForum)
             }
         }
@@ -137,12 +137,9 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
 }
 
 @Composable
-private fun HomeHeading(title: String, subtitle: String, onMore: (() -> Unit)?) {
+private fun HomeHeading(title: String, onMore: (() -> Unit)?) {
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        Text(title, Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
         if (onMore != null) AppIconButton(Icons.AutoMirrored.Outlined.ArrowForward, "More $title", onMore)
     }
 }
@@ -180,7 +177,6 @@ private fun HomeHero(releases: List<Release>, section: ContentSection, onRelease
                 Column(Modifier.fillMaxHeight().fillMaxWidth(0.59f).padding(20.dp)
                     .graphicsLayer { translationX = -distance() * 16.dp.toPx() }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(section.style().icon, null, Modifier.size(28.dp), tint = tone.second)
-                    Text("Explore ${section.label.lowercase()}", style = MaterialTheme.typography.labelLarge, color = tone.second)
                     Spacer(Modifier.weight(1f))
                     Text(title.name, style = MaterialTheme.typography.titleLargeEmphasized, maxLines = 3, overflow = TextOverflow.Ellipsis, color = tone.second)
                     Text(if (section == ContentSection.Books && title.subtitle.isNotBlank()) title.subtitle else release.author,
@@ -262,10 +258,10 @@ private fun HomeArtwork(url: String?, modifier: Modifier, section: ContentSectio
 }
 
 @Composable
-private fun HomeForumShelf(title: String, subtitle: String, state: HomeForum, reviews: Boolean, onRetry: () -> Unit,
+private fun HomeForumShelf(title: String, state: HomeForum, reviews: Boolean, onRetry: () -> Unit,
     onTopic: (DiscussionTopic, DiscussionCategory) -> Unit, onForum: (DiscussionCategory) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        HomeHeading(title, subtitle, state.topics?.category?.let { category -> { onForum(category) } })
+        HomeHeading(title, state.topics?.category?.let { category -> { onForum(category) } })
         val topics = state.topics
         if (topics != null && topics.items.isNotEmpty()) Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             topics.items.forEach { topic ->
