@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -35,9 +35,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -57,12 +59,13 @@ fun SearchScreen(
     categories: CategoryState, onLoadCategories: () -> Unit, onFilters: (FeedFilters) -> Unit,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
-    val list = rememberLazyListState()
+    val list = rememberSaveable(state.submitted, state.scope, state.filters, saver = LazyListState.Saver) {
+        LazyListState()
+    }
     var filters by remember { mutableStateOf(false) }
     var showReleaseFilters by remember { mutableStateOf(false) }
     val openFilters = { keyboard?.hide(); onLoadCategories(); showReleaseFilters = true }
     val submit = { keyboard?.hide(); onSubmit() }
-    LaunchedEffect(state.submitted, state.scope, state.filters) { list.scrollToItem(0) }
     if (showReleaseFilters) CategoryFilterSheet(categories, state.filters, onLoadCategories, onFilters,
         onDismiss = { showReleaseFilters = false }, showCategories = state.scope.section != null, showSearchSort = true)
     LaunchedEffect(list, state.items.size, state.busy, state.error, state.canLoadMore) {
@@ -118,7 +121,7 @@ fun SearchScreen(
                     AppIconButton(Icons.Outlined.FilterList, "Release filters", openFilters)
                 }
                 ActiveFilterSummary(state.filters, openFilters, { onFilters(FeedFilters()) }, showSearchSort = true)
-                LazyColumn(state = list, modifier = Modifier.weight(1f),
+                LazyColumn(state = list, modifier = Modifier.weight(1f).testTag("search-results"),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(state.items, key = { it.id }) { release ->

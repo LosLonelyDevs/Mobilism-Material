@@ -4,6 +4,7 @@
 
 ## 0.1.15
 
+- Keep your app list and search scroll position when returning from a release.
 - Add Home tabs for Apps, Books, and Games with featured releases, latest and popular collections, categories, reviews, and recent discussions.
 - Add Discussions with separate app and game forums, topic search, original posts, and paged comments. Show forum activity, compact topic previews, and pinned badges.
 - Restyle comments with compact author rows, icon-only collapse controls, and indented quotes. Keep quoted replies with unfinished drafts and make plain URLs clickable.

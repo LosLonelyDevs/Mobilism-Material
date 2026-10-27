@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.outlined.Apps
@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -115,12 +116,13 @@ fun FeedScreen(
     val sectionStyle = state.section.style()
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
+    val listState = rememberSaveable(state.section, state.order, state.filters, saver = LazyListState.Saver) {
+        LazyListState()
+    }
     val savedTabs = rememberSaveableStateHolder()
     val scroll = TopAppBarDefaults.pinnedScrollBehavior()
     var showFilters by remember { mutableStateOf(false) }
     val openFilters = { onLoadCategories(); showFilters = true }
-    LaunchedEffect(state.section, state.order, state.filters) { listState.scrollToItem(0) }
     if (showFilters) CategoryFilterSheet(
         state = categories, initial = state.filters, onRetry = onLoadCategories,
         onApply = onFilters, onDismiss = { showFilters = false },
@@ -245,7 +247,7 @@ fun FeedScreen(
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                                 LazyColumn(
                                     state = listState,
-                                    modifier = Modifier.widthIn(max = 840.dp).fillMaxSize(),
+                                    modifier = Modifier.widthIn(max = 840.dp).fillMaxSize().testTag("feed-list"),
                                     contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
