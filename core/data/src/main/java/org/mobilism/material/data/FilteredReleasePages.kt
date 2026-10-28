@@ -6,6 +6,7 @@ internal suspend fun filteredReleasePages(
     filters: FeedFilters,
     newestFirst: Boolean = false,
     excludedCategories: Set<Long> = emptySet(),
+    customCategories: CustomCategoryState = CustomCategoryState(),
     load: suspend (Int) -> ReleasePage,
 ): ReleasePage {
     require(firstPage > 0 && filters.validDates)
@@ -15,8 +16,9 @@ internal suspend fun filteredReleasePages(
     repeat(5) {
         val source = load(page)
         nextActivityAtMost = source.nextActivityAtMost
+        if (source.items.isEmpty() && source.canLoadMore) return ReleasePage(emptyList(), true, page, nextActivityAtMost)
         val fresh = source.items.filter { seen.add(it.id) }
-        val matches = fresh.filter { it.categoryId !in excludedCategories && filters.matches(it) }
+        val matches = fresh.filter { it.categoryId !in excludedCategories && filters.matches(it, customCategories = customCategories) }
         val pastStart = filters.postedFrom != null && (
             (newestFirst && fresh.isNotEmpty() && fresh.all {
                 it.publishedAt > 0 && java.time.Instant.ofEpochSecond(it.publishedAt)

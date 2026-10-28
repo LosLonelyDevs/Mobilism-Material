@@ -111,6 +111,8 @@ fun FeedScreen(
     onTab: (BrowseTab) -> Unit = { onOrder(if (it == BrowseTab.Top) FeedOrder.Top else FeedOrder.Latest) },
     onHomeRefresh: () -> Unit = {},
     homeContent: (@Composable (() -> Unit) -> Unit)? = null,
+    customCategories: org.mobilism.material.data.CustomCategoryStore? = null,
+    onManageCategories: () -> Unit = {},
 ) {
     val theme = LocalAppTheme.current
     val sectionStyle = state.section.style()
@@ -126,6 +128,7 @@ fun FeedScreen(
     if (showFilters) CategoryFilterSheet(
         state = categories, initial = state.filters, onRetry = onLoadCategories,
         onApply = onFilters, onDismiss = { showFilters = false },
+        customCategories = customCategories, onManageCategories = { showFilters = false; onManageCategories() },
     )
     LaunchedEffect(tab, listState, state.items.size, state.busy, state.canLoadMore, state.error) {
         if (tab != BrowseTab.Home && state.items.isNotEmpty() && !state.busy && state.canLoadMore && state.error == null && !state.awaitingMore) {

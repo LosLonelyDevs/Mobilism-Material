@@ -57,6 +57,8 @@ fun SearchScreen(
     state: SearchState, onQuery: (String) -> Unit, onSubmit: () -> Unit,
     onScope: (SearchScope) -> Unit, onMore: () -> Unit, onRelease: (Long) -> Unit, onBack: () -> Unit,
     categories: CategoryState, onLoadCategories: () -> Unit, onFilters: (FeedFilters) -> Unit,
+    customCategories: org.mobilism.material.data.CustomCategoryStore? = null,
+    onManageCategories: () -> Unit = {},
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val list = rememberSaveable(state.submitted, state.scope, state.filters, saver = LazyListState.Saver) {
@@ -67,7 +69,8 @@ fun SearchScreen(
     val openFilters = { keyboard?.hide(); onLoadCategories(); showReleaseFilters = true }
     val submit = { keyboard?.hide(); onSubmit() }
     if (showReleaseFilters) CategoryFilterSheet(categories, state.filters, onLoadCategories, onFilters,
-        onDismiss = { showReleaseFilters = false }, showCategories = state.scope.section != null, showSearchSort = true)
+        onDismiss = { showReleaseFilters = false }, showCategories = state.scope.section != null, showSearchSort = true,
+        customCategories = customCategories, onManageCategories = { showReleaseFilters = false; onManageCategories() })
     LaunchedEffect(list, state.items.size, state.busy, state.error, state.canLoadMore) {
         if (state.items.isNotEmpty() && !state.busy && state.error == null && state.canLoadMore && !state.awaitingMore) {
             snapshotFlow { (list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.items.size - 3 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Description
@@ -101,6 +102,7 @@ fun ReleaseScreen(
     onRelease: (Long) -> Unit = {},
     onDownloadHosts: (List<String>) -> Unit = {},
     onRefresh: () -> Unit = onRetry,
+    onCategories: (() -> Unit)? = null,
 ) {
     val theme = LocalAppTheme.current
     val context = LocalContext.current
@@ -173,6 +175,10 @@ fun ReleaseScreen(
                     Box {
                         AppIconButton(Icons.Outlined.MoreVert, "Release options", { menu = true })
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = MaterialTheme.shapes.extraLarge) {
+                            if (onCategories != null) RoundedMenuItem(
+                                label = "Categories", accent = theme.featured, icon = Icons.Outlined.Category,
+                                onClick = { menu = false; onCategories() },
+                            )
                             if (it.section == ContentSection.Apps) {
                                 RoundedMenuItem(
                                     label = if (watched) "Unfollow app" else "Follow app", accent = theme.featured,

@@ -7,7 +7,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class DefaultMobilismRepository(context: Context, private val contentPreferences: ContentPreferencesStore = ContentPreferencesStore(context),
-    diagnostics: DiagnosticLogger = DiagnosticLogger.None, client: okhttp3.OkHttpClient = okhttp3.OkHttpClient()) : MobilismRepository, MessagesRepository, DiscussionsRepository, HomeRepository {
+    diagnostics: DiagnosticLogger = DiagnosticLogger.None, client: okhttp3.OkHttpClient = okhttp3.OkHttpClient(),
+    private val customCategories: CustomCategoryStore? = null,
+    private val customCategoriesEnabled: () -> Boolean = { false },
+) : MobilismRepository, MessagesRepository, DiscussionsRepository, HomeRepository {
     private val api = MobilismApi(context.applicationContext, diagnostics, client)
     private val store = SessionStore(context.applicationContext)
     private val reactions = context.getSharedPreferences("release-reactions", Context.MODE_PRIVATE)
@@ -15,7 +18,8 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     private val categoryMutex = Mutex()
     private val categoryCache = mutableMapOf<Boolean, Map<ContentSection, List<ReleaseCategory>>>()
     private val pagerMutex = Mutex()
-    private data class Query(val section: ContentSection, val order: FeedOrder, val categories: Set<Long>, val hideAdult: Boolean)
+    private data class Query(val section: ContentSection, val order: FeedOrder, val categories: Set<Long>, val hideAdult: Boolean,
+        val customIds: Set<String> = emptySet(), val customItems: List<CategorizedItem> = emptyList())
     private var pagerQuery: Query? = null
     private var pager: CategoryFeedPager? = null
     private var pagerPage = 0
@@ -74,27 +78,42 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     }
 
     override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters): ReleasePage {
+        val effective = if (customCategoriesEnabled()) filters else filters.copy(customCategoryIds = emptySet())
+        val local = customCategories?.state?.value ?: CustomCategoryState()
         val hideAdult = contentPreferences.hideAdult.value
         val excluded = excludedCategories(hideAdult)
-        val categories = filters.categoryIds - excluded
-        if (filters.categoryIds.isNotEmpty() && categories.isEmpty()) return ReleasePage(emptyList(), false)
-        return filteredReleasePages(page, filters.copy(categoryIds = emptySet()),
+        val categories = effective.categoryIds - excluded
+        if (effective.customCategoryIds.isNotEmpty()) {
+            if (categories.isEmpty() && local.items.none { item -> item.categoryIds.any(effective.customCategoryIds::contains) &&
+                item.release.section == section }) return ReleasePage(emptyList(), false)
+            return filteredReleasePages(page, effective.copy(categoryIds = emptySet(), customCategoryIds = emptySet()),
+                newestFirst = order == FeedOrder.Latest, excludedCategories = excluded) { sourcePage ->
+                categoryReleases(section, order, sourcePage, categories, hideAdult, effective.customCategoryIds, local)
+            }
+        }
+        if (effective.categoryIds.isNotEmpty() && categories.isEmpty()) return ReleasePage(emptyList(), false)
+        return filteredReleasePages(page, effective.copy(categoryIds = emptySet()),
             newestFirst = order == FeedOrder.Latest, excludedCategories = excluded) { sourcePage ->
             categoryReleases(section, order, sourcePage, categories, hideAdult)
         }
     }
 
-    private suspend fun categoryReleases(section: ContentSection, order: FeedOrder, page: Int, categories: Set<Long>, hideAdult: Boolean): ReleasePage =
+    private suspend fun categoryReleases(section: ContentSection, order: FeedOrder, page: Int, categories: Set<Long>, hideAdult: Boolean,
+        customIds: Set<String> = emptySet(), local: CustomCategoryState = CustomCategoryState()): ReleasePage =
         withSession { token ->
-            if (categories.isEmpty()) api.releases(section, order, page, token, hideAdult = hideAdult)
+            if (categories.isEmpty() && customIds.isEmpty()) api.releases(section, order, page, token, hideAdult = hideAdult)
             else pagerMutex.withLock {
-                val query = Query(section, order, categories.toSet(), hideAdult)
+                val query = Query(section, order, categories.toSet(), hideAdult, customIds.toSet(),
+                    local.items.filter { item -> item.categoryIds.any(customIds::contains) })
                 if (page == 1 || pagerQuery != query) {
                     pagerQuery = query
                     pagerPage = 0
                     pagerResults.clear()
-                    pager = CategoryFeedPager(query.categories, order) { category, sourcePage ->
-                        api.releases(section, order, sourcePage, token, category, hideAdult)
+                    pager = CategoryFeedPager(query.categories, order,
+                        localMatches = if (customIds.isNotEmpty()) ({ release -> local.matches(release, customIds) }) else null) { category, sourcePage ->
+                        api.releases(section, order, sourcePage, token, category.takeIf { it > 0 }, hideAdult).let { result ->
+                            if (category == 0L) result else result.copy(items = result.items.map { it.copy(categoryId = it.categoryId ?: category) })
+                        }
                     }
                 }
                 // A date scan can fail after consuming several category pages. Retrying must replay them.
@@ -192,8 +211,14 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     }
 
     override suspend fun search(query: String, scope: SearchScope, page: Int, filters: FeedFilters): ReleasePage {
+        val effective = if (customCategoriesEnabled()) filters else filters.copy(customCategoryIds = emptySet())
+        val local = customCategories?.state?.value ?: CustomCategoryState()
+        if (effective.customCategoryIds.isNotEmpty() && effective.categoryIds.isEmpty() && local.items.none { item ->
+            item.categoryIds.any(effective.customCategoryIds::contains) && (scope.section == null || item.release.section == scope.section)
+        }) return ReleasePage(emptyList(), false)
         val hideAdult = contentPreferences.hideAdult.value
-        return filteredReleasePages(page, filters, excludedCategories = excludedCategories(hideAdult)) { sourcePage ->
+        return filteredReleasePages(page, effective, excludedCategories = excludedCategories(hideAdult),
+            customCategories = local) { sourcePage ->
             withSession { token -> api.search(query, scope, sourcePage, token, hideAdult) }
         }
     }

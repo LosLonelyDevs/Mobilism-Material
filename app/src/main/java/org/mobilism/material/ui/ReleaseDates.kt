@@ -42,7 +42,8 @@ fun ActiveFilterSummary(filters: FeedFilters, onEdit: () -> Unit, onClear: () ->
     val formatter = dateFormatter()
     val labels = buildList {
         if (showSearchSort) add(filters.searchSort.label)
-        if (filters.categoryIds.isNotEmpty()) add(if (filters.categoryIds.size == 1) "1 category" else "${filters.categoryIds.size} categories")
+        val categoryCount = filters.categoryIds.size + filters.customCategoryIds.size
+        if (categoryCount > 0) add(if (categoryCount == 1) "1 category" else "$categoryCount categories")
         filters.postedFrom?.let { add("From ${it.format(formatter)}") }
         filters.postedThrough?.let { add("Through ${it.format(formatter)}") }
     }

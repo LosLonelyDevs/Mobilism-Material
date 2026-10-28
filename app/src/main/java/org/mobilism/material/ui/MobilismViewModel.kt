@@ -2,6 +2,7 @@ package org.mobilism.material.ui
 
 
 import android.content.Context
+import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
@@ -61,6 +62,7 @@ class MobilismViewModel(
     val library: org.mobilism.material.data.AppLibraryStore,
     val contentPreferences: org.mobilism.material.data.ContentPreferencesStore = org.mobilism.material.data.ContentPreferencesStore(context),
     val developer: org.mobilism.material.settings.DeveloperPreferencesStore = org.mobilism.material.settings.DeveloperPreferencesStore(context),
+    val customCategories: org.mobilism.material.data.CustomCategoryStore = org.mobilism.material.data.CustomCategoryStore(context),
 ) : ViewModel() {
     val downloads = DownloadPreferencesStore(context)
     private val preferences = context.getSharedPreferences("material-navigation", Context.MODE_PRIVATE)
@@ -96,6 +98,35 @@ class MobilismViewModel(
     fun discussionSignInHandled() { discussionAfterSignIn = null }
 
     init {
+        var previousCustom = customCategories.state.value
+        var previousCustomEnabled = developer.state.value.customCategoriesActive
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(customCategories.state, developer.state) { local, options ->
+                local to options.customCategoriesActive
+            }.collect { (local, enabled) ->
+                if (local.categories != previousCustom.categories) {
+                    preferences.edit {
+                        ContentSection.entries.forEach { section ->
+                            val key = "filters-${section.name}-custom-categories"
+                            val saved = preferences.getStringSet(key, emptySet()).orEmpty()
+                            val retained = local.retain(section, saved)
+                            if (saved != retained) putStringSet(key, retained)
+                        }
+                    }
+                }
+                val snapshot = mutableFeed.value
+                val next = filtersFor(snapshot.section)
+                val membershipChanged = local.items != previousCustom.items && next.customCategoryIds.isNotEmpty()
+                if (next != snapshot.filters || membershipChanged ||
+                    (enabled != previousCustomEnabled && next.customCategoryIds.isNotEmpty())) {
+                    feedJob?.cancel()
+                    mutableFeed.value = FeedState(section = snapshot.section, order = snapshot.order, filters = next)
+                    loadFeed(refresh = true)
+                }
+                previousCustom = local
+                previousCustomEnabled = enabled
+            }
+        }
         var previousVisibility = contentPreferences.hideAdult.value
         viewModelScope.launch {
             contentPreferences.hideAdult.collect { hidden ->
@@ -190,7 +221,9 @@ class MobilismViewModel(
         val sort = runCatching { org.mobilism.material.data.SearchSort.valueOf(
             preferences.getString("filters-${section.name}-search-sort", null).orEmpty())
         }.getOrDefault(org.mobilism.material.data.SearchSort.Newest)
-        return FeedFilters(ids, date("from"), date("through"), sort)
+        val custom = if (developer.state.value.customCategoriesActive) customCategories.state.value.retain(section,
+            preferences.getStringSet("filters-${section.name}-custom-categories", emptySet()).orEmpty()) else emptySet()
+        return FeedFilters(ids, date("from"), date("through"), sort, custom)
     }
 
     private fun newFeed(section: ContentSection, order: FeedOrder = FeedOrder.Latest) =
@@ -222,16 +255,22 @@ class MobilismViewModel(
         val allowed = mutableCategories.value.takeIf { it.section == snapshot.section }
             ?.items.orEmpty().map { it.id }.toSet()
         val selected = if (allowed.isEmpty()) filters.categoryIds else filters.categoryIds.intersect(allowed)
-        val normalized = filters.copy(categoryIds = if (selected == allowed) emptySet() else selected)
+        val custom = if (developer.state.value.customCategoriesActive)
+            customCategories.state.value.retain(snapshot.section, filters.customCategoryIds) else emptySet()
+        val normalized = filters.copy(categoryIds = if (selected == allowed && custom.isEmpty()) emptySet() else selected,
+            customCategoryIds = custom)
         saveFilters(snapshot.section, normalized)
     }
 
     fun saveFilters(section: ContentSection, filters: FeedFilters) {
         if (!filters.validDates || filters == filtersFor(section)) return
-        preferences.edit().putStringSet("filters-${section.name}-categories", filters.categoryIds.map { it.toString() }.toSet())
+        val editor = preferences.edit().putStringSet("filters-${section.name}-categories", filters.categoryIds.map { it.toString() }.toSet())
             .putString("filters-${section.name}-from", filters.postedFrom?.toString())
             .putString("filters-${section.name}-through", filters.postedThrough?.toString())
-            .putString("filters-${section.name}-search-sort", filters.searchSort.name).apply()
+            .putString("filters-${section.name}-search-sort", filters.searchSort.name)
+        if (developer.state.value.customCategoriesActive) editor.putStringSet("filters-${section.name}-custom-categories",
+            customCategories.state.value.retain(section, filters.customCategoryIds))
+        editor.apply()
         val snapshot = mutableFeed.value
         if (snapshot.section != section) return
         feedJob?.cancel()

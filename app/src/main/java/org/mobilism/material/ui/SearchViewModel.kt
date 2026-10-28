@@ -30,10 +30,12 @@ class SearchViewModel(
     initialFilters: Map<ContentSection, FeedFilters> = emptyMap(),
     private val onFiltersChanged: (ContentSection, FeedFilters) -> Unit = { _, _ -> },
     hideAdultContent: kotlinx.coroutines.flow.StateFlow<Boolean>? = null,
+    private val customCategories: org.mobilism.material.data.CustomCategoryStore? = null,
+    private val developer: org.mobilism.material.settings.DeveloperPreferencesStore? = null,
 ) : ViewModel() {
     private val savedFilters = SearchScope.entries.associateWith { initialFilters[it.section] ?: FeedFilters() }.toMutableMap()
     private val mutableState = MutableStateFlow(SearchState(scope = initialScope, query = initialQuery,
-        filters = savedFilters.getValue(initialScope)))
+        filters = effectiveFilters(initialScope)))
     val state = mutableState.asStateFlow()
     private val mutableCategories = MutableStateFlow(CategoryState(section = initialScope.section ?: ContentSection.Apps))
     val categories = mutableCategories.asStateFlow()
@@ -42,6 +44,26 @@ class SearchViewModel(
     private var pager: SortedSearchPager? = null
 
     init {
+        if (customCategories != null && developer != null) {
+            var previous = customCategories.state.value
+            viewModelScope.launch {
+                kotlinx.coroutines.flow.combine(customCategories.state, developer.state) { local, options ->
+                    local to options.customCategoriesActive
+                }.collect { (local, _) ->
+                    val snapshot = mutableState.value
+                    savedFilters.replaceAll { scope, filters -> filters.copy(customCategoryIds =
+                        scope.section?.let { local.retain(it, filters.customCategoryIds) } ?: emptySet()) }
+                    val next = effectiveFilters(snapshot.scope)
+                    if (next != snapshot.filters || (previous.items != local.items && next.customCategoryIds.isNotEmpty())) {
+                        job?.cancel()
+                        mutableState.value = SearchState(query = snapshot.query, submitted = snapshot.submitted,
+                            scope = snapshot.scope, filters = next)
+                        if (snapshot.submitted.isNotBlank()) loadMore()
+                    }
+                    previous = local
+                }
+            }
+        }
         if (initialQuery.isNotBlank()) submit()
         hideAdultContent?.let { visibility ->
             var previous = visibility.value
@@ -59,13 +81,17 @@ class SearchViewModel(
 
     fun editQuery(value: String) { mutableState.update { it.copy(query = value) } }
 
+    private fun effectiveFilters(scope: SearchScope): FeedFilters = savedFilters.getValue(scope).let {
+        if (developer?.state?.value?.customCategoriesActive == true) it else it.copy(customCategoryIds = emptySet())
+    }
+
     fun selectScope(scope: SearchScope) {
         if (scope == mutableState.value.scope) return
         val snapshot = mutableState.value
         job?.cancel()
         categoryJob?.cancel()
         mutableCategories.value = CategoryState(section = scope.section ?: ContentSection.Apps)
-        mutableState.value = SearchState(query = snapshot.query, scope = scope, filters = savedFilters.getValue(scope))
+        mutableState.value = SearchState(query = snapshot.query, scope = scope, filters = effectiveFilters(scope))
         if (snapshot.submitted.isNotEmpty()) submit()
     }
 
@@ -91,7 +117,8 @@ class SearchViewModel(
     fun applyFilters(filters: FeedFilters) {
         if (!filters.validDates || filters == mutableState.value.filters) return
         val snapshot = mutableState.value
-        savedFilters[snapshot.scope] = filters
+        savedFilters[snapshot.scope] = if (developer?.state?.value?.customCategoriesActive == true) filters
+            else filters.copy(customCategoryIds = savedFilters.getValue(snapshot.scope).customCategoryIds)
         snapshot.scope.section?.let { onFiltersChanged(it, filters) }
         job?.cancel()
         mutableState.value = SearchState(query = snapshot.query, submitted = snapshot.submitted, scope = snapshot.scope, filters = filters)

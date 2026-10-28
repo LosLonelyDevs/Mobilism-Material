@@ -42,4 +42,43 @@ class CategoryFeedPagerTest {
         assertFalse(page.canLoadMore)
         assertEquals(4, calls)
     }
+
+    @Test fun localAndNativeSourcesMergeWithoutDependingOnRowCategoryMetadata() = runBlocking {
+        for (order in FeedOrder.entries) {
+            val native = listOf(item(3), item(1))
+            val all = (5L downTo 1L).map { item(it) }
+            val pager = CategoryFeedPager(setOf(10), order, localMatches = { it.id == 4L || it.id == 2L || it.id == 3L }) { source, page ->
+                val items = (if (source == 0L) all else native).drop((page - 1) * 2).take(2)
+                ReleasePage(items, items.isNotEmpty())
+            }
+            val page = pager.nextPage()
+            assertEquals(listOf(4L, 3L, 2L, 1L), page.items.map { it.id })
+            assertFalse(page.canLoadMore)
+        }
+    }
+
+    @Test fun sparseLocalSourcesPauseBeforeEmittingPastUnknownOrderingAndResume() = runBlocking {
+        val calls = mutableListOf<Int>()
+        val pager = CategoryFeedPager(setOf(10), FeedOrder.Latest, localMatches = { it.id == 94L }) { source, page ->
+            if (source != 0L) ReleasePage(listOf(item(1)), false)
+            else {
+                calls += page
+                ReleasePage(listOf(item(100L - page)), page < 6)
+            }
+        }
+        val first = pager.nextPage()
+        assertTrue(first.items.isEmpty())
+        assertTrue(first.canLoadMore)
+        assertEquals((1..5).toList(), calls)
+        val next = pager.nextPage()
+        assertEquals(listOf(94L, 1L), next.items.map { it.id })
+        assertFalse(next.canLoadMore)
+    }
+
+    @Test fun sparsePagerPagesStayResumableThroughDateFiltering() = runBlocking {
+        val first = filteredReleasePages(1, FeedFilters()) { ReleasePage(emptyList(), true) }
+        assertTrue(first.items.isEmpty())
+        assertTrue(first.canLoadMore)
+        assertEquals(1, first.lastPage)
+    }
 }

@@ -25,7 +25,9 @@ class MobilismApplication : Application() {
     val developer by lazy { DeveloperPreferencesStore(this) }
     val diagnostics by lazy { DiagnosticLogStore(java.io.File(filesDir, "diagnostics"),
         { true }, isVerbose = { developer.state.value.enabled && developer.state.value.verboseLogging }) }
-    val repository by lazy { DefaultMobilismRepository(this, contentPreferences, diagnostics) }
+    val customCategories by lazy { org.mobilism.material.data.CustomCategoryStore(this) }
+    val repository by lazy { DefaultMobilismRepository(this, contentPreferences, diagnostics,
+        customCategories = customCategories, customCategoriesEnabled = { developer.state.value.customCategoriesActive }) }
     val appearance by lazy { AppearanceStore(this) }
     val debrid by lazy { DebridRepository(this, isEnabled = {
         developer.state.value.debridEnabled

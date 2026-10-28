@@ -48,13 +48,16 @@ data class FeedFilters(
     val postedFrom: java.time.LocalDate? = null,
     val postedThrough: java.time.LocalDate? = null,
     val searchSort: SearchSort = SearchSort.Newest,
+    val customCategoryIds: Set<String> = emptySet(),
 ) {
     val hasDates: Boolean get() = postedFrom != null || postedThrough != null
-    val isActive: Boolean get() = categoryIds.isNotEmpty() || hasDates
+    val isActive: Boolean get() = categoryIds.isNotEmpty() || customCategoryIds.isNotEmpty() || hasDates
     val validDates: Boolean get() = postedFrom == null || postedThrough == null || postedFrom <= postedThrough
 
-    fun matches(release: Release, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): Boolean {
-        if (categoryIds.isNotEmpty() && release.categoryId !in categoryIds) return false
+    fun matches(release: Release, zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
+        customCategories: CustomCategoryState = CustomCategoryState()): Boolean {
+        if ((categoryIds.isNotEmpty() || customCategoryIds.isNotEmpty()) &&
+            release.categoryId !in categoryIds && !customCategories.matches(release, customCategoryIds)) return false
         if (!hasDates) return true
         if (!validDates || release.publishedAt <= 0) return false
         val date = java.time.Instant.ofEpochSecond(release.publishedAt).atZone(zone).toLocalDate()

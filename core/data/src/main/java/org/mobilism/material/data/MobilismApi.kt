@@ -181,7 +181,9 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         return SearchJson.page(request("search", token, form = mapOf(
             "search" to query.trim(), "count" to page.toString(), "limits" to PAGE_SIZE.toString(),
             "isrelease" to "1", "isdiscussion" to "0", "isother" to "0", "id" to scope.apiId,
-        ), hideAdult = hideAdult))
+        ), hideAdult = hideAdult)).let { result ->
+            result.copy(items = result.items.map { it.copy(section = it.section ?: scope.section) })
+        }
     }
 
     private suspend fun request(path: String, token: String? = null, form: Map<String, String>? = null,

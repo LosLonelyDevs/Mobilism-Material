@@ -22,6 +22,8 @@ import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +53,8 @@ fun FilterSheet(
     onReset: () -> Unit,
     onApply: () -> Unit,
     applyEnabled: Boolean,
+    title: String = "Filters",
+    applyLabel: String = "Apply filters",
     content: LazyListScope.() -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -75,7 +79,7 @@ fun FilterSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AppHeading("Filters", HeadingLevel.Page, style = MaterialTheme.typography.headlineMedium)
+                AppHeading(title, HeadingLevel.Page, style = MaterialTheme.typography.headlineMedium)
                 AppTextButton("Reset", onReset)
             }
             LazyColumn(
@@ -90,7 +94,7 @@ fun FilterSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AppTextButton("Cancel", { close() })
-                ExpressiveButton({ close(apply = true) }, Modifier.weight(1f), enabled = applyEnabled) { Text("Apply filters") }
+                ExpressiveButton({ close(apply = true) }, Modifier.weight(1f), enabled = applyEnabled) { Text(applyLabel) }
             }
         }
     }
@@ -113,20 +117,25 @@ fun CategoryFilterSheet(
     onDismiss: () -> Unit,
     showCategories: Boolean = true,
     showSearchSort: Boolean = false,
+    customCategories: org.mobilism.material.data.CustomCategoryStore? = null,
+    onManageCategories: () -> Unit = {},
 ) {
     var selected by remember { mutableStateOf(initial.categoryIds) }
+    val local = customCategories?.state?.collectAsStateWithLifecycle()?.value ?: org.mobilism.material.data.CustomCategoryState()
+    var selectedCustom by remember { mutableStateOf(initial.customCategoryIds) }
+    LaunchedEffect(local.categories, state.section) { selectedCustom = local.retain(state.section, selectedCustom) }
     var dates by remember { mutableStateOf(initial) }
     var sortTab by remember { mutableStateOf(false) }
     val sectionStyle = state.section.style()
     var search by remember { mutableStateOf("") }
-    val visible = remember(state.items, search) {
-        Alphabetical.sorted(state.items) { it.name }.filter { it.name.contains(search.trim(), ignoreCase = true) ||
+    val visible = remember(state.items, local.categories, state.section, search) {
+        categoryChoices(state.items, local.categories(state.section)).filter { it.name.contains(search.trim(), ignoreCase = true) ||
             it.group.orEmpty().contains(search.trim(), ignoreCase = true) }
     }
     FilterSheet(
         onDismiss = onDismiss,
-        onReset = { selected = emptySet(); dates = FeedFilters(); search = "" },
-        onApply = { onApply(dates.copy(categoryIds = selected)) },
+        onReset = { selected = emptySet(); selectedCustom = emptySet(); dates = FeedFilters(); search = "" },
+        onApply = { onApply(dates.copy(categoryIds = selected, customCategoryIds = selectedCustom)) },
         applyEnabled = dates.validDates,
     ) {
         if (showSearchSort) item("filter-tabs") {
@@ -144,8 +153,11 @@ fun CategoryFilterSheet(
         if (!showCategories) return@FilterSheet
         item("category-header") {
             FilterSectionHeader("Categories · " + state.section.label,
-                if (selected.isEmpty()) "All categories. Select any combination to narrow the feed."
-                else selected.size.toString() + " selected")
+                if (selected.isEmpty() && selectedCustom.isEmpty()) "All categories. Select any combination to narrow the feed."
+                else (selected.size + selectedCustom.size).toString() + " selected")
+        }
+        if (customCategories != null) item("manage-categories") {
+            AppTextButton("Manage categories", onManageCategories)
         }
         item("category-search") {
             OutlinedTextField(
@@ -157,14 +169,15 @@ fun CategoryFilterSheet(
         }
         if (state.busy) item("category-loading") { LoadingState("Loading categories…", Modifier.fillMaxWidth()) }
         state.error?.let { error -> item("category-error") { ErrorPanel(error, onRetry = onRetry) } }
-        items(visible, key = { "category-" + it.id }, contentType = { "multi-select" }) { category ->
-            val checked = category.id in selected
+        items(visible, key = { it.key }, contentType = { "multi-select" }) { category ->
+            val checked = category.forum?.id in selected || category.custom?.id in selectedCustom
             Row(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
                     .clip(MaterialTheme.shapes.large)
                     .background(lerp(MaterialTheme.colorScheme.surfaceContainerHigh, sectionStyle.accent, if (checked) 0.22f else 0.06f))
                     .toggleable(value = checked, role = Role.Checkbox, onValueChange = {
-                        selected = if (it) selected + category.id else selected - category.id
+                        category.forum?.let { forum -> selected = if (it) selected + forum.id else selected - forum.id }
+                        category.custom?.let { custom -> selectedCustom = if (it) selectedCustom + custom.id else selectedCustom - custom.id }
                     }).padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),

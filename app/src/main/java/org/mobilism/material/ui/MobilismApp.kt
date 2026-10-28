@@ -39,7 +39,7 @@ import org.mobilism.material.designsystem.screenMotion
 fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fromNotification: Boolean = true,
     onNotificationHandled: () -> Unit = {}) {
     val model: MobilismViewModel = viewModel(factory = viewModelFactory {
-        initializer { MobilismViewModel(app, app.repository, app.appearance, app.debrid, app.library, app.contentPreferences, app.developer) }
+        initializer { MobilismViewModel(app, app.repository, app.appearance, app.debrid, app.library, app.contentPreferences, app.developer, app.customCategories) }
     })
     val auth by model.auth.collectAsStateWithLifecycle()
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -97,6 +97,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     val debridState by model.debrid.state.collectAsStateWithLifecycle()
     val downloads by model.downloads.state.collectAsStateWithLifecycle()
     val developer by model.developer.state.collectAsStateWithLifecycle()
+    val localCategories by model.customCategories.state.collectAsStateWithLifecycle()
+    val categoryStore = model.customCategories.takeIf { developer.customCategoriesActive }
     val debrid = if (developer.debridEnabled) debridState else org.mobilism.material.data.DebridState(enabled = false)
     val library by model.library.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -156,6 +158,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onDiscussions = { nav.navigate("discussions") { launchSingleTop = true } },
                 onSignOut = model::signOut,
                 categories = categories, onLoadCategories = model::loadCategories,
+                customCategories = categoryStore,
+                onManageCategories = { nav.navigate("categories/${feed.section.name}") },
                 onFilters = { filters -> openFeed(if (tab == BrowseTab.Top) FeedOrder.Top else FeedOrder.Latest, filters) },
                 tab = tab, onTab = { selected ->
                     tab = selected
@@ -168,6 +172,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                             onMore = { openFeed(it, FeedFilters()) },
                             onCategory = { openFeed(FeedOrder.Latest, FeedFilters(categoryIds = setOf(it.id))) },
                             onCategories = openCategories,
+                            customCategories = if (categoryStore != null) localCategories.categories(homeState.section) else emptyList(),
+                            onCustomCategory = { openFeed(FeedOrder.Latest, FeedFilters(customCategoryIds = setOf(it.id))) },
                             onTopic = { topic, category ->
                                 homeForum = topic to category
                                 nav.navigate("discussions") { launchSingleTop = true }
@@ -187,12 +193,15 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                     if (query.isNotEmpty()) org.mobilism.material.data.SearchScope.Apps
                     else org.mobilism.material.data.SearchScope.entries.first { it.section == feed.section }, query,
                     initialFilters = org.mobilism.material.data.ContentSection.entries.associateWith(model::filtersFor),
-                    onFiltersChanged = model::saveFilters, hideAdultContent = model.contentPreferences.hideAdult) }
+                    onFiltersChanged = model::saveFilters, hideAdultContent = model.contentPreferences.hideAdult,
+                    customCategories = model.customCategories, developer = model.developer) }
             })
             val state by search.state.collectAsStateWithLifecycle()
             val searchCategories by search.categories.collectAsStateWithLifecycle()
             SearchScreen(state, search::editQuery, search::submit, search::selectScope, search::loadMore,
                 categories = searchCategories, onLoadCategories = search::loadCategories, onFilters = search::applyFilters,
+                customCategories = categoryStore,
+                onManageCategories = { state.scope.section?.let { nav.navigate("categories/${it.name}") } },
                 onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() })
         }
         composable("library") { entry ->
@@ -262,7 +271,17 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             }
             if (developer.enabled) DeveloperOptionsScreen(developer,
                 onVerboseLogging = model.developer::setVerboseLogging,
-                onDisable = model.developer::disable, onBack = { nav.popBackStack() })
+                onDisable = model.developer::disable, onBack = { nav.popBackStack() },
+                onCustomCategories = model.developer::setCustomCategoriesEnabled)
+        }
+        composable("categories/{section}") { entry ->
+            LaunchedEffect(developer.customCategoriesActive) {
+                if (!developer.customCategoriesActive) nav.popBackStack()
+            }
+            if (developer.customCategoriesActive) CustomCategoriesScreen(
+                org.mobilism.material.data.ContentSection.valueOf(requireNotNull(entry.arguments?.getString("section"))),
+                model.customCategories, onBack = { nav.popBackStack() },
+                onRelease = { nav.navigate("release/$it") })
         }
         composable("about") {
             AboutScreen(onBack = { nav.popBackStack() }, developerMode = developer.enabled,
@@ -280,7 +299,16 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 initializer { ReleaseViewModel(id, model.repository, createSavedStateHandle()) }
             })
             val state by detail.state.collectAsStateWithLifecycle()
+            var assigningCategories by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(state.release, developer.customCategoriesActive) {
+                if (developer.customCategoriesActive) state.release?.let(model.customCategories::observe)
+                else assigningCategories = false
+            }
+            if (assigningCategories && categoryStore != null) state.release?.let {
+                CategoryAssignmentSheet(it, categoryStore, onDismiss = { assigningCategories = false })
+            }
             ReleaseScreen(state, debrid, downloads, onBack = { nav.popBackStack() }, onRetry = detail::load, onMoreComments = detail::loadComments,
+                onCategories = if (categoryStore != null && state.release?.section != null) ({ assigningCategories = true }) else null,
                 onLike = detail::toggleLike, onActionMessageShown = detail::actionMessageShown,
                 auth = auth, onSignIn = { model.signInForRelease(id) },
                 onWriteComment = detail::openComposer, onEditComment = detail::editComment,

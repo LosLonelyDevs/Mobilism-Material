@@ -81,7 +81,9 @@ import org.mobilism.material.designsystem.StoreShape
 @Composable
 fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (Long) -> Unit,
     onMore: (FeedOrder) -> Unit, onCategory: (ReleaseCategory) -> Unit, onCategories: () -> Unit,
-    onTopic: (DiscussionTopic, DiscussionCategory) -> Unit, onForum: (DiscussionCategory) -> Unit) {
+    onTopic: (DiscussionTopic, DiscussionCategory) -> Unit, onForum: (DiscussionCategory) -> Unit,
+    customCategories: List<org.mobilism.material.data.CustomCategory> = emptyList(),
+    onCustomCategory: (org.mobilism.material.data.CustomCategory) -> Unit = {}) {
     val section = state.section
     val highlights = state.popular.items.ifEmpty { state.latest.items }.take(5)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -116,9 +118,13 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
             item(key = "categories") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     HomeHeading("Browse by category", onCategories)
-                    if (state.categories.items.isNotEmpty()) LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        itemsIndexed(Alphabetical.sorted(state.categories.items) { it.name }, key = { _, item -> item.id }) { index, category ->
-                            CategoryTile(category, section, index) { onCategory(category) }
+                    val choices = categoryChoices(state.categories.items, customCategories)
+                    if (choices.isNotEmpty()) LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(choices, key = { _, item -> item.key }) { index, category ->
+                            CategoryTile(category.name, section, index) {
+                                category.forum?.let(onCategory)
+                                category.custom?.let(onCustomCategory)
+                            }
                         }
                     }
                     HomeShelfStatus(state.categories, "No categories available.") { onRetry(HomeCollection.Categories) }
@@ -234,7 +240,7 @@ private fun PopularTile(release: Release, section: ContentSection, index: Int, o
 }
 
 @Composable
-private fun CategoryTile(category: ReleaseCategory, section: ContentSection, index: Int, onClick: () -> Unit) {
+private fun CategoryTile(name: String, section: ContentSection, index: Int, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val tone = homeTone(index)
@@ -243,7 +249,7 @@ private fun CategoryTile(category: ReleaseCategory, section: ContentSection, ind
             StoreShape(index, 80.dp, tone.first, pressed = pressed) {
                 Icon(section.style().icon, null, Modifier.size(32.dp), tint = tone.second)
             }
-            Text(category.name, style = MaterialTheme.typography.labelLarge, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis,
+            Text(name, style = MaterialTheme.typography.labelLarge, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
     }

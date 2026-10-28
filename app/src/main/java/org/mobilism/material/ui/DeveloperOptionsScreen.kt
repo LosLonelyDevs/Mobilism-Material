@@ -28,7 +28,7 @@ import org.mobilism.material.settings.DeveloperPreferences
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeveloperOptionsScreen(state: DeveloperPreferences, onVerboseLogging: (Boolean) -> Unit,
-    onDisable: () -> Unit, onBack: () -> Unit) {
+    onDisable: () -> Unit, onBack: () -> Unit, onCustomCategories: (Boolean) -> Unit = {}) {
     Scaffold(topBar = {
         TopAppBar(title = { AppHeading("Developer options", HeadingLevel.Page) }, navigationIcon = {
             AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack)
@@ -43,6 +43,10 @@ fun DeveloperOptionsScreen(state: DeveloperPreferences, onVerboseLogging: (Boole
             item {
                 DeveloperToggle("Verbose logging", "Record diagnostic details",
                     state.verboseLogging, onVerboseLogging)
+            }
+            item {
+                DeveloperToggle("Custom categories", "Organize releases with categories saved on this device",
+                    state.customCategoriesEnabled, onCustomCategories)
             }
         }
     }
