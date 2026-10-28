@@ -1,6 +1,6 @@
 # Mobilism Material
 
-I'm rebuilding Mobilism in Kotlin and Jetpack Compose. Same basic flow, with Material 3 Expressive components and motion. Catppuccin Frappé and Geist are the defaults.
+Modern Mobilism Android client rewritten in Kotlin and Jetpack Compose. Built with Material 3 Expressive components and motion.
 
 <p>
 <a href="https://github.com/LosLonelyDevs/Mobilism-Material/releases"><img src="docs/images/github.png" alt="Get it on GitHub" width="180"></a>

@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
@@ -270,6 +271,9 @@ private fun DiscussionTopics(state: DiscussionsState, onTopic: (DiscussionTopic)
 private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit, onReply: (ReleaseComment) -> Unit,
     onImage: (List<String>, Int) -> Unit) {
     val topic = state.topic ?: return
+    var collapsedComments by rememberSaveable(topic.key) { mutableStateOf(emptyList<Long>()) }
+    val commentTree = remember(state.comments.items) { CommentTree.build(state.comments.items) }
+    val commentRows = remember(commentTree, collapsedComments) { CommentTree.flatten(commentTree, collapsedComments.toSet()) }
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize().testTag("discussion-reader")) {
         item {
@@ -286,9 +290,17 @@ private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit,
                 ReleaseCommentCard(topic.originalPost, topic.browserUrl, onImage = onImage)
             }
         }
-        item { AppHeading("Comments · newest first", HeadingLevel.Section, style = MaterialTheme.typography.titleMedium) }
-        items(state.comments.items, key = { it.id }) { comment ->
-            ReleaseCommentCard(comment, topic.browserUrl, onReply = { onReply(comment) }, replyEnabled = !state.composer.posting, onImage = onImage)
+        item { AppHeading("Comments · newest threads first", HeadingLevel.Section, style = MaterialTheme.typography.titleMedium) }
+        items(commentRows, key = { it.comment.id }) { row ->
+            val comment = row.comment
+            CommentThreadRow(row.depth) {
+                ReleaseCommentCard(comment, topic.browserUrl, onReply = { onReply(comment) }, replyEnabled = !state.composer.posting,
+                    collapsed = comment.id in collapsedComments,
+                    onToggleThread = {
+                        collapsedComments = if (comment.id in collapsedComments) collapsedComments - comment.id
+                            else collapsedComments + comment.id
+                    }, onImage = onImage)
+            }
         }
         if (state.comments.busy) item { LoadingState("Loading comments…", Modifier.fillMaxWidth()) }
         state.comments.error?.let { item { ErrorPanel(it, onRetry = { onMore(false) }) } }

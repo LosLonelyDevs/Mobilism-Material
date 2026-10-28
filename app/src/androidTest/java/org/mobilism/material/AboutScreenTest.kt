@@ -34,7 +34,6 @@ class AboutScreenTest {
         compose.activity.getSharedPreferences("material-developer", android.content.Context.MODE_PRIVATE).edit().clear().commit()
         val developer = org.mobilism.material.settings.DeveloperPreferencesStore(compose.activity)
         val repository = DebridRepository(compose.activity)
-        var exports = 0
         compose.setContent {
             var page by remember { mutableStateOf("settings") }
             val state by developer.state.collectAsState()
@@ -45,8 +44,8 @@ class AboutScreenTest {
                 if (page == "about") AboutScreen(onBack = { page = "settings" }, developerMode = state.enabled,
                     onEnableDeveloperMode = developer::unlock)
                 else if (page == "developer") org.mobilism.material.ui.DeveloperOptionsScreen(state,
-                    developer::setVerboseLogging, developer::setDebridEnabled, developer::disable,
-                    onBack = { page = "settings" }, onExportLogs = { exports++ })
+                    developer::setVerboseLogging, developer::disable,
+                    onBack = { page = "settings" })
                 else SettingsScreen(DebridState(), repository, onAppearance = {}, onDownloads = {}, onBack = {},
                     onAbout = { page = "about" }, developer = state, onDeveloperOptions = { page = "developer" })
             }
@@ -82,9 +81,8 @@ class AboutScreenTest {
             compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
         }
         compose.onNodeWithText("Verbose logging").assertIsOff().performClick().assertIsOn()
-        compose.onNodeWithText("Experimental premium services").performScrollTo().assertIsOn().performClick().assertIsOff()
-        compose.onNodeWithText("Export logs").performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(1, exports) }
+        compose.onNodeWithText("Experimental premium services").assertDoesNotExist()
+        compose.onNodeWithText("Diagnostic logs").assertDoesNotExist()
         compose.onNodeWithText("Developer mode").performScrollTo().assertIsOn().performClick()
         compose.onNodeWithText("Settings").assertIsDisplayed()
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("About Mobilism Material"))
@@ -93,7 +91,7 @@ class AboutScreenTest {
             val restored = org.mobilism.material.settings.DeveloperPreferencesStore(compose.activity).state.value
             assertFalse(restored.enabled)
             assertFalse(restored.verboseLogging)
-            assertFalse(restored.debridEnabled)
+            assertTrue(restored.debridEnabled)
         }
         compose.onNodeWithText("About Mobilism Material").performClick()
         repeat(9) { compose.onNodeWithContentDescription("Mobilism Material icon").performClick() }
@@ -101,12 +99,12 @@ class AboutScreenTest {
         compose.onNodeWithContentDescription("Mobilism Material icon").performClick()
         compose.runOnIdle {
             assertTrue(developer.state.value.enabled)
-            assertFalse(developer.state.value.debridEnabled)
-            developer.setDebridEnabled(true)
+            assertTrue(developer.state.value.debridEnabled)
+            developer.setDebridEnabled(false)
             developer.disable()
             val restored = org.mobilism.material.settings.DeveloperPreferencesStore(compose.activity).state.value
             assertFalse(restored.enabled)
-            assertTrue(restored.debridEnabled)
+            assertFalse(restored.debridEnabled)
         }
     }
 
@@ -122,6 +120,11 @@ class AboutScreenTest {
             }
         }
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("About Mobilism Material"))
+        compose.onAllNodesWithText("v${BuildConfig.VERSION_NAME}").assertCountEquals(1)
+        val titleLayout = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        compose.onNodeWithText("About Mobilism Material", useUnmergedTree = true)
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(titleLayout) }
+        assertEquals(1, titleLayout.single().lineCount)
         compose.onNodeWithText("About Mobilism Material").assertIsDisplayed().performClick()
         compose.onNodeWithText("Mobilism Material").assertIsDisplayed()
         compose.onNodeWithText("v${BuildConfig.VERSION_NAME}").assertIsDisplayed()

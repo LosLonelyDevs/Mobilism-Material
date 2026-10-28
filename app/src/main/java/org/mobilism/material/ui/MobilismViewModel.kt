@@ -64,12 +64,11 @@ class MobilismViewModel(
 ) : ViewModel() {
     val downloads = DownloadPreferencesStore(context)
     private val preferences = context.getSharedPreferences("material-navigation", Context.MODE_PRIVATE)
-    val preferredSection: ContentSection?
-        get() = ContentSection.entries.firstOrNull { it.name == preferences.getString("section", null) }
+    val landingPage = org.mobilism.material.settings.LandingPageStore(context)
     val auth = repository.auth
     private val mutableLogin = MutableStateFlow(LoginState())
     val login = mutableLogin.asStateFlow()
-    private val mutableFeed = MutableStateFlow(newFeed(preferredSection ?: ContentSection.Apps))
+    private val mutableFeed = MutableStateFlow(landingFeed())
     val feed = mutableFeed.asStateFlow()
     private val mutableCategories = MutableStateFlow(CategoryState(section = mutableFeed.value.section))
     val categories = mutableCategories.asStateFlow()
@@ -119,7 +118,7 @@ class MobilismViewModel(
                 if (state == AuthState.SignedOut) {
                     feedJob?.cancel()
                     categoryJob?.cancel()
-                    mutableFeed.value = newFeed(preferredSection ?: ContentSection.Apps)
+                    mutableFeed.value = landingFeed()
                     mutableCategories.value = CategoryState(section = mutableFeed.value.section)
                 }
             }
@@ -163,12 +162,11 @@ class MobilismViewModel(
         categoryJob?.cancel()
         authAction {
             repository.signOut()
-            mutableFeed.value = newFeed(mutableFeed.value.section)
+            mutableFeed.value = landingFeed()
         }
     }
 
     fun selectSection(section: ContentSection) {
-        preferences.edit().putString("section", section.name).apply()
         feedJob?.cancel()
         categoryJob?.cancel()
         mutableCategories.value = CategoryState(section = section)
@@ -197,6 +195,8 @@ class MobilismViewModel(
 
     private fun newFeed(section: ContentSection, order: FeedOrder = FeedOrder.Latest) =
         FeedState(section = section, order = order, filters = filtersFor(section))
+
+    private fun landingFeed() = landingPage.state.value.let { newFeed(it.section, it.order ?: FeedOrder.Latest) }
 
     fun loadCategories() {
         val section = mutableFeed.value.section

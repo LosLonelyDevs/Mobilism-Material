@@ -46,6 +46,43 @@ import org.mobilism.material.ui.*
 class ReleaseCommentTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun repliesFollowTheirParentAndCollapsingHidesTheWholeThread() {
+        val parent = ReleaseComment(1, "Parent", null, 1700000001, "Original comment")
+        val reply = ReleaseComment(2, "Reply", null, 1700000002, "First reply",
+            quotes = listOf(CommentQuote(parent.author, parent.contentHtml)))
+        val unrelated = ReleaseComment(3, "Another thread", null, 1700000003, "Independent comment")
+        val nested = ReleaseComment(4, "Nested reply", null, 1700000004, "Second reply",
+            quotes = listOf(CommentQuote(reply.author, reply.contentHtml)))
+        val release = Release(42, "Sample app", "Author", null, 1700000000, 4, 0)
+        val state = ReleaseState(release = release, busy = false,
+            comments = CommentsState(listOf(nested, unrelated, reply, parent), canLoadMore = false))
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            ReleaseScreen(state, DebridState(), DownloadPreferences(), onBack = {}, onRetry = {},
+                onMoreComments = {}, watched = false, downloaded = false, onWatch = {}, onDownloaded = {},
+                onLike = {}, onActionMessageShown = {})
+        } }
+        compose.onNode(hasScrollToIndexAction() and
+            SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .performScrollToNode(hasTestTag("comment-3"))
+        val unrelatedBounds = compose.onNodeWithTag("comment-3").fetchSemanticsNode().boundsInRoot
+        val parentBounds = compose.onNodeWithTag("comment-1").fetchSemanticsNode().boundsInRoot
+        val replyBounds = compose.onNodeWithTag("comment-2").fetchSemanticsNode().boundsInRoot
+        val nestedBounds = compose.onNodeWithTag("comment-4").fetchSemanticsNode().boundsInRoot
+        assertTrue(unrelatedBounds.top < parentBounds.top)
+        assertTrue(parentBounds.top < replyBounds.top)
+        assertTrue(replyBounds.top < nestedBounds.top)
+        assertTrue(replyBounds.left > parentBounds.left)
+        assertTrue(nestedBounds.left > replyBounds.left)
+        capture("threaded-comments")
+        compose.onNodeWithTag("comment-toggle-1").performClick()
+        compose.onNodeWithTag("comment-2").assertDoesNotExist()
+        compose.onNodeWithTag("comment-4").assertDoesNotExist()
+        compose.onNodeWithTag("comment-3").assertIsDisplayed()
+        compose.onNodeWithTag("comment-toggle-1").performClick()
+        compose.onNodeWithTag("comment-2").assertExists()
+        compose.onNodeWithTag("comment-4").assertExists()
+    }
+
     @Test fun commentsCollapseIndependentlyAndRestoreQuotedReplies() {
         val restoration = StateRestorationTester(compose)
         val comments = listOf(

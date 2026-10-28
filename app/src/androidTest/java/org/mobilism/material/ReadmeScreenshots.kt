@@ -101,9 +101,14 @@ class ReadmeScreenshots {
     @Test fun appearance() {
         screen { AppearanceScreen(AppearanceState(), AppearanceStore(compose.activity), {}) }
         capture("appearance")
+        compose.onNodeWithContentDescription("Choose theme").performClick()
+        compose.onNodeWithText("Choose theme").assertIsDisplayed()
+        capture("theme-picker", wholeWindow = true)
     }
 
     @Test fun debridAccounts() {
+        val logs = DiagnosticLogStore(File(compose.activity.cacheDir, "settings-export-test"), { true })
+        logs.record(DiagnosticEvent(DiagnosticSource.App, DiagnosticOperation.Startup, DiagnosticPhase.Completed))
         val accounts = DebridState(listOf(
             DebridAccount(DebridProvider.RealDebrid, configured = true, validated = true, hostsVerified = true,
                 hosts = listOf(SupportedHost("rapidgator.net", "Rapidgator"), SupportedHost("send.now", "send.now"))),
@@ -111,13 +116,29 @@ class ReadmeScreenshots {
                 hosts = listOf(SupportedHost("rapidgator.net", "Rapidgator"))),
         ))
         screen { SettingsScreen(accounts, DebridRepository(compose.activity), {}, {}, {},
-            developer = org.mobilism.material.settings.DeveloperPreferences(enabled = true, debridEnabled = true)) }
+            developer = org.mobilism.material.settings.DeveloperPreferences(enabled = true, debridEnabled = true),
+            diagnostics = logs) }
+        capture("settings")
         compose.onNodeWithText("Premium").performScrollTo()
         capture("debrid")
         compose.onNode(verticalList).performScrollToNode(hasText("2 Mobilism hosts"))
         compose.onNodeWithText("2 Mobilism hosts").assertIsDisplayed().performClick()
         compose.onNodeWithText("Supported Mobilism hosts").assertIsDisplayed()
         compose.onNodeWithText("send.now").assertIsDisplayed()
+        capture("debrid-hosts", wholeWindow = true)
+        compose.onNodeWithText("Rapidgator").performClick()
+        compose.onNode(verticalList).performScrollToNode(hasText("Tap to export logs for troubleshooting"))
+        compose.onNodeWithText("Export logs").assertDoesNotExist()
+        capture("settings-logs")
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val monitor = instrumentation.addMonitor(IntentFilter(Intent.ACTION_CHOOSER),
+            Instrumentation.ActivityResult(Activity.RESULT_OK, null), true)
+        try {
+            compose.onNodeWithText("Tap to export logs for troubleshooting").assertHasClickAction().performClick()
+            compose.waitUntil(10_000) { monitor.hits == 1 }
+        } finally {
+            instrumentation.removeMonitor(monitor)
+        }
     }
 
     @Test fun adaptiveIcon() {
@@ -276,10 +297,13 @@ class ReadmeScreenshots {
         compose.waitForIdle()
     }
 
-    private fun capture(name: String) {
+    private fun capture(name: String, wholeWindow: Boolean = false) {
         compose.waitForIdle()
-        // Capture only Compose content. System notifications and keyboard never enter the PNG.
-        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        if (wholeWindow) automation.waitForIdle(500, 5_000)
+        // Dialog captures include the window so alignment stays visible.
+        val bitmap = if (wholeWindow) automation.takeScreenshot()
+            else compose.onRoot().captureToImage().asAndroidBitmap()
         val directory = File(compose.activity.getExternalFilesDir(null), "readme-screenshots")
         check(directory.mkdirs() || directory.isDirectory)
         File(directory, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }

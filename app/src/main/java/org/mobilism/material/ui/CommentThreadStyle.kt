@@ -19,6 +19,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.mobilism.material.designsystem.AppIconButton
 
@@ -47,13 +48,22 @@ internal fun CommentAuthorDot(name: String) {
 }
 
 @Composable
-internal fun Modifier.commentRail(depth: Int = 1): Modifier {
+internal fun Modifier.commentRail(depth: Int = 1, railWidth: Dp = 2.dp): Modifier {
     val cs = MaterialTheme.colorScheme
     val rails = listOf(cs.primary, cs.tertiary, cs.secondary)
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     return drawBehind {
-        val width = 2.dp.toPx()
+        val width = railWidth.toPx()
         drawRect(rails[(depth - 1).coerceAtLeast(0) % rails.size],
             Offset(if (rtl) size.width - width else 0f, 0f), Size(width, size.height))
+    }
+}
+
+@Composable
+internal fun CommentThreadRow(depth: Int, content: @Composable () -> Unit) {
+    val indent = (depth.coerceIn(0, 6) * 8).dp
+    Box(Modifier.fillMaxWidth().padding(start = indent)
+        .then(if (depth > 0) Modifier.commentRail(depth, 4.dp).padding(start = 4.dp) else Modifier)) {
+        content()
     }
 }

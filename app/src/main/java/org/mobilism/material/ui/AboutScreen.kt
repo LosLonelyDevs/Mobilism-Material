@@ -122,7 +122,7 @@ fun AboutScreen(onBack: () -> Unit, openRepository: ((String) -> Unit)? = null,
                         Icon(Icons.Outlined.Code, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             AppHeading("GitHub", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                            Text("Source code, releases, and issues", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            SettingsSubtitle("Source code, releases, and issues")
                         }
                         Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, tint = MaterialTheme.colorScheme.primary)
                     }

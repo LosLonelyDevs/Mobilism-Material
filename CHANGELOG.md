@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Choose a default section and Home, Latest, or Top tab.
+- Keep theme previews compact and center host dialogs.
+- Nest replies under their parent comments.
+- Simplify Settings subtitles, diagnostics export, and About.
+- Limit new changelog entries to 40 words.
+
 ## 0.1.16
 
 - Keep your app list and search scroll position when returning from a release.

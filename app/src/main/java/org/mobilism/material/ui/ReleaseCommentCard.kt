@@ -54,8 +54,11 @@ import java.util.Date
 @Composable
 fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRelease: ((Long) -> Unit)? = null,
     onReply: (() -> Unit)? = null, replyEnabled: Boolean = true,
+    collapsed: Boolean? = null, onToggleThread: (() -> Unit)? = null,
     onImage: (List<String>, Int) -> Unit) {
-    var expanded by rememberSaveable(baseUrl, comment.id) { mutableStateOf(true) }
+    var localExpanded by rememberSaveable(baseUrl, comment.id) { mutableStateOf(true) }
+    val expanded = collapsed?.not() ?: localExpanded
+    val toggle = { if (onToggleThread != null) onToggleThread() else localExpanded = !localExpanded }
     val bodyState = rememberSaveableStateHolder()
     val content = remember(comment.contentHtml, comment.quotes) { CommentContent.parse(comment) }
     val interaction = remember { MutableInteractionSource() }
@@ -66,7 +69,7 @@ fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRelease: ((Lo
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("comment-toggle-${comment.id}")
                 .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
                 .focusOutline(interaction).clickable(interactionSource = interaction, indication = ripple(), role = Role.Button,
-                    onClickLabel = if (expanded) "Collapse comment" else "Expand comment", onClick = { expanded = !expanded })
+                    onClickLabel = if (expanded) "Collapse comment" else "Expand comment", onClick = toggle)
                 .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (comment.avatar != null) AsyncImage(comment.avatar, null, Modifier.size(28.dp).clip(MaterialTheme.shapes.large), contentScale = ContentScale.Crop)
@@ -79,7 +82,7 @@ fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRelease: ((Lo
                         Text(date, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                if (!expanded) CommentCollapseButton(false, { expanded = true })
+                if (!expanded) CommentCollapseButton(false, toggle)
             }
             AnimatedVisibility(expanded,
                 enter = if (reduced) EnterTransition.None else expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
@@ -105,7 +108,7 @@ fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRelease: ((Lo
                                 }
                             }
                             Spacer(Modifier.weight(1f))
-                            CommentCollapseButton(true, { expanded = false })
+                            CommentCollapseButton(true, toggle)
                         }
                     }
                 }

@@ -49,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -108,6 +109,9 @@ fun ReleaseScreen(
     var menu by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val release = state.release
+    var collapsedComments by rememberSaveable(release?.id) { mutableStateOf(emptyList<Long>()) }
+    val commentTree = remember(state.comments.items) { CommentTree.build(state.comments.items) }
+    val commentRows = remember(commentTree, collapsedComments) { CommentTree.flatten(commentTree, collapsedComments.toSet()) }
     LaunchedEffect(state.actionMessage) {
         state.actionMessage?.let { snackbar.showSnackbar(it); onActionMessageShown() }
     }
@@ -288,7 +292,7 @@ fun ReleaseScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 AppHeading("Comments", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                                Text("Newest first", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Newest threads first", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             ExpressiveButton(if (auth is AuthState.SignedIn) onWriteComment else onSignIn,
                                 Modifier.fillMaxWidth().testTag("write-comment"),
@@ -300,11 +304,19 @@ fun ReleaseScreen(
                             }
                         }
                     }
-                    items(state.comments.items, key = { "comment-${it.id}" }) { comment ->
-                        ReleaseCommentCard(comment, release.browserUrl ?: "https://forum.mobilism.org/", onRelease = onRelease,
+                    items(commentRows, key = { "comment-${it.comment.id}" }) { row ->
+                        val comment = row.comment
+                        CommentThreadRow(row.depth) {
+                            ReleaseCommentCard(comment, release.browserUrl ?: "https://forum.mobilism.org/", onRelease = onRelease,
                             onReply = { if (auth is AuthState.SignedIn) onReplyToComment(comment) else onSignIn() },
                             replyEnabled = !state.composer.posting,
+                            collapsed = comment.id in collapsedComments,
+                            onToggleThread = {
+                                collapsedComments = if (comment.id in collapsedComments) collapsedComments - comment.id
+                                    else collapsedComments + comment.id
+                            },
                             onImage = { urls, index -> gallery = urls to index })
+                        }
                     }
                     item("comments-status") {
                         val comments = state.comments

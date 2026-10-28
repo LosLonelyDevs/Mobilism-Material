@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -27,7 +29,6 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
@@ -62,6 +63,8 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.mobilism.material.data.DebridAccount
@@ -82,7 +85,9 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
     hideAdult: Boolean = false, onHideAdult: (Boolean) -> Unit = {}, onAbout: () -> Unit = {},
     developer: org.mobilism.material.settings.DeveloperPreferences = org.mobilism.material.settings.DeveloperPreferences(),
     onDeveloperOptions: () -> Unit = {}, diagnostics: org.mobilism.material.settings.DiagnosticLogStore? = null,
-    preferredHosts: Set<String> = emptySet()) {
+    preferredHosts: Set<String> = emptySet(),
+    landingPage: org.mobilism.material.settings.LandingPage = org.mobilism.material.settings.LandingPage(),
+    onLandingPage: (org.mobilism.material.settings.LandingPage) -> Unit = {}) {
     val theme = LocalAppTheme.current
     Scaffold(topBar = {
         TopAppBar(title = { AppHeading("Settings", HeadingLevel.Page) }, navigationIcon = {
@@ -102,7 +107,7 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
                         Icon(Icons.Outlined.Palette, null, tint = theme.personalization, modifier = Modifier.size(32.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             AppHeading("Appearance", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                            Text("Theme, font, and motion", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            SettingsSubtitle("Theme, font, and motion")
                         }
                         Icon(Icons.Outlined.ChevronRight, null, tint = theme.personalization)
                     }
@@ -116,11 +121,14 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
                         Icon(Icons.Outlined.Download, null, tint = theme.reading, modifier = Modifier.size(32.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             AppHeading("Download preferences", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                            Text("CPU architecture and favorite hosts", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            SettingsSubtitle("CPU architecture and favorite hosts")
                         }
                         Icon(Icons.Outlined.ChevronRight, null, tint = theme.reading)
                     }
                 }
+            }
+            item {
+                LandingPageSetting(landingPage, onLandingPage)
             }
             item {
                 ContentVisibilitySetting(hideAdult, onHideAdult)
@@ -128,9 +136,8 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             if (developer.debridEnabled) {
                 item {
                     AppHeading("Premium", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall)
-                    Text(
-                        "Green buttons resolve supported links through a verified Premium account. Choose Mobilism Premium, MegaDebrid, or Real-Debrid.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    SettingsSubtitle(
+                        "Checkmarked buttons resolve downloads through verified Premium accounts.",
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
@@ -156,17 +163,12 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
                 ExpressiveCard(onAbout, Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Icon(Icons.Outlined.Info, null, tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            AppHeading("About Mobilism Material", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                            Text("Version, release notes, and source code", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            AppHeading("About Mobilism Material", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            SettingsSubtitle("v${org.mobilism.material.BuildConfig.VERSION_NAME}")
                         }
-                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("v${org.mobilism.material.BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Icon(Icons.Outlined.ChevronRight, null, tint = MaterialTheme.colorScheme.primary)
-                        }
+                        Icon(Icons.Outlined.ChevronRight, null, tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
@@ -181,11 +183,8 @@ internal fun ContentVisibilitySetting(hideAdult: Boolean, onHideAdult: (Boolean)
         Row(Modifier.fillMaxWidth().toggleable(hideAdult, role = androidx.compose.ui.semantics.Role.Switch,
             onValueChange = onHideAdult).padding(20.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                AppHeading("Hide 18+ content", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                Text("Hide adult categories and releases in browsing and search.",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            AppHeading("Hide 18+ content", HeadingLevel.Section, modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleLarge)
             androidx.compose.material3.Switch(hideAdult, onCheckedChange = null)
         }
     }
@@ -221,23 +220,22 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
     AppSurface(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) {
-                    AppHeading(account.provider.label, HeadingLevel.Subsection, style = MaterialTheme.typography.titleLarge)
-                }
                 if (account.configured) Icon(
                     if (account.validated) Icons.Outlined.CheckCircle else Icons.Outlined.Info,
                     if (account.validated) "Account verified" else "Account needs verification",
                     tint = if (account.validated) theme.success else MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(start = 12.dp).size(24.dp),
+                    modifier = Modifier.padding(end = 12.dp).size(24.dp),
                 )
+                Box(Modifier.weight(1f)) {
+                    AppHeading(account.provider.label, HeadingLevel.Subsection, style = MaterialTheme.typography.titleLarge)
+                }
             }
             if (!account.configured || signingInAgain) {
               if (account.provider != DebridProvider.RealDebrid) {
                 val mobilism = account.provider == DebridProvider.Mobilism
                 val service = if (mobilism) "Mobilism" else account.provider.label
-                Text(if (mobilism) "Use your Mobilism username and Premium password. Your forum password may be different."
-                    else "Sign in with your Premium account. Credentials stay encrypted on this device so expired sessions can renew automatically.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SettingsSubtitle(if (mobilism) "Sign in with your Mobilism username and Premium password."
+                    else "Sign in once; encrypted credentials renew expired Premium sessions.")
                 OutlinedTextField(
                     value = username, onValueChange = { if (it.length <= 256) username = it },
                     label = { Text("$service username") }, singleLine = true, enabled = !busy,
@@ -346,31 +344,36 @@ private fun DebridHostMenu(account: DebridAccount, debrid: DebridState, preferre
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             Icon(Icons.Outlined.ExpandMore, null, Modifier.padding(start = 4.dp).size(20.dp).rotate(rotation))
         }
-        DropdownMenu(
-            expanded = expanded, onDismissRequest = { expanded = false },
-            modifier = Modifier.width(menuWidth).heightIn(max = 360.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        if (expanded) Dialog(
+            onDismissRequest = { expanded = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            Text(
-                "Supported Mobilism hosts", Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
-            )
-            if (hosts.isEmpty()) Text(
-                if (account.busy) "Loading hosts…" else "No matching hosts. Try Refresh hosts.",
-                Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            hosts.forEach { host ->
-                val name = host.name
-                val domains = account.hosts.filter { it.name.equals(name, ignoreCase = true) }.map { it.domain }
-                RoundedMenuItem(
-                    label = name, onClick = { expanded = false }, accent = MaterialTheme.colorScheme.primary,
-                    supportLabel = debrid.accounts.filter { other ->
-                        other.configured && other.hosts.any { it.domain in domains }
-                    }.map { it.provider.label }.takeIf { it.isNotEmpty() }?.joinToString(" · "),
-                    singleLine = true,
-                )
+            AppSurface(
+                Modifier.width(menuWidth).heightIn(max = 360.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            ) {
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
+                    Text(
+                        "Supported Mobilism hosts", Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
+                    )
+                    if (hosts.isEmpty()) Text(
+                        if (account.busy) "Loading hosts…" else "No matching hosts. Try Refresh hosts.",
+                        Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    hosts.forEach { host ->
+                        val name = host.name
+                        val domains = account.hosts.filter { it.name.equals(name, ignoreCase = true) }.map { it.domain }
+                        RoundedMenuItem(
+                            label = name, onClick = { expanded = false }, accent = MaterialTheme.colorScheme.primary,
+                            supportLabel = debrid.accounts.filter { other ->
+                                other.configured && other.hosts.any { it.domain in domains }
+                            }.map { it.provider.label }.takeIf { it.isNotEmpty() }?.joinToString(" · "),
+                            singleLine = true,
+                        )
+                    }
+                }
             }
         }
     }

@@ -102,9 +102,15 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     val context = LocalContext.current
     val app = context.applicationContext as MobilismApplication
     var homeForum by remember { mutableStateOf<Pair<DiscussionTopic?, DiscussionCategory>?>(null) }
-    val start = androidx.compose.runtime.remember { if (model.preferredSection == null) "favourite" else "feed" }
+    var openingTab by rememberSaveable {
+        mutableStateOf<BrowseTab?>(when (model.landingPage.state.value.order) {
+            FeedOrder.Latest -> BrowseTab.Latest
+            FeedOrder.Top -> BrowseTab.Top
+            null -> BrowseTab.Home
+        })
+    }
     LaunchedEffect(Unit) {
-        if (start == "feed") model.loadFeed(refresh = true)
+        model.loadFeed(refresh = true)
         if (auth is AuthState.SignedIn) model.releaseAfterSignIn?.let {
             nav.navigate("release/$it") { launchSingleTop = true }
             model.releaseSignInHandled()
@@ -119,22 +125,17 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         }
     }
     NavHost(
-        navController = nav, startDestination = start,
+        navController = nav, startDestination = "feed",
         enterTransition = { motion.enter }, exitTransition = { motion.exit },
         popEnterTransition = { motion.popEnter }, popExitTransition = { motion.popExit },
     ) {
-        composable("favourite") {
-            FavouriteScreen { section ->
-                model.selectSection(section)
-                nav.navigate("feed") { popUpTo("favourite") { inclusive = true }; launchSingleTop = true }
-            }
-        }
         composable("feed") { entry ->
             val home: HomeViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
                 initializer { HomeViewModel(app.repository, feed.section, model.contentPreferences.hideAdult) }
             })
             val homeState by home.state.collectAsStateWithLifecycle()
-            var tab by rememberSaveable(feed.section) { mutableStateOf(BrowseTab.Home) }
+            var tab by rememberSaveable(feed.section) { mutableStateOf(openingTab ?: BrowseTab.Home) }
+            LaunchedEffect(Unit) { openingTab = null }
             LaunchedEffect(feed.section) { home.selectSection(feed.section) }
             val openRelease: (Long) -> Unit = { nav.navigate("release/$it") { launchSingleTop = true } }
             val openFeed: (FeedOrder, FeedFilters) -> Unit = { order, filters ->
@@ -246,19 +247,21 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         }
         composable("settings") {
             val hideAdult by model.contentPreferences.hideAdult.collectAsStateWithLifecycle()
+            val landingPage by model.landingPage.state.collectAsStateWithLifecycle()
             SettingsScreen(debrid, model.debrid, onAppearance = { nav.navigate("appearance") },
                 onDownloads = { nav.navigate("download-preferences") }, onBack = { nav.popBackStack() },
                 hideAdult = hideAdult, onHideAdult = model.contentPreferences::hideAdult,
                 onAbout = { nav.navigate("about") }, developer = developer,
                 onDeveloperOptions = { nav.navigate("developer-options") }, diagnostics = app.diagnostics,
-                preferredHosts = downloads.preferredHosts)
+                preferredHosts = downloads.preferredHosts, landingPage = landingPage,
+                onLandingPage = model.landingPage::select)
         }
         composable("developer-options") {
             LaunchedEffect(developer.enabled) {
                 if (!developer.enabled) nav.popBackStack()
             }
-            if (developer.enabled) DeveloperOptionsRoute(developer, app.diagnostics,
-                onVerboseLogging = model.developer::setVerboseLogging, onDebridEnabled = model.developer::setDebridEnabled,
+            if (developer.enabled) DeveloperOptionsScreen(developer,
+                onVerboseLogging = model.developer::setVerboseLogging,
                 onDisable = model.developer::disable, onBack = { nav.popBackStack() })
         }
         composable("about") {

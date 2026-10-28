@@ -74,6 +74,12 @@ kotlin {
     compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
 }
 
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    val changelogFile = rootProject.layout.projectDirectory.file("CHANGELOG.md")
+    inputs.file(changelogFile).withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    systemProperty("mobilism.changelog.path", changelogFile.asFile.absolutePath)
+}
+
 dependencies {
     implementation(project(":core:data"))
     implementation(project(":core:designsystem"))

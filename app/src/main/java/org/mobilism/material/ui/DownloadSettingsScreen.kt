@@ -48,7 +48,6 @@ import kotlinx.coroutines.launch
 import org.mobilism.material.data.DebridRepository
 import org.mobilism.material.data.Alphabetical
 import org.mobilism.material.data.HostMatcher
-import org.mobilism.material.data.HostOrder
 import org.mobilism.material.data.SupportedHost
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.ExpressiveButton
@@ -93,14 +92,12 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
                         Text("Auto-watch downloaded apps", Modifier.weight(1f))
                         Switch(state.autoWatchDownloads, onCheckedChange = null)
                     }
-                    Text("Opening a file host marks that release downloaded. It's a rough record, not a completion check. You can clear the mark on the release page.",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    SettingsSubtitle("Opening file hosts marks releases downloaded without confirming completion.")
                 }
             }
             item {
                 CollapsibleSection("cpu-preference", "CPU architecture", Icons.Outlined.Memory, theme.reading) {
-                    Text("Matching and universal downloads stay open. Other architectures are collapsed, so you can still access them.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    SettingsSubtitle("Matching and universal downloads stay expanded; other architectures stay collapsed.")
                     Text("This device: " + (Build.SUPPORTED_ABIS.firstOrNull() ?: "Unknown"),
                         style = MaterialTheme.typography.labelLarge, color = theme.reading)
                     Box {
@@ -121,12 +118,11 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
             }
             item {
                 CollapsibleSection("host-preferences", "Preferred file hosts", Icons.Outlined.StarOutline, colors.primary) {
-                    Text("Hosts sort by preferred with Premium access, Premium access, preferred, then other. Each group sorts alphabetically.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    SettingsSubtitle("Reorders displayed filehosters based on preference.")
                     if (busy && state.hosts.isEmpty()) LoadingState("Loading Mobilism hosts…", Modifier.fillMaxWidth())
                     error?.let { ErrorPanel(it, onRetry = { scope.launch { loadHosts() } }) }
-                    val hosts = HostOrder.sorted((state.hosts + state.preferredHosts.map { SupportedHost(it, HostMatcher.displayName(it)) })
-                        .distinctBy { it.domain }, state.preferredHosts, debrid, { it.domain }) { it.name }
+                    val hosts = Alphabetical.sorted((state.hosts + state.preferredHosts.map { SupportedHost(it, HostMatcher.displayName(it)) })
+                        .distinctBy { it.domain }) { it.name }
                     hosts.forEach { host ->
                         val checked = host.domain in state.preferredHosts
                         Row(

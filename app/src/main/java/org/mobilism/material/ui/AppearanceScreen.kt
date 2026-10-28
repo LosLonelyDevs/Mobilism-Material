@@ -63,8 +63,7 @@ fun AppearanceScreen(state: AppearanceState, store: AppearanceStore, onBack: () 
                     Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f).padding(end = 16.dp)) {
                             Text("Reduce motion", style = MaterialTheme.typography.titleMedium)
-                            Text("Limit animations.", style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            SettingsSubtitle("Limit animations.")
                         }
                         Switch(state.reduceMotion, store::reduceMotion,
                             Modifier.semantics { contentDescription = "Reduce motion" })
@@ -122,12 +121,13 @@ private fun ThemeOption(theme: ThemeDefinition, active: Boolean, onClick: () -> 
                 else if (active) Icon(Icons.Outlined.Check, "Selected", Modifier.size(24.dp), tint = theme.colors.primary)
                 else Spacer(Modifier.size(20.dp))
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(theme.colors.primary, theme.colors.secondary, theme.colors.tertiary,
                     theme.reading, theme.featured, theme.personalization, theme.success, theme.colors.error,
                     theme.colors.background, theme.colors.surface, theme.colors.surfaceContainerHigh, theme.colors.onSurface)
-                    .distinct().forEach { color ->
-                    Box(Modifier.size(24.dp).clip(MaterialTheme.shapes.small).background(color)
+                    .distinct().dropLast(if (theme.id == CatppuccinFrappe.id) 1 else 0).forEach { color ->
+                    Box(Modifier.weight(1f, fill = false).widthIn(max = 24.dp).aspectRatio(1f)
+                        .clip(MaterialTheme.shapes.small).background(color)
                         .border(1.dp, theme.colors.outlineVariant, MaterialTheme.shapes.small))
                 }
             }
