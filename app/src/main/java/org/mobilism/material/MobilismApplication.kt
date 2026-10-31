@@ -37,6 +37,12 @@ class MobilismApplication : Application() {
     val followNotifications by lazy { FollowingNotifications(this) }
     val following by lazy { FollowingChecker(library, repository, InstalledApps(this), followPreferences, followNotifications) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    internal val appUpdates by lazy { org.mobilism.material.updates.AppUpdateChecker(this) }
+    private val updateLaunchStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    internal fun checkAppUpdatesOnColdStart() {
+        if (updateLaunchStarted.compareAndSet(false, true)) scope.launch { appUpdates.check(automatic = true) }
+    }
 
     override fun onCreate() {
         super.onCreate()

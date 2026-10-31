@@ -101,6 +101,7 @@ fun AboutScreen(onBack: () -> Unit, openRepository: ((String) -> Unit)? = null,
                         style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            item { AppUpdatesCard() }
             item {
                 AppSurface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                     Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {

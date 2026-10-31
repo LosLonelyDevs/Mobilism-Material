@@ -73,6 +73,19 @@ class ForumReleaseParserTest {
         assertNull(last.nextStart)
     }
 
+    @Test fun quotedPostIdsSurviveForumParsingWithoutFlatteningNestedQuotes() {
+        val html = topic().replace("<cite>Earlier wrote:</cite>Quoted text", """
+            <cite><a href='viewtopic.php?p=12010000#p12010000'>Earlier wrote: ↑</a></cite>
+            <blockquote><cite><a href='#p12000000'>Ancestor wrote:</a></cite>Old text</blockquote>Quoted text
+        """.trimIndent())
+        val quote = ForumReleaseParser.comments(html, 6075324, 12016008, 0).page.items.single().quotes.single()
+        assertEquals("Earlier", quote.author)
+        assertEquals(12010000L, quote.postId)
+        assertTrue(quote.html.contains("Ancestor wrote:"))
+        assertTrue(quote.html.contains("#p12000000"))
+        assertFalse(quote.html.contains("Earlier wrote:"))
+    }
+
     @Test fun liveReportedWearReleaseHasDetailsAndDownloads() {
         assumeTrue(System.getenv("MOBILISM_LIVE_WEAR_TEST") == "true")
         val client = OkHttpClient.Builder().callTimeout(30, java.util.concurrent.TimeUnit.SECONDS).build()

@@ -147,6 +147,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             }
             FeedScreen(
                 state = feed, auth = auth,
+                compact = appearance.compactFeed, onCompact = model.appearance::compactFeed,
                 onSection = { home.selectSection(it); model.selectSection(it) }, onOrder = model::selectOrder,
                 onRefresh = { model.loadFeed(refresh = true) }, onMore = { model.loadFeed() },
                 onRelease = openRelease,

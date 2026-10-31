@@ -39,7 +39,7 @@ object ThemeCatalog {
         (builtIn + custom).filter { it.isDark == dark }.sortedBy { it.name.lowercase(Locale.ROOT) }
 
     fun resolve(id: String, custom: List<ThemeDefinition> = emptyList()): ThemeDefinition =
-        (builtIn + custom).firstOrNull { it.id == id } ?: default
+        if (id == MaterialYou.id) MaterialYou else (builtIn + custom).firstOrNull { it.id == id } ?: default
 
     /** Versioned import contract; storage and document picking belong to the app. */
     fun parse(json: String): ThemeDefinition {
@@ -48,7 +48,7 @@ object ThemeCatalog {
         require(root.getInt("schemaVersion") == 1) { "Unsupported theme schema." }
         val id = root.getString("id")
         require(id.matches(Regex("[a-z0-9][a-z0-9-]{1,63}"))) { "Invalid theme ID." }
-        require(builtIn.none { it.id == id }) { "Built-in themes cannot be replaced." }
+        require(id != MaterialYou.id && builtIn.none { it.id == id }) { "Built-in themes cannot be replaced." }
         val name = root.getString("name").trim()
         require(name.length in 1..60) { "Theme name must have 1 to 60 characters." }
         val dark = root.getBoolean("dark")

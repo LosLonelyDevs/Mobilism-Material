@@ -33,7 +33,7 @@ data class Release(
 data class ReleasePage(val items: List<Release>, val canLoadMore: Boolean, val lastPage: Int? = null,
     val nextActivityAtMost: Long? = null)
 
-data class CommentQuote(val author: String, val html: String)
+data class CommentQuote(val author: String, val html: String, val postId: Long? = null)
 data class ReleaseComment(
     val id: Long, val author: String, val avatar: String?, val publishedAt: Long,
     val contentHtml: String, val images: List<String> = emptyList(), val quotes: List<CommentQuote> = emptyList(),

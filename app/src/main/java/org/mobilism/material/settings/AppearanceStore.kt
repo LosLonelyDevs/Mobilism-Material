@@ -23,6 +23,7 @@ data class AppearanceState(
     val customThemes: List<ThemeDefinition> = emptyList(),
     val customFontFile: File? = null,
     val customFontName: String? = null,
+    val compactFeed: Boolean = false,
 ) {
     val themes: List<ThemeDefinition> get() = ThemeCatalog.builtIn + customThemes
     val theme: ThemeDefinition get() = ThemeCatalog.resolve(themeId, customThemes)
@@ -50,6 +51,7 @@ class AppearanceStore(private val context: Context) {
             customThemes = themes,
             customFontFile = customFont,
             customFontName = preferences.getString("font-name", null).takeIf { customFont != null },
+            compactFeed = preferences.getBoolean("compact-feed", false),
         )
     }
 
@@ -62,6 +64,11 @@ class AppearanceStore(private val context: Context) {
         if (font == AppFont.Custom && mutableState.value.customFontFile == null) return
         preferences.edit().putString("font", font.name).apply()
         mutableState.update { it.copy(font = font) }
+    }
+
+    fun compactFeed(enabled: Boolean) {
+        preferences.edit().putBoolean("compact-feed", enabled).apply()
+        mutableState.update { it.copy(compactFeed = enabled) }
     }
 
     suspend fun importFont(uri: Uri) = withContext(Dispatchers.IO) {

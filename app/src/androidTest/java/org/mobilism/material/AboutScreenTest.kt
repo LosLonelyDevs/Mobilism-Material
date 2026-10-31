@@ -130,7 +130,8 @@ class AboutScreenTest {
         compose.onNodeWithText("v${BuildConfig.VERSION_NAME}").assertIsDisplayed()
         compose.onNodeWithText(BuildConfig.ABOUT_DESCRIPTION).assertIsDisplayed()
         val note = BuildConfig.RELEASE_NOTES.lines().first { it.startsWith("- ") }.removePrefix("- ")
-        compose.onNodeWithText(note).performScrollTo().assertIsDisplayed()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(note))
+        compose.onNodeWithText(note).assertIsDisplayed()
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("GitHub"))
         compose.onNodeWithText("GitHub").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals(listOf(REPOSITORY_URL), opened) }

@@ -8,7 +8,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -45,10 +44,12 @@ class CustomCategoriesTest {
     private fun release() = Release(1, "Example v1.0", "Author", null, 1_793_188_800, 0, 10, section = ContentSection.Apps)
 
     private fun capture(name: String) {
+        compose.waitForIdle()
+        val screenshot = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
         val directory = File(compose.activity.getExternalFilesDir(null), "custom-categories")
         check(directory.mkdirs() || directory.isDirectory)
         File(directory, "$name.png").outputStream().use {
-            compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+            screenshot.compress(Bitmap.CompressFormat.PNG, 100, it)
         }
     }
 
@@ -138,6 +139,7 @@ class CustomCategoriesTest {
             compose.runOnIdle { section = current }
             compose.onNodeWithTag("home-${current.name}").performScrollToNode(hasText("Sports"))
             compose.onNodeWithText("Sports").performClick()
+            compose.onNodeWithText("No categories available.").assertDoesNotExist()
             compose.runOnIdle { assertEquals(categories.getValue(current), opened) }
         }
         compose.runOnIdle { visible = false }

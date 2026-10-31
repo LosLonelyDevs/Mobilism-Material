@@ -1,13 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.1.17
 
-- Choose a default section and landing tab.
-- Keep theme previews compact and center host dialogs.
-- Nest replies under their parent comments.
-- Simplify Settings subtitles, diagnostics export, and About.
-- Limit new changelog entries to 40 words.
-- Fix opening Wear OS releases.
+- Add compact lists, Material You, NEW badges, and GitHub update notifications.
+- Fix reply nesting, activity ordering, and repeated quotes.
+- Add landing choices, refine Settings and About, and fix Wear OS releases.
 
 ## 0.1.16
 

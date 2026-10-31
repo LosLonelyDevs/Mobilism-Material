@@ -46,10 +46,17 @@ internal object ForumReleaseParser {
         val comments = posts.filter { id(it) != originalPostId }.map { post ->
             val content = content(post)
             val quotes = content.select("blockquote").filter { it.parents().none { p -> p.normalName() == "blockquote" } }.map { quote ->
-                val attribution = quote.selectFirst("cite, .quote-author")
-                val name = attribution?.text().orEmpty().removeSuffix(" wrote:").trim()
+                val attribution = quote.select("cite, .quote-author").firstOrNull { candidate ->
+                    candidate.parents().firstOrNull { it.normalName() == "blockquote" } == quote
+                }
+                val name = attribution?.text().orEmpty().substringBefore(" wrote:").trim()
+                val quotedId = quote.attr("data-post-id").toLongOrNull()?.takeIf { it > 0 }
+                    ?: attribution?.select("a[href]")?.firstNotNullOfOrNull { link ->
+                        Regex("(?:[?&]p=|#p)([0-9]+)").find(link.attr("href"))
+                            ?.groupValues?.get(1)?.toLongOrNull()?.takeIf { it > 0 }
+                    }
                 attribution?.remove()
-                CommentQuote(name, quote.html()).also { quote.remove() }
+                CommentQuote(name, quote.html(), quotedId).also { quote.remove() }
             }
             ReleaseComment(id(post), author(post),
                 post.selectFirst(".user-profile-avatar img[src], .postprofile img[src]")?.absUrl("src")?.let(::webUrlOrNull),

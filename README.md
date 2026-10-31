@@ -30,16 +30,17 @@ Screenshots use sample data. CI refreshes them on version bumps and screenshot t
 ## Features
 
 - [Home tabs](docs/home.md) for Apps, Books, and Games, with featured releases, categories, reviews, and discussions.
-- Search, Latest and Top feeds, date/category filters, and infinite scrolling.
+- Search, compact or detailed Latest and Top feeds, date/category filters, and infinite scrolling. NEW badges mark releases since the previous visit.
 - Clear app versions and book details, collapsible release sections, and full-screen images.
-- [Comments](docs/release-comments.md) with quoted replies, saved drafts, compact spacing, and individual collapse controls.
+- [Comments](docs/release-comments.md) with nested replies, threads sorted by latest activity, saved drafts, and collapse controls.
 - [Discussions](docs/discussions.md) with forum browsing, topic search, and replies.
 - Inbox, Sent, conversation history, mark as read, and message replies.
 - Clickable URLs and emoji support in release text, comments, and messages.
 - Following with background update checks and optional notifications. My Applications tracks installed and downloaded apps.
 - Mobilism Premium, MegaDebrid, and Real-Debrid links with encrypted account storage.
 - Grouped downloads, preferred architectures, and preferred file hosts.
-- 13 themes including AMOLED Black, bundled and custom fonts, and reduced motion.
+- Material You wallpaper colors on Android 12+, 13 preset themes including AMOLED Black, bundled and custom fonts, and reduced motion.
+- [App update checks](docs/app-updates.md) with GitHub release notifications and a manual check in Settings and About.
 
 Downloads open in your browser. Green buttons resolve through a verified Premium account first. Native downloads and several legacy features are still pending. [Remaining work](docs/feature-parity.md).
 

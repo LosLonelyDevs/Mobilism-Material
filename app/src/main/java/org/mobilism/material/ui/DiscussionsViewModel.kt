@@ -224,7 +224,7 @@ class DiscussionsViewModel(
                 val id = repository.postDiscussionComment(topic, text, snapshot.composer.replyTo?.id)
                 if (id <= 0) throw ApiFailure(FailureKind.InvalidResponse, "The server did not confirm the comment.")
                 val comment = ReleaseComments.posted(id, author, text, System.currentTimeMillis() / 1000).copy(
-                    quotes = snapshot.composer.replyTo?.let { listOf(CommentQuote(it.author, it.html)) }.orEmpty())
+                    quotes = snapshot.composer.replyTo?.let { listOf(CommentQuote(it.author, it.html, it.id)) }.orEmpty())
                 confirmed[topic.key] = listOf(comment) + confirmed[topic.key].orEmpty()
                 listOf("draft", "pending", "reply", "author", "quote").forEach { saved.remove<Any>("$it:${topic.key}") }
                 mutableState.update { it.copy(composer = CommentComposerState(), notice = "Comment posted",

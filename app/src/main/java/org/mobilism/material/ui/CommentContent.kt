@@ -1,5 +1,6 @@
 package org.mobilism.material.ui
 
+import java.util.Locale
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.mobilism.material.data.ReleaseComment
@@ -8,10 +9,8 @@ internal data class CommentContent(val html: String, val quotes: List<QuotedComm
     companion object {
         fun parse(comment: ReleaseComment): CommentContent {
             val content = parse(comment.contentHtml)
-            val quotes = comment.quotes.map { QuotedComment(it.author, parse(it.html)) } + content.quotes
-            return content.copy(quotes = quotes.groupBy { it.author to it.content }.values.map { matches ->
-                matches.firstOrNull { it.postId != null } ?: matches.first()
-            })
+            val quotes = comment.quotes.map { QuotedComment(it.author, parse(it.html), it.postId) } + content.quotes
+            return content.copy(quotes = distinctQuotes(quotes))
         }
 
         fun parse(html: String): CommentContent = extract(Jsoup.parseBodyFragment(html).body(), 0)
@@ -38,8 +37,25 @@ internal data class CommentContent(val html: String, val quotes: List<QuotedComm
                 block.remove()
                 QuotedComment(author, content, postId)
             }
-            return CommentContent(body.html().trim(), quotes)
+            return CommentContent(body.html().trim(), distinctQuotes(quotes))
         }
+
+        private data class QuoteIdentity(val author: String, val text: String, val links: List<String>,
+            val images: List<String>, val nested: List<QuoteIdentity>)
+
+        private fun identity(quote: QuotedComment): QuoteIdentity {
+            val body = Jsoup.parseBodyFragment(quote.content.html)
+            return QuoteIdentity(quote.author.trim().lowercase(Locale.ROOT),
+                body.text().replace(Regex("[\\s\u00a0]+"), " ").trim(),
+                body.select("a[href]").map { it.attr("href") }, body.select("img[src]").map { it.attr("src") },
+                quote.content.quotes.map(::identity))
+        }
+
+        private fun distinctQuotes(quotes: List<QuotedComment>): List<QuotedComment> =
+            quotes.groupBy(::identity).values.flatMap { matches ->
+                // API metadata can repeat the inline quote with different formatting or no post ID.
+                matches.filter { it.postId != null }.distinctBy { it.postId }.ifEmpty { listOf(matches.first()) }
+            }
 
         private val wrote = Regex("^(.+?)\\s+wrote\\s*:", RegexOption.IGNORE_CASE)
         private val postLink = Regex("(?:[?&]p=|#p)([0-9]+)")

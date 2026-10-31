@@ -290,11 +290,12 @@ private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit,
                 ReleaseCommentCard(topic.originalPost, topic.browserUrl, onImage = onImage)
             }
         }
-        item { AppHeading("Comments · newest threads first", HeadingLevel.Section, style = MaterialTheme.typography.titleMedium) }
+        item { AppHeading("Comments · latest activity first", HeadingLevel.Section, style = MaterialTheme.typography.titleMedium) }
         items(commentRows, key = { it.comment.id }) { row ->
             val comment = row.comment
             CommentThreadRow(row.depth) {
-                ReleaseCommentCard(comment, topic.browserUrl, onReply = { onReply(comment) }, replyEnabled = !state.composer.posting,
+                ReleaseCommentCard(comment, topic.browserUrl, onReply = if (row.placeholder) null else ({ onReply(comment) }),
+                    replyEnabled = !state.composer.posting, threadContent = row.content, earlierComment = row.placeholder,
                     collapsed = comment.id in collapsedComments,
                     onToggleThread = {
                         collapsedComments = if (comment.id in collapsedComments) collapsedComments - comment.id

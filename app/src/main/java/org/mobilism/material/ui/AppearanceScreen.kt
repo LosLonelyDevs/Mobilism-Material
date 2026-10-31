@@ -1,5 +1,6 @@
 package org.mobilism.material.ui
 
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -53,7 +54,20 @@ fun AppearanceScreen(state: AppearanceState, store: AppearanceStore, onBack: () 
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item { AppHeading("Theme", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall) }
             item {
-                ThemeOption(state.theme, false, { showThemes = true }, Modifier.fillMaxWidth(), chooser = true)
+                ThemeOption(resolveAppTheme(state.theme), false, { showThemes = true }, Modifier.fillMaxWidth(), chooser = true)
+            }
+            item { AppHeading("Release lists", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall) }
+            item {
+                AppSurface(Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f).padding(end = 16.dp)) {
+                            Text("Compact lists", style = MaterialTheme.typography.titleMedium)
+                            SettingsSubtitle("Show smaller rows in Latest and Top.")
+                        }
+                        Switch(state.compactFeed, store::compactFeed,
+                            Modifier.semantics { contentDescription = "Compact lists" })
+                    }
+                }
             }
             item { AppHeading("Font", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall) }
             item { FontPicker(state, store) }
@@ -77,6 +91,7 @@ fun AppearanceScreen(state: AppearanceState, store: AppearanceStore, onBack: () 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ThemePicker(state: AppearanceState, onDismiss: () -> Unit, onSelect: (ThemeDefinition) -> Unit) {
+    val selectedTheme = resolveAppTheme(state.theme)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f)) {
             Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, bottom = 8.dp),
@@ -87,13 +102,17 @@ private fun ThemePicker(state: AppearanceState, onDismiss: () -> Unit, onSelect:
             LazyColumn(Modifier.weight(1f).testTag("theme-options").selectableGroup(),
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) item(key = MaterialYou.id) {
+                    ThemeOption(resolveAppTheme(MaterialYou), state.themeId == MaterialYou.id,
+                        { onSelect(MaterialYou) }, Modifier.fillMaxWidth())
+                }
                 items(listOf(false, true), key = { if (it) "dark" else "light" }) { dark ->
                     CollapsibleSection(
                         id = if (dark) "dark-themes" else "light-themes",
                         title = if (dark) "Dark" else "Light",
                         icon = if (dark) Icons.Outlined.DarkMode else Icons.Outlined.LightMode,
                         accent = MaterialTheme.colorScheme.primary,
-                        initiallyExpanded = state.theme.isDark == dark,
+                        initiallyExpanded = selectedTheme.isDark == dark,
                         headingLevel = HeadingLevel.Subsection,
                     ) {
                         org.mobilism.material.data.Alphabetical.sorted(ThemeCatalog.forMode(dark, state.customThemes)) { it.name }.forEach { theme ->
@@ -121,6 +140,8 @@ private fun ThemeOption(theme: ThemeDefinition, active: Boolean, onClick: () -> 
                 else if (active) Icon(Icons.Outlined.Check, "Selected", Modifier.size(24.dp), tint = theme.colors.primary)
                 else Spacer(Modifier.size(20.dp))
             }
+            if (theme.id == MaterialYou.id) SettingsSubtitle("Use wallpaper colors and follow your system theme.",
+                color = theme.colors.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(theme.colors.primary, theme.colors.secondary, theme.colors.tertiary,
                     theme.reading, theme.featured, theme.personalization, theme.success, theme.colors.error,

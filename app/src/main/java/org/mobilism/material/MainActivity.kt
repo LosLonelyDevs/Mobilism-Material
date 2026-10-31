@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.mobilism.material.designsystem.MobilismTheme
+import org.mobilism.material.designsystem.resolveAppTheme
 import org.mobilism.material.ui.MobilismApp
 import org.mobilism.material.following.FollowingNotifications
 
@@ -25,9 +26,11 @@ class MainActivity : ComponentActivity() {
         fromNotification = savedInstanceState?.getBoolean("fromNotification") ?: (intent.action != Intent.ACTION_VIEW)
         enableEdgeToEdge()
         val app = application as MobilismApplication
+        app.checkAppUpdatesOnColdStart()
         setContent {
+            org.mobilism.material.ui.AppUpdatePermissionEffect(app.appUpdates)
             val appearance by app.appearance.state.collectAsStateWithLifecycle()
-            val theme = appearance.theme
+            val theme = resolveAppTheme(appearance.theme)
             SideEffect {
                 val bars = if (theme.isDark) SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
                     else SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)

@@ -27,6 +27,8 @@ import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.ViewHeadline
+import androidx.compose.material3.Badge
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,6 +66,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -81,6 +85,7 @@ import org.mobilism.material.data.Release
 import org.mobilism.material.data.ReleaseTitles
 import org.mobilism.material.data.Alphabetical
 import org.mobilism.material.designsystem.AppIconButton
+import org.mobilism.material.designsystem.AppIconToggleButton
 import org.mobilism.material.designsystem.ExpressiveCard
 import org.mobilism.material.designsystem.LoadingState
 import org.mobilism.material.designsystem.LocalAppTheme
@@ -113,6 +118,8 @@ fun FeedScreen(
     homeContent: (@Composable (() -> Unit) -> Unit)? = null,
     customCategories: org.mobilism.material.data.CustomCategoryStore? = null,
     onManageCategories: () -> Unit = {},
+    compact: Boolean = false,
+    onCompact: (Boolean) -> Unit = {},
 ) {
     val theme = LocalAppTheme.current
     val sectionStyle = state.section.style()
@@ -217,6 +224,8 @@ fun FeedScreen(
                     navigationIcon = { AppIconButton(Icons.Outlined.Menu, "Open navigation drawer", { scope.launch { drawer.open() } }) },
                     actions = {
                         AppIconButton(Icons.Outlined.Search, "Search releases", onSearch)
+                        if (tab != BrowseTab.Home) AppIconToggleButton(Icons.Outlined.ViewHeadline,
+                            if (compact) "Use detailed list" else "Use compact list", compact, sectionStyle.accent, onCompact)
                         AppIconButton(Icons.Outlined.FilterList, "Filters", openFilters)
                         AppIconButton(Icons.Outlined.Refresh, "Refresh", if (tab == BrowseTab.Home) onHomeRefresh else onRefresh)
                     },
@@ -252,10 +261,11 @@ fun FeedScreen(
                                     state = listState,
                                     modifier = Modifier.widthIn(max = 840.dp).fillMaxSize().testTag("feed-list"),
                                     contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 12.dp),
                                 ) {
                                     items(state.items, key = { it.id }, contentType = { "release" }) { release ->
-                                        ReleaseCard(release, sectionStyle.accent, { onRelease(release.id) })
+                                        ReleaseCard(release, sectionStyle.accent, compact,
+                                            isNew = state.order == FeedOrder.Latest && release.id in state.newReleaseIds) { onRelease(release.id) }
                                     }
                                     if (state.busy) item(key = "loading") { LoadingState("Loading releases…", Modifier.fillMaxWidth()) }
                                     state.error?.let { error -> item(key = "error") {
@@ -281,32 +291,40 @@ fun FeedScreen(
 }
 
 @Composable
-internal fun ReleaseCard(release: Release, accent: Color, onClick: () -> Unit) {
+internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = false, isNew: Boolean = false, onClick: () -> Unit) {
     val title = remember(release.title, release.section) { ReleaseTitles.parse(release.title, release.section) }
     val theme = LocalAppTheme.current
-    ExpressiveCard(onClick, Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
+    ExpressiveCard(onClick, Modifier.fillMaxWidth().testTag("release-${release.id}"), colors = CardDefaults.cardColors(
         containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, accent, 0.06f),
     )) {
-        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(if (compact) 12.dp else 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 16.dp), verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
                 model = release.thumbnail, contentDescription = null,
                 placeholder = painterResource(R.drawable.ic_mobilism), error = painterResource(R.drawable.ic_mobilism),
-                modifier = Modifier.size(72.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop,
+                modifier = Modifier.size(if (compact) 40.dp else 72.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop,
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                AppHeading(title.name, HeadingLevel.Subsection, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AppHeading(title.name, HeadingLevel.Subsection, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                        maxLines = if (compact) 2 else 3, overflow = TextOverflow.Ellipsis)
+                    if (isNew) Badge(containerColor = theme.success, contentColor = theme.onSuccess,
+                        modifier = Modifier.testTag("new-release-${release.id}").semantics {
+                            contentDescription = "New since your last visit"
+                        }) { Text("NEW") }
+                }
                 if (title.subtitle.isNotBlank()) Text(
                     title.subtitle, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (compact) 1 else 3, overflow = TextOverflow.Ellipsis,
                 )
-                Text(release.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (!compact) Text(release.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (!compact) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
                         Text("${release.replies} replies", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (!compact) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(Icons.Outlined.Visibility, null, Modifier.size(14.dp), tint = theme.featured)
                         Text("${release.views} views", style = MaterialTheme.typography.labelSmall, color = theme.featured)
                     }

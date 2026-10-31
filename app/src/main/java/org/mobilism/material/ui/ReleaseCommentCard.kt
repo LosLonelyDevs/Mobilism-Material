@@ -52,15 +52,16 @@ import java.util.Date
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRelease: ((Long) -> Unit)? = null,
+internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRelease: ((Long) -> Unit)? = null,
     onReply: (() -> Unit)? = null, replyEnabled: Boolean = true,
     collapsed: Boolean? = null, onToggleThread: (() -> Unit)? = null,
+    threadContent: CommentContent? = null, earlierComment: Boolean = false,
     onImage: (List<String>, Int) -> Unit) {
     var localExpanded by rememberSaveable(baseUrl, comment.id) { mutableStateOf(true) }
     val expanded = collapsed?.not() ?: localExpanded
     val toggle = { if (onToggleThread != null) onToggleThread() else localExpanded = !localExpanded }
     val bodyState = rememberSaveableStateHolder()
-    val content = remember(comment.contentHtml, comment.quotes) { CommentContent.parse(comment) }
+    val content = threadContent ?: remember(comment.contentHtml, comment.quotes) { CommentContent.parse(comment) }
     val interaction = remember { MutableInteractionSource() }
     val reduced = LocalReducedMotion.current
     Surface(Modifier.fillMaxWidth().testTag("comment-${comment.id}"), shape = MaterialTheme.shapes.large,
@@ -77,6 +78,8 @@ fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRelease: ((Lo
                 Column(Modifier.weight(1f)) {
                     Text(comment.author, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (earlierComment) Text("Earlier comment", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (comment.publishedAt > 0) {
                         val date = remember(comment.publishedAt) { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(comment.publishedAt * 1000)) }
                         Text(date, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

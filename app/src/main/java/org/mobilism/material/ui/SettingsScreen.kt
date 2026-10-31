@@ -159,6 +159,7 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
                 }
             }
             diagnostics?.let { logs -> item(key = "diagnostics") { DiagnosticLogsCard(logs) } }
+            item(key = "app-updates") { AppUpdatesCard() }
             item(key = "about") {
                 ExpressiveCard(onAbout, Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,

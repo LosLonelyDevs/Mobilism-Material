@@ -298,7 +298,7 @@ fun ReleaseScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 AppHeading("Comments", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                                Text("Newest threads first", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Latest activity first", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             ExpressiveButton(if (auth is AuthState.SignedIn) onWriteComment else onSignIn,
                                 Modifier.fillMaxWidth().testTag("write-comment"),
@@ -314,8 +314,8 @@ fun ReleaseScreen(
                         val comment = row.comment
                         CommentThreadRow(row.depth) {
                             ReleaseCommentCard(comment, release.browserUrl ?: "https://forum.mobilism.org/", onRelease = onRelease,
-                            onReply = { if (auth is AuthState.SignedIn) onReplyToComment(comment) else onSignIn() },
-                            replyEnabled = !state.composer.posting,
+                            onReply = if (row.placeholder) null else ({ if (auth is AuthState.SignedIn) onReplyToComment(comment) else onSignIn() }),
+                            replyEnabled = !state.composer.posting, threadContent = row.content, earlierComment = row.placeholder,
                             collapsed = comment.id in collapsedComments,
                             onToggleThread = {
                                 collapsedComments = if (comment.id in collapsedComments) collapsedComments - comment.id

@@ -22,6 +22,10 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import java.io.IOException
@@ -37,6 +41,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.hamcrest.Matchers.containsString
 import org.mobilism.material.data.*
 import org.mobilism.material.designsystem.MobilismTheme
 import org.mobilism.material.settings.DownloadPreferences
@@ -63,16 +68,21 @@ class ReleaseCommentTest {
         } }
         compose.onNode(hasScrollToIndexAction() and
             SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
-            .performScrollToNode(hasTestTag("comment-3"))
+            .performScrollToNode(hasTestTag("comment-1"))
         val unrelatedBounds = compose.onNodeWithTag("comment-3").fetchSemanticsNode().boundsInRoot
         val parentBounds = compose.onNodeWithTag("comment-1").fetchSemanticsNode().boundsInRoot
         val replyBounds = compose.onNodeWithTag("comment-2").fetchSemanticsNode().boundsInRoot
         val nestedBounds = compose.onNodeWithTag("comment-4").fetchSemanticsNode().boundsInRoot
-        assertTrue(unrelatedBounds.top < parentBounds.top)
+        assertTrue(nestedBounds.top < unrelatedBounds.top)
         assertTrue(parentBounds.top < replyBounds.top)
         assertTrue(replyBounds.top < nestedBounds.top)
         assertTrue(replyBounds.left > parentBounds.left)
         assertTrue(nestedBounds.left > replyBounds.left)
+        compose.onAllNodesWithTag("comment-2").assertCountEquals(1)
+        compose.onAllNodesWithTag("comment-4").assertCountEquals(1)
+        onView(withText(containsString("Original comment"))).check(matches(isDisplayed()))
+        onView(withText(containsString("First reply"))).check(matches(isDisplayed()))
+        compose.onNodeWithText("Show quote").assertDoesNotExist()
         capture("threaded-comments")
         compose.onNodeWithTag("comment-toggle-1").performClick()
         compose.onNodeWithTag("comment-2").assertDoesNotExist()
@@ -81,6 +91,23 @@ class ReleaseCommentTest {
         compose.onNodeWithTag("comment-toggle-1").performClick()
         compose.onNodeWithTag("comment-2").assertExists()
         compose.onNodeWithTag("comment-4").assertExists()
+    }
+
+    @Test fun overlappingApiAndInlineQuotesDisplayOnePreviewAndOneExpandedQuote() {
+        val comment = ReleaseComment(77, "Reader", null, 1700000000, """
+            <blockquote><cite><a href="#p1">Parent wrote:</a></cite><div>Hello there</div></blockquote>My answer
+        """, quotes = listOf(CommentQuote("Parent", "<p>Hello there</p>")))
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            Surface(Modifier.safeDrawingPadding()) {
+                ReleaseCommentCard(comment, "https://forum.mobilism.org/", onImage = { _, _ -> })
+            }
+        } }
+        compose.onAllNodesWithText("Replying to Parent").assertCountEquals(1)
+        compose.onAllNodesWithText("Hello there", substring = true).assertCountEquals(1)
+        compose.onNodeWithText("Show quote").performClick()
+        onView(withText(containsString("Hello there"))).check(matches(isDisplayed()))
+        onView(withText(containsString("My answer"))).check(matches(isDisplayed()))
+        capture("deduplicated-quote")
     }
 
     @Test fun commentsCollapseIndependentlyAndRestoreQuotedReplies() {

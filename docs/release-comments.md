@@ -1,13 +1,13 @@
 # Release comments
 
-Signed-in users can post a comment or reply to an existing comment on an Apps, Games, or Books release. Comments stay newest first. Editing, deletion, attachments, and other forum sections remain pending.
+Signed-in users can post a comment or reply to an existing comment on an Apps, Games, or Books release. Threads sort by the latest activity anywhere in their reply chain. Replies appear once beneath their parent, oldest first. Editing, deletion, and attachments remain pending.
 
 ## Flow
 
 - The Comments section has Write a comment and Refresh actions. Guests get Sign in to comment and return to the release after signing in.
 - Each comment has Reply. The composer shows the quoted author and text; Remove reply keeps the draft and turns it into a normal comment. Reply targets survive closing the sheet and saved-state restoration.
-- Tap a comment's author row to collapse or reopen its body, quoted replies, images, and Reply action. Each comment keeps its own state, including across saved-state restoration. Comments use less top and bottom padding and smaller gaps on release and discussion pages. Side margins stay the same.
-- Quoted replies show a short preview with Show quote to expand the formatted text. Plain URLs in comments and release text become clickable links. Existing named links keep their original destination.
+- Tap a comment's author row to collapse or reopen its body and all replies beneath it. Collapse state survives saved-state restoration.
+- Quotes already represented by a parent comment are omitted from the reply body. Other quotes show a preview with Show quote to expand the formatted text. Duplicate API and inline quotes appear once. Plain URLs become clickable links; named links keep their destination.
 - An expanded modal sheet shows the release title, account name, multiline field, character count, Close, and Post comment. Comments are public. The app limits a draft to 10,000 characters.
 - Closing the sheet keeps the draft for that release. Rotation and saved-state restoration keep it too. Leaving the release or changing accounts ends that draft's lifetime.
 - Posting disables editing, dismissal, and repeat submission. A confirmed comment ID clears the draft, closes the sheet, shows success, adds the comment, and reloads page one.
@@ -29,4 +29,4 @@ Drafts are not sent until Post comment is tapped. Diagnostics do not log comment
 
 Posting tests use intercepted API responses. No live forum comment is published by the test suite.
 
-The API returns a flat list and quoted reply text, without parent comment IDs. Collapsing a comment hides its own quoted context; it does not infer a thread or hide separate comments.
+The API returns a flat list with quoted reply text. Threading uses quoted post IDs when available, otherwise the author and normalized quote text. Replies whose parents have not loaded stay beneath an Earlier comment placeholder containing the quoted text. Loading the parent replaces that placeholder. Repeated text without a post ID is matched to the latest earlier comment from that author.

@@ -8,6 +8,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -25,6 +26,7 @@ import org.mobilism.material.data.Release
 import org.mobilism.material.data.ReleaseComments
 import org.mobilism.material.settings.AppearanceStore
 import org.mobilism.material.settings.DownloadPreferencesStore
+import org.mobilism.material.settings.NewReleaseSession
 
 data class ScreenError(val message: String, val showNetworkSettings: Boolean = false)
 
@@ -45,6 +47,7 @@ data class FeedState(
     val error: ScreenError? = null,
     val filters: FeedFilters = FeedFilters(),
     val awaitingMore: Boolean = false,
+    val newReleaseIds: Set<Long> = emptySet(),
 )
 
 data class CategoryState(
@@ -65,6 +68,7 @@ class MobilismViewModel(
     val customCategories: org.mobilism.material.data.CustomCategoryStore = org.mobilism.material.data.CustomCategoryStore(context),
 ) : ViewModel() {
     val downloads = DownloadPreferencesStore(context)
+    private val newReleaseSession = NewReleaseSession(context)
     private val preferences = context.getSharedPreferences("material-navigation", Context.MODE_PRIVATE)
     val landingPage = org.mobilism.material.settings.LandingPageStore(context)
     val auth = repository.auth
@@ -288,10 +292,15 @@ class MobilismViewModel(
             mutableFeed.update { it.copy(busy = true, error = null) }
             try {
                 val result = repository.releases(snapshot.section, snapshot.order, page, snapshot.filters)
+                coroutineContext.ensureActive()
                 val existing = if (refresh) emptyList() else snapshot.items
                 val combined = (existing + result.items).distinctBy { it.id }
+                val newReleaseIds = if (snapshot.order == FeedOrder.Latest)
+                    newReleaseSession.observe(snapshot.section, combined, initialize = !snapshot.filters.isActive)
+                else emptySet()
                 mutableFeed.update { it.copy(
                     items = combined, page = result.lastPage ?: page, busy = false,
+                    newReleaseIds = newReleaseIds,
                     awaitingMore = result.items.isEmpty() && result.canLoadMore,
                     canLoadMore = result.canLoadMore && (result.items.isEmpty() || refresh || combined.size > existing.size),
                 ) }
@@ -402,7 +411,7 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
                 val target = snapshot.composer.replyTo
                 val commentId = repository.postComment(id, text, target?.id)
                 val posted = ReleaseComments.posted(commentId, author, text, System.currentTimeMillis() / 1000).copy(
-                    quotes = target?.let { listOf(org.mobilism.material.data.CommentQuote(it.author, it.html)) }.orEmpty())
+                    quotes = target?.let { listOf(org.mobilism.material.data.CommentQuote(it.author, it.html, it.id)) }.orEmpty())
                 commentsJob?.cancel()
                 commentsJob = null
                 savedState["comment-draft"] = ""

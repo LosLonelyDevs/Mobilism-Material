@@ -127,7 +127,9 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
                             }
                         }
                     }
-                    HomeShelfStatus(state.categories, "No categories available.") { onRetry(HomeCollection.Categories) }
+                    if (choices.isEmpty() || state.categories.busy || state.categories.error != null) {
+                        HomeShelfStatus(state.categories, "No categories available.") { onRetry(HomeCollection.Categories) }
+                    }
                 }
             }
             item(key = "reviews") {

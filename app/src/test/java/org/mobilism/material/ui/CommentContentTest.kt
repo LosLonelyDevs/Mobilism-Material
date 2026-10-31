@@ -60,4 +60,36 @@ class CommentContentTest {
         assertEquals(32, depth)
         assertEquals("Still readable", Jsoup.parse(current.html).text())
     }
+
+    @Test fun metadataAndInlineQuoteRenderOnceDespiteFormattingDifferences() {
+        val comment = ReleaseComment(7, "Reader", null, 0, """
+            <blockquote><cite><a href="#p1">Parent wrote: ↑</a></cite><div>Hello &amp; goodbye</div></blockquote>
+            <p>My answer</p>
+        """, quotes = listOf(CommentQuote("parent", "<p>Hello &amp; goodbye</p>")))
+        val content = CommentContent.parse(comment)
+        assertEquals("My answer", Jsoup.parse(content.html).text())
+        assertEquals(1, content.quotes.size)
+        assertEquals(1L, content.quotes.single().postId)
+        assertFalse(content.html.contains("Hello"))
+    }
+
+    @Test fun identicalTextFromDistinctPostsAndImageOnlyQuotesStaySeparate() {
+        val comment = ReleaseComment(7, "Reader", null, 0, "Answer", quotes = listOf(
+            CommentQuote("Parent", "Thanks", 1), CommentQuote("Parent", "Thanks", 2),
+            CommentQuote("Parent", "Thanks"),
+            CommentQuote("Parent", "<img src='https://example.org/one.png'>"),
+            CommentQuote("Parent", "<img src='https://example.org/two.png'>"),
+        ))
+        val quotes = CommentContent.parse(comment).quotes
+        assertEquals(4, quotes.size)
+        assertEquals(listOf(1L, 2L), quotes.mapNotNull { it.postId })
+    }
+
+    @Test fun repeatedNestedQuotesAreDeduplicatedAtEachLevel() {
+        val ancestor = "<blockquote><cite>Ancestor wrote:</cite>Earlier</blockquote>"
+        val content = CommentContent.parse("<blockquote><cite>Parent wrote:</cite>$ancestor$ancestor Answer</blockquote>Reply")
+        assertEquals(1, content.quotes.single().content.quotes.size)
+        assertEquals("Answer", Jsoup.parse(content.quotes.single().content.html).text())
+        assertEquals("Reply", content.html)
+    }
 }
