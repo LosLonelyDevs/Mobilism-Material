@@ -109,7 +109,8 @@ class MessagesTest {
                 onMore = { model.loadMailbox() }, onOpen = model::openMessage, onRead = model::markRead,
                 onBack = model::closeConversation, onSignIn = {}, onRefreshConversation = model::loadConversation,
                 onReply = model::openReply, onEdit = model::editReply, onSend = model::sendReply,
-                onCloseReply = model::closeReply, onNoticeShown = model::noticeShown)
+                onCloseReply = model::closeReply, onNoticeShown = model::noticeShown,
+                onCheckReply = model::checkReplyDelivery, onRetryReply = model::retryReply)
         } }
         compose.waitUntil(10_000) { model.state.value.mailbox.items.isNotEmpty() }
         compose.onNodeWithText("Inbox").assertIsSelected()
@@ -141,9 +142,83 @@ class MessagesTest {
         fixture.repository.signOut()
     }
 
+    @Test fun lostAcknowledgementRecoversDeliveredReplyWithoutAnotherPost() = runBlocking {
+        val fixture = Fixture().apply { actionBody = "{}"; deliverOnSend = true }
+        val model = openComposer(fixture)
+        compose.onNodeWithTag("send-message").performScrollTo().assertIsEnabled().performClick()
+        try {
+            compose.waitUntil(15_000) { model.state.value.draft.isEmpty() && !model.state.value.replying }
+        } catch (failure: Throwable) {
+            val state = model.state.value
+            capture("reply-recovery-failure")
+            throw AssertionError("Reply recovery: posts=${fixture.requests.count { it.url.encodedPath.endsWith("message/reply/send") }}, " +
+                "sending=${state.sending}, checking=${state.checkingReply}, unconfirmed=${state.sendUnconfirmed}, " +
+                "loading=${state.loading}, draftLength=${state.draft.length}, error=${state.sendError}", failure)
+        }
+        assertFalse(model.state.value.sendUnconfirmed)
+        assertEquals(1, fixture.requests.count { it.url.encodedPath.endsWith("message/reply/send") })
+        compose.onNodeWithText("Reply sent").assertExists()
+        fixture.repository.signOut()
+    }
+
+    @Test fun uncertainReplyChecksDeliveryAndRequiresExplicitRetryConfirmation() = runBlocking {
+        val fixture = Fixture().apply { actionBody = "{}" }
+        val model = openComposer(fixture)
+        compose.onNodeWithTag("send-message").performScrollTo().performClick()
+        compose.waitUntil(15_000) {
+            model.state.value.sendUnconfirmed && !model.state.value.checkingReply && model.state.value.sendError != null
+        }
+        compose.onNodeWithTag("send-message").assertDoesNotExist()
+        compose.onNodeWithTag("check-message-delivery").performScrollTo().assertIsEnabled()
+        compose.onNodeWithTag("message-draft").assertTextContains("A private reply")
+        capture("reply-delivery-unconfirmed")
+        compose.onNodeWithTag("check-message-delivery").performClick()
+        compose.waitUntil(15_000) { !model.state.value.checkingReply }
+        assertEquals(1, fixture.requests.count { it.url.encodedPath.endsWith("message/reply/send") })
+        compose.onNodeWithText("Close", substring = false).performScrollTo().performClick()
+        compose.onNodeWithText("Continue reply", substring = false).performScrollTo().performClick()
+        compose.onNodeWithTag("message-draft").assertTextContains("A private reply")
+        compose.onNodeWithTag("retry-message").performScrollTo().performClick()
+        compose.onNodeWithText("Send this reply again?").assertIsDisplayed()
+        capture("reply-retry-confirmation")
+        compose.onNodeWithText("Cancel", substring = false).performClick()
+        assertEquals(1, fixture.requests.count { it.url.encodedPath.endsWith("message/reply/send") })
+        fixture.actionBody = """{"status":"success"}"""
+        compose.onNodeWithTag("retry-message").performScrollTo().performClick()
+        compose.onNodeWithTag("confirm-message-retry").performClick()
+        compose.waitUntil(15_000) { model.state.value.draft.isEmpty() && !model.state.value.replying }
+        assertEquals(2, fixture.requests.count { it.url.encodedPath.endsWith("message/reply/send") })
+        fixture.repository.signOut()
+    }
+
+    private suspend fun openComposer(fixture: Fixture): MessagesViewModel {
+        fixture.repository.signIn("Reader", "sample-password")
+        lateinit var model: MessagesViewModel
+        compose.runOnUiThread { model = MessagesViewModel(fixture.repository, "Reader", SavedStateHandle()) }
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            val state by model.state.collectAsState()
+            MessagesScreen(state, "Reader", onFolder = model::selectFolder, onRefresh = { model.loadMailbox(true) },
+                onMore = { model.loadMailbox() }, onOpen = model::openMessage, onRead = model::markRead,
+                onBack = model::closeConversation, onSignIn = {}, onRefreshConversation = model::loadConversation,
+                onReply = model::openReply, onEdit = model::editReply, onSend = model::sendReply,
+                onCloseReply = model::closeReply, onNoticeShown = model::noticeShown,
+                onCheckReply = model::checkReplyDelivery, onRetryReply = model::retryReply)
+        } }
+        compose.waitUntil(10_000) { model.state.value.mailbox.items.isNotEmpty() }
+        compose.onNodeWithText("Question").performClick()
+        compose.waitUntil(10_000) { model.state.value.conversation.isNotEmpty() }
+        compose.onNodeWithText("Reply", substring = false).performScrollTo().performClick()
+        compose.onNodeWithTag("message-draft").performTextInput("A private reply")
+        // The keyboard resizes the sheet outside Compose's idle tracking.
+        InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5_000)
+        return model
+    }
+
     private fun capture(name: String) {
         compose.waitForIdle()
-        val image = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        automation.waitForIdle(500, 5_000)
+        val image = checkNotNull(automation.takeScreenshot())
         val directory = java.io.File(compose.activity.getExternalFilesDir(null), "message-screenshots")
         check(directory.mkdirs() || directory.isDirectory)
         java.io.File(directory, "$name.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
@@ -155,7 +230,9 @@ class MessagesTest {
         val events = CopyOnWriteArrayList<DiagnosticEvent>()
         var loginId: Long? = 7
         var actionStatus = 200
-        var actionBody = """{"status":"success"}"""
+        @Volatile var actionBody = """{"status":"success"}"""
+        @Volatile var deliverOnSend = false
+        @Volatile var delivered = false
         var listStatus = 200
         var listBody: String? = null
         var preview = "Hello"
@@ -171,8 +248,12 @@ class MessagesTest {
             val body = when {
                 path == "auth/login" -> """{"access_token":"sample-session","id":${loginId ?: "null"}}"""
                 path == "release/comment" -> """{"status":"success","response":{"comment_id":99}}"""
-                path == "message/reply/send" || path.endsWith("/read") -> { status = actionStatus; actionBody }
-                path == "message/10/orderby/times/asc" -> """{"response":[{"id":42,"subject":"Question","from_user":"Author","to_user":"Reader","content":"Hello https://example.org","times":1700000000,"readed":0}]}"""
+                path == "message/reply/send" -> { if (deliverOnSend) delivered = true; status = actionStatus; actionBody }
+                path.endsWith("/read") -> { status = actionStatus; """{"status":"success"}""" }
+                path == "message/10/orderby/times/asc" -> {
+                    val reply = if (delivered) """,{"id":43,"subject":"Re: Question","from_user":"Reader","to_user":"Author","content":"A private reply","times":${System.currentTimeMillis() / 1000},"readed":1}""" else ""
+                    """{"response":[{"id":42,"subject":"Question","from_user":"Author","to_user":"Reader","content":"Hello https://example.org","times":1700000000,"readed":0}$reply]}"""
+                }
                 path.startsWith("message/to/") || path.startsWith("message/from/") -> {
                     status = listStatus
                     val sent = path.startsWith("message/from/")

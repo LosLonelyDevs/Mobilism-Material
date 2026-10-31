@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
@@ -34,6 +35,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -58,7 +62,8 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
     onRefresh: () -> Unit, onMore: () -> Unit, onOpen: (PrivateMessage) -> Unit, onRead: (Long) -> Unit,
     onBack: () -> Unit, onSignIn: () -> Unit, onRefreshConversation: () -> Unit,
     onReply: () -> Unit, onEdit: (String) -> Unit, onSend: () -> Unit, onCloseReply: () -> Unit,
-    onNoticeShown: () -> Unit, onRelease: (Long) -> Unit = {}) {
+    onNoticeShown: () -> Unit, onRelease: (Long) -> Unit = {},
+    onCheckReply: () -> Unit = {}, onRetryReply: () -> Unit = {}) {
     val snackbar = remember { SnackbarHostState() }
     val inboxScroll = rememberLazyListState()
     val sentScroll = rememberLazyListState()
@@ -66,7 +71,7 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
     BackHandler(detail) { if (!state.sending) onBack() }
     LaunchedEffect(state.notice) { state.notice?.let { snackbar.showSnackbar(it); onNoticeShown() } }
     if (state.replying) MessageReplyComposer(state, username, onEdit, onSend, onCloseReply,
-        onCheck = { onCloseReply(); onRefreshConversation() })
+        onCheck = onCheckReply, onRetry = onRetryReply)
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = { TopAppBar(
@@ -75,7 +80,7 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
             navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack, enabled = !state.sending) },
             actions = { AppIconButton(Icons.Outlined.Refresh, "Refresh messages",
                 if (detail) onRefreshConversation else onRefresh,
-                enabled = !state.sending && !(if (detail) state.loading else state.mailbox.busy)) },
+                enabled = !state.sending && !state.checkingReply && !(if (detail) state.loading else state.mailbox.busy)) },
         ) },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
@@ -158,7 +163,16 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MessageReplyComposer(state: MessagesState, username: String, onEdit: (String) -> Unit,
-    onSend: () -> Unit, onClose: () -> Unit, onCheck: () -> Unit) {
+    onSend: () -> Unit, onClose: () -> Unit, onCheck: () -> Unit, onRetry: () -> Unit) {
+    var confirmRetry by remember(state.messageId) { mutableStateOf(false) }
+    if (confirmRetry && state.sendUnconfirmed && !state.sending) AlertDialog(
+        onDismissRequest = { confirmRetry = false },
+        title = { Text("Send this reply again?") },
+        text = { Text("The first attempt may still arrive. Sending again could create a duplicate.") },
+        confirmButton = { AppTextButton("Send again", { confirmRetry = false; onRetry() },
+            enabled = !state.checkingReply, modifier = Modifier.testTag("confirm-message-retry")) },
+        dismissButton = { AppTextButton("Cancel", { confirmRetry = false }) },
+    )
     ModalBottomSheet(onDismissRequest = { if (!state.sending) onClose() },
         sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden,
             enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
@@ -171,18 +185,22 @@ private fun MessageReplyComposer(state: MessagesState, username: String, onEdit:
                 style = MaterialTheme.typography.headlineSmall)
             Text(state.replyTarget?.subject.orEmpty(), style = MaterialTheme.typography.titleSmall)
             OutlinedTextField(state.draft, onEdit, Modifier.fillMaxWidth().testTag("message-draft"),
-                readOnly = state.sending, label = { Text("Message") }, minLines = 4, maxLines = 8,
+                readOnly = state.sending || state.sendUnconfirmed, label = { Text("Message") }, minLines = 4, maxLines = 8,
                 shape = MaterialTheme.shapes.large, supportingText = { Text("${state.draft.length} / ${PrivateMessages.MAX_LENGTH}") })
             state.sendError?.let {
                 Text(it, color = MaterialTheme.colorScheme.error)
-                AppTextButton("Check conversation", onCheck, enabled = !state.sending)
             }
             if (state.sending) LoadingState("Sending reply…", Modifier.fillMaxWidth())
+            else if (state.checkingReply) LoadingState("Checking whether your reply arrived…", Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 AppTextButton("Close", onClose, enabled = !state.sending)
-                ExpressiveButton(onSend, Modifier.weight(1f).testTag("send-message"),
+                if (state.sendUnconfirmed) ExpressiveButton(onCheck, Modifier.weight(1f).testTag("check-message-delivery"),
+                    enabled = !state.sending && !state.checkingReply) { Text("Check delivery") }
+                else ExpressiveButton(onSend, Modifier.weight(1f).testTag("send-message"),
                     enabled = !state.sending && state.draft.isNotBlank() && state.draft.length <= PrivateMessages.MAX_LENGTH) { Text("Send reply") }
             }
+            if (state.sendUnconfirmed && !state.sending && !state.checkingReply)
+                AppTextButton("Send again…", { confirmRetry = true }, modifier = Modifier.testTag("retry-message"))
             Text("Your draft stays here when you close this sheet.", style = MaterialTheme.typography.bodySmall)
         }
     }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.18
+
+- Recover private-message sends when the confirmation is missing.
+- Check conversations and Sent, preserve unresolved drafts, and require confirmation before retrying to reduce duplicate replies.
+
 ## 0.1.17
 
 - Add compact lists, Material You, NEW badges, and GitHub update notifications.
