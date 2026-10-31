@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-- Choose a default section and Home, Latest, or Top tab.
+- Choose a default section and landing tab.
 - Keep theme previews compact and center host dialogs.
 - Nest replies under their parent comments.
 - Simplify Settings subtitles, diagnostics export, and About.
 - Limit new changelog entries to 40 words.
+- Fix opening Wear OS releases.
 
 ## 0.1.16
 

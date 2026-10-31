@@ -17,6 +17,19 @@ import org.mobilism.material.settings.DownloadPreferences
 /** Read-only checks against the releases that exposed the parsing errors. */
 @RunWith(AndroidJUnit4::class)
 class LiveReleaseParsingTest {
+    @Test fun reportedWearReleaseLoadsThroughRepositoryFallback() = kotlinx.coroutines.runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("liveReleaseParsing") == "true")
+        val repository = org.mobilism.material.data.DefaultMobilismRepository(InstrumentationRegistry.getInstrumentation().targetContext)
+        val release = repository.release(6075324)
+        assertTrue(release.title.contains("Pujie Watch Faces"))
+        assertEquals(1347L, release.categoryId)
+        assertEquals(12016008L, release.likeId)
+        assertTrue(release.images.isNotEmpty())
+        val content = ReleaseContentParser.parse(release.contentHtml, release.downloadLinks, release.browserUrl!!)
+        assertTrue(content.downloads.isNotEmpty())
+        assertTrue(repository.comments(6075324, 1).items.none { it.id == release.likeId })
+    }
+
     @Test fun verifiesReportedReleaseStructures() {
         assumeTrue(InstrumentationRegistry.getArguments().getString("liveReleaseParsing") == "true")
         val client = OkHttpClient.Builder().callTimeout(30, TimeUnit.SECONDS).build()

@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -38,6 +39,8 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         .build()
     // Connection recovery can resend a request. Keep writes on the non-retrying client.
     private val readClient = this.client.newBuilder().retryOnConnectionFailure(true).build()
+    private val forumPostIds = ConcurrentHashMap<Long, Long>()
+    private val forumCommentStarts = ConcurrentHashMap<Pair<Long, Int>, Int>()
 
     suspend fun signIn(username: String, password: String): Session {
         val result = request("auth/login", form = mapOf("username" to username, "password" to password))
@@ -78,7 +81,13 @@ internal class MobilismApi(private val context: Context, private val diagnostics
 
     suspend fun release(id: Long, token: String?): Release {
         require(id > 0)
-        return ReleaseJson.parse(request("release/$id", token).getJSONObject("response"))
+        return try {
+            ReleaseJson.parse(request("release/$id", token).getJSONObject("response")).also { forumPostIds.remove(id) }
+        } catch (failure: ApiFailure) {
+            // Wear releases can exist on the forum while the API excludes them.
+            if (failure.httpStatus != 400 || failure.message != "No records found.") throw failure
+            ForumReleaseParser.release(forumTopic(id), id).also { forumPostIds[id] = requireNotNull(it.likeId) }
+        }
     }
 
     suspend fun toggleLike(release: Release, token: String): Boolean {
@@ -103,6 +112,13 @@ internal class MobilismApi(private val context: Context, private val diagnostics
 
     suspend fun comments(id: Long, page: Int, token: String?): CommentPage {
         require(id > 0 && page > 0)
+        forumPostIds[id]?.let { originalPostId ->
+            val start = if (page == 1) 0 else forumCommentStarts[id to page] ?: return CommentPage(emptyList(), false)
+            val result = ForumReleaseParser.comments(forumTopic(id, start), id, originalPostId, start)
+            if (page == 1) forumCommentStarts.keys.removeAll { it.first == id }
+            result.nextStart?.let { forumCommentStarts[id to page + 1] = it }
+            return result.page
+        }
         return CommentJson.page(request("release/$id/comments/page/$page/limit/$PAGE_SIZE/orderby/date/desc", token,
             emptyRecordsAsArray = true).getJSONArray("response"))
     }
@@ -183,6 +199,32 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             "isrelease" to "1", "isdiscussion" to "0", "isother" to "0", "id" to scope.apiId,
         ), hideAdult = hideAdult)).let { result ->
             result.copy(items = result.items.map { it.copy(section = it.section ?: scope.section) })
+        }
+    }
+
+    private suspend fun forumTopic(id: Long, commentsStart: Int? = null): String = withContext(Dispatchers.IO) {
+        val url = "https://forum.mobilism.org/viewtopic.php".toHttpUrl().newBuilder()
+            .addQueryParameter("t", id.toString()).apply {
+                if (commentsStart != null) {
+                    addQueryParameter("sd", "d")
+                    addQueryParameter("start", commentsStart.toString())
+                }
+            }.build()
+        try {
+            // Forum reads never receive the API session token.
+            readClient.newCall(Request.Builder().url(url).build()).await().use { response ->
+                val source = response.body?.source() ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum returned an empty response.")
+                source.request(MAX_RESPONSE_BYTES + 1)
+                if (source.buffer.size > MAX_RESPONSE_BYTES) throw ApiFailure(FailureKind.InvalidResponse, "The forum response was too large.")
+                val html = source.readUtf8()
+                if (!response.isSuccessful || response.header("cf-mitigated") == "challenge") {
+                    NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", html)?.let { throw it }
+                    throw ApiFailure(FailureKind.Server, "The forum could not load this release (HTTP ${response.code}).", response.code)
+                }
+                html
+            }
+        } catch (failure: IOException) {
+            throw NetworkFailures.forScreen(failure)
         }
     }
 
