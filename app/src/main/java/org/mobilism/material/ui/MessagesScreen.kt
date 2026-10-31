@@ -50,7 +50,6 @@ import org.mobilism.material.data.MessageFolder
 import org.mobilism.material.data.PrivateMessage
 import org.mobilism.material.data.PrivateMessages
 import org.mobilism.material.designsystem.AppIconButton
-import org.mobilism.material.designsystem.AppSurface
 import org.mobilism.material.designsystem.AppTextButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.ExpressiveCard
@@ -101,17 +100,8 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
                         state.error?.let { item { ErrorPanel(it, onRetry = onRefreshConversation) } }
                         state.readError?.let { item { ErrorPanel(it) } }
                         items(state.conversation, key = { it.id }) { message ->
-                            AppSurface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge,
-                                color = if (message.from.equals(username, true)) MaterialTheme.colorScheme.surfaceContainerHigh
-                                else MaterialTheme.colorScheme.surfaceContainer) {
-                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Text("${message.from} to ${message.to}", style = MaterialTheme.typography.titleSmall)
-                                    ReleasePostDate(message.publishedAt)
-                                    ReleaseBody(message.contentHtml, "https://forum.mobilism.org/", onRelease)
-                                    if (!message.read && message.to.equals(username, true)) AppTextButton("Mark as read",
-                                        { onRead(message.id) }, enabled = message.id !in state.marking)
-                                }
-                            }
+                            MessageBubble(message, username, onRead = { onRead(message.id) },
+                                marking = message.id in state.marking, onRelease = onRelease)
                         }
                         if (state.replyTarget != null) item("reply") {
                             ExpressiveButton(onReply, Modifier.fillMaxWidth(), enabled = !state.loading && !state.sending) {

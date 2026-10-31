@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Show conversations as colored incoming and outgoing message bubbles, with comment-style collapse controls and full date and time.
+
 ## 0.1.18
 
 - Improve messaging confirmation, preserve drafts, and check before retrying.

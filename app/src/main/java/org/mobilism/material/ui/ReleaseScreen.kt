@@ -55,6 +55,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -345,12 +346,14 @@ private fun androidx.compose.foundation.lazy.LazyListScope.releaseDetailItem(key
 
 /** Native text bridge preserves formatted forum posts without JavaScript or a WebView. */
 @Composable
-internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Unit)? = null) {
+internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Unit)? = null,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    linkColor: Color = MaterialTheme.colorScheme.primary) {
     val context = LocalContext.current
     val currentOnRelease = androidx.compose.runtime.rememberUpdatedState(onRelease)
     val currentForumLinkHandler = androidx.compose.runtime.rememberUpdatedState(LocalForumLinkHandler.current)
-    val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
-    val linkColor = MaterialTheme.colorScheme.primary.toArgb()
+    val textColor = contentColor.toArgb()
+    val linkArgb = linkColor.toArgb()
     val textSize = MaterialTheme.typography.bodyLarge.fontSize.value
     val font = LocalAppFont.current
     val resources = LocalResources.current
@@ -386,7 +389,7 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
         update = { view ->
             if (view.tag !== richText) { view.text = richText; view.tag = richText }
             view.setTextColor(textColor)
-            view.setLinkTextColor(linkColor)
+            view.setLinkTextColor(linkArgb)
             view.textSize = textSize
             view.typeface = typeface
         },

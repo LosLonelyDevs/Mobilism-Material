@@ -24,10 +24,11 @@ import androidx.compose.ui.unit.dp
 import org.mobilism.material.designsystem.AppIconButton
 
 @Composable
-internal fun CommentCollapseButton(expanded: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun CommentCollapseButton(expanded: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier,
+    label: String = if (expanded) "Collapse comment" else "Expand comment") {
     AppIconButton(
         icon = if (expanded) Icons.Outlined.UnfoldLess else Icons.Outlined.UnfoldMore,
-        label = if (expanded) "Collapse comment" else "Expand comment",
+        label = label,
         onClick = onClick,
         modifier = modifier,
     )
