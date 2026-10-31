@@ -2,8 +2,10 @@
 
 ## 0.1.18
 
-- Recover private-message sends when the confirmation is missing.
-- Check conversations and Sent, preserve unresolved drafts, and require confirmation before retrying to reduce duplicate replies.
+- Improve messaging confirmation, preserve drafts, and check before retrying.
+- Add compact lists, Material You, NEW badges, and GitHub update notifications.
+- Fix reply nesting, activity ordering, and repeated quotes.
+- Add landing choices, refine Settings and About, and fix Wear OS releases.
 
 ## 0.1.17
 
