@@ -216,6 +216,12 @@ class MobilismViewModel(
         loadFeed(refresh = true)
     }
 
+    fun observeNewReleases(section: ContentSection, releases: List<Release>): Set<Long> =
+        newReleaseSession.observe(section, releases)
+
+    fun markReleasesViewed(section: ContentSection, releases: List<Release>) =
+        newReleaseSession.markViewed(section, releases)
+
     fun filtersFor(section: ContentSection): FeedFilters {
         val ids = preferences.getStringSet("filters-" + section.name + "-categories", emptySet()).orEmpty()
             .mapNotNull { it.toLongOrNull()?.takeIf { id -> id > 0 } }.toSet()

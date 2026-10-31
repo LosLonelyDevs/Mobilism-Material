@@ -10,7 +10,7 @@ internal class NewReleaseSession(
     private val save: (ContentSection, Long) -> Unit,
 ) {
     private val baseline = previous.filterValues { it > 0 }.toMutableMap()
-    private val newest = baseline.toMutableMap()
+    private val viewed = baseline.toMutableMap()
 
     constructor(context: Context) : this(
         ContentSection.entries.associateWith {
@@ -28,11 +28,17 @@ internal class NewReleaseSession(
             if (!initialize) return emptySet()
             baseline[section] = latest
         }
-        if (latest > (newest[section] ?: 0)) {
-            newest[section] = latest
-            save(section, latest)
-        }
         // Keep the comparison fixed until the next activity session, including refreshes.
         return releases.filter { it.id > baseline.getValue(section) }.mapTo(mutableSetOf()) { it.id }
+    }
+
+    fun markViewed(section: ContentSection, releases: List<Release>) {
+        if (section !in baseline) return
+        val latest = releases.maxOfOrNull { it.id } ?: return
+        // Fetching offscreen must not clear badges before the user sees the list.
+        if (latest > (viewed[section] ?: 0)) {
+            viewed[section] = latest
+            save(section, latest)
+        }
     }
 }

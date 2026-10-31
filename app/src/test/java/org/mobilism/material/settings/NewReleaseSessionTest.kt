@@ -9,13 +9,25 @@ class NewReleaseSessionTest {
     private val apps = ContentSection.Apps
     private fun releases(vararg ids: Long) = ids.map { Release(it, "Release $it", "Member", null, 0, 0, 0) }
 
+    @Test fun backgroundLoadsDoNotClearBadgesBeforeTheListIsViewed() {
+        val saved = mutableMapOf(apps to 10L)
+        val background = NewReleaseSession(saved) { section, id -> saved[section] = id }
+        assertEquals(setOf(12L), background.observe(apps, releases(12, 10)))
+        assertEquals(10L, saved[apps])
+        val reopened = NewReleaseSession(saved) { section, id -> saved[section] = id }
+        assertEquals(setOf(12L), reopened.observe(apps, releases(12, 10)))
+    }
+
     @Test fun firstVisitEstablishesBaselineAndRefreshKeepsNewBadgesForTheSession() {
         val saved = mutableMapOf<ContentSection, Long>()
         val session = NewReleaseSession(saved) { section, id -> saved[section] = id }
         assertTrue(session.observe(apps, releases(10, 9)).isEmpty())
+        assertTrue(saved.isEmpty())
+        session.markViewed(apps, releases(10, 9))
         assertEquals(10L, saved[apps])
         assertEquals(setOf(11L), session.observe(apps, releases(11, 10)))
         assertEquals(setOf(11L, 12L), session.observe(apps, releases(12, 11, 10, 9)))
+        session.markViewed(apps, releases(12, 11))
         assertEquals(12L, saved[apps])
         assertEquals(setOf(11L), session.observe(apps, releases(11, 10)))
         assertEquals(12L, saved[apps])
@@ -26,6 +38,8 @@ class NewReleaseSessionTest {
         val session = NewReleaseSession(saved) { section, id -> saved[section] = id }
         assertEquals(setOf(12L), session.observe(apps, releases(12, 9)))
         assertEquals(setOf(31L), session.observe(ContentSection.Books, releases(31, 29)))
+        session.markViewed(apps, releases(12))
+        session.markViewed(ContentSection.Books, releases(31))
         val next = NewReleaseSession(saved) { section, id -> saved[section] = id }
         assertTrue(next.observe(apps, releases(12, 9)).isEmpty())
         assertEquals(setOf(13L), next.observe(apps, releases(13, 12)))
@@ -37,8 +51,20 @@ class NewReleaseSessionTest {
         val session = NewReleaseSession(saved) { section, id -> saved[section] = id }
         assertTrue(session.observe(apps, emptyList()).isEmpty())
         assertTrue(session.observe(apps, releases(1, 2), initialize = false).isEmpty())
+        session.markViewed(apps, releases(1, 2))
         assertTrue(saved.isEmpty())
         assertTrue(session.observe(apps, releases(100, 99)).isEmpty())
         assertEquals(setOf(101L), session.observe(apps, releases(101, 1), initialize = false))
+    }
+
+    @Test fun onlyVisibleReleasesAdvanceTheNextSessionMarker() {
+        val saved = mutableMapOf(apps to 10L)
+        val session = NewReleaseSession(saved) { section, id -> saved[section] = id }
+        assertEquals(setOf(11L, 12L), session.observe(apps, releases(12, 11, 10)))
+        session.markViewed(apps, releases(11, 10))
+        assertEquals(11L, saved[apps])
+        assertEquals(setOf(11L, 12L), session.observe(apps, releases(12, 11, 10)))
+        val reopened = NewReleaseSession(saved) { section, id -> saved[section] = id }
+        assertEquals(setOf(12L), reopened.observe(apps, releases(12, 11, 10)))
     }
 }

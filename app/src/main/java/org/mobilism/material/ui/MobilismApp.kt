@@ -133,7 +133,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     ) {
         composable("feed") { entry ->
             val home: HomeViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
-                initializer { HomeViewModel(app.repository, feed.section, model.contentPreferences.hideAdult) }
+                initializer { HomeViewModel(app.repository, feed.section, model.contentPreferences.hideAdult,
+                    observeNewReleases = model::observeNewReleases) }
             })
             val homeState by home.state.collectAsStateWithLifecycle()
             var tab by rememberSaveable(feed.section) { mutableStateOf(openingTab ?: BrowseTab.Home) }
@@ -148,6 +149,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             FeedScreen(
                 state = feed, auth = auth,
                 compact = appearance.compactFeed, onCompact = model.appearance::compactFeed,
+                onReleasesViewed = model::markReleasesViewed,
                 onSection = { home.selectSection(it); model.selectSection(it) }, onOrder = model::selectOrder,
                 onRefresh = { model.loadFeed(refresh = true) }, onMore = { model.loadFeed() },
                 onRelease = openRelease,
@@ -163,13 +165,19 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onManageCategories = { nav.navigate("categories/${feed.section.name}") },
                 onFilters = { filters -> openFeed(if (tab == BrowseTab.Top) FeedOrder.Top else FeedOrder.Latest, filters) },
                 tab = tab, onTab = { selected ->
+                    val previousTab = tab
                     tab = selected
-                    if (selected != BrowseTab.Home) model.selectOrder(if (selected == BrowseTab.Top) FeedOrder.Top else FeedOrder.Latest)
+                    if (selected != BrowseTab.Home) {
+                        val order = if (selected == BrowseTab.Top) FeedOrder.Top else FeedOrder.Latest
+                        if (previousTab != selected && order == feed.order) model.loadFeed(refresh = true)
+                        else model.selectOrder(order)
+                    } else if (previousTab != selected) home.retry(HomeCollection.Latest)
                 },
                 onHomeRefresh = home::refresh,
                 homeContent = { openCategories ->
                     key(homeState.section) {
                         HomeScreen(homeState, home::retry, openRelease,
+                            onReleasesViewed = model::markReleasesViewed,
                             onMore = { openFeed(it, FeedFilters()) },
                             onCategory = { openFeed(FeedOrder.Latest, FeedFilters(categoryIds = setOf(it.id))) },
                             onCategories = openCategories,

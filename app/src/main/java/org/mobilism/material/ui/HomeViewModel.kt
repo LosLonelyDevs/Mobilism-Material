@@ -30,13 +30,14 @@ data class HomeState(
     val section: ContentSection = ContentSection.Apps,
     val latest: HomeShelf<Release> = HomeShelf(), val popular: HomeShelf<Release> = HomeShelf(),
     val categories: HomeShelf<ReleaseCategory> = HomeShelf(), val reviews: HomeForum = HomeForum(),
-    val discussions: HomeForum = HomeForum(),
+    val discussions: HomeForum = HomeForum(), val newReleaseIds: Set<Long> = emptySet(),
 ) {
     val busy: Boolean get() = latest.busy || popular.busy || categories.busy || reviews.busy || discussions.busy
 }
 
 class HomeViewModel(private val repository: HomeRepository, initialSection: ContentSection,
-    hideAdult: StateFlow<Boolean> = MutableStateFlow(false)) : ViewModel() {
+    hideAdult: StateFlow<Boolean> = MutableStateFlow(false),
+    private val observeNewReleases: (ContentSection, List<Release>) -> Set<Long> = { _, _ -> emptySet() }) : ViewModel() {
     private val mutableState = MutableStateFlow(HomeState(initialSection))
     val state = mutableState.asStateFlow()
     private val cache = mutableMapOf<ContentSection, HomeState>()
@@ -80,7 +81,9 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
                         val order = if (collection == HomeCollection.Latest) FeedOrder.Latest else FeedOrder.Top
                         val items = repository.homeReleases(section, order).distinctBy { it.id }
                         ensureActive()
-                        mutableState.update { if (collection == HomeCollection.Latest) it.copy(latest = HomeShelf(items, loaded = true))
+                        val newReleaseIds = if (collection == HomeCollection.Latest) observeNewReleases(section, items) else emptySet()
+                        mutableState.update { if (collection == HomeCollection.Latest) it.copy(latest = HomeShelf(items, loaded = true),
+                            newReleaseIds = newReleaseIds)
                             else it.copy(popular = HomeShelf(items, loaded = true)) }
                     }
                     HomeCollection.Categories -> {

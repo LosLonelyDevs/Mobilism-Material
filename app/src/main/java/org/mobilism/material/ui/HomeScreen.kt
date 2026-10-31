@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
@@ -43,14 +44,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -83,11 +88,18 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
     onMore: (FeedOrder) -> Unit, onCategory: (ReleaseCategory) -> Unit, onCategories: () -> Unit,
     onTopic: (DiscussionTopic, DiscussionCategory) -> Unit, onForum: (DiscussionCategory) -> Unit,
     customCategories: List<org.mobilism.material.data.CustomCategory> = emptyList(),
-    onCustomCategory: (org.mobilism.material.data.CustomCategory) -> Unit = {}) {
+    onCustomCategory: (org.mobilism.material.data.CustomCategory) -> Unit = {},
+    onReleasesViewed: (ContentSection, List<Release>) -> Unit = { _, _ -> }) {
     val section = state.section
     val highlights = state.popular.items.ifEmpty { state.latest.items }.take(5)
+    val scroll = rememberLazyListState()
+    val latestScroll = rememberLazyListState()
+    var latestVisible by remember { mutableStateOf(false) }
+    ObserveVisibleReleases(latestScroll, section, state.latest.items,
+        isVisible = { latestVisible && scroll.layoutInfo.visibleItemsInfo.any { it.key == "latest" } }, onViewed = onReleasesViewed)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(Modifier.widthIn(max = 1000.dp).fillMaxSize().testTag("home-${section.name}"),
+            state = scroll,
             contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             item(key = "hero") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -100,8 +112,14 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
             item(key = "latest") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     HomeHeading("Latest ${section.label.lowercase()}", { onMore(FeedOrder.Latest) })
-                    if (state.latest.items.isNotEmpty()) LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(state.latest.items, key = { it.id }) { release -> LatestTile(release, section, onRelease) }
+                    if (state.latest.items.isNotEmpty()) LazyRow(state = latestScroll,
+                        modifier = Modifier.onGloballyPositioned {
+                            latestVisible = it.boundsInWindow().let { bounds -> bounds.width > 0 && bounds.height > 0 }
+                        },
+                        contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(state.latest.items, key = { it.id }) { release ->
+                            LatestTile(release, section, onRelease, isNew = release.id in state.newReleaseIds)
+                        }
                     }
                     HomeShelfStatus(state.latest, "No new releases here yet.") { onRetry(HomeCollection.Latest) }
                 }
@@ -210,12 +228,15 @@ private fun HomeHero(releases: List<Release>, section: ContentSection, onRelease
 }
 
 @Composable
-private fun LatestTile(release: Release, section: ContentSection, onRelease: (Long) -> Unit) {
+private fun LatestTile(release: Release, section: ContentSection, onRelease: (Long) -> Unit, isNew: Boolean = false) {
     val title = remember(release.title, section) { ReleaseTitles.parse(release.title, section) }
     StoreCard({ onRelease(release.id) }, Modifier.width(if (section == ContentSection.Books) 144.dp else 160.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            HomeArtwork(release.thumbnail, Modifier.fillMaxWidth().aspectRatio(if (section == ContentSection.Books) 0.68f else 1f), section)
+            Box {
+                HomeArtwork(release.thumbnail, Modifier.fillMaxWidth().aspectRatio(if (section == ContentSection.Books) 0.68f else 1f), section)
+                if (isNew) NewReleaseBadge(release.id, Modifier.align(Alignment.TopEnd).padding(4.dp))
+            }
             Text(title.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
             Text(if (section == ContentSection.Books && title.subtitle.isNotBlank()) title.subtitle else release.author,
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)

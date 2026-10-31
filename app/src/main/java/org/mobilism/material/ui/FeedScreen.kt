@@ -28,7 +28,6 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.ViewHeadline
-import androidx.compose.material3.Badge
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -66,8 +65,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -120,6 +117,7 @@ fun FeedScreen(
     onManageCategories: () -> Unit = {},
     compact: Boolean = false,
     onCompact: (Boolean) -> Unit = {},
+    onReleasesViewed: (ContentSection, List<Release>) -> Unit = { _, _ -> },
 ) {
     val theme = LocalAppTheme.current
     val sectionStyle = state.section.style()
@@ -129,6 +127,8 @@ fun FeedScreen(
         LazyListState()
     }
     val savedTabs = rememberSaveableStateHolder()
+    ObserveVisibleReleases(listState, state.section, state.items,
+        enabled = tab == BrowseTab.Latest && state.order == FeedOrder.Latest, onViewed = onReleasesViewed)
     val scroll = TopAppBarDefaults.pinnedScrollBehavior()
     var showFilters by remember { mutableStateOf(false) }
     val openFilters = { onLoadCategories(); showFilters = true }
@@ -308,10 +308,7 @@ internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = fal
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     AppHeading(title.name, HeadingLevel.Subsection, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
                         maxLines = if (compact) 2 else 3, overflow = TextOverflow.Ellipsis)
-                    if (isNew) Badge(containerColor = theme.success, contentColor = theme.onSuccess,
-                        modifier = Modifier.testTag("new-release-${release.id}").semantics {
-                            contentDescription = "New since your last visit"
-                        }) { Text("NEW") }
+                    if (isNew) NewReleaseBadge(release.id)
                 }
                 if (title.subtitle.isNotBlank()) Text(
                     title.subtitle, style = MaterialTheme.typography.bodySmall,

@@ -140,9 +140,12 @@ class BrowsingOptionsTest {
         fun releases(vararg ids: Long) = ids.map { Release(it, "Release $it", "Member", null, 0, 0, 0) }
         val session = NewReleaseSession(context)
         assertTrue(session.observe(ContentSection.Apps, releases(10)).isEmpty())
+        session.markViewed(ContentSection.Apps, releases(10))
         assertEquals(setOf(11L), session.observe(ContentSection.Apps, releases(11, 10)))
         assertTrue(session.observe(ContentSection.Books, releases(30)).isEmpty())
+        session.markViewed(ContentSection.Books, releases(30))
         assertEquals(setOf(11L), session.observe(ContentSection.Apps, releases(11, 10)))
+        session.markViewed(ContentSection.Apps, releases(11))
         val reopened = NewReleaseSession(context)
         assertTrue(reopened.observe(ContentSection.Apps, releases(11, 10)).isEmpty())
         assertEquals(setOf(12L), reopened.observe(ContentSection.Apps, releases(12, 11)))

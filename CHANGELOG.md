@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Show conversations as colored incoming and outgoing message bubbles, with comment-style collapse controls and full date and time.
+- Show new-release dots on Home and Latest. Keep unseen releases new until their list is viewed.
 
 ## 0.1.18
 
