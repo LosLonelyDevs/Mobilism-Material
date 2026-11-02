@@ -106,6 +106,55 @@ class MobilismPremiumApiTest {
         }
     }
 
+    @Test fun blockedPublicCatalogDoesNotDisableWorkingPremiumDownloads() {
+        var catalogCalls = 0
+        var resolverCalls = 0
+        val service = api { request ->
+            if (request.url.host == "forum.mobilism.org") {
+                catalogCalls++
+                assertNull(request.body)
+                assertNull(request.header("X-Auth-Token"))
+                403 to "<html><script src='/cdn-cgi/challenge-platform/'></script></html>"
+            } else {
+                resolverCalls++
+                200 to """<a href="$direct">Download</a>"""
+            }
+        }
+        val key = service.credentials("sample", "test-password")
+        assertTrue(service.hosts().any { it.domain == "rapidgator.net" })
+        repeat(2) { assertEquals(direct, service.resolve(key, "https://rapidgator.net/file/123")) }
+        assertEquals(1, catalogCalls)
+        assertEquals(2, resolverCalls)
+        assertThrows(DebridException::class.java) { service.resolve(key, "https://rapidgator.net.attacker.test/file") }
+        assertEquals(2, resolverCalls)
+    }
+
+    @Test fun catalogOutageKeepsLastSuccessfulListAndRefreshReplacesIt() {
+        var fail = false
+        var current = catalog
+        val service = api { if (fail) throw IOException("Offline") else 200 to current }
+        val originalHosts = service.hosts()
+        fail = true
+        assertEquals(originalHosts, service.hosts())
+        fail = false
+        current = """<supported-filehosts><host url="new.example.org"/></supported-filehosts>"""
+        assertEquals(listOf("new.example.org"), service.hosts().map { it.domain })
+        fail = true
+        assertEquals(listOf("new.example.org"), service.hosts().map { it.domain })
+    }
+
+    @Test fun resolverChallengeKeepsAccountAndExplainsVerification() {
+        val service = api { 403 to "<html><script src='/cdn-cgi/challenge-platform/'></script></html>" }
+        val error = assertThrows(DebridException::class.java) { service.validate(service.credentials("sample", "test-password")) }
+        assertFalse(error.invalidatesAccount)
+        assertTrue(error.message.orEmpty().contains("browser verification"))
+    }
+
+    @Test fun normalPremiumPagesCanIncludeCloudflareScripts() {
+        val service = api { 200 to "$login<script src='/cdn-cgi/challenge-platform/scripts/jsd/main.js'></script>" }
+        service.validate(service.credentials("sample", "test-password"))
+    }
+
     @Test fun rejectsRedirectsOversizedBodiesUnrecognizedPagesAndNetworkErrors() {
         for ((status, body) in listOf(302 to login, 403 to login, 200 to "x".repeat(512 * 1024 + 1), 200 to "<html>Challenge</html>")) {
             val service = api { status to body }

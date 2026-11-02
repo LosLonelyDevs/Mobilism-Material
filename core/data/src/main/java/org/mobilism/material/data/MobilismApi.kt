@@ -39,6 +39,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         .build()
     // Connection recovery can resend a request. Keep writes on the non-retrying client.
     private val readClient = this.client.newBuilder().retryOnConnectionFailure(true).build()
+    private val likePostIds = context.getSharedPreferences("release-post-ids", Context.MODE_PRIVATE)
     private val forumPostIds = ConcurrentHashMap<Long, Long>()
     private val forumCommentStarts = ConcurrentHashMap<Pair<Long, Int>, Int>()
 
@@ -92,19 +93,12 @@ internal class MobilismApi(private val context: Context, private val diagnostics
 
     suspend fun toggleLike(release: Release, token: String): Boolean {
         require(release.id > 0)
-        // Current release responses can omit like_id. The API expects the first post ID, not the topic ID.
-        val postId = release.likeId ?: withContext(Dispatchers.IO) {
-            val request = Request.Builder().url("https://forum.mobilism.org/viewtopic.php?t=${release.id}").build()
-            readClient.newCall(request).await().use { response ->
-                if (!response.isSuccessful) throw ApiFailure(FailureKind.Server, "The forum could not load this post. Try again later.")
-                val source = response.body?.source()
-                    ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum returned an empty post.")
-                source.request(MAX_RESPONSE_BYTES + 1)
-                if (source.buffer.size > MAX_RESPONSE_BYTES) throw ApiFailure(FailureKind.InvalidResponse, "The forum response was too large.")
-                ReleaseLikes.postId(source.readUtf8())
-                    ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum did not return the original post. Try again later.")
-            }
-        }
+        // Post IDs are public and stable. Reuse a verified ID when the forum blocks later reads.
+        val postId = release.likeId?.takeIf { it > 0 }
+            ?: likePostIds.getLong(release.id.toString(), 0).takeIf { it > 0 }
+            ?: ReleaseLikes.postId(forumTopic(release.id))
+            ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum did not return the original post. Try again later.")
+        likePostIds.edit().putLong(release.id.toString(), postId).apply()
         val response = request("post/like", token, mapOf("id" to postId.toString())).getJSONObject("response")
         return ReleaseLikes.liked(response)
             ?: throw ApiFailure(FailureKind.InvalidResponse, "The server did not confirm the thumbs-up state.")

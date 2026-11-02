@@ -331,7 +331,7 @@ data class CommentReplyTarget(val id: Long, val author: String, val html: String
 
 data class ReleaseState(val release: Release? = null, val busy: Boolean = true, val error: ScreenError? = null,
     val comments: CommentsState = CommentsState(), val likeBusy: Boolean = false, val actionMessage: String? = null,
-    val composer: CommentComposerState = CommentComposerState())
+    val composer: CommentComposerState = CommentComposerState(), val likeNeedsVerification: Boolean = false)
 
 class ReleaseViewModel(private val id: Long, private val repository: MobilismRepository,
     private val savedState: SavedStateHandle) : ViewModel() {
@@ -352,21 +352,35 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
     init { load() }
 
     fun toggleLike() {
-        val release = mutableState.value.release ?: return
+        val current = mutableState.value.release ?: return
+        val release = current.copy(likeId = current.likeId ?: savedState.get<Long>("like-post-id"))
         if (likeJob?.isActive == true || mutableState.value.busy) return
         likeJob = viewModelScope.launch {
-            mutableState.update { it.copy(likeBusy = true, actionMessage = null) }
+            mutableState.update { it.copy(likeBusy = true, actionMessage = null, likeNeedsVerification = false) }
             try {
                 val liked = repository.toggleLike(release)
                 mutableState.update { it.copy(release = it.release?.copy(liked = liked),
                     actionMessage = if (liked) "Thumbs up added" else "Thumbs up removed") }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { mutableState.update { it.copy(actionMessage = error.forScreen().message) } }
+            catch (error: Exception) {
+                val needsVerification = error is ApiFailure && error.kind == FailureKind.Challenge && release.likeId == null
+                mutableState.update { it.copy(likeNeedsVerification = needsVerification,
+                    actionMessage = if (needsVerification) null else error.forScreen().message) }
+            }
             finally { mutableState.update { it.copy(likeBusy = false) } }
         }
     }
 
     fun actionMessageShown() { mutableState.update { it.copy(actionMessage = null) } }
+
+    fun likePostVerified(postId: Long) {
+        if (postId <= 0 || !mutableState.value.likeNeedsVerification) return
+        savedState["like-post-id"] = postId
+        mutableState.update { it.copy(release = it.release?.copy(likeId = postId), likeNeedsVerification = false,
+            actionMessage = "Forum verified. Tap thumbs up again.") }
+    }
+
+    fun dismissLikeVerification() { mutableState.update { it.copy(likeNeedsVerification = false) } }
 
     fun openComposer() {
         if (repository.auth.value !is AuthState.SignedIn) return

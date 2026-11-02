@@ -104,6 +104,7 @@ fun ReleaseScreen(
     onDownloadHosts: (List<String>) -> Unit = {},
     onRefresh: () -> Unit = onRetry,
     onCategories: (() -> Unit)? = null,
+    onLikePostVerified: (Long) -> Unit = {}, onDismissLikeVerification: () -> Unit = {},
 ) {
     val theme = LocalAppTheme.current
     val context = LocalContext.current
@@ -112,6 +113,9 @@ fun ReleaseScreen(
     var menu by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val release = state.release
+    if (state.likeNeedsVerification && release != null) {
+        ForumPostVerification(release.id, onLikePostVerified, onDismissLikeVerification)
+    }
     var collapsedComments by rememberSaveable(release?.id) { mutableStateOf(emptyList<Long>()) }
     val commentTree = remember(state.comments.items) { CommentTree.build(state.comments.items) }
     val commentRows = remember(commentTree, collapsedComments) { CommentTree.flatten(commentTree, collapsedComments.toSet()) }

@@ -1,5 +1,7 @@
 package org.mobilism.material
 
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
@@ -29,6 +31,57 @@ import org.mobilism.material.ui.*
 @RunWith(AndroidJUnit4::class)
 class PremiumSettingsTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun forbiddenHostListKeepsVerifiedPremiumUsableAfterRefreshAndRestart() = runBlocking {
+        val context = object : ContextWrapper(InstrumentationRegistry.getInstrumentation().targetContext) {
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int) =
+                super.getSharedPreferences("premium-forbidden-$name", mode)
+        }
+        var hostRequests = 0
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            val hostList = request.url.host == "forum.mobilism.org"
+            if (hostList) {
+                hostRequests++
+                assertNull(request.body)
+                assertNull(request.header("X-Auth-Token"))
+            } else assertEquals("mblservices.org", request.url.host)
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+                .code(if (hostList) 403 else 200).message(if (hostList) "Forbidden" else "OK")
+                .body((if (hostList) "Forbidden" else
+                    """<form name="transload"><input name="link"/><input name="premium_acc"/></form>""").toResponseBody()).build()
+        }.build()
+        val repository = DebridRepository(context, client)
+        repository.removeKey(DebridProvider.Mobilism)
+        try {
+            repository.connectMobilism("sample-user", "sample-password")
+            val connected = repository.state.value.accounts.single { it.provider == DebridProvider.Mobilism }
+            assertTrue(connected.validated)
+            assertTrue(connected.hostsVerified)
+            assertTrue(connected.hosts.isNotEmpty())
+            assertNull(connected.error)
+            compose.setContent { MobilismTheme(reduceMotion = true) {
+                val state by repository.state.collectAsState()
+                SettingsScreen(state, repository, onAppearance = {}, onDownloads = {}, onBack = {})
+            } }
+            scrollTo("${connected.hostNames.size} Mobilism hosts")
+            compose.onNodeWithContentDescription("Account verified").assertExists()
+            compose.onNodeWithText("0 Mobilism hosts").assertDoesNotExist()
+            compose.onNodeWithText("Mobilism Premium denied access. Check your account or try again later.").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Verify account and refresh hosts").performClick()
+            compose.waitUntil(10_000) { hostRequests >= 2 && !repository.state.value.accounts.single { it.provider == DebridProvider.Mobilism }.busy }
+            val restored = DebridRepository(context, client)
+            restored.load()
+            val account = restored.state.value.accounts.single { it.provider == DebridProvider.Mobilism }
+            assertTrue(account.validated)
+            assertTrue(account.hostsVerified)
+            assertEquals(connected.hosts, account.hosts)
+            assertNull(account.error)
+            assertEquals(listOf(DebridProvider.Mobilism), restored.state.value.supporting("https://rapidgator.net/file/123").map { it.provider })
+            assertEquals(3, hostRequests)
+        } finally { repository.removeKey(DebridProvider.Mobilism) }
+    }
 
     @Test fun mobilismSignInRendersVerifiesPersistsEncryptedAndRemoves() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

@@ -18,6 +18,49 @@ class ReleaseCommentsViewModelTest {
     @Before fun setMain() = Dispatchers.setMain(dispatcher)
     @After fun resetMain() = Dispatchers.resetMain()
 
+    @Test fun challengedLikeRequiresVerificationAndAnotherExplicitTap() = runTest(dispatcher) {
+        val repo = Repository()
+        val saved = SavedStateHandle()
+        val model = ReleaseViewModel(42, repo, saved)
+        advanceUntilIdle()
+        repo.likeFailure = ApiFailure(FailureKind.Challenge, "Browser verification required", 403)
+        model.toggleLike()
+        advanceUntilIdle()
+        assertTrue(model.state.value.likeNeedsVerification)
+        assertFalse(model.state.value.likeBusy)
+        assertNull(model.state.value.release!!.liked)
+        model.likePostVerified(0)
+        assertTrue(model.state.value.likeNeedsVerification)
+        model.likePostVerified(12725286)
+        assertFalse(model.state.value.likeNeedsVerification)
+        assertEquals(1, repo.likes.size)
+        repo.likeFailure = null
+        model.toggleLike()
+        advanceUntilIdle()
+        assertEquals(12725286L, repo.likes.last().likeId)
+        assertEquals(true, model.state.value.release!!.liked)
+        val restored = ReleaseViewModel(42, repo, saved)
+        advanceUntilIdle()
+        restored.toggleLike()
+        advanceUntilIdle()
+        assertEquals(12725286L, repo.likes.last().likeId)
+    }
+
+    @Test fun cancellingLikeVerificationDoesNotChangeTheReaction() = runTest(dispatcher) {
+        val repo = Repository()
+        val model = ReleaseViewModel(42, repo, SavedStateHandle())
+        advanceUntilIdle()
+        repo.likeFailure = ApiFailure(FailureKind.Challenge, "Browser verification required", 403)
+        model.toggleLike()
+        advanceUntilIdle()
+        model.dismissLikeVerification()
+        model.likePostVerified(12725286)
+        assertFalse(model.state.value.likeNeedsVerification)
+        assertNull(model.state.value.release!!.liked)
+        assertNull(model.state.value.release!!.likeId)
+        assertEquals(1, repo.likes.size)
+    }
+
     @Test fun postIsExplicitAndDuplicateTapsOnlySendOnce() = runTest(dispatcher) {
         val repo = Repository()
         val model = ReleaseViewModel(42, repo, SavedStateHandle())
@@ -245,6 +288,8 @@ class ReleaseCommentsViewModelTest {
         var pendingPageTwo: CompletableDeferred<CommentPage>? = null
         var releaseRequests = 0
         var releaseTitle = "Sample release"
+        val likes = mutableListOf<Release>()
+        var likeFailure: Exception? = null
         override suspend fun postComment(id: Long, text: String, replyTo: Long?): Long {
             posts += id to text
             replyTargets += replyTo
@@ -260,7 +305,11 @@ class ReleaseCommentsViewModelTest {
             releaseRequests++
             return Release(id, releaseTitle, "Author", null, 1, 0, 0)
         }
-        override suspend fun toggleLike(release: Release) = true
+        override suspend fun toggleLike(release: Release): Boolean {
+            likes += release
+            likeFailure?.let { throw it }
+            return true
+        }
         override suspend fun restoreSession() = Unit
         override suspend fun signIn(username: String, password: String) = Unit
         override suspend fun continueAsGuest() = Unit

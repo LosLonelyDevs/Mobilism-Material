@@ -16,6 +16,7 @@ import org.jsoup.parser.Parser
 internal class MobilismPremiumApi(client: OkHttpClient) {
     private val client = client.newBuilder().followRedirects(false).followSslRedirects(false)
         .callTimeout(60, TimeUnit.SECONDS).readTimeout(45, TimeUnit.SECONDS).build()
+    @Volatile private var lastHosts: List<SupportedHost>? = null
 
     fun credentials(username: String, password: String): String {
         if (username.isBlank() || password.isEmpty() || username.length > 256 || password.length > 4096 ||
@@ -33,7 +34,12 @@ internal class MobilismPremiumApi(client: OkHttpClient) {
     }
 
     fun hosts(): List<SupportedHost> {
-        val xml = request(Request.Builder().url(HOSTS).build())
+        val xml = try {
+            request(Request.Builder().url(HOSTS).build())
+        } catch (_: DebridException) {
+            // The public catalog can be blocked while the Premium resolver still works.
+            return fallbackHosts()
+        }
         val document = Jsoup.parse(xml, "", Parser.xmlParser())
         if (document.selectFirst("supported-filehosts") == null) throw invalidResponse()
         val hosts = document.select("supported-filehosts > host[url]").mapNotNull { element ->
@@ -45,12 +51,16 @@ internal class MobilismPremiumApi(client: OkHttpClient) {
             SupportedHost(domain, HostMatcher.displayName(domain))
         }.distinctBy { it.domain }
         if (hosts.isEmpty()) throw invalidResponse()
-        return Alphabetical.sorted(hosts) { it.name }
+        return Alphabetical.sorted(hosts) { it.name }.also { lastHosts = it }
     }
+
+    private fun fallbackHosts(): List<SupportedHost> = lastHosts ?: Alphabetical.sorted(MobilismHosts.domains.map { domain ->
+        SupportedHost(domain, HostMatcher.displayName(domain))
+    }) { it.name }.also { lastHosts = it }
 
     fun resolve(key: String, original: String): String {
         val source = webUrl(original) ?: throw DebridException("This download link is not a valid web address.")
-        if (hosts().none { HostMatcher.matches(source, it.domain) }) {
+        if ((lastHosts ?: hosts()).none { HostMatcher.matches(source, it.domain) }) {
             throw DebridException("This file host is not supported by Mobilism Premium.")
         }
         var page = post(key, mapOf("link" to source, "premium_acc" to "on"), source)
@@ -137,16 +147,23 @@ internal class MobilismPremiumApi(client: OkHttpClient) {
     private fun request(request: Request): String = try {
         client.newCall(request.newBuilder().header("User-Agent", "MobilismMaterial/0.1 (Android)").build())
             .execute().use { response ->
+                val source = response.body?.source() ?: throw invalidResponse()
+                source.request(MAX_BYTES + 1)
+                if (source.buffer.size > MAX_BYTES) throw invalidResponse()
+                val body = source.readUtf8()
+                val challenged = response.header("cf-mitigated") == "challenge" ||
+                    (!response.isSuccessful || Jsoup.parse(body).title().equals("Just a moment...", ignoreCase = true)) &&
+                    NetworkFailures.response(response.code, false, body)?.kind == FailureKind.Challenge
+                if (challenged) {
+                    throw DebridException("Mobilism Premium needs browser verification. Try another network or open the original link.")
+                }
                 if (!response.isSuccessful) throw DebridException(when (response.code) {
                     401 -> "Mobilism Premium rejected the account. Sign in again."
                     403 -> "Mobilism Premium denied access. Check your account or try again later."
                     429 -> "Too many requests. Wait a moment and try again."
                     else -> "Mobilism Premium is unavailable. Try again later."
                 }, response.code == 401)
-                val source = response.body?.source() ?: throw invalidResponse()
-                source.request(MAX_BYTES + 1)
-                if (source.buffer.size > MAX_BYTES) throw invalidResponse()
-                source.readUtf8()
+                body
             }
     } catch (cancelled: CancellationException) {
         throw cancelled

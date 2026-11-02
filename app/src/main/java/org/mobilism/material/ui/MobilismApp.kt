@@ -320,6 +320,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             ReleaseScreen(state, debrid, downloads, onBack = { nav.popBackStack() }, onRetry = detail::load, onMoreComments = detail::loadComments,
                 onCategories = if (categoryStore != null && state.release?.section != null) ({ assigningCategories = true }) else null,
                 onLike = detail::toggleLike, onActionMessageShown = detail::actionMessageShown,
+                onLikePostVerified = detail::likePostVerified, onDismissLikeVerification = detail::dismissLikeVerification,
                 auth = auth, onSignIn = { model.signInForRelease(id) },
                 onWriteComment = detail::openComposer, onEditComment = detail::editComment,
                 onPostComment = detail::postComment, onCloseComposer = detail::closeComposer,

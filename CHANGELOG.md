@@ -2,8 +2,9 @@
 
 ## Unreleased
 
-- Show conversations as colored incoming and outgoing message bubbles, with comment-style collapse controls and full date and time.
-- Show new-release dots on Home and Latest. Keep unseen releases new until their list is viewed.
+- Show collapsible message bubbles with full timestamps.
+- Show new-release dots on Home and Latest until viewed.
+- Add forum verification for thumbs up and reuse verified post IDs.
 
 ## 0.1.18
 

@@ -37,16 +37,20 @@ class ReleaseActionsTest {
     @Test fun likeUsesCurrentForumPostAndRestoresConfirmedState() = runBlocking {
         val requests = CopyOnWriteArrayList<Request>()
         var liked = false
+        var forumReads = 0
         val context = object : ContextWrapper(InstrumentationRegistry.getInstrumentation().targetContext) {
             override fun getApplicationContext(): Context = this
             override fun getSharedPreferences(name: String, mode: Int) = super.getSharedPreferences("like-test-$name", mode)
         }
+        context.getSharedPreferences("release-post-ids", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences("release-reactions", Context.MODE_PRIVATE).edit().clear().commit()
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val request = chain.request()
             val body = when (request.url.encodedPath.removePrefix("/api-new/")) {
                 "auth/login" -> """{"access_token":"sample-session"}"""
                 "release/6437968" -> """{"response":{"id":6437968,"subject":"Mobilism Material v0.1.8","name":"Author","section":"app"}}"""
                 "/viewtopic.php" -> {
+                    assertEquals("A verified post ID must survive later forum outages", 1, ++forumReads)
                     assertEquals("forum.mobilism.org", request.url.host)
                     assertEquals("6437968", request.url.queryParameter("t"))
                     assertNull(request.header("X-Auth-Token"))
@@ -100,6 +104,11 @@ class ReleaseActionsTest {
             compose.onNodeWithContentDescription("Thumbs up").assertIsOff()
             assertEquals(false, repository.release(6437968).liked)
             assertEquals(2, requests.size)
+            val restored = DefaultMobilismRepository(context, client = client)
+            restored.signIn("Like Reader", "sample-password")
+            assertTrue(restored.toggleLike(restored.release(6437968)))
+            assertEquals(1, forumReads)
+            assertEquals(3, requests.size)
         } finally { repository.signOut() }
     }
 }
