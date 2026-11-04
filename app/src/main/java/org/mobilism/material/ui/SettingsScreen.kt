@@ -159,7 +159,7 @@ private fun PremiumSettingsScreen(state: DebridState, repository: DebridReposito
     }) { insets ->
         LazyColumn(Modifier.padding(insets), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item { SettingsSubtitle("Checkmarked buttons resolve downloads through verified Premium accounts.") }
+            item { SettingsSubtitle("Checkmarks show Premium support.") }
             items(Alphabetical.sorted(state.accounts) { it.provider.label }
                 .sortedBy { it.provider != DebridProvider.Mobilism }, key = { it.provider }) { account ->
                 DebridAccountCard(account, repository, state, preferredHosts)
@@ -205,7 +205,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                     modifier = Modifier.padding(end = 12.dp).size(24.dp),
                 )
                 Box(Modifier.weight(1f)) {
-                    AppHeading(account.provider.label, HeadingLevel.Subsection, style = MaterialTheme.typography.titleMedium)
+                    SettingsTitle(account.provider.label)
                 }
             }
             if (!account.configured || signingInAgain) {

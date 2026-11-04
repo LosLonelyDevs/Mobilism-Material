@@ -44,6 +44,7 @@ fun CollapsibleSection(
     id: String, title: String, icon: ImageVector, accent: Color,
     initiallyExpanded: Boolean = true, headingLevel: HeadingLevel = HeadingLevel.Section,
     headingStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.titleLarge,
+    headingColor: Color = Color.Unspecified,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     var expanded by rememberSaveable(id, initiallyExpanded) { mutableStateOf(initiallyExpanded) }
@@ -61,7 +62,7 @@ fun CollapsibleSection(
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Icon(icon, null, Modifier.size(24.dp), tint = accent)
-                AppHeading(title, headingLevel, Modifier.weight(1f), style = headingStyle)
+                AppHeading(title, headingLevel, Modifier.weight(1f), style = headingStyle, color = headingColor)
                 Icon(Icons.Outlined.ExpandMore, null, Modifier.rotate(rotation), tint = accent)
             }
             AnimatedVisibility(

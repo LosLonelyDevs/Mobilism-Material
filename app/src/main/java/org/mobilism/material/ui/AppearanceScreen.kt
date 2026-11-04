@@ -52,16 +52,16 @@ fun AppearanceScreen(state: AppearanceState, store: AppearanceStore, onBack: () 
     }) { insets ->
         LazyColumn(Modifier.padding(insets), contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item { AppHeading("Theme", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall) }
+            item { SettingsTitle("Theme", style = MaterialTheme.typography.headlineSmall) }
             item {
                 ThemeOption(resolveAppTheme(state.theme), false, { showThemes = true }, Modifier.fillMaxWidth(), chooser = true)
             }
-            item { AppHeading("Release lists", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall) }
+            item { SettingsTitle("Release lists", style = MaterialTheme.typography.headlineSmall) }
             item {
                 AppSurface(Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f).padding(end = 16.dp)) {
-                            Text("Compact lists", style = MaterialTheme.typography.titleMedium)
+                            SettingsTitle("Compact lists")
                             SettingsSubtitle("Show smaller rows in Latest and Top.")
                         }
                         Switch(state.compactFeed, store::compactFeed,
@@ -69,14 +69,14 @@ fun AppearanceScreen(state: AppearanceState, store: AppearanceStore, onBack: () 
                     }
                 }
             }
-            item { AppHeading("Font", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall) }
+            item { SettingsTitle("Font", style = MaterialTheme.typography.headlineSmall) }
             item { FontPicker(state, store) }
-            item { AppHeading("Motion", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall) }
+            item { SettingsTitle("Motion", style = MaterialTheme.typography.headlineSmall) }
             item {
                 AppSurface(Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f).padding(end = 16.dp)) {
-                            Text("Reduce motion", style = MaterialTheme.typography.titleMedium)
+                            SettingsTitle("Reduce motion")
                             SettingsSubtitle("Limit animations.")
                         }
                         Switch(state.reduceMotion, store::reduceMotion,

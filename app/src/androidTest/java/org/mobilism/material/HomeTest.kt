@@ -122,20 +122,36 @@ class HomeTest {
         val state = fixtureState(ContentSection.Apps)
         var tab by mutableStateOf(BrowseTab.Home)
         var feedOrder by mutableStateOf(FeedOrder.Latest)
-        var refreshed = false
+        var homeRefreshes = 0
+        val feedRefreshes = mutableListOf<FeedOrder>()
+        var refreshing by mutableStateOf(false)
         compose.setContent { MobilismTheme(reduceMotion = true) {
-            FeedScreen(FeedState(items = state.latest.items, order = feedOrder), AuthState.Guest, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
-                CategoryState(), {}, {}, tab = tab, onTab = { tab = it; if (it != BrowseTab.Home) feedOrder = if (it == BrowseTab.Top) FeedOrder.Top else FeedOrder.Latest },
-                onHomeRefresh = { refreshed = true }, homeContent = { HomeScreen(state, {}, {}, {}, {}, it, { _, _ -> }, {}) })
+            FeedScreen(FeedState(items = state.latest.items, order = feedOrder, busy = refreshing, refreshing = refreshing),
+                AuthState.Guest, onSection = {}, onOrder = {}, onRefresh = { feedRefreshes += feedOrder; refreshing = true },
+                onMore = {}, onRelease = {}, onSettings = {}, onSearch = {}, onLibrary = {}, onFollowing = {}, onSignOut = {},
+                categories = CategoryState(), onLoadCategories = {}, onFilters = {}, tab = tab,
+                onTab = { tab = it; if (it != BrowseTab.Home) feedOrder = if (it == BrowseTab.Top) FeedOrder.Top else FeedOrder.Latest },
+                onHomeRefresh = { homeRefreshes++; refreshing = true }, homeRefreshing = refreshing,
+                homeContent = { HomeScreen(state, {}, {}, {}, {}, it, { _, _ -> }, {}) })
         } }
-        compose.onNodeWithContentDescription("Refresh").performClick()
-        compose.runOnIdle { assertTrue(refreshed) }
+        compose.onNodeWithContentDescription("Refresh").assertDoesNotExist()
+        compose.onNodeWithTag("home-Apps").performTouchInput { swipeDown() }
+        compose.runOnIdle { assertEquals(1, homeRefreshes) }
+        compose.onNodeWithTag("feed-refresh-indicator").assertIsDisplayed()
+        compose.onNodeWithTag("home-Apps").performTouchInput { swipeDown() }
+        compose.runOnIdle { assertEquals(1, homeRefreshes); refreshing = false }
         compose.onNodeWithTag("home-Apps").performScrollToNode(hasText("Browse by category"))
         compose.onNodeWithText("Latest", substring = false).performClick()
         compose.onNodeWithText("Latest", substring = false).assertIsSelected()
         compose.onNodeWithText(state.latest.items.first().title.substringBefore(" v")).assertExists()
+        compose.onNodeWithTag("feed-list").performTouchInput { swipeDown() }
+        compose.runOnIdle { assertEquals(listOf(FeedOrder.Latest), feedRefreshes) }
+        compose.onNodeWithTag("feed-refresh-indicator").assertIsDisplayed()
+        compose.runOnIdle { refreshing = false }
         compose.onNodeWithText("Top", substring = false).performClick()
         compose.onNodeWithText("Top", substring = false).assertIsSelected()
+        compose.onNodeWithTag("feed-list").performTouchInput { swipeDown() }
+        compose.runOnIdle { assertEquals(listOf(FeedOrder.Latest, FeedOrder.Top), feedRefreshes); refreshing = false }
         compose.onNodeWithText("Home", substring = false).performClick()
         compose.onNodeWithText("Browse by category").assertIsDisplayed()
         capture("apps-tabs")

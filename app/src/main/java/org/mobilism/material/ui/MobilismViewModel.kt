@@ -48,6 +48,7 @@ data class FeedState(
     val filters: FeedFilters = FeedFilters(),
     val awaitingMore: Boolean = false,
     val newReleaseIds: Set<Long> = emptySet(),
+    val refreshing: Boolean = false,
 )
 
 data class CategoryState(
@@ -295,7 +296,7 @@ class MobilismViewModel(
         val snapshot = mutableFeed.value
         val page = if (refresh) 1 else snapshot.page + 1
         feedJob = viewModelScope.launch {
-            mutableFeed.update { it.copy(busy = true, error = null) }
+            mutableFeed.update { it.copy(busy = true, refreshing = refresh, error = null) }
             try {
                 val result = repository.releases(snapshot.section, snapshot.order, page, snapshot.filters)
                 coroutineContext.ensureActive()
@@ -305,14 +306,14 @@ class MobilismViewModel(
                     newReleaseSession.observe(snapshot.section, combined, initialize = !snapshot.filters.isActive)
                 else emptySet()
                 mutableFeed.update { it.copy(
-                    items = combined, page = result.lastPage ?: page, busy = false,
+                    items = combined, page = result.lastPage ?: page, busy = false, refreshing = false,
                     newReleaseIds = newReleaseIds,
                     awaitingMore = result.items.isEmpty() && result.canLoadMore,
                     canLoadMore = result.canLoadMore && (result.items.isEmpty() || refresh || combined.size > existing.size),
                 ) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
-                mutableFeed.update { it.copy(busy = false, error = error.forScreen()) }
+                mutableFeed.update { it.copy(busy = false, refreshing = false, error = error.forScreen()) }
             }
         }
     }

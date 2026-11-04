@@ -21,7 +21,6 @@ import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Menu
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.FilterList
@@ -120,6 +119,7 @@ fun FeedScreen(
     compact: Boolean = false,
     onCompact: (Boolean) -> Unit = {},
     onReleasesViewed: (ContentSection, List<Release>) -> Unit = { _, _ -> },
+    homeRefreshing: Boolean = false,
 ) {
     val theme = LocalAppTheme.current
     val sectionStyle = state.section.style()
@@ -235,7 +235,6 @@ fun FeedScreen(
                         if (tab != BrowseTab.Home) AppIconToggleButton(Icons.Outlined.ViewHeadline,
                             if (compact) "Use detailed list" else "Use compact list", compact, sectionStyle.accent, onCompact)
                         AppIconButton(Icons.Outlined.FilterList, "Filters", openFilters)
-                        AppIconButton(Icons.Outlined.Refresh, "Refresh", if (tab == BrowseTab.Home) onHomeRefresh else onRefresh)
                     },
                     scrollBehavior = scroll,
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -261,6 +260,11 @@ fun FeedScreen(
                 }
                 StoreTabContent(tab, Modifier.weight(1f)) { selectedTab ->
                     savedTabs.SaveableStateProvider("${state.section}-$selectedTab") {
+                        FeedRefreshContainer(
+                            refreshing = if (selectedTab == BrowseTab.Home) homeRefreshing else state.refreshing,
+                            busy = if (selectedTab == BrowseTab.Home) homeRefreshing else state.busy,
+                            onRefresh = if (selectedTab == BrowseTab.Home) onHomeRefresh else onRefresh,
+                        ) {
                         if (selectedTab == BrowseTab.Home && homeContent != null) homeContent(openFilters)
                         else Column {
                             ActiveFilterSummary(state.filters, openFilters, { onFilters(FeedFilters()) })
@@ -275,7 +279,7 @@ fun FeedScreen(
                                         ReleaseCard(release, sectionStyle.accent, compact,
                                             isNew = state.order == FeedOrder.Latest && release.id in state.newReleaseIds) { onRelease(release.id) }
                                     }
-                                    if (state.busy) item(key = "loading") { LoadingState("Loading releases…", Modifier.fillMaxWidth()) }
+                                    if (state.busy && !state.refreshing) item(key = "loading") { LoadingState("Loading releases…", Modifier.fillMaxWidth()) }
                                     state.error?.let { error -> item(key = "error") {
                                         ErrorPanel(error, onRetry = if (state.items.isEmpty()) onRefresh else onMore)
                                     } }
@@ -290,6 +294,7 @@ fun FeedScreen(
                                     }
                                 }
                             }
+                        }
                         }
                     }
                 }
@@ -306,11 +311,11 @@ internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = fal
         containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, accent, 0.06f),
     )) {
         Row(Modifier.padding(if (compact) 12.dp else 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
                 model = release.thumbnail, contentDescription = null,
                 placeholder = painterResource(R.drawable.ic_mobilism), error = painterResource(R.drawable.ic_mobilism),
-                modifier = Modifier.size(if (compact) 40.dp else 72.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop,
+                modifier = Modifier.size(if (compact) 56.dp else 96.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop,
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

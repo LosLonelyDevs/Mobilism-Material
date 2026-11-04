@@ -185,6 +185,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                     } else if (previousTab != selected) home.retry(HomeCollection.Latest)
                 },
                 onHomeRefresh = home::refresh,
+                homeRefreshing = homeState.busy,
                 homeContent = { openCategories ->
                     key(homeState.section) {
                         HomeScreen(homeState, home::retry, openRelease,

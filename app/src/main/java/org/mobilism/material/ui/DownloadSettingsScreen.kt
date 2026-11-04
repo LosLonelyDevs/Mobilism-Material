@@ -84,7 +84,8 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
         LazyColumn(Modifier.padding(insets), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
-                CollapsibleSection("download-tracking", "Download tracking", Icons.Outlined.Visibility, theme.success) {
+                CollapsibleSection("download-tracking", "Download tracking", Icons.Outlined.Visibility, theme.success,
+                    headingColor = colors.primary, headingStyle = MaterialTheme.typography.titleSmall) {
                     Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large)
                         .toggleable(state.autoWatchDownloads, role = Role.Switch, onValueChange = store::autoWatchDownloads)
                         .padding(8.dp), verticalAlignment = Alignment.CenterVertically,
@@ -96,7 +97,8 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
                 }
             }
             item {
-                CollapsibleSection("cpu-preference", "CPU architecture", Icons.Outlined.Memory, theme.reading) {
+                CollapsibleSection("cpu-preference", "CPU architecture", Icons.Outlined.Memory, theme.reading,
+                    headingColor = colors.primary, headingStyle = MaterialTheme.typography.titleSmall) {
                     SettingsSubtitle("Matching and universal downloads stay expanded; other architectures stay collapsed.")
                     Text("This device: " + (Build.SUPPORTED_ABIS.firstOrNull() ?: "Unknown"),
                         style = MaterialTheme.typography.labelLarge, color = theme.reading)
@@ -117,7 +119,8 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
                 }
             }
             item {
-                CollapsibleSection("host-preferences", "Preferred file hosts", Icons.Outlined.StarOutline, colors.primary) {
+                CollapsibleSection("host-preferences", "Preferred file hosts", Icons.Outlined.StarOutline, colors.primary,
+                    headingColor = colors.primary, headingStyle = MaterialTheme.typography.titleSmall) {
                     SettingsSubtitle("Reorders displayed filehosters based on preference.")
                     if (busy && state.hosts.isEmpty()) LoadingState("Loading Mobilism hosts…", Modifier.fillMaxWidth())
                     error?.let { ErrorPanel(it, onRetry = { scope.launch { loadHosts() } }) }

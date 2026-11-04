@@ -173,6 +173,10 @@ class PremiumSettingsTest {
         } }
         scrollTo("Premium")
         compose.onNodeWithText("Premium").performClick()
+        val subtitleLayouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        compose.onNodeWithText("Checkmarks show Premium support.")
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(subtitleLayouts) }
+        assertEquals(1, subtitleLayouts.single().lineCount)
         scrollTo("2 Mobilism hosts")
         val label = compose.onNodeWithText("2 Mobilism hosts")
         val bounds = label.fetchSemanticsNode().boundsInRoot

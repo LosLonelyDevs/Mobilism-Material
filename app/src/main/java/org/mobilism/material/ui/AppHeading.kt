@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -19,9 +20,10 @@ fun AppHeading(
     text: String, level: HeadingLevel, modifier: Modifier = Modifier,
     style: TextStyle = LocalTextStyle.current, maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
+    color: Color = Color.Unspecified,
 ) {
     Text(text, modifier.semantics { heading() }, style = style, maxLines = maxLines, overflow = overflow,
-        color = when (level) {
+        color = if (color != Color.Unspecified) color else when (level) {
             HeadingLevel.Page -> MaterialTheme.colorScheme.primary
             HeadingLevel.Section -> MaterialTheme.colorScheme.secondary
             HeadingLevel.Subsection -> LocalAppTheme.current.reading

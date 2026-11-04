@@ -2,10 +2,11 @@
 
 ## Unreleased
 
-- Improve message threads, avatars, replies, and unread badges.
-- Add update installation, changelogs, anonymous usage, Announcements navigation, and link actions.
+- Improve messaging and avatars.
+- Add updates, changelogs, anonymous usage, Announcements, and link actions.
 - Refine Settings and palettes; default to Tokyo Night.
-- Show release dots and verify thumbs up through forum posts.
+- Add pull-to-refresh, larger thumbnails, and glowing release dots.
+- Verify thumbs up through forum posts.
 
 ## 0.1.18
 
