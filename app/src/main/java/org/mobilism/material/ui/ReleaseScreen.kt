@@ -222,7 +222,7 @@ fun ReleaseScreen(
                             )
                             RoundedMenuItem(
                                 label = "Open in browser", accent = MaterialTheme.colorScheme.tertiary, icon = Icons.Outlined.OpenInBrowser,
-                                onClick = { menu = false; openWeb(context, url) },
+                                onClick = { menu = false; openForumBrowser(context, url) },
                             )
                         }
                     }
@@ -253,8 +253,7 @@ fun ReleaseScreen(
                     releaseDetailItem {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Text(release.author, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            UsernameLink(release.author, Modifier.weight(1f))
                             Text("${release.replies} replies", style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                             ReleasePostDate(release.publishedAt)
@@ -360,6 +359,8 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
     val context = LocalContext.current
     val currentOnRelease = androidx.compose.runtime.rememberUpdatedState(onRelease)
     val currentForumLinkHandler = androidx.compose.runtime.rememberUpdatedState(LocalForumLinkHandler.current)
+    val currentDownloadHelpHandler = androidx.compose.runtime.rememberUpdatedState(LocalDownloadHelpHandler.current)
+    val currentProfileHandler = androidx.compose.runtime.rememberUpdatedState(LocalProfileHandler.current)
     var heldUrl by remember(html, baseUrl) { mutableStateOf<String?>(null) }
     val currentOnHold = androidx.compose.runtime.rememberUpdatedState<(String) -> Unit>({ heldUrl = it })
     heldUrl?.let { ForumLinkActions(it, onDismiss = { heldUrl = null }) }
@@ -384,7 +385,12 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
                         val topic = org.mobilism.material.ReleaseLinks.topicId(link.url)
                         val navigate = currentOnRelease.value
                         val forumHandler = currentForumLinkHandler.value
-                        if (forumHandler != null) forumHandler(link.url)
+                        val help = currentDownloadHelpHandler.value
+                        val profile = org.mobilism.material.data.ProfileReference.fromUrl(link.url)
+                        val openProfile = currentProfileHandler.value
+                        if (profile != null && openProfile != null) openProfile(profile)
+                        else if (topic == org.mobilism.material.data.DownloadHelp.TOPIC_ID && help != null) help()
+                        else if (forumHandler != null) forumHandler(link.url)
                         else if (topic != null && navigate != null) navigate(topic) else openWeb(context, link.url)
                     }
                 }, start, end, flags)

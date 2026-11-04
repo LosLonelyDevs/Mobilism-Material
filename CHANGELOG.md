@@ -2,11 +2,10 @@
 
 ## Unreleased
 
-- Improve messaging, avatars, Settings, and palettes.
-- Add updates, changelogs, anonymous usage, Announcements, and link actions.
-- Default to Tokyo Night; add pull-to-refresh, larger thumbnails, glowing dots.
-- Add Downloads shortcut; remember Description state.
-- Verify thumbs up through forum posts.
+- Add message alerts, profiles, role badges, and contact links.
+- Add updates, changelogs, usage pings, Announcements, Downloads, and in-app help.
+- Improve messaging, Settings, palettes, refresh gestures, thumbnails, and dots.
+- Default to Tokyo Night; remember Description state; verify thumbs up.
 
 ## 0.1.18
 

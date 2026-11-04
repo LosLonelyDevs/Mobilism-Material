@@ -104,6 +104,12 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             ?: throw ApiFailure(FailureKind.InvalidResponse, "The server did not confirm the thumbs-up state.")
     }
 
+    suspend fun downloadHelp(token: String?): DiscussionTopic {
+        val page = release(DownloadHelp.TOPIC_ID, token)
+        return DiscussionTopic(page.id, page.title, page.author, page.contentHtml, DiscussionKind.Other,
+            page.categoryId ?: 399, publishedAt = page.publishedAt, browserUrl = DownloadHelp.URL, images = page.images)
+    }
+
     suspend fun comments(id: Long, page: Int, token: String?): CommentPage {
         require(id > 0 && page > 0)
         forumPostIds[id]?.let { originalPostId ->
@@ -196,7 +202,9 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         }
     }
 
-    private suspend fun forumTopic(id: Long, commentsStart: Int? = null): String = withContext(Dispatchers.IO) {
+    suspend fun profile(reference: ProfileReference): UserProfile = ForumProfiles.parse(forumPage(reference.url.toHttpUrl()), reference)
+
+    private suspend fun forumTopic(id: Long, commentsStart: Int? = null): String {
         val url = "https://forum.mobilism.org/viewtopic.php".toHttpUrl().newBuilder()
             .addQueryParameter("t", id.toString()).apply {
                 if (commentsStart != null) {
@@ -204,16 +212,24 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                     addQueryParameter("start", commentsStart.toString())
                 }
             }.build()
+        return forumPage(url)
+    }
+
+    private suspend fun forumPage(url: okhttp3.HttpUrl): String = withContext(Dispatchers.IO) {
         try {
             // Forum reads never receive the API session token.
-            readClient.newCall(Request.Builder().url(url).build()).await().use { response ->
+            val request = Request.Builder().url(url)
+            runCatching { android.webkit.WebSettings.getDefaultUserAgent(context) }.getOrNull()?.let { request.header("User-Agent", it) }
+            runCatching { android.webkit.CookieManager.getInstance().getCookie("https://forum.mobilism.org/") }.getOrNull()
+                ?.takeIf { it.isNotBlank() }?.let { request.header("Cookie", it) }
+            readClient.newCall(request.build()).await().use { response ->
                 val source = response.body?.source() ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum returned an empty response.")
                 source.request(MAX_RESPONSE_BYTES + 1)
                 if (source.buffer.size > MAX_RESPONSE_BYTES) throw ApiFailure(FailureKind.InvalidResponse, "The forum response was too large.")
                 val html = source.readUtf8()
                 if (!response.isSuccessful || response.header("cf-mitigated") == "challenge") {
                     NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", html)?.let { throw it }
-                    throw ApiFailure(FailureKind.Server, "The forum could not load this release (HTTP ${response.code}).", response.code)
+                    throw ApiFailure(FailureKind.Server, "The forum could not load this page (HTTP ${response.code}).", response.code)
                 }
                 html
             }

@@ -151,7 +151,9 @@ fun FeedScreen(
             ModalDrawerSheet(Modifier.fillMaxHeight().testTag("navigation-drawer")) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                     AppHeading("Mobilism", HeadingLevel.Page, Modifier.padding(24.dp), style = MaterialTheme.typography.headlineMedium)
-                    Text((auth as? AuthState.SignedIn)?.username ?: "Guest", Modifier.padding(horizontal = 24.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (auth is AuthState.SignedIn) UsernameLink(auth.username, Modifier.padding(horizontal = 24.dp),
+                        onOpen = { scope.launch { drawer.close() } })
+                    else Text("Guest", Modifier.padding(horizontal = 24.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Alphabetical.sorted(ContentSection.entries) { it.label }.forEach { section ->
                         val style = section.style()
                         val interaction = remember { MutableInteractionSource() }
@@ -327,7 +329,7 @@ internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = fal
                     title.subtitle, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (compact) 1 else 3, overflow = TextOverflow.Ellipsis,
                 )
-                if (!compact) Text(release.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (!compact) UsernameLink(release.author, style = MaterialTheme.typography.bodySmall)
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (!compact) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {

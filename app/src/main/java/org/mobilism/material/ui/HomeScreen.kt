@@ -205,8 +205,9 @@ private fun HomeHero(releases: List<Release>, section: ContentSection, onRelease
                     Icon(section.style().icon, null, Modifier.size(28.dp), tint = tone.second)
                     Spacer(Modifier.weight(1f))
                     Text(title.name, style = MaterialTheme.typography.titleLargeEmphasized, maxLines = 3, overflow = TextOverflow.Ellipsis, color = tone.second)
-                    Text(if (section == ContentSection.Books && title.subtitle.isNotBlank()) title.subtitle else release.author,
+                    if (section == ContentSection.Books && title.subtitle.isNotBlank()) Text(title.subtitle,
                         style = MaterialTheme.typography.labelMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, color = tone.second)
+                    else UsernameLink(release.author, style = MaterialTheme.typography.labelMedium, maxLines = 2, color = tone.second)
                 }
             }
         }
@@ -238,8 +239,9 @@ private fun LatestTile(release: Release, section: ContentSection, onRelease: (Lo
                 if (isNew) NewReleaseBadge(release.id, Modifier.align(Alignment.TopEnd).padding(4.dp))
             }
             Text(title.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(if (section == ContentSection.Books && title.subtitle.isNotBlank()) title.subtitle else release.author,
+            if (section == ContentSection.Books && title.subtitle.isNotBlank()) Text(title.subtitle,
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            else UsernameLink(release.author, style = MaterialTheme.typography.labelMedium)
             ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
         }
     }
@@ -300,7 +302,7 @@ private fun HomeForumShelf(title: String, state: HomeForum, reviews: Boolean, on
                             Modifier.size(24.dp), tint = MaterialTheme.colorScheme.tertiary)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(topic.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text("${topic.author} · ${topic.replies} replies", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            UsernameLink(topic.author, label = "${topic.author} · ${topic.replies} replies", style = MaterialTheme.typography.labelMedium)
                         }
                         Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

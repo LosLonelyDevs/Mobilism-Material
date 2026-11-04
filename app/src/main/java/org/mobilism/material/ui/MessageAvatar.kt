@@ -21,11 +21,12 @@ import coil3.compose.AsyncImage
 @Composable
 internal fun MessageAvatar(name: String, url: String?, modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primaryContainer,
-    contentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer) {
+    contentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
+    initialStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.labelMedium) {
     var loaded by remember(url) { mutableStateOf(false) }
     Surface(modifier, shape = CircleShape, color = color, contentColor = contentColor) {
         Box(contentAlignment = Alignment.Center) {
-            if (!loaded) Text(name.firstOrNull()?.uppercase() ?: "?", style = MaterialTheme.typography.labelMedium)
+            if (!loaded) Text(name.firstOrNull()?.uppercase() ?: "?", style = initialStyle)
             if (url != null) AsyncImage(url, "$name profile picture", Modifier.fillMaxSize().clip(CircleShape),
                 contentScale = ContentScale.Crop, onSuccess = { loaded = true }, onError = { loaded = false })
         }

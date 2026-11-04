@@ -76,8 +76,7 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
                 if (comment.avatar != null) AsyncImage(comment.avatar, null, Modifier.size(28.dp).clip(MaterialTheme.shapes.large), contentScale = ContentScale.Crop)
                 else CommentAuthorDot(comment.author)
                 Column(Modifier.weight(1f)) {
-                    Text(comment.author, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    UsernameLink(comment.author, style = MaterialTheme.typography.titleSmall)
                     if (earlierComment) Text("Earlier comment", style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (comment.publishedAt > 0) {

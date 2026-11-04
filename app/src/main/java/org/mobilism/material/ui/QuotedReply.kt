@@ -40,9 +40,9 @@ internal fun QuotedReply(quote: QuotedComment, baseUrl: String, onRelease: ((Lon
         Column(Modifier.commentRail(depth).padding(start = if (depth <= 4) 12.dp else 4.dp, end = 4.dp, bottom = 6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(if (quote.author.isBlank()) "Quoted message" else "Replying to ${quote.author}", Modifier.weight(1f),
+                UsernameLink(quote.author, Modifier.weight(1f), label = if (quote.author.isBlank()) "Quoted message" else "Replying to ${quote.author}",
                     style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    maxLines = 2)
                 AppTextButton(if (expanded) "Hide quote" else "Show quote", { expanded = !expanded })
             }
             if (expanded) {

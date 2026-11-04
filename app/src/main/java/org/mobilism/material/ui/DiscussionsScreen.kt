@@ -230,7 +230,7 @@ private fun DiscussionTopics(state: DiscussionsState, onTopic: (DiscussionTopic)
                             if (preview.isNotBlank()) Text(preview, style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.testTag("discussion-preview:${topic.key}"))
-                            Text(topic.author, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            UsernameLink(topic.author)
                             Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 DiscussionDate(topic.activityAt)
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

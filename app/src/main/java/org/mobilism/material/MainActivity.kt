@@ -25,17 +25,39 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import org.mobilism.material.usage.DailyUsageSchedule
+import org.mobilism.material.messages.MessageNotificationTarget
+import org.mobilism.material.messages.MessageNotifications
+import org.mobilism.material.data.AuthState
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.combine
 
 class MainActivity : ComponentActivity() {
     private var notificationRelease by mutableStateOf<Long?>(null)
+    private var notificationMessage by mutableStateOf<MessageNotificationTarget?>(null)
     private var fromNotification by mutableStateOf(false)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         notificationRelease = (savedInstanceState?.getLong("pendingRelease")
             ?: releaseFrom(intent)).takeIf { it > 0 }
         fromNotification = savedInstanceState?.getBoolean("fromNotification") ?: (intent.action != Intent.ACTION_VIEW)
+        notificationMessage = savedInstanceState?.getString("pendingMessageAccount")?.let {
+            MessageNotificationTarget(it, savedInstanceState.getLong("pendingMessageConversation"), savedInstanceState.getLong("pendingMessageId"))
+        } ?: MessageNotifications.target(intent)
         enableEdgeToEdge()
         val app = application as MobilismApplication
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                combine(app.repository.auth, app.messageAlerts.enabled) { auth, enabled -> auth to enabled }
+                    .collectLatest { (auth, enabled) ->
+                        if (auth is AuthState.SignedIn && enabled) while (true) {
+                            try { app.messageChecker.check() }
+                            catch (cancelled: CancellationException) { throw cancelled }
+                            catch (_: Exception) { /* Retry transient failures on the next poll. */ }
+                            delay(60_000)
+                        }
+                    }
+            }
+        }
         if (DailyUsageSchedule.configured) lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 app.dailyUsage.enabled.collectLatest { enabled ->
@@ -58,9 +80,13 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
             }
             MobilismTheme(theme, appearance.font, appearance.reduceMotion, appearance.customFontFile) {
-                MobilismApp(app, notificationRelease, fromNotification = fromNotification) {
+                MobilismApp(app, notificationRelease, fromNotification = fromNotification, notificationMessage = notificationMessage) {
                     notificationRelease = null
+                    notificationMessage = null
                     intent.removeExtra(FollowingNotifications.EXTRA_RELEASE)
+                    intent.removeExtra(MessageNotifications.EXTRA_ACCOUNT)
+                    intent.removeExtra(MessageNotifications.EXTRA_CONVERSATION)
+                    intent.removeExtra(MessageNotifications.EXTRA_MESSAGE)
                     intent.data = null
                 }
             }
@@ -72,11 +98,17 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         fromNotification = intent.action != Intent.ACTION_VIEW
         notificationRelease = releaseFrom(intent).takeIf { it > 0 }
+        notificationMessage = MessageNotifications.target(intent)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putLong("pendingRelease", notificationRelease ?: 0)
         outState.putBoolean("fromNotification", fromNotification)
+        notificationMessage?.let {
+            outState.putString("pendingMessageAccount", it.accountKey)
+            outState.putLong("pendingMessageConversation", it.conversationId)
+            outState.putLong("pendingMessageId", it.messageId)
+        }
         super.onSaveInstanceState(outState)
     }
 

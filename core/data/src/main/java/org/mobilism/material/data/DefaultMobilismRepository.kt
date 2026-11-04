@@ -136,6 +136,9 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         release.copy(liked = release.liked ?: key?.takeIf(reactions::contains)?.let { reactions.getBoolean(it, false) })
     }
 
+    suspend fun downloadHelp(): DiscussionTopic = withSession { api.downloadHelp(it) }
+    suspend fun profile(reference: ProfileReference): UserProfile = api.profile(reference)
+
     override suspend fun toggleLike(release: Release): Boolean = withSession { token ->
         val account = session?.takeIf { it.accessToken == token }
             ?: throw ApiFailure(FailureKind.Credentials, "Sign in to give this release a thumbs up.")

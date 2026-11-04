@@ -19,9 +19,21 @@ import org.mobilism.material.data.DiagnosticPhase
 import org.mobilism.material.data.DiagnosticFailure
 import org.mobilism.material.settings.DeveloperPreferencesStore
 import org.mobilism.material.settings.DiagnosticLogStore
+import org.mobilism.material.messages.*
+import org.mobilism.material.data.AuthState
 
 class MobilismApplication : Application() {
-    val messageReads by lazy { org.mobilism.material.settings.MessageReadStore(this) }
+    val messageAlerts by lazy { MessageAlertStore(this) }
+    val messageNotifications by lazy { MessageNotifications(this) }
+    val messageReads by lazy { org.mobilism.material.settings.MessageReadStore(this, messageNotifications::cancelRead) }
+    val messageChecker by lazy { MessageNotificationChecker(repository,
+        username = { (repository.auth.value as? AuthState.SignedIn)?.username },
+        allowed = { messageAlerts.enabled.value && messageNotifications.allowed() },
+        history = messageAlerts::history, readHistory = messageReads::forAccount,
+        post = { account, message ->
+            if ((repository.auth.value as? AuthState.SignedIn)?.username == account && messageAlerts.enabled.value &&
+                message.messageId !in messageReads.forAccount(account)) messageNotifications.post(account, message) else false
+        }, cancelRead = messageNotifications::cancelRead) }
     val dailyUsage by lazy { org.mobilism.material.usage.DailyUsageStore(this) }
     val contentPreferences by lazy { org.mobilism.material.data.ContentPreferencesStore(this) }
     val developer by lazy { DeveloperPreferencesStore(this) }
@@ -49,6 +61,16 @@ class MobilismApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        scope.launch {
+            combine(repository.auth, messageAlerts.enabled) { auth, enabled -> auth to enabled }
+                .distinctUntilChanged().collect { (auth, enabled) ->
+                    if (auth != AuthState.Restoring) {
+                        val account = (auth as? AuthState.SignedIn)?.username
+                        MessageSchedule.update(this@MobilismApplication, enabled && account != null)
+                        messageNotifications.retainAccount(account.takeIf { enabled })
+                    }
+                }
+        }
         scope.launch {
             diagnostics.record(DiagnosticEvent(DiagnosticSource.App, DiagnosticOperation.Startup, DiagnosticPhase.Completed))
             developer.state.map { it.debridEnabled }.distinctUntilChanged()

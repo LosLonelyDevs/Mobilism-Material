@@ -103,14 +103,17 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
         }
     }
 
-    fun openMessage(message: PrivateMessage) {
+    fun openMessage(message: PrivateMessage) = openConversation(message.id, message.messageId)
+
+    fun openConversation(conversationId: Long, messageId: Long) {
+        if (conversationId <= 0 || messageId <= 0) return
         if (state.value.sending) return
         conversationJob?.cancel()
         deliveryGeneration++
         deliveryJob?.cancel()
-        savedState["conversation-id"] = message.id
-        savedState["message-id"] = message.messageId
-        mutableState.update { it.copy(conversationId = message.id, messageId = message.messageId,
+        savedState["conversation-id"] = conversationId
+        savedState["message-id"] = messageId
+        mutableState.update { it.copy(conversationId = conversationId, messageId = messageId,
             conversation = emptyList(), error = null, readError = null, replying = false, notice = null,
             checkingReply = false) }
         restoreDraft()

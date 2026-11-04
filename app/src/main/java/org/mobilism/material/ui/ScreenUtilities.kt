@@ -1,7 +1,6 @@
 package org.mobilism.material.ui
 
 import android.content.Context
-import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -50,16 +49,18 @@ fun openWeb(context: Context, url: String): Boolean {
 }
 
 internal val LocalForumLinkHandler = staticCompositionLocalOf<((String) -> Unit)?> { null }
+internal val LocalDownloadHelpHandler = staticCompositionLocalOf<(() -> Unit)?> { null }
 
-internal fun forumBrowserIntent(context: Context, url: String): Intent? {
+internal fun forumBrowserIntent(url: String): Intent? {
     val uri = url.toUri()
     if (uri.scheme !in listOf("https", "http") || uri.host.isNullOrBlank()) return null
-    // Discussion links must not re-enter the release-only Android app-link handler.
-    return Intent.createChooser(Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE), "Open in browser")
-        .putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(ComponentName(context, org.mobilism.material.MainActivity::class.java)))
+    // Resolve a browser by scheme, then deliver the original URL. Domain handlers cannot capture it.
+    return Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE).apply {
+        selector = Intent(Intent.ACTION_VIEW, "${uri.scheme}:".toUri()).addCategory(Intent.CATEGORY_BROWSABLE)
+    }
 }
 
-internal fun openForumBrowser(context: Context, url: String): Boolean = forumBrowserIntent(context, url)?.let { launch(context, it) } ?: false
+internal fun openForumBrowser(context: Context, url: String): Boolean = forumBrowserIntent(url)?.let { launch(context, it) } ?: false
 
 private fun launch(context: Context, intent: Intent): Boolean {
     return try { context.startActivity(intent); true }

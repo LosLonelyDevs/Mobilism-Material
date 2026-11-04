@@ -17,7 +17,14 @@ internal object ForumReleaseParser {
     private val postId = Regex("p([1-9][0-9]*)")
     private val dateFormat = DateTimeFormatter.ofPattern("MMM d, uuuu, h:mm a", Locale.ENGLISH)
 
-    fun release(html: String, id: Long): Release {
+    fun release(html: String, id: Long): Release = parse(html, id, requireSection = true)
+
+    fun topic(html: String, id: Long): DiscussionTopic = parse(html, id, requireSection = false).let {
+        DiscussionTopic(it.id, it.title, it.author, it.contentHtml, DiscussionKind.Other, it.categoryId ?: 0,
+            publishedAt = it.publishedAt, replies = it.replies, browserUrl = requireNotNull(it.browserUrl), images = it.images)
+    }
+
+    private fun parse(html: String, id: Long, requireSection: Boolean): Release {
         val document = document(html, id)
         val title = document.selectFirst(".page-category-topic a[href], h2.topic-title a[href]")!!
         val post = posts(document).firstOrNull() ?: invalid()
@@ -25,7 +32,7 @@ internal object ForumReleaseParser {
         val images = images(content)
         val forums = document.select(".pagination a[href*='viewforum.php'], .breadcrumbs a[href*='viewforum.php']")
         val section = forums.mapNotNull { link -> ContentSection.entries.find { it.label.equals(link.text(), true) } }.lastOrNull()
-            ?: invalid()
+        if (section == null && requireSection) invalid()
         val url = title.absUrl("href").toHttpUrlOrNull() ?: invalid()
         val category = url.queryParameter("f")?.toLongOrNull()?.takeIf { it > 0 }
         val totalPosts = Regex("([0-9,]+)\\s+posts?\\b", RegexOption.IGNORE_CASE)

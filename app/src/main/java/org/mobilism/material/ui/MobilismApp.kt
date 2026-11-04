@@ -37,6 +37,7 @@ import org.mobilism.material.designsystem.screenMotion
 
 @Composable
 fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fromNotification: Boolean = true,
+    notificationMessage: org.mobilism.material.messages.MessageNotificationTarget? = null,
     onNotificationHandled: () -> Unit = {}) {
     val model: MobilismViewModel = viewModel(factory = viewModelFactory {
         initializer { MobilismViewModel(app, app.repository, app.appearance, app.debrid, app.library, app.contentPreferences, app.developer, app.customCategories) }
@@ -59,7 +60,7 @@ fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fro
                         LoadingState("Opening Mobilism…")
                     }
                     AuthState.SignedOut -> AccountNavigation(model, app.diagnostics)
-                    else -> MainNavigation(model, auth, notificationRelease, fromNotification, onNotificationHandled, onUpdates)
+                    else -> MainNavigation(model, auth, notificationRelease, notificationMessage, fromNotification, onNotificationHandled, onUpdates)
                 }
             }
         }
@@ -97,7 +98,8 @@ private fun AccountNavigation(model: MobilismViewModel, diagnostics: org.mobilis
 }
 
 @Composable
-private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificationRelease: Long?, fromNotification: Boolean,
+private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificationRelease: Long?,
+    notificationMessage: org.mobilism.material.messages.MessageNotificationTarget?, fromNotification: Boolean,
     onNotificationHandled: () -> Unit, onUpdates: () -> Unit) {
     val nav = rememberNavController()
     val motion = screenMotion()
@@ -113,6 +115,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     val library by model.library.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val app = context.applicationContext as MobilismApplication
+    if (auth is AuthState.SignedIn) MessageNotificationPermissionPrompt(app)
     var homeForum by remember { mutableStateOf<Pair<DiscussionTopic?, DiscussionCategory>?>(null) }
     var openingTab by rememberSaveable {
         mutableStateOf<BrowseTab?>(when (model.landingPage.state.value.order) {
@@ -132,10 +135,23 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     LaunchedEffect(notificationRelease) {
         notificationRelease?.takeIf { it > 0 }?.let { id ->
             if (fromNotification) nav.navigate("following") { launchSingleTop = true }
-            nav.navigate("release/$id") { launchSingleTop = true }
+            nav.navigate(if (id == org.mobilism.material.data.DownloadHelp.TOPIC_ID) "download-help" else "release/$id") { launchSingleTop = true }
             onNotificationHandled()
         }
     }
+    LaunchedEffect(notificationMessage, auth) {
+        notificationMessage?.let { target ->
+            if (auth is AuthState.SignedIn && target.accountKey == org.mobilism.material.messages.MessageAlertStore.accountKey(auth.username)) {
+                nav.navigate("messages") { launchSingleTop = true }
+            } else onNotificationHandled()
+        }
+    }
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalDownloadHelpHandler provides { nav.navigate("download-help") { launchSingleTop = true } },
+        LocalProfileHandler provides { reference ->
+            nav.navigate("profile?user=${reference.id ?: 0}&name=${android.net.Uri.encode(reference.username.orEmpty())}") { launchSingleTop = true }
+        },
+    ) {
     NavHost(
         navController = nav, startDestination = "feed",
         enterTransition = { motion.enter }, exitTransition = { motion.exit },
@@ -273,6 +289,14 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                         readHistory = app.messageReads.forAccount(auth.username)) }
                 })
                 val state by messages.state.collectAsStateWithLifecycle()
+                LaunchedEffect(notificationMessage, state.sending) {
+                    notificationMessage?.takeIf {
+                        !state.sending && it.accountKey == org.mobilism.material.messages.MessageAlertStore.accountKey(auth.username)
+                    }?.let {
+                        messages.openConversation(it.conversationId, it.messageId)
+                        onNotificationHandled()
+                    }
+                }
                 MessagesScreen(state, auth.username, onFolder = messages::selectFolder,
                     onRefresh = { messages.loadMailbox(refresh = true) }, onMore = { messages.loadMailbox() },
                     onOpen = messages::openMessage, onRead = messages::markRead,
@@ -295,7 +319,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onDeveloperOptions = { nav.navigate("developer-options") }, diagnostics = app.diagnostics,
                 preferredHosts = downloads.preferredHosts, landingPage = landingPage,
                 onLandingPage = model.landingPage::select, dailyUsageEnabled = dailyUsageEnabled,
-                onDailyUsage = { app.dailyUsage.setEnabled(app, it) }, onUpdates = onUpdates)
+                onDailyUsage = { app.dailyUsage.setEnabled(app, it) }, onUpdates = onUpdates,
+                messageNotifications = { MessageNotificationSetting(app) })
         }
         composable("developer-options") {
             LaunchedEffect(developer.enabled) {
@@ -324,6 +349,19 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         }
         composable("appearance") {
             AppearanceScreen(appearance, model.appearance, onBack = { nav.popBackStack() })
+        }
+        composable("download-help") {
+            DownloadHelpScreen(app.repository::downloadHelp, onBack = { nav.popBackStack() },
+                onRelease = { nav.navigate("release/$it") { launchSingleTop = true } })
+        }
+        composable("profile?user={user}&name={name}", arguments = listOf(
+            navArgument("user") { type = NavType.LongType; defaultValue = 0L },
+            navArgument("name") { defaultValue = "" },
+        )) { entry ->
+            val args = requireNotNull(entry.arguments)
+            val reference = org.mobilism.material.data.ProfileReference(args.getLong("user").takeIf { it > 0 },
+                args.getString("name")?.takeIf { it.isNotBlank() })
+            UserProfileScreen(reference, app.repository::profile, onBack = { nav.popBackStack() })
         }
         composable("release/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
             val id = requireNotNull(entry.arguments).getLong("id")
@@ -361,5 +399,6 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                     model.library.downloaded(it, enabled, downloads.autoWatchDownloads)
                 } })
         }
+    }
     }
 }

@@ -55,17 +55,14 @@ class DiscussionsTest {
     }
 
     @Test fun forumBrowserLinksExcludeOurReleaseLinkHandler() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
         val url = "https://forum.mobilism.org/viewtopic.php?t=80"
-        val chooser = checkNotNull(forumBrowserIntent(context, url))
-        assertEquals(android.content.Intent.ACTION_CHOOSER, chooser.action)
-        @Suppress("DEPRECATION")
-        val target = chooser.getParcelableExtra<android.content.Intent>(android.content.Intent.EXTRA_INTENT)
-        assertEquals(url, target?.dataString)
-        @Suppress("DEPRECATION")
-        val excluded = chooser.getParcelableArrayExtra(android.content.Intent.EXTRA_EXCLUDE_COMPONENTS)
-        assertTrue(excluded!!.contains(android.content.ComponentName(context, MainActivity::class.java)))
-        assertNull(forumBrowserIntent(context, "javascript:alert(1)"))
+        val target = checkNotNull(forumBrowserIntent(url))
+        assertEquals(android.content.Intent.ACTION_VIEW, target.action)
+        assertEquals(url, target.dataString)
+        assertEquals("https:", target.selector?.dataString)
+        assertEquals(android.content.Intent.ACTION_VIEW, target.selector?.action)
+        assertTrue(target.selector!!.hasCategory(android.content.Intent.CATEGORY_BROWSABLE))
+        assertNull(forumBrowserIntent("javascript:alert(1)"))
     }
 
     @Test fun categoriesTopicsSearchAndPostingUseTheLegacyRoutes() = runBlocking {

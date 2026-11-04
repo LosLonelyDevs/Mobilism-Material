@@ -34,12 +34,13 @@ Screenshots use sample data. CI refreshes them on version bumps and screenshot t
 - Clear app versions and book details, collapsible release sections, and full-screen images.
 - [Comments](docs/release-comments.md) with nested replies, threads sorted by latest activity, saved drafts, and collapse controls.
 - [Discussions](docs/discussions.md) with forum browsing, topic search, and replies.
-- Inbox, Sent, conversation history, mark as read, and message replies.
+- Inbox, Sent, conversation history, mark as read, message replies, and [incoming message alerts](docs/message-alerts.md).
 - Optional [anonymous daily usage reporting](services/daily-usage/README.md), with a Settings opt-out. Disabled until an endpoint is configured.
 - Clickable URLs and emoji support in release text, comments, and messages.
+- Tap usernames for native member profiles, forum role badges, and Telegram or WhatsApp links.
 - Following with background update checks and optional notifications. My Applications tracks installed and downloaded apps.
 - Mobilism Premium, MegaDebrid, and Real-Debrid links with encrypted account storage.
-- Downloads shortcut with grouped links, preferred architectures, and preferred file hosts. Description remembers its last expanded or collapsed state across releases.
+- Downloads shortcut with grouped links, preferred architectures, and preferred file hosts. Download help opens in the app. Description remembers its last expanded or collapsed state across releases.
 - Material You wallpaper colors on Android 12+, 13 preset themes including AMOLED Black, bundled and custom fonts, and reduced motion.
 - [In-app updates](docs/app-updates.md) with automatic checks, verified downloads, Android installation, and release notes. Open Updates from Settings.
 

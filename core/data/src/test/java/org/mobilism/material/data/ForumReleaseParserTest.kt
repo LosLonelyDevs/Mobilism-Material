@@ -9,6 +9,17 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 class ForumReleaseParserTest {
+    @Test fun helpTopicsKeepTheirContentWithoutPretendingToBeAppReleases() {
+        val html = topic().replace("6075324", DownloadHelp.TOPIC_ID.toString()).replace(">Apps<", ">Help<")
+        val help = ForumReleaseParser.topic(html, DownloadHelp.TOPIC_ID)
+        assertEquals(DownloadHelp.TOPIC_ID, help.id)
+        assertEquals(DiscussionKind.Other, help.kind)
+        assertTrue(help.contentHtml.contains("Download Instructions:"))
+        assertTrue(help.browserUrl.contains("t=${DownloadHelp.TOPIC_ID}"))
+        assertTrue(runCatching { ForumReleaseParser.topic(html, 99) }.exceptionOrNull() is ApiFailure)
+        assertTrue(runCatching { ForumReleaseParser.release(html, DownloadHelp.TOPIC_ID) }.exceptionOrNull() is ApiFailure)
+    }
+
     @Test fun readsWearReleaseFromOriginalPostAndNormalizesForumMarkup() {
         val release = ForumReleaseParser.release(topic(), 6075324)
         assertEquals("Pujie Watch Faces - Wear OS 4 v6.5.14 [Patched]", release.title)

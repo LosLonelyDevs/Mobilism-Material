@@ -36,9 +36,9 @@ internal fun MessageThreadCard(thread: MessageThread, folder: MessageFolder, mar
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 MessageAvatar(person, message.avatar.takeIf { person.equals(message.from, ignoreCase = true) }, Modifier.size(32.dp))
-                Text(if (incoming) person else "To $person", Modifier.weight(1f),
+                UsernameLink(person, Modifier.weight(1f), label = if (incoming) person else "To $person",
                     color = colors.primary, style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    fontWeight = FontWeight.SemiBold, maxLines = 2)
                 if (unread) Text("Unread", color = colors.primary, style = MaterialTheme.typography.labelMedium)
             }
             Text(message.subject.ifBlank { "No subject" }, color = colors.secondary,

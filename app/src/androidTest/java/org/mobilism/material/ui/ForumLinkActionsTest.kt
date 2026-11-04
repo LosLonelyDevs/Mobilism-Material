@@ -21,6 +21,25 @@ import org.mobilism.material.designsystem.MobilismTheme
 class ForumLinkActionsTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun downloadHelpLinkUsesItsNativeReaderInsteadOfReleaseOrBrowserRouting() {
+        var helpOpened = false
+        var releaseOpened = false
+        var browserOpened = false
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalDownloadHelpHandler provides { helpOpened = true },
+                LocalForumLinkHandler provides { browserOpened = true },
+            ) {
+                ReleaseBody("Trouble downloading? Read <a href='${org.mobilism.material.data.DownloadHelp.URL}'>This</a>.",
+                    "https://forum.mobilism.org/", onRelease = { releaseOpened = true })
+            }
+        } }
+        val target = textView()
+        touch(target, MotionEvent.ACTION_DOWN)
+        touch(target, MotionEvent.ACTION_UP)
+        compose.runOnIdle { assertTrue(helpOpened); assertFalse(releaseOpened); assertFalse(browserOpened) }
+    }
+
     @Test fun holdingNamedLinkCopiesDestinationWithoutOpeningItAndTapStillNavigates() {
         var opened: Long? = null
         compose.setContent { MobilismTheme(reduceMotion = true) {

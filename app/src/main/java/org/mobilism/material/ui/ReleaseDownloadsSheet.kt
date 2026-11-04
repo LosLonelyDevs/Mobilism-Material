@@ -34,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -95,9 +96,11 @@ internal fun ReleaseDownloadGroup(releaseId: Long, group: DownloadGroup, baseUrl
     onCopied: suspend () -> Unit, onRelease: (Long) -> Unit) {
     var expanded by rememberSaveable(releaseId, group.id, group.collapsed) { mutableStateOf(!group.collapsed) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).heightIn(min = 48.dp)
+            .clip(MaterialTheme.shapes.medium)
             .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
-            .clickable(role = Role.Button, onClick = { expanded = !expanded }),
+            .clickable(role = Role.Button, onClick = { expanded = !expanded })
+            .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
             AppHeading(group.title, HeadingLevel.Page, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
             Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null,

@@ -90,7 +90,8 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
     preferredHosts: Set<String> = emptySet(),
     landingPage: org.mobilism.material.settings.LandingPage = org.mobilism.material.settings.LandingPage(),
     onLandingPage: (org.mobilism.material.settings.LandingPage) -> Unit = {},
-    dailyUsageEnabled: Boolean = true, onDailyUsage: (Boolean) -> Unit = {}, onUpdates: () -> Unit = {}) {
+    dailyUsageEnabled: Boolean = true, onDailyUsage: (Boolean) -> Unit = {}, onUpdates: () -> Unit = {},
+    messageNotifications: (@Composable () -> Unit)? = null) {
     var premiumOpen by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     LaunchedEffect(developer.debridEnabled) { if (!developer.debridEnabled) premiumOpen = false }
@@ -112,6 +113,7 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
         ) {
             item("preferences-section") { SettingsSectionLabel("Preferences") }
             item("appearance") { SettingsNavigationRow("Appearance", "Theme, font, and motion.", Icons.Outlined.Palette, onAppearance) }
+            messageNotifications?.let { setting -> item("message-notifications") { setting() } }
             item("landing-page") { LandingPageSetting(landingPage, onLandingPage) }
             item("content") { ContentVisibilitySetting(hideAdult, onHideAdult) }
             item("downloads-section") { SettingsSectionLabel("Downloads") }
