@@ -92,6 +92,81 @@ class MessagesViewModelTest {
         assertNull(model.state.value.readError)
     }
 
+    @Test fun refreshClearsOldReadErrorWhenServerAlreadyMarkedMessageRead() = runTest(dispatcher) {
+        val repo = Repository().apply {
+            readResult.completeExceptionally(ApiFailure(FailureKind.InvalidResponse, "Missing acknowledgement"))
+        }
+        val model = MessagesViewModel(repo, "Reader", SavedStateHandle())
+        advanceUntilIdle()
+        model.openMessage(incoming)
+        advanceUntilIdle()
+        assertNotNull(model.state.value.readError)
+        repo.conversationItems = repo.conversationItems.map { it.copy(read = true) }
+        model.loadConversation()
+        advanceUntilIdle()
+        assertNull(model.state.value.readError)
+        assertTrue(model.state.value.mailbox.items.single().read)
+        assertEquals(listOf(42L), repo.reads)
+    }
+
+    @Test fun missingReadAcknowledgementIsVerifiedWithoutRepeatingTheWrite() = runTest(dispatcher) {
+        val repo = Repository()
+        val model = MessagesViewModel(repo, "Reader", SavedStateHandle())
+        advanceUntilIdle()
+        model.openMessage(incoming)
+        runCurrent()
+        repo.conversationItems = repo.conversationItems.map { it.copy(read = true) }
+        repo.readResult.completeExceptionally(ApiFailure(FailureKind.InvalidResponse, "Missing acknowledgement"))
+        advanceUntilIdle()
+        assertNull(model.state.value.readError)
+        assertTrue(model.state.value.mailbox.items.single().read)
+        assertTrue(model.state.value.conversation.first().read)
+        assertEquals(listOf(42L), repo.reads)
+        assertEquals(listOf(10L, 10L), repo.conversationCalls)
+    }
+
+    @Test fun anotherReadMessageDoesNotConfirmTheFailedRead() = runTest(dispatcher) {
+        val repo = Repository().apply {
+            conversationItems = conversationItems.map { if (it.id == 43L) it.copy(read = true) else it }
+            readResult.completeExceptionally(ApiFailure(FailureKind.InvalidResponse, "Missing acknowledgement"))
+        }
+        val model = MessagesViewModel(repo, "Reader", SavedStateHandle())
+        advanceUntilIdle()
+        model.openMessage(incoming)
+        advanceUntilIdle()
+        assertNotNull(model.state.value.readError)
+        assertFalse(model.state.value.mailbox.items.single().read)
+    }
+
+    @Test fun lateReadFailureCannotLeakIntoAnotherConversation() = runTest(dispatcher) {
+        val repo = Repository().apply { otherConversations[20L] = listOf(outgoing.copy(id = 50)) }
+        val model = MessagesViewModel(repo, "Reader", SavedStateHandle())
+        advanceUntilIdle()
+        model.openMessage(incoming)
+        runCurrent()
+        model.openMessage(outgoing.copy(id = 20))
+        runCurrent()
+        repo.readResult.completeExceptionally(ApiFailure(FailureKind.Connection, "Offline"))
+        advanceUntilIdle()
+        assertEquals(20L, model.state.value.conversationId)
+        assertNull(model.state.value.readError)
+    }
+
+    @Test fun lateReadFailureCannotReturnAfterRefreshConfirmsRead() = runTest(dispatcher) {
+        val repo = Repository()
+        val model = MessagesViewModel(repo, "Reader", SavedStateHandle())
+        advanceUntilIdle()
+        model.openMessage(incoming)
+        runCurrent()
+        repo.conversationItems = repo.conversationItems.map { it.copy(read = true) }
+        model.loadConversation()
+        runCurrent()
+        repo.readResult.completeExceptionally(ApiFailure(FailureKind.Connection, "Offline"))
+        advanceUntilIdle()
+        assertNull(model.state.value.readError)
+        assertTrue(model.state.value.conversation.first().read)
+    }
+
     @Test fun replyUsesSelectedMessageAndCannotDoubleSendOrLoseDraftOnFailure() = runTest(dispatcher) {
         val repo = Repository().apply { readResult.complete(Unit) }
         val saved = SavedStateHandle()

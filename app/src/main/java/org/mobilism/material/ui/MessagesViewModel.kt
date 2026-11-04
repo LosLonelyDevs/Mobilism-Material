@@ -50,6 +50,8 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
     val state = mutableState.asStateFlow()
     private val mailboxJobs = mutableMapOf<MessageFolder, Job>()
     private val readIds = mutableSetOf<Long>()
+    private val readErrors = mutableMapOf<Long, ScreenError>()
+    private var readGeneration = 0
     private var conversationJob: Job? = null
     private var deliveryJob: Job? = null
     private var deliveryGeneration = 0
@@ -64,6 +66,7 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
     }
 
     fun selectFolder(folder: MessageFolder) {
+        clearReadErrors()
         savedState["message-folder"] = folder.name
         mutableState.update { it.copy(folder = folder) }
         if (state.value.mailbox.page == 0) loadMailbox()
@@ -72,6 +75,7 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
     fun loadMailbox(refresh: Boolean = false, folder: MessageFolder = state.value.folder) {
         val snapshot = state.value.mailboxes.getValue(folder)
         if (!refresh && (mailboxJobs[folder]?.isActive == true || !snapshot.canLoadMore)) return
+        if (refresh && folder == state.value.folder && state.value.conversationId == null) clearReadErrors()
         mailboxJobs[folder]?.cancel()
         updateMailbox(folder) { it.copy(busy = true, error = null, needsSignIn = false) }
         mailboxJobs[folder] = viewModelScope.launch {
@@ -109,6 +113,7 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
 
     fun closeConversation() {
         if (state.value.sending) return
+        clearReadErrors()
         conversationJob?.cancel()
         deliveryGeneration++
         deliveryJob?.cancel()
@@ -124,12 +129,14 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
         val id = state.value.conversationId ?: return
         if (state.value.sending) return
         conversationJob?.cancel()
+        clearReadErrors()
         mutableState.update { it.copy(loading = true, error = null) }
         conversationJob = viewModelScope.launch {
             try {
                 val messages = repository.conversation(id)
                 ensureActive()
                 if (messages.isEmpty()) throw ApiFailure(FailureKind.InvalidResponse, "This conversation is no longer available.")
+                messages.filter { it.read && it.to.equals(username, ignoreCase = true) }.forEach { confirmRead(it.id) }
                 mutableState.update { it.copy(loading = false, conversation = messages.map { message ->
                     if (message.id in readIds) message.copy(read = true) else message
                 }) }
@@ -142,22 +149,53 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
 
     fun markRead(id: Long) {
         if (id in state.value.marking || id in readIds) return
-        mutableState.update { it.copy(marking = it.marking + id, readError = null) }
+        val generation = readGeneration
+        val conversationId = state.value.conversationId ?: state.value.mailboxes.values
+            .flatMap { it.items }.firstOrNull { it.messageId == id }?.id
+        readErrors.remove(id)
+        mutableState.update { it.copy(marking = it.marking + id, readError = readErrors.values.firstOrNull()) }
         viewModelScope.launch {
             try {
-                repository.markMessageRead(id)
+                try {
+                    repository.markMessageRead(id)
+                } catch (failure: ApiFailure) {
+                    if (failure.kind != FailureKind.InvalidResponse) throw failure
+                    // Some read acknowledgements are missing even when the server saved the change.
+                    val confirmed = conversationId?.let { thread ->
+                        readDelivery { repository.conversation(thread) }?.any { it.id == id && it.read }
+                    } == true
+                    if (!confirmed) throw ApiFailure(FailureKind.InvalidResponse,
+                        "Couldn't confirm this message was marked as read. Refresh to check again.")
+                }
                 ensureActive()
-                readIds += id
-                mutableState.update { state -> state.copy(
-                    mailboxes = state.mailboxes.mapValues { (_, box) -> box.copy(items = box.items.map {
-                        if (it.messageId == id) it.copy(read = true) else it
-                    }) },
-                    conversation = state.conversation.map { if (it.id == id) it.copy(read = true) else it },
-                ) }
+                confirmRead(id)
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { mutableState.update { it.copy(readError = failure.forScreen()) } }
+            catch (failure: Exception) {
+                if (generation == readGeneration && id !in readIds) {
+                    readErrors[id] = failure.forScreen()
+                    mutableState.update { it.copy(readError = readErrors.values.firstOrNull()) }
+                }
+            }
             finally { mutableState.update { it.copy(marking = it.marking - id) } }
         }
+    }
+
+    private fun confirmRead(id: Long) {
+        readIds += id
+        readErrors.remove(id)
+        mutableState.update { state -> state.copy(
+            mailboxes = state.mailboxes.mapValues { (_, box) -> box.copy(items = box.items.map {
+                if (it.messageId == id) it.copy(read = true) else it
+            }) },
+            conversation = state.conversation.map { if (it.id == id) it.copy(read = true) else it },
+            readError = readErrors.values.firstOrNull(),
+        ) }
+    }
+
+    private fun clearReadErrors() {
+        readGeneration++
+        readErrors.clear()
+        mutableState.update { it.copy(readError = null) }
     }
 
     fun openReply() {

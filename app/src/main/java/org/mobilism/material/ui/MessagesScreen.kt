@@ -98,7 +98,7 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
                         } }
                         if (state.loading) item { LoadingState("Loading conversation…", Modifier.fillMaxWidth()) }
                         state.error?.let { item { ErrorPanel(it, onRetry = onRefreshConversation) } }
-                        state.readError?.let { item { ErrorPanel(it) } }
+                        state.readError?.let { item { ErrorPanel(it, onRetry = onRefreshConversation) } }
                         items(state.conversation, key = { it.id }) { message ->
                             MessageBubble(message, username, onRead = { onRead(message.id) },
                                 marking = message.id in state.marking, onRelease = onRelease)
@@ -114,7 +114,7 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
                     LazyColumn(Modifier.widthIn(max = 840.dp).fillMaxSize().testTag("message-mailbox"),
                         state = if (state.folder == MessageFolder.Inbox) inboxScroll else sentScroll,
                         contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        state.readError?.let { item { ErrorPanel(it) } }
+                        state.readError?.let { item { ErrorPanel(it, onRetry = onRefresh) } }
                         items(mailbox.items, key = { it.messageId }) { message ->
                             ExpressiveCard({ onOpen(message) }, Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
