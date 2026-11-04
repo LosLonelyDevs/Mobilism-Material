@@ -31,6 +31,7 @@ class MobilismApplication : Application() {
     val repository by lazy { DefaultMobilismRepository(this, contentPreferences, diagnostics,
         customCategories = customCategories, customCategoriesEnabled = { developer.state.value.customCategoriesActive }) }
     val appearance by lazy { AppearanceStore(this) }
+    val releaseDisplay by lazy { org.mobilism.material.settings.ReleaseDisplayStore(this) }
     val debrid by lazy { DebridRepository(this, isEnabled = {
         developer.state.value.debridEnabled
     }, diagnostics = diagnostics) }

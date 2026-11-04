@@ -24,7 +24,6 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -34,6 +33,7 @@ import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -104,6 +104,7 @@ fun ReleaseScreen(
     onRefresh: () -> Unit = onRetry,
     onCategories: (() -> Unit)? = null,
     onLikePostVerified: (Long) -> Unit = {}, onDismissLikeVerification: () -> Unit = {},
+    descriptionExpanded: Boolean? = null, onDescriptionExpanded: ((Boolean) -> Unit)? = null,
 ) {
     val theme = LocalAppTheme.current
     val context = LocalContext.current
@@ -112,6 +113,8 @@ fun ReleaseScreen(
     var menu by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val release = state.release
+    var downloadsOpen by rememberSaveable(release?.id) { mutableStateOf(false) }
+    val downloadRequests = remember(release?.id) { DownloadRequestTracker() }
     if (state.likeNeedsVerification && release != null) {
         ForumPostVerification(release.id, onLikePostVerified, onDismissLikeVerification)
     }
@@ -135,6 +138,12 @@ fun ReleaseScreen(
         ReleaseSections.parse(content?.bodyHtml.orEmpty(), release?.title.orEmpty())
     }
     val groups = remember(content, preferences, debrid) { DownloadGroups.group(content?.downloads.orEmpty(), preferences, debrid) }
+    val downloadOpened = { if (release?.section == ContentSection.Apps) onDownloaded(true) }
+    if (downloadsOpen && release != null) ReleaseDownloadsSheet(
+        release.id, ReleaseTitles.parse(release.title, release.section).name, groups, content?.downloadNotesHtml.orEmpty(),
+        release.browserUrl ?: "https://forum.mobilism.org/", debrid, downloadRequests,
+        onResolveDownload, downloadOpened,
+        onRelease = onRelease, onDismiss = { downloadsOpen = false })
     val canRefresh = !state.busy && !state.likeBusy && !state.composer.posting
     val refresh = { if (canRefresh) onRefresh() }
     gallery?.let { (urls, index) -> ReleaseImageViewer(urls, index, onDismiss = { gallery = null }) }
@@ -251,6 +260,13 @@ fun ReleaseScreen(
                             ReleasePostDate(release.publishedAt)
                         }
                     }
+                    if (groups.isNotEmpty()) releaseDetailItem("quick-downloads") {
+                        ExpressiveButton({ downloadsOpen = true }, Modifier.fillMaxWidth().testTag("open-downloads"),
+                            colors = ButtonDefaults.filledTonalButtonColors()) {
+                            Icon(Icons.Outlined.Download, null)
+                            Text("Downloads", Modifier.padding(start = 8.dp))
+                        }
+                    }
                     if (images.isNotEmpty()) releaseDetailItem("images-${release.id}") {
                         ReleaseImageCarousel(images) { index -> gallery = images to index }
                     }
@@ -267,6 +283,8 @@ fun ReleaseScreen(
                         }
                         Box(Modifier.padding(bottom = 12.dp)) {
                             CollapsibleSection("${release.id}-${section.kind}", section.kind.title, icon, accent,
+                                expanded = descriptionExpanded.takeIf { section.kind == ReleaseSection.Description },
+                                onExpandedChange = onDescriptionExpanded.takeIf { section.kind == ReleaseSection.Description },
                                 headingStyle = MaterialTheme.typography.titleMedium) {
                                 ReleaseBody(section.html, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
                             }
@@ -279,22 +297,9 @@ fun ReleaseScreen(
                                 ReleaseBody(it, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
                             }
                             groups.forEach { group ->
-                                CollapsibleSection(
-                                    "${release.id}-${group.id}", group.title, Icons.Outlined.Layers,
-                                    if (group.collapsed) MaterialTheme.colorScheme.onSurfaceVariant else theme.reading,
-                                    initiallyExpanded = !group.collapsed,
-                                    headingLevel = HeadingLevel.Subsection,
-                                    headingStyle = MaterialTheme.typography.titleSmall,
-                                ) {
-                                    if (group.notesHtml.isNotBlank()) {
-                                        ReleaseBody(group.notesHtml, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
-                                    }
-                                    group.links.forEach { link ->
-                                        DownloadLinkRow(link, debrid, resolveLink = onResolveDownload, onOpened = {
-                                            if (release.section == ContentSection.Apps) onDownloaded(true)
-                                        }) { snackbar.showSnackbar("Link copied") }
-                                    }
-                                }
+                                ReleaseDownloadGroup(release.id, group, release.browserUrl ?: "https://forum.mobilism.org/",
+                                    debrid, downloadRequests, onResolveDownload, downloadOpened,
+                                    onCopied = { snackbar.showSnackbar("Link copied") }, onRelease = onRelease)
                             }
                         }
                     }

@@ -45,10 +45,12 @@ fun CollapsibleSection(
     initiallyExpanded: Boolean = true, headingLevel: HeadingLevel = HeadingLevel.Section,
     headingStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.titleLarge,
     headingColor: Color = Color.Unspecified,
+    expanded: Boolean? = null, onExpandedChange: ((Boolean) -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    var expanded by rememberSaveable(id, initiallyExpanded) { mutableStateOf(initiallyExpanded) }
-    val rotation by animateFloatAsState(if (expanded) 180f else 0f,
+    var localExpanded by rememberSaveable(id, initiallyExpanded) { mutableStateOf(initiallyExpanded) }
+    val isExpanded = expanded ?: localExpanded
+    val rotation by animateFloatAsState(if (isExpanded) 180f else 0f,
         MaterialTheme.motionScheme.fastSpatialSpec(), label = "section chevron")
     AppSurface(
         modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge,
@@ -57,8 +59,10 @@ fun CollapsibleSection(
         Column {
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 64.dp)
-                    .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
-                    .clickable(role = Role.Button, onClick = { expanded = !expanded }).padding(20.dp),
+                    .semantics { stateDescription = if (isExpanded) "Expanded" else "Collapsed" }
+                    .clickable(role = Role.Button, onClick = {
+                        if (onExpandedChange != null) onExpandedChange(!isExpanded) else localExpanded = !isExpanded
+                    }).padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Icon(icon, null, Modifier.size(24.dp), tint = accent)
@@ -66,7 +70,7 @@ fun CollapsibleSection(
                 Icon(Icons.Outlined.ExpandMore, null, Modifier.rotate(rotation), tint = accent)
             }
             AnimatedVisibility(
-                visible = expanded,
+                visible = isExpanded,
                 enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
                 exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
             ) {

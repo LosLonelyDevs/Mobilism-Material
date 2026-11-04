@@ -1,6 +1,10 @@
 package org.mobilism.material
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -13,6 +17,7 @@ import org.mobilism.material.data.*
 import org.mobilism.material.designsystem.MobilismTheme
 import org.mobilism.material.ui.DownloadLink
 import org.mobilism.material.ui.DownloadLinkRow
+import org.mobilism.material.ui.DownloadRequestTracker
 
 @RunWith(AndroidJUnit4::class)
 class DebridDownloadsTest {
@@ -22,6 +27,33 @@ class DebridDownloadsTest {
     private val verified = DebridState(listOf(DebridAccount(DebridProvider.RealDebrid,
         configured = true, validated = true, hostsVerified = true,
         hosts = listOf(SupportedHost("files.example.org", "Example host")))), enabled = true)
+
+    @Test fun sharedLookupDisablesBothPresentationsAndDismissalAllowsRetry() {
+        val requests = DownloadRequestTracker()
+        var firstVisible by mutableStateOf(true)
+        var resolved = 0
+        val result = CompletableDeferred<String>()
+        val opened = mutableListOf<String>()
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            Column {
+                if (firstVisible) DownloadLinkRow(DownloadLink(original), verified, onOpened = {},
+                    resolveLink = { resolved++; result.await() }, openLink = { opened += it; true },
+                    requests = requests, onCopied = {})
+                DownloadLinkRow(DownloadLink(original), verified, onOpened = {},
+                    resolveLink = { resolved++; direct }, openLink = { opened += it; true },
+                    requests = requests, onCopied = {})
+            }
+        } }
+        compose.onAllNodesWithText("Example host")[0].performClick()
+        compose.onAllNodesWithText("Resolving Example host").assertCountEquals(2)
+        compose.onAllNodesWithText("Resolving Example host")[1].assertIsNotEnabled()
+        compose.runOnIdle { assertEquals(1, resolved); firstVisible = false }
+        compose.waitUntil { requests.pending.value.isEmpty() }
+        compose.runOnIdle { result.complete(direct) }
+        compose.runOnIdle { assertTrue(opened.isEmpty()) }
+        compose.onNodeWithText("Example host").performClick()
+        compose.runOnIdle { assertEquals(2, resolved); assertEquals(listOf(direct), opened) }
+    }
 
     @Test fun opensResolvedLinkOnceAndCopyNeverResolves() {
         val result = CompletableDeferred<String>()

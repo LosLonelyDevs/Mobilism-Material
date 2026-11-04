@@ -2,10 +2,10 @@
 
 ## Unreleased
 
-- Improve messaging and avatars.
+- Improve messaging, avatars, Settings, and palettes.
 - Add updates, changelogs, anonymous usage, Announcements, and link actions.
-- Refine Settings and palettes; default to Tokyo Night.
-- Add pull-to-refresh, larger thumbnails, and glowing release dots.
+- Default to Tokyo Night; add pull-to-refresh, larger thumbnails, glowing dots.
+- Add Downloads shortcut; remember Description state.
 - Verify thumbs up through forum posts.
 
 ## 0.1.18

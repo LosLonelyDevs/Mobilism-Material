@@ -99,7 +99,6 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
             item {
                 CollapsibleSection("cpu-preference", "CPU architecture", Icons.Outlined.Memory, theme.reading,
                     headingColor = colors.primary, headingStyle = MaterialTheme.typography.titleSmall) {
-                    SettingsSubtitle("Matching and universal downloads stay expanded; other architectures stay collapsed.")
                     Text("This device: " + (Build.SUPPORTED_ABIS.firstOrNull() ?: "Unknown"),
                         style = MaterialTheme.typography.labelLarge, color = theme.reading)
                     Box {

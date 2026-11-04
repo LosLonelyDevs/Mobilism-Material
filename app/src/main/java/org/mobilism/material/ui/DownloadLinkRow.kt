@@ -35,8 +35,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import org.mobilism.material.data.DebridException
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.designsystem.AppIconButton
@@ -49,6 +51,7 @@ fun DownloadLinkRow(
     link: DownloadLink, debrid: DebridState, onOpened: () -> Unit,
     resolveLink: suspend (String) -> String = { throw DebridException("Debrid is not available. Try again.") },
     openLink: ((String) -> Boolean)? = null,
+    requests: DownloadRequestTracker = remember { DownloadRequestTracker() },
     onCopied: suspend () -> Unit,
 ) {
     val context = LocalContext.current
@@ -57,7 +60,8 @@ fun DownloadLinkRow(
     val providers = debrid.supporting(link.url).map { it.provider.label }
     val name = debrid.hostName(link.url)
     val supported = providers.isNotEmpty()
-    var resolving by remember(link.url) { mutableStateOf(false) }
+    val pending by requests.pending.collectAsStateWithLifecycle()
+    val resolving = link.url in pending
     var error by remember(link.url) { mutableStateOf<String?>(null) }
     fun open(url: String): Boolean {
         val opened = openLink?.invoke(url) ?: openWeb(context, url)
@@ -73,15 +77,17 @@ fun DownloadLinkRow(
             ExpressiveButton(
                 onClick = {
                     if (!resolving) {
-                        if (!supported) open(link.url) else {
-                            resolving = true
+                        if (!supported) open(link.url) else if (requests.begin(link.url)) {
                             scope.launch {
-                                try { open(resolveLink(link.url)) }
+                                try {
+                                    val resolved = resolveLink(link.url)
+                                    ensureActive()
+                                    open(resolved)
+                                }
                                 catch (cancelled: CancellationException) { throw cancelled }
                                 catch (failure: DebridException) { error = failure.message }
                                 catch (_: Exception) { error = "The download could not be resolved. Please try again." }
-                                finally { resolving = false }
-                            }
+                            }.invokeOnCompletion { requests.finish(link.url) }
                         }
                     }
                 },

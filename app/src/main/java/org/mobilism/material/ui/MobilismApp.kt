@@ -331,6 +331,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 initializer { ReleaseViewModel(id, model.repository, createSavedStateHandle()) }
             })
             val state by detail.state.collectAsStateWithLifecycle()
+            val descriptionExpanded by app.releaseDisplay.descriptionExpanded.collectAsStateWithLifecycle()
             var assigningCategories by rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(state.release, developer.customCategoriesActive) {
                 if (developer.customCategoriesActive) state.release?.let(model.customCategories::observe)
@@ -351,6 +352,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onReplyToComment = detail::replyToComment, onRemoveReply = detail::clearCommentReply,
                 onRelease = { topic -> if (topic != id) nav.navigate("release/$topic") { launchSingleTop = true } },
                 onResolveDownload = model.debrid::resolve,
+                descriptionExpanded = descriptionExpanded, onDescriptionExpanded = app.releaseDisplay::setDescriptionExpanded,
                 onDownloadHosts = model.downloads::discover,
                 watched = library.any { item -> item.watched && state.release?.let { org.mobilism.material.data.ReleaseVersions.sameApp(item.release, it) } == true },
                 downloaded = library.any { it.downloaded && it.release.id == state.release?.id },

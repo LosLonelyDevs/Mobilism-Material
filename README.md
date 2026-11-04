@@ -39,7 +39,7 @@ Screenshots use sample data. CI refreshes them on version bumps and screenshot t
 - Clickable URLs and emoji support in release text, comments, and messages.
 - Following with background update checks and optional notifications. My Applications tracks installed and downloaded apps.
 - Mobilism Premium, MegaDebrid, and Real-Debrid links with encrypted account storage.
-- Grouped downloads, preferred architectures, and preferred file hosts.
+- Downloads shortcut with grouped links, preferred architectures, and preferred file hosts. Description remembers its last expanded or collapsed state across releases.
 - Material You wallpaper colors on Android 12+, 13 preset themes including AMOLED Black, bundled and custom fonts, and reduced motion.
 - [In-app updates](docs/app-updates.md) with automatic checks, verified downloads, Android installation, and release notes. Open Updates from Settings.
 
