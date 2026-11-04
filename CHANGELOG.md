@@ -2,11 +2,10 @@
 
 ## Unreleased
 
-- Add message alerts, profiles, role badges, and contact links.
-- Add updates, changelogs, usage pings, Announcements, Downloads, and in-app help.
-- Improve messaging, Settings, palettes, refresh gestures, thumbnails, and dots.
-- Default to Tokyo Night; remember Description state; verify thumbs up.
-- Fix screenshots.
+- Add profiles, badges, message alerts, and authenticated usage dashboard.
+- Add updates, changelogs, Announcements, Downloads, and in-app help.
+- Improve Settings, palettes, refresh, thumbnails, and dots.
+- Default to Tokyo Night; remember Description; verify thumbs up; fix screenshots.
 
 ## 0.1.18
 

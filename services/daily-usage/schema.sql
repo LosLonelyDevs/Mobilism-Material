@@ -14,3 +14,22 @@ CREATE TABLE IF NOT EXISTS daily_usage (
     devices bigint NOT NULL CHECK (devices > 0),
     PRIMARY KEY (day, app_version, version_code, android_api, manufacturer, model)
 );
+
+CREATE TABLE IF NOT EXISTS admin_login_limits (
+    key text PRIMARY KEY,
+    failures integer NOT NULL,
+    started_at timestamptz NOT NULL,
+    blocked_until timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS admin_login_challenges (
+    nonce text PRIMARY KEY,
+    client text NOT NULL,
+    expires_at timestamptz NOT NULL,
+    attempts integer NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS admin_totp_counters (
+    account text PRIMARY KEY,
+    step bigint NOT NULL
+);

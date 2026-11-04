@@ -1,4 +1,6 @@
-.env
-.env.*
+.env*
+.vercel
 node_modules
 test
+scripts
+README.md

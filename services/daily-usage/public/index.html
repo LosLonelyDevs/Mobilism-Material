@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#16161e">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Mobilism · Daily activity</title>
+  <link rel="stylesheet" href="/dashboard.css">
+  <link rel="stylesheet" href="/site.css">
+  <script type="module" src="/dashboard.js"></script>
+</head>
+<body>
+  <main>
+    <div id="startup" class="startup" role="status">Opening dashboard…</div>
+    <section id="login" class="login" hidden aria-labelledby="login-title">
+      <form id="login-form" class="login-form">
+        <span class="brand-mark" aria-hidden="true">m</span>
+        <span class="eyebrow">MOBILISM · USAGE</span>
+        <h1 id="login-title">Welcome back</h1>
+        <p id="login-subtitle">Sign in to view daily app activity.</p>
+        <span id="login-step" class="step-label">Step 1 of 2</span>
+        <div id="password-fields" class="fields">
+          <label>Username<input id="username" name="username" autocomplete="username" maxlength="64" required></label>
+          <label>Password<input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" required></label>
+        </div>
+        <div id="otp-fields" class="fields" hidden>
+          <label>Authenticator code<input id="code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="000000" disabled required></label>
+          <p class="field-hint">Enter the six-digit code from your authenticator app.</p>
+        </div>
+        <p id="login-error" class="login-error" role="alert" hidden></p>
+        <button id="login-submit" class="primary" type="submit">Continue</button>
+        <button id="start-over" class="text-button" type="button" hidden>Use a different account</button>
+        <p class="login-note">Private dashboard · Two-step verification</p>
+      </form>
+    </section>
+    <div id="dashboard" class="admin-dashboard" hidden>
+      <header class="site-header"><span class="site-brand"><span class="brand-mark" aria-hidden="true">m</span> Mobilism</span><button id="sign-out" class="text-button">Sign out</button></header>
+      <div class="admin-heading">
+        <div><span class="admin-eyebrow">ADMIN · APP USAGE</span><h1>Daily activity</h1><p>A daily snapshot of active Mobilism installations.</p></div>
+        <form id="filters" class="admin-toolbar"><label>UTC date<input id="day" type="date" required></label><button id="refresh" class="primary" type="submit">↻ Refresh</button></form>
+      </div>
+      <div id="dashboard-error" class="admin-notice" role="alert" hidden></div>
+      <p id="loading" class="admin-loading" role="status">Loading activity…</p>
+      <div id="report" hidden>
+        <div class="admin-stats">
+          <div class="admin-stat admin-stat-total"><span>Active installs</span><strong id="total">0</strong></div>
+          <div class="admin-stat"><span>App versions</span><strong id="versions">0</strong></div>
+          <div class="admin-stat"><span>Device models</span><strong id="models">0</strong></div>
+        </div>
+        <section class="admin-panel" aria-labelledby="trend-title">
+          <div class="admin-panel-heading admin-trend-heading"><h2 id="trend-title">Activity over time</h2><div id="ranges" class="admin-range-group" aria-label="Date range"><button data-days="14" aria-pressed="true">14 days</button><button data-days="30" aria-pressed="false">30 days</button><button data-days="90" aria-pressed="false">90 days</button></div></div>
+          <div class="admin-trend">
+            <div class="admin-chart-summary" aria-live="polite"><strong><span id="chart-total">0</span> <span>active installs</span></strong><span id="chart-day" class="admin-date-pill"></span></div>
+            <div class="admin-chart-plot" aria-hidden="true"><div class="admin-chart-axis"><span id="peak">0</span><span>0</span></div><div id="chart" class="admin-chart"></div></div>
+            <div class="admin-chart-range"><span id="range-start"></span><span id="range-end"></span></div>
+            <label class="admin-chart-control" for="chart-slider"><span>Explore a day <span aria-hidden="true">↔</span></span><input id="chart-slider" type="range" min="0" max="13" value="13" step="1"></label>
+          </div>
+          <p id="zero-note" class="admin-zero-note" hidden>No reports in this range yet. Activity appears as opted-in installations check in.</p>
+        </section>
+        <section class="admin-panel" aria-labelledby="devices-title">
+          <div class="admin-panel-heading"><h2 id="devices-title">Devices & app versions</h2><span id="device-date"></span></div>
+          <div class="admin-device-labels" aria-hidden="true"><span>Device</span><span>App version</span><span>Active</span></div>
+          <div id="devices"></div>
+          <div id="empty" class="admin-empty" hidden><span aria-hidden="true">◌</span><h3>No activity on this date</h3><p>Choose another date or check back after apps report activity.</p></div>
+        </section>
+        <p class="admin-footnote">Anonymous, opt-in active installation counts. Reinstalls and multiple devices can count separately. These are not unique people. Dates use UTC; late reports can arrive for seven days.</p>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

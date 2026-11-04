@@ -35,6 +35,10 @@ export function cleanReports(query) {
     DELETE FROM usage_receipts WHERE day < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 7 RETURNING day
   ), aggregates AS (
     DELETE FROM daily_usage WHERE day < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 364 RETURNING day
+  ), login_limits AS (
+    DELETE FROM admin_login_limits WHERE started_at < CURRENT_TIMESTAMP - interval '1 day' RETURNING key
+  ), challenges AS (
+    DELETE FROM admin_login_challenges WHERE expires_at < CURRENT_TIMESTAMP RETURNING nonce
   ) SELECT (SELECT count(*)::int FROM receipts) AS receipts,
            (SELECT count(*)::int FROM aggregates) AS aggregates`);
 }
