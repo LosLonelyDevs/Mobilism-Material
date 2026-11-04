@@ -5,7 +5,6 @@
 - Add in-app updates, changelogs, Announcements, profiles, badges, and message alerts.
 - Add recent searches, book-format filters, animated avatars, and unread dots.
 - Refine Settings, Tokyo Night, downloads, links, refresh, and screenshots.
-- Secure usage dashboard with two-step login.
 
 ## 0.1.18
 
