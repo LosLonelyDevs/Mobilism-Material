@@ -261,7 +261,7 @@ class MessagesViewModelTest {
         advanceUntilIdle()
         assertEquals("  Thanks & hello  ", model.state.value.draft)
         assertTrue(model.state.value.sendUnconfirmed)
-        assertTrue(model.state.value.sendError!!.contains("may still arrive"))
+        assertEquals("Couldn't confirm sending. Check Sent before sending again.", model.state.value.sendError)
         model.sendReply()
         model.editReply("Changed")
         advanceUntilIdle()
@@ -327,7 +327,7 @@ class MessagesViewModelTest {
         assertTrue(saved.keys().none { it.startsWith("message-pending-") || it.startsWith("message-draft-") })
     }
 
-    @Test fun sentPreviewRequiresFullMatchingReplyInTheSameThread() = runTest(dispatcher) {
+    @Test fun newSentEntryRequiresFullBodyButNotOriginalThreadHistory() = runTest(dispatcher) {
         val repo = Repository()
         val model = ready(repo)
         model.sendReply()
@@ -337,17 +337,106 @@ class MessagesViewModelTest {
         repo.sendResult.completeExceptionally(ApiFailure(FailureKind.Connection, "Timeout"))
         advanceUntilIdle()
         assertTrue(model.state.value.sendUnconfirmed)
-        // A full match in another conversation still does not confirm this reply.
         repo.otherConversations[99] = listOf(delivered)
         model.checkReplyDelivery()
+        advanceUntilIdle()
+        assertEquals("Reply sent", model.state.value.notice)
+        assertEquals(1, repo.posts.size)
+        assertTrue(99L in repo.conversationCalls)
+    }
+
+    @Test fun automaticCheckConfirmsNewSentReplyWithIndependentConversationId() = runTest(dispatcher) {
+        val repo = Repository()
+        val saved = SavedStateHandle()
+        val model = ready(repo, saved)
+        model.sendReply()
+        runCurrent()
+        repo.sentItems = listOf(delivered.copy(id = 99, contentHtml = ""))
+        repo.otherConversations[99] = listOf(delivered)
+        repo.sendResult.completeExceptionally(ApiFailure(FailureKind.InvalidResponse, "Missing acknowledgement"))
+        advanceUntilIdle()
+        assertEquals("Reply sent", model.state.value.notice)
+        assertFalse(model.state.value.replying)
+        assertFalse(model.state.value.sendUnconfirmed)
+        assertEquals("", model.state.value.draft)
+        assertEquals(1, repo.posts.size)
+        assertTrue(saved.keys().none { it.startsWith("message-pending-") })
+    }
+
+    @Test fun existingSentReplyCannotConfirmNewSendEvenWhenConversationIsStale() = runTest(dispatcher) {
+        val repo = Repository().apply { sentItems = listOf(delivered.copy(id = 10)) }
+        val model = ready(repo)
+        model.sendReply()
+        runCurrent()
+        repo.sendResult.completeExceptionally(ApiFailure(FailureKind.InvalidResponse, "Missing acknowledgement"))
+        advanceUntilIdle()
+        assertTrue(model.state.value.sendUnconfirmed)
+        assertEquals("Thanks & hello", model.state.value.draft)
+        assertEquals(1, repo.posts.size)
+    }
+
+    @Test fun missingSentBaselineStillRequiresOriginalThreadEvidence() = runTest(dispatcher) {
+        val repo = Repository()
+        val model = ready(repo)
+        repo.mailboxError = ApiFailure(FailureKind.Connection, "Offline")
+        model.sendReply()
+        runCurrent()
+        repo.mailboxError = null
+        repo.sentItems = listOf(delivered.copy(id = 99, contentHtml = ""))
+        repo.otherConversations[99] = listOf(delivered)
+        repo.sendResult.completeExceptionally(ApiFailure(FailureKind.Connection, "Timeout"))
         advanceUntilIdle()
         assertTrue(model.state.value.sendUnconfirmed)
         repo.otherConversations[99] = listOf(incoming.copy(id = 42), delivered)
         model.checkReplyDelivery()
         advanceUntilIdle()
         assertEquals("Reply sent", model.state.value.notice)
+    }
+
+    @Test fun anotherMessageInSentThreadCannotStandInForCandidate() = runTest(dispatcher) {
+        val repo = Repository()
+        val model = ready(repo)
+        model.sendReply()
+        runCurrent()
+        repo.sentItems = listOf(delivered.copy(id = 99, messageId = 45, contentHtml = ""))
+        repo.otherConversations[99] = listOf(delivered, delivered.copy(id = 45, messageId = 45, contentHtml = "Other text"))
+        repo.sendResult.completeExceptionally(ApiFailure(FailureKind.Connection, "Timeout"))
+        advanceUntilIdle()
+        assertTrue(model.state.value.sendUnconfirmed)
+        assertEquals("Thanks & hello", model.state.value.draft)
+    }
+
+    @Test fun retryChecksSentBeforePostingAgain() = runTest(dispatcher) {
+        val repo = Repository()
+        val model = ready(repo)
+        model.sendReply()
+        runCurrent()
+        repo.sendResult.completeExceptionally(ApiFailure(FailureKind.Connection, "Timeout"))
+        advanceUntilIdle()
+        repo.sentItems = listOf(delivered.copy(id = 99, contentHtml = ""))
+        repo.otherConversations[99] = listOf(delivered)
+        model.retryReply()
+        advanceUntilIdle()
+        assertEquals("Reply sent", model.state.value.notice)
         assertEquals(1, repo.posts.size)
-        assertTrue(99L in repo.conversationCalls)
+    }
+
+    @Test fun sentBaselineSurvivesRestorationAndConfirmsDelayedDelivery() = runTest(dispatcher) {
+        val repo = Repository()
+        val saved = SavedStateHandle()
+        val model = ready(repo, saved)
+        model.sendReply()
+        runCurrent()
+        repo.sendResult.completeExceptionally(ApiFailure(FailureKind.Connection, "Timeout"))
+        advanceUntilIdle()
+        val snapshot = SavedStateHandle(saved.keys().associateWith { saved.get<Any>(it) })
+        repo.sentItems = listOf(delivered.copy(id = 99, contentHtml = ""))
+        repo.otherConversations[99] = listOf(delivered)
+        val restored = MessagesViewModel(repo, "Reader", snapshot)
+        advanceUntilIdle()
+        assertEquals("Reply sent", restored.state.value.notice)
+        assertEquals("", restored.state.value.draft)
+        assertEquals(1, repo.posts.size)
     }
 
     @Test fun identicalOlderReplyCannotConfirmANewAttempt() = runTest(dispatcher) {
@@ -403,7 +492,7 @@ class MessagesViewModelTest {
         repo.mailboxError = repo.conversationError
         repo.sendResult.completeExceptionally(repo.conversationError!!)
         advanceUntilIdle()
-        assertTrue(model.state.value.sendError!!.contains("couldn't check delivery"))
+        assertEquals("Couldn't check send status. Try again when connected.", model.state.value.sendError)
         assertEquals("Thanks & hello", model.state.value.draft)
         repo.conversationError = null
         repo.mailboxError = null

@@ -159,7 +159,7 @@ private fun MessageReplyComposer(state: MessagesState, username: String, onEdit:
     if (confirmRetry && state.sendUnconfirmed && !state.sending) AlertDialog(
         onDismissRequest = { confirmRetry = false },
         title = { Text("Send this reply again?") },
-        text = { Text("The first attempt may still arrive. Sending again could create a duplicate.") },
+        text = { Text("Sending again could create a duplicate.") },
         confirmButton = { AppTextButton("Send again", { confirmRetry = false; onRetry() },
             enabled = !state.checkingReply, modifier = Modifier.testTag("confirm-message-retry")) },
         dismissButton = { AppTextButton("Cancel", { confirmRetry = false }) },
@@ -179,14 +179,15 @@ private fun MessageReplyComposer(state: MessagesState, username: String, onEdit:
                 readOnly = state.sending || state.sendUnconfirmed, label = { Text("Message") }, minLines = 4, maxLines = 8,
                 shape = MaterialTheme.shapes.large, supportingText = { Text("${state.draft.length} / ${PrivateMessages.MAX_LENGTH}") })
             state.sendError?.let {
-                Text(it, color = MaterialTheme.colorScheme.error)
+                Text(it, color = if (state.sendUnconfirmed) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.error)
             }
             if (state.sending) LoadingState("Sending reply…", Modifier.fillMaxWidth())
-            else if (state.checkingReply) LoadingState("Checking whether your reply arrived…", Modifier.fillMaxWidth())
+            else if (state.checkingReply) LoadingState("Checking send status…", Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 AppTextButton("Close", onClose, enabled = !state.sending)
                 if (state.sendUnconfirmed) ExpressiveButton(onCheck, Modifier.weight(1f).testTag("check-message-delivery"),
-                    enabled = !state.sending && !state.checkingReply) { Text("Check delivery") }
+                    enabled = !state.sending && !state.checkingReply) { Text("Check status") }
                 else ExpressiveButton(onSend, Modifier.weight(1f).testTag("send-message"),
                     enabled = !state.sending && state.draft.isNotBlank() && state.draft.length <= PrivateMessages.MAX_LENGTH) { Text("Send reply") }
             }

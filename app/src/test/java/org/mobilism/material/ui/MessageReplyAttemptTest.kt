@@ -34,4 +34,22 @@ class MessageReplyAttemptTest {
     @Test fun toStringDoesNotExposePrivateContentOrParticipants() {
         assertEquals("MessageReplyAttempt(conversationId=10, targetId=42)", attempt.toString())
     }
+
+    @Test fun newSentMessageUsesItsOwnBaselineAndRequiresFullContent() {
+        val sentAttempt = attempt.copy(knownIds = setOf(900, 901), sentIds = setOf(40, 43))
+        assertFalse(sentAttempt.matches(reply))
+        assertTrue(sentAttempt.matchesSent(reply))
+        assertFalse(sentAttempt.matchesSent(reply.copy(contentHtml = "")))
+        assertFalse(sentAttempt.matchesSent(reply.copy(contentHtml = "Thanks")))
+        assertFalse(sentAttempt.matchesSent(reply.copy(to = "Other")))
+        assertFalse(sentAttempt.matchesSent(reply.copy(messageId = 43)))
+        assertFalse(sentAttempt.matchesSent(reply.copy(messageId = 41)))
+        assertFalse(sentAttempt.copy(sentIds = null).matchesSent(reply))
+        assertFalse(sentAttempt.copy(knownIds = setOf(44)).matchesSent(reply))
+        assertTrue(sentAttempt.copy(sentIds = emptySet()).matchesSent(reply))
+    }
+
+    @Test fun replyAlreadyInSentCannotBeConfirmedByStaleConversation() {
+        assertFalse(attempt.copy(sentIds = setOf(44)).matches(reply))
+    }
 }

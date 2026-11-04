@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import org.mobilism.material.data.ApiFailure
 import org.mobilism.material.data.FailureKind
 import org.mobilism.material.data.MessageFolder
+import org.mobilism.material.data.MessagePage
 import org.mobilism.material.data.MessagesRepository
 import org.mobilism.material.data.PrivateMessage
 import org.mobilism.material.data.PrivateMessages
@@ -239,16 +240,22 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
         viewModelScope.launch {
             var checkDelivery = false
             try {
-                val baseline = readDelivery { repository.conversation(conversationId) }?.takeIf { it.isNotEmpty() }
+                val (baseline, sentBaseline) = coroutineScope {
+                    val conversation = async { readDelivery { repository.conversation(conversationId) }?.takeIf { it.isNotEmpty() } }
+                    val sent = async { readDelivery { repository.messages(MessageFolder.Sent, 1) } }
+                    conversation.await() to sent.await()
+                }
                 ensureActive()
                 // A reply may arrive after the user opens the retry dialog.
-                if (allowUnconfirmed && baseline?.any { pendingReply?.matches(it) == true } == true) {
+                if (allowUnconfirmed && pendingReply?.let { attempt ->
+                    withTimeoutOrNull(12_000) { replyDelivered(attempt, baseline, sentBaseline) } == true
+                } == true) {
                     finishReply(target.messageId)
                     return@launch
                 }
                 val attempt = MessageReplyAttempt(conversationId, target.messageId, username, target.recipient(username),
                     target.subject, text, now(), (snapshot.conversation + baseline.orEmpty()).map { it.messageId }.toSet() + target.messageId,
-                    freshBaseline = baseline != null)
+                    freshBaseline = baseline != null, sentIds = sentBaseline?.items?.map { it.messageId }?.toSet())
                 saveAttempt(attempt)
                 repository.replyToMessage(target, text)
                 finishReply(target.messageId)
@@ -300,12 +307,7 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
                             }
                             val page = sent.await()
                             if (page != null) readSucceeded = true
-                            for (candidate in page?.items.orEmpty().filter(attempt::sameEnvelope).take(3)) {
-                                if (candidate.id == attempt.conversationId && attempt.matches(candidate)) return@coroutineScope true
-                                val thread = readDelivery { repository.conversation(candidate.id) } ?: continue
-                                if (thread.any { it.messageId in attempt.knownIds } && thread.any(attempt::matches)) return@coroutineScope true
-                            }
-                            false
+                            replyDelivered(attempt, messages, page)
                         }
                         if (matched) return@withTimeoutOrNull true
                     }
@@ -318,6 +320,19 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
                 if (generation == deliveryGeneration) mutableState.update { it.copy(checkingReply = false) }
             }
         }
+    }
+
+    private suspend fun replyDelivered(attempt: MessageReplyAttempt, conversation: List<PrivateMessage>?, sent: MessagePage?): Boolean {
+        if (conversation?.any(attempt::matches) == true) return true
+        val candidates = sent?.items.orEmpty().filter { attempt.newSentCandidate(it) || attempt.sameEnvelope(it) }
+        for (candidate in candidates.take(3)) {
+            if (attempt.matchesSent(candidate) || candidate.id == attempt.conversationId && attempt.matches(candidate)) return true
+            val thread = readDelivery { repository.conversation(candidate.id) } ?: continue
+            // A newly added Sent entry can have its own conversation ID without the original thread's history.
+            if (thread.any { it.messageId == candidate.messageId && attempt.matchesSent(it) }) return true
+            if (thread.any { it.messageId in attempt.knownIds } && thread.any(attempt::matches)) return true
+        }
+        return false
     }
 
     private suspend fun <T> readDelivery(block: suspend () -> T): T? = withTimeoutOrNull(4_000) {
@@ -347,11 +362,13 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
         savedState["$key-started"] = attempt.startedAt
         savedState["$key-known"] = attempt.knownIds.toLongArray()
         savedState["$key-fresh"] = attempt.freshBaseline
+        if (attempt.sentIds != null) savedState["$key-sent"] = attempt.sentIds.toLongArray()
+        else savedState.remove<LongArray>("$key-sent")
     }
 
     private fun clearAttempt(id: Long) {
         val key = "message-pending-$id"
-        listOf("", "-conversation", "-sender", "-recipient", "-subject", "-text", "-started", "-known", "-fresh")
+        listOf("", "-conversation", "-sender", "-recipient", "-subject", "-text", "-started", "-known", "-fresh", "-sent")
             .forEach { savedState.remove<Any>(key + it) }
         pendingReply = null
     }
@@ -369,7 +386,7 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
         pendingReply = if (pending && recipient != null && subject != null && text != null && sender == username)
             MessageReplyAttempt(savedState["$key-conversation"] ?: state.value.conversationId ?: id, id, sender, recipient,
                 subject, text, savedState["$key-started"] ?: 0, savedState.get<LongArray>("$key-known")?.toSet().orEmpty(),
-                savedState["$key-fresh"] ?: false) else null
+                savedState["$key-fresh"] ?: false, savedState.get<LongArray>("$key-sent")?.toSet()) else null
         mutableState.update { it.copy(draft = savedState["message-draft-$id"] ?: "",
             sendUnconfirmed = pending, checkingReply = false, sendError = if (pending) UNCONFIRMED_REPLY else null) }
     }
@@ -379,7 +396,7 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
     }
 
     private companion object {
-        const val UNCONFIRMED_REPLY = "Your reply isn't visible yet. It may still arrive. Your draft is kept."
-        const val DELIVERY_UNAVAILABLE = "We couldn't check delivery. Your draft is kept."
+        const val UNCONFIRMED_REPLY = "Couldn't confirm sending. Check Sent before sending again."
+        const val DELIVERY_UNAVAILABLE = "Couldn't check send status. Try again when connected."
     }
 }
