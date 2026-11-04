@@ -40,9 +40,7 @@ object PrivateMessages {
                 subject = Jsoup.parse(text("subject")).text(), from = text("from_user"), to = text("to_user"),
                 contentHtml = CommentMarkup.html(text("content")), preview = Jsoup.parse(CommentMarkup.html(text("preview"))).text(),
                 publishedAt = json.optLong("times"), read = json.optInt("readed") == 1 || json.optBoolean("readed"),
-                avatar = webUrlOrNull(text("avatar").let {
-                    if (it.startsWith("/") && !it.startsWith("//")) "https://forum.mobilism.org$it" else it
-                }),
+                avatar = forumAvatarUrl(text("avatar")),
             )
         }.distinctBy { it.messageId }
     }

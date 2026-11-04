@@ -17,6 +17,25 @@ class SearchViewModelTest {
     @Before fun setMain() = Dispatchers.setMain(dispatcher)
     @After fun resetMain() = Dispatchers.resetMain()
 
+    @Test fun clearingQueryClearsResultsAndRecentQueryResubmitsWithBookFilters() = runTest(dispatcher) {
+        val history = org.mobilism.material.settings.RecentSearches()
+        val repository = SearchRepository()
+        val formats = FeedFilters(bookFormats = setOf(BookFormat.M4b, BookFormat.Epub))
+        val model = SearchViewModel(repository, SearchScope.Books, "Example", mapOf(ContentSection.Books to formats), history = history)
+        advanceUntilIdle()
+        assertEquals(listOf("Example"), model.recentQueries.value)
+        model.editQuery("")
+        assertTrue(model.state.value.items.isEmpty())
+        assertTrue(model.state.value.submitted.isBlank())
+        model.searchRecent("Example")
+        advanceUntilIdle()
+        assertEquals(formats, repository.requests.last().filters)
+        model.selectScope(SearchScope.Apps)
+        assertTrue(model.state.value.filters.bookFormats.isEmpty())
+        model.selectScope(SearchScope.Books)
+        assertEquals(formats, model.state.value.filters)
+    }
+
     @Test fun changingContentVisibilityReplacesSearchResultsAndKeepsFilters() = runTest(dispatcher) {
         val filters = FeedFilters(postedFrom = LocalDate.of(2026, 10, 1))
         val hidden = MutableStateFlow(false)

@@ -66,6 +66,7 @@ object ForumProfiles {
         val lastVisited = fields.remove("Last visited")
         val posts = fields.remove("Total posts")?.substringBefore('(')?.trim()
         val balance = fields.remove("WRZ$")
+        fields.keys.filter { it.equals("Website", ignoreCase = true) }.forEach(fields::remove)
         val contacts = profile.select("a[href]").mapNotNull { anchor ->
             val link = webUrlOrNull(anchor.absUrl("href"))?.toHttpUrlOrNull() ?: return@mapNotNull null
             if (link.username.isNotEmpty() || link.password.isNotEmpty() || link.host == "forum.mobilism.org") return@mapNotNull null

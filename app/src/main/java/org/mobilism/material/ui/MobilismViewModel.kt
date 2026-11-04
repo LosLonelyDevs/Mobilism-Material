@@ -234,7 +234,9 @@ class MobilismViewModel(
         }.getOrDefault(org.mobilism.material.data.SearchSort.Newest)
         val custom = if (developer.state.value.customCategoriesActive) customCategories.state.value.retain(section,
             preferences.getStringSet("filters-${section.name}-custom-categories", emptySet()).orEmpty()) else emptySet()
-        return FeedFilters(ids, date("from"), date("through"), sort, custom)
+        val formats = if (section == ContentSection.Books) preferences.getStringSet("filters-Books-formats", emptySet()).orEmpty()
+            .mapNotNull { name -> org.mobilism.material.data.BookFormat.entries.find { it.name == name } }.toSet() else emptySet()
+        return FeedFilters(ids, date("from"), date("through"), sort, custom, formats)
     }
 
     private fun newFeed(section: ContentSection, order: FeedOrder = FeedOrder.Latest) =
@@ -279,6 +281,7 @@ class MobilismViewModel(
             .putString("filters-${section.name}-from", filters.postedFrom?.toString())
             .putString("filters-${section.name}-through", filters.postedThrough?.toString())
             .putString("filters-${section.name}-search-sort", filters.searchSort.name)
+        if (section == ContentSection.Books) editor.putStringSet("filters-Books-formats", filters.bookFormats.map { it.name }.toSet())
         if (developer.state.value.customCategoriesActive) editor.putStringSet("filters-${section.name}-custom-categories",
             customCategories.state.value.retain(section, filters.customCategoryIds))
         editor.apply()

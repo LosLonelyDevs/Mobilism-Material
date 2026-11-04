@@ -23,6 +23,8 @@ import org.mobilism.material.messages.*
 import org.mobilism.material.data.AuthState
 
 class MobilismApplication : Application() {
+    val memberIdentities by lazy { org.mobilism.material.members.MemberIdentityStore(scope, repository::profile) }
+    val recentSearches by lazy { org.mobilism.material.settings.RecentSearchStore(this) }
     val messageAlerts by lazy { MessageAlertStore(this) }
     val messageNotifications by lazy { MessageNotifications(this) }
     val messageReads by lazy { org.mobilism.material.settings.MessageReadStore(this, messageNotifications::cancelRead) }

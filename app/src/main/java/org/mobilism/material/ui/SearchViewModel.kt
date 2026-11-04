@@ -32,7 +32,12 @@ class SearchViewModel(
     hideAdultContent: kotlinx.coroutines.flow.StateFlow<Boolean>? = null,
     private val customCategories: org.mobilism.material.data.CustomCategoryStore? = null,
     private val developer: org.mobilism.material.settings.DeveloperPreferencesStore? = null,
+    private val history: org.mobilism.material.settings.RecentSearches = org.mobilism.material.settings.RecentSearches(),
 ) : ViewModel() {
+    val recentQueries = history.queries
+    fun removeRecent(query: String) = history.remove(query)
+    fun clearRecent() = history.clear()
+    fun searchRecent(query: String) { editQuery(query); submit() }
     private val savedFilters = SearchScope.entries.associateWith { initialFilters[it.section] ?: FeedFilters() }.toMutableMap()
     private val mutableState = MutableStateFlow(SearchState(scope = initialScope, query = initialQuery,
         filters = effectiveFilters(initialScope)))
@@ -79,7 +84,13 @@ class SearchViewModel(
         }
     }
 
-    fun editQuery(value: String) { mutableState.update { it.copy(query = value) } }
+    fun editQuery(value: String) {
+        if (value.isBlank()) {
+            job?.cancel()
+            pager = null
+            mutableState.update { SearchState(query = value, scope = it.scope, filters = it.filters) }
+        } else mutableState.update { it.copy(query = value) }
+    }
 
     private fun effectiveFilters(scope: SearchScope): FeedFilters = savedFilters.getValue(scope).let {
         if (developer?.state?.value?.customCategoriesActive == true) it else it.copy(customCategoryIds = emptySet())
@@ -100,7 +111,7 @@ class SearchViewModel(
         val query = snapshot.query.trim()
         job?.cancel()
         mutableState.value = SearchState(query = snapshot.query, submitted = query, scope = snapshot.scope, filters = snapshot.filters)
-        if (query.isNotEmpty()) loadMore()
+        if (query.isNotEmpty()) { history.record(query); loadMore() }
     }
 
     fun loadCategories() {

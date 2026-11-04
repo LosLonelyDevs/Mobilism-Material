@@ -1,11 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.1.19
 
-- Add profiles, badges, message alerts, and authenticated usage dashboard.
-- Add updates, changelogs, Announcements, Downloads, and in-app help.
-- Improve Settings, palettes, refresh, thumbnails, and dots.
-- Default to Tokyo Night; remember Description; verify thumbs up; fix screenshots.
+- Add in-app updates, changelogs, Announcements, profiles, badges, and message alerts.
+- Add recent searches, book-format filters, animated avatars, and unread dots.
+- Refine Settings, Tokyo Night, downloads, links, refresh, and screenshots.
+- Secure usage dashboard with two-step login.
 
 ## 0.1.18
 

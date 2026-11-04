@@ -34,7 +34,7 @@ adb("install", "-r", str(apk_dir / f"androidTest/debug/MobilismMaterial_v{versio
 output = f"/sdcard/Android/data/{PACKAGE}/files"
 adb("shell", "rm", "-f", *(f"{output}/{folder}/{name}.png" for name, folder in CAPTURES.items()))
 result = adb("shell", "am", "instrument", "-w", "-r", "-e", "class",
-             "org.mobilism.material.ReadmeScreenshots,org.mobilism.material.DebridDownloadsTest,org.mobilism.material.DebridRepositoryTest,org.mobilism.material.AboutScreenTest,org.mobilism.material.DiagnosticExportTest,org.mobilism.material.AppearanceOptionsTest,org.mobilism.material.HomeTest#allThreeSectionsExposeHeroCollectionsAndWorkingShortcuts",
+             "org.mobilism.material.ReadmeScreenshots,org.mobilism.material.DebridDownloadsTest,org.mobilism.material.DebridRepositoryTest,org.mobilism.material.AboutScreenTest,org.mobilism.material.DiagnosticExportTest,org.mobilism.material.AppearanceOptionsTest,org.mobilism.material.HomeTest#allThreeSectionsExposeHeroCollectionsAndWorkingShortcuts,org.mobilism.material.MessageMailboxTest,org.mobilism.material.ui.UserProfileTest,org.mobilism.material.ui.SearchDiscoveryTest,org.mobilism.material.ui.MessageAvatarTest",
              f"{PACKAGE}.test/org.mobilism.material.ReadmeScreenshotRunner")
 passed = re.search(r"OK \(([1-9][0-9]*) tests?\)", result)
 # adb can exit successfully even when JUnit fails.

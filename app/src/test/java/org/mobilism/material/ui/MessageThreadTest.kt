@@ -29,4 +29,15 @@ class MessageThreadTest {
         assertEquals(newer, messageThreads(listOf(newer, first)).single().latest)
         assertEquals(newer, messageThreads(listOf(first, newer)).single().latest)
     }
+
+    @Test fun missingAvatarOnLatestReplyKeepsEarlierAvatarForTheCorrectParticipant() {
+        val original = first.copy(avatar = "https://example.org/author.gif")
+        val response = first.copy(messageId = 43, from = "Reader", to = "Author", publishedAt = 200,
+            avatar = "https://example.org/reader.png")
+        val latest = first.copy(messageId = 44, publishedAt = 300)
+        val thread = messageThreads(listOf(original, response, latest)).single()
+        assertEquals("https://example.org/author.gif", thread.avatarFor("Author"))
+        assertEquals("https://example.org/reader.png", thread.avatarFor("reader"))
+        assertNull(thread.avatarFor("Other member"))
+    }
 }

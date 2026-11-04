@@ -23,12 +23,16 @@ internal fun MessageAvatar(name: String, url: String?, modifier: Modifier = Modi
     color: Color = MaterialTheme.colorScheme.primaryContainer,
     contentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
     initialStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.labelMedium) {
-    var loaded by remember(url) { mutableStateOf(false) }
+    val identity = memberIdentity(name)
+    var rejected by remember(name, url, identity?.avatar) { mutableStateOf(emptySet<String>()) }
+    val source = listOfNotNull(url, identity?.avatar).distinct().firstOrNull { it !in rejected }
+    var loaded by remember(source) { mutableStateOf(false) }
     Surface(modifier, shape = CircleShape, color = color, contentColor = contentColor) {
         Box(contentAlignment = Alignment.Center) {
             if (!loaded) Text(name.firstOrNull()?.uppercase() ?: "?", style = initialStyle)
-            if (url != null) AsyncImage(url, "$name profile picture", Modifier.fillMaxSize().clip(CircleShape),
-                contentScale = ContentScale.Crop, onSuccess = { loaded = true }, onError = { loaded = false })
+            if (source != null) AsyncImage(source, "$name profile picture", Modifier.fillMaxSize().clip(CircleShape),
+                contentScale = ContentScale.Crop, onSuccess = { loaded = true },
+                onError = { loaded = false; rejected = rejected + source })
         }
     }
 }

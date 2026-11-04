@@ -49,13 +49,15 @@ data class FeedFilters(
     val postedThrough: java.time.LocalDate? = null,
     val searchSort: SearchSort = SearchSort.Newest,
     val customCategoryIds: Set<String> = emptySet(),
+    val bookFormats: Set<BookFormat> = emptySet(),
 ) {
     val hasDates: Boolean get() = postedFrom != null || postedThrough != null
-    val isActive: Boolean get() = categoryIds.isNotEmpty() || customCategoryIds.isNotEmpty() || hasDates
+    val isActive: Boolean get() = categoryIds.isNotEmpty() || customCategoryIds.isNotEmpty() || hasDates || bookFormats.isNotEmpty()
     val validDates: Boolean get() = postedFrom == null || postedThrough == null || postedFrom <= postedThrough
 
     fun matches(release: Release, zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
         customCategories: CustomCategoryState = CustomCategoryState()): Boolean {
+        if (bookFormats.isNotEmpty() && BookFormat.forRelease(release).none(bookFormats::contains)) return false
         if ((categoryIds.isNotEmpty() || customCategoryIds.isNotEmpty()) &&
             release.categoryId !in categoryIds && !customCategories.matches(release, customCategoryIds)) return false
         if (!hasDates) return true

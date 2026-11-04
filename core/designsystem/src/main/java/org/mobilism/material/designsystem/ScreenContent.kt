@@ -46,7 +46,8 @@ fun AppChoiceTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) 
 fun AppSearchField(value: String, onValueChange: (String) -> Unit, label: String, supportingText: String,
     onSearch: () -> Unit, searchIcon: ImageVector, submitIcon: ImageVector, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
-    OutlinedTextField(value, onValueChange, modifier = modifier.fillMaxWidth().focusOutline(interaction),
+    OutlinedTextField(value, onValueChange, modifier = modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent),
         interactionSource = interaction, label = { Text(label) }, singleLine = true,
         shape = MaterialTheme.shapes.extraLarge, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSearch() }),

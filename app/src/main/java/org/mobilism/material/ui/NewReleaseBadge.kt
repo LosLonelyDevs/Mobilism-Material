@@ -30,9 +30,14 @@ import org.mobilism.material.designsystem.LocalReducedMotion
 
 @Composable
 internal fun NewReleaseBadge(id: Long, modifier: Modifier = Modifier) {
+    PulsingNotificationDot("New since your last visit", modifier.testTag("new-release-$id"))
+}
+
+@Composable
+internal fun PulsingNotificationDot(description: String, modifier: Modifier = Modifier) {
     val color = MaterialTheme.colorScheme.primary
     val pulse = if (LocalReducedMotion.current) 0f else {
-        val transition = rememberInfiniteTransition(label = "new release glow")
+        val transition = rememberInfiniteTransition(label = "notification glow")
         val value by transition.animateFloat(0f, 1f,
             infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "glow intensity")
         value
@@ -44,8 +49,8 @@ internal fun NewReleaseBadge(id: Long, modifier: Modifier = Modifier) {
                 drawCircle(Brush.radialGradient(listOf(color.copy(alpha = 0.45f * pulse), color.copy(alpha = 0f)),
                     center, radius), radius, center)
             }
-        }.testTag("new-release-$id").semantics {
-            contentDescription = "New since your last visit"
+        }.semantics {
+            contentDescription = description
         })
 }
 

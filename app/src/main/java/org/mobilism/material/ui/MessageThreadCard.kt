@@ -35,11 +35,12 @@ internal fun MessageThreadCard(thread: MessageThread, folder: MessageFolder, mar
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                MessageAvatar(person, message.avatar.takeIf { person.equals(message.from, ignoreCase = true) }, Modifier.size(32.dp))
+                MessageAvatar(person, thread.avatarFor(person), Modifier.size(32.dp))
                 UsernameLink(person, Modifier.weight(1f), label = if (incoming) person else "To $person",
                     color = colors.primary, style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold, maxLines = 2)
-                if (unread) Text("Unread", color = colors.primary, style = MaterialTheme.typography.labelMedium)
+                if (unread) PulsingNotificationDot("Unread messages", Modifier.padding(horizontal = 6.dp)
+                    .testTag("unread-thread-${thread.id}"))
             }
             Text(message.subject.ifBlank { "No subject" }, color = colors.secondary,
                 style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,

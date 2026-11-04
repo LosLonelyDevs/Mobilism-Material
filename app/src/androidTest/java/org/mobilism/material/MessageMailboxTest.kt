@@ -46,12 +46,12 @@ class MessageMailboxTest {
         compose.onNodeWithText(latest.preview).assertIsDisplayed()
         compose.onNodeWithText(first.preview).assertDoesNotExist()
         compose.onNodeWithText("Earlier reply").assertDoesNotExist()
-        compose.onNodeWithText("Unread").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Unread messages").assertIsDisplayed()
         compose.onNodeWithTag("message-thread-time-10", useUnmergedTree = true).assertTextContains(" · ", substring = true)
         capture("inbox-threads-dark")
         compose.onNodeWithText("Mark as read").performClick()
         compose.runOnIdle { assertEquals(setOf(42L, 43L), reads.toSet()) }
-        compose.onNodeWithText("Unread").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Unread messages").assertDoesNotExist()
         compose.onNodeWithTag("message-thread-10").performClick()
         compose.runOnIdle { assertEquals(latest, opened) }
         compose.onNodeWithText("Sent").performClick()
@@ -77,14 +77,14 @@ class MessageMailboxTest {
         state.value = state.value.copy(mailboxes = state.value.mailboxes +
             (MessageFolder.Inbox to MailboxState(listOf(latest), page = 1)))
         setScreen(AmoledBlack)
-        compose.onNodeWithText("Unread").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Unread messages").assertDoesNotExist()
         compose.runOnIdle {
             state.value = state.value.copy(mailboxes = state.value.mailboxes +
                 (MessageFolder.Inbox to MailboxState(replies, page = 2)))
         }
         compose.onAllNodesWithTag("message-thread-10").assertCountEquals(1)
         compose.onNodeWithText(latest.preview).assertIsDisplayed()
-        compose.onNodeWithText("Unread").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Unread messages").assertIsDisplayed()
         compose.onNodeWithText("Load more messages").assertIsDisplayed()
         capture("inbox-threads-amoled")
     }

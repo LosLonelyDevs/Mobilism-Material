@@ -49,4 +49,32 @@ class UserProfileTest {
         } }
         compose.onNodeWithText("Major Android Releaser").assertIsDisplayed()
     }
+
+    @Test fun websiteHasShortLabelAndBalanceUsesCommas() {
+        var opened: String? = null
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            Box(Modifier.width(320.dp)) { UserProfileContent(profile.copy(balance = "12345.00", contacts = listOf(
+                ProfileContact("https://example.org/long/path", "https://example.org/long/path", ProfileContactKind.Website))),
+                onOpenContact = { opened = it }) }
+        } }
+        compose.onNodeWithText("12,345").assertIsDisplayed()
+        compose.onNodeWithText("https://example.org/long/path").assertDoesNotExist()
+        compose.onNodeWithText("Website").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals("https://example.org/long/path", opened) }
+    }
+
+    @Test fun adminBadgeIsInlineAndUsernameStillOpensProfile() {
+        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main)
+        val identities = org.mobilism.material.members.MemberIdentityStore(scope, { error("Cached") })
+        identities.remember(profile.copy(roles = setOf(AccountRole.Administrator)))
+        var opened: ProfileReference? = null
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            CompositionLocalProvider(LocalMemberIdentities provides identities, LocalProfileHandler provides { opened = it }) {
+                Box(Modifier.width(320.dp)) { UsernameLink(profile.username) }
+            }
+        } }
+        compose.onNodeWithTag("admin-badge-Example Member", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Example Member (Administrator)").performClick()
+        compose.runOnIdle { assertEquals(profile.username, opened?.username) }
+    }
 }

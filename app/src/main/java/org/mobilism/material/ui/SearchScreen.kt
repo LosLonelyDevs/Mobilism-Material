@@ -1,6 +1,7 @@
 package org.mobilism.material.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +28,8 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,11 +40,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -59,6 +65,10 @@ fun SearchScreen(
     categories: CategoryState, onLoadCategories: () -> Unit, onFilters: (FeedFilters) -> Unit,
     customCategories: org.mobilism.material.data.CustomCategoryStore? = null,
     onManageCategories: () -> Unit = {},
+    recentQueries: List<String> = emptyList(),
+    onRecentQuery: (String) -> Unit = {},
+    onRemoveRecent: (String) -> Unit = {},
+    onClearRecent: () -> Unit = {},
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val list = rememberSaveable(state.submitted, state.scope, state.filters, saver = LazyListState.Saver) {
@@ -108,6 +118,7 @@ fun SearchScreen(
                     value = state.query, onValueChange = onQuery,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     label = { Text("Search releases") }, singleLine = true, shape = MaterialTheme.shapes.extraLarge,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color.Transparent),
                     leadingIcon = { Icon(Icons.Outlined.Search, null) },
                     trailingIcon = { if (state.query.isNotEmpty()) AppIconButton(Icons.Outlined.Close, "Clear search", { onQuery("") }) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -123,7 +134,7 @@ fun SearchScreen(
                     ExpressiveButton(submit, compact = true, enabled = state.query.isNotBlank()) { Text("Search") }
                     AppIconButton(Icons.Outlined.FilterList, "Release filters", openFilters)
                 }
-                ActiveFilterSummary(state.filters, openFilters, { onFilters(FeedFilters()) }, showSearchSort = true)
+                ActiveFilterSummary(state.filters, openFilters, { onFilters(FeedFilters()) })
                 LazyColumn(state = list, modifier = Modifier.weight(1f).testTag("search-results"),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -139,7 +150,23 @@ fun SearchScreen(
                             ExpressiveButton(onMore, Modifier.fillMaxWidth()) { Text("Keep looking") }
                         }
                     }
-                    if (!state.busy && state.error == null && state.items.isEmpty() && !state.awaitingMore) item {
+                    val showRecent = state.query.isBlank() && state.submitted.isBlank() && state.items.isEmpty() &&
+                        !state.busy && state.error == null && recentQueries.isNotEmpty()
+                    if (showRecent) {
+                        item { Text("Recent searches", style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary) }
+                        items(recentQueries.take(10), key = { "recent:$it" }) { query ->
+                            Row(Modifier.fillMaxWidth().animateItem().clip(MaterialTheme.shapes.large)
+                                .clickable { keyboard?.hide(); onRecentQuery(query) }.padding(start = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Text(query, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                AppIconButton(Icons.Outlined.Close, "Remove recent search: $query", { onRemoveRecent(query) })
+                            }
+                        }
+                        item { TextButton(onClick = onClearRecent) { Text("Clear all") } }
+                    }
+                    if (!showRecent && !state.busy && state.error == null && state.items.isEmpty() && !state.awaitingMore) item {
                         Text(if (state.submitted.isEmpty()) "Find apps, games, and books." else "No releases found for “${state.submitted}”.",
                             Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

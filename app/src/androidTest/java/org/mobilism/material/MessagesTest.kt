@@ -114,13 +114,13 @@ class MessagesTest {
         } }
         compose.waitUntil(10_000) { model.state.value.mailbox.items.isNotEmpty() }
         compose.onNodeWithText("Inbox").assertIsSelected()
-        compose.onNodeWithText("Unread").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Unread messages").assertIsDisplayed()
         compose.onNodeWithText("Premium support added 😊").assertIsDisplayed()
         compose.onNodeWithText("[smile]", substring = true).assertDoesNotExist()
         capture("inbox")
         compose.onNodeWithText("Mark as read").performClick()
         compose.waitUntil(10_000) { model.state.value.mailbox.items.single().read }
-        compose.onNodeWithText("Unread").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Unread messages").assertDoesNotExist()
         compose.onNodeWithText("Sent").performClick()
         compose.waitUntil(10_000) { model.state.value.mailbox.page == 1 }
         compose.onNodeWithText("To Author").assertIsDisplayed()

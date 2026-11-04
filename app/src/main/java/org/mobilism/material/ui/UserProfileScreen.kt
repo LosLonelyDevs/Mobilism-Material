@@ -42,7 +42,7 @@ internal fun UsernameLink(name: String, modifier: Modifier = Modifier, label: St
             onOpen()
             open?.invoke(ProfileReference(username = name))
         }, contentAlignment = Alignment.CenterStart) {
-        Text(label, style = style, color = color, maxLines = maxLines, overflow = TextOverflow.Ellipsis, fontWeight = fontWeight)
+        MemberName(name, label, style = style, color = color, maxLines = maxLines, fontWeight = fontWeight)
     }
 }
 
@@ -50,6 +50,7 @@ internal fun UsernameLink(name: String, modifier: Modifier = Modifier, label: St
 @Composable
 internal fun UserProfileScreen(reference: ProfileReference, load: suspend (ProfileReference) -> UserProfile, onBack: () -> Unit) {
     val context = LocalContext.current
+    val identities = LocalMemberIdentities.current
     var profile by remember(reference) { mutableStateOf<UserProfile?>(null) }
     var error by remember(reference) { mutableStateOf<ScreenError?>(null) }
     var attempt by remember(reference) { mutableIntStateOf(0) }
@@ -57,7 +58,7 @@ internal fun UserProfileScreen(reference: ProfileReference, load: suspend (Profi
     var canVerify by remember(reference) { mutableStateOf(false) }
     LaunchedEffect(reference, attempt) {
         error = null
-        try { profile = load(reference) }
+        try { profile = load(reference).also { identities?.remember(it) } }
         catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) {
             error = failure.forScreen()
@@ -65,7 +66,9 @@ internal fun UserProfileScreen(reference: ProfileReference, load: suspend (Profi
         }
     }
     if (verify) ForumAccessVerification(reference.url, onRead = { html ->
-        runCatching { ForumProfiles.parse(html, reference) }.getOrNull()?.let { profile = it; error = null; true } ?: false
+        runCatching { ForumProfiles.parse(html, reference) }.getOrNull()?.let {
+            identities?.remember(it); profile = it; error = null; true
+        } ?: false
     }, onDismiss = { verify = false })
     Scaffold(topBar = {
         TopAppBar(title = { AppHeading("Profile", HeadingLevel.Page, style = MaterialTheme.typography.titleLarge) },
@@ -102,7 +105,8 @@ internal fun UserProfileContent(profile: UserProfile, onOpenContact: ((String) -
                 Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     MessageAvatar(profile.username, profile.avatar, Modifier.size(80.dp), initialStyle = MaterialTheme.typography.headlineMedium)
-                    Text(profile.username, style = MaterialTheme.typography.headlineSmall, color = colors.primary, textAlign = TextAlign.Center)
+                    MemberName(profile.username, style = MaterialTheme.typography.headlineSmall, color = colors.primary,
+                        textAlign = TextAlign.Center, maxLines = 2, administrator = AccountRole.Administrator in profile.roles)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         profile.roles.forEach { role -> ProfileRoleBadge(role,
                             if (role == AccountRole.Member) profile.rank.ifBlank { "Member" } else role.label) }
@@ -110,7 +114,7 @@ internal fun UserProfileContent(profile: UserProfile, onOpenContact: ((String) -
                     if (profile.posts != null || profile.balance != null) {
                         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                             profile.posts?.let { ProfileStatistic("Posts", it, Modifier.weight(1f)) }
-                            profile.balance?.let { ProfileStatistic("WRZ$", it, Modifier.weight(1f)) }
+                            profile.balance?.let { ProfileStatistic("WRZ$", formatWrzBalance(it), Modifier.weight(1f)) }
                         }
                     }
                 }
@@ -126,7 +130,7 @@ internal fun UserProfileContent(profile: UserProfile, onOpenContact: ((String) -
                             ProfileContactKind.WhatsApp -> Icons.Outlined.ChatBubbleOutline
                             ProfileContactKind.Website -> Icons.AutoMirrored.Outlined.OpenInNew
                         }, null, Modifier.size(18.dp))
-                        Text(if (contact.kind == ProfileContactKind.Website) contact.label else "Join ${contact.label}",
+                        Text(if (contact.kind == ProfileContactKind.Website) "Website" else "Join ${contact.label}",
                             Modifier.padding(start = 8.dp))
                     }
                 }
@@ -183,7 +187,8 @@ private fun ProfileRoleBadge(role: AccountRole, label: String) {
         AccountRole.Administrator -> colors.tertiaryContainer to colors.onTertiaryContainer
         AccountRole.Developer -> colors.primaryContainer to colors.onPrimaryContainer
         AccountRole.Moderator -> colors.secondaryContainer to colors.onSecondaryContainer
-        AccountRole.Member -> colors.surfaceContainerHigh to colors.onSurface
+        AccountRole.Member -> if (label.equals("Member", true)) colors.surfaceContainerHigh to colors.onSurfaceVariant
+            else colors.secondaryContainer to colors.onSecondaryContainer
     }
     Surface(shape = MaterialTheme.shapes.large, color = background, contentColor = foreground) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,

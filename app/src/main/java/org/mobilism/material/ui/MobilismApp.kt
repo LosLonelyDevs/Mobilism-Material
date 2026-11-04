@@ -147,6 +147,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         }
     }
     androidx.compose.runtime.CompositionLocalProvider(
+        LocalMemberIdentities provides app.memberIdentities,
         LocalDownloadHelpHandler provides { nav.navigate("download-help") { launchSingleTop = true } },
         LocalProfileHandler provides { reference ->
             nav.navigate("profile?user=${reference.id ?: 0}&name=${android.net.Uri.encode(reference.username.orEmpty())}") { launchSingleTop = true }
@@ -231,12 +232,16 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                     else org.mobilism.material.data.SearchScope.entries.first { it.section == feed.section }, query,
                     initialFilters = org.mobilism.material.data.ContentSection.entries.associateWith(model::filtersFor),
                     onFiltersChanged = model::saveFilters, hideAdultContent = model.contentPreferences.hideAdult,
-                    customCategories = model.customCategories, developer = model.developer) }
+                    customCategories = model.customCategories, developer = model.developer,
+                    history = app.recentSearches.forAccount((auth as? AuthState.SignedIn)?.username)) }
             })
             val state by search.state.collectAsStateWithLifecycle()
             val searchCategories by search.categories.collectAsStateWithLifecycle()
+            val recentQueries by search.recentQueries.collectAsStateWithLifecycle()
             SearchScreen(state, search::editQuery, search::submit, search::selectScope, search::loadMore,
                 categories = searchCategories, onLoadCategories = search::loadCategories, onFilters = search::applyFilters,
+                recentQueries = recentQueries, onRecentQuery = search::searchRecent,
+                onRemoveRecent = search::removeRecent, onClearRecent = search::clearRecent,
                 customCategories = categoryStore,
                 onManageCategories = { state.scope.section?.let { nav.navigate("categories/${it.name}") } },
                 onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() })

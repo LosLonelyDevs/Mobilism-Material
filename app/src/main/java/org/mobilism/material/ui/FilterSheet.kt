@@ -150,6 +150,9 @@ fun CategoryFilterSheet(
             return@FilterSheet
         }
         item("post-date") { PostDateFilters(dates) { dates = it } }
+        if (showCategories && state.section == org.mobilism.material.data.ContentSection.Books) item("book-formats") {
+            BookFormatFilters(dates.bookFormats) { dates = dates.copy(bookFormats = it) }
+        }
         if (!showCategories) return@FilterSheet
         item("category-header") {
             FilterSectionHeader("Categories · " + state.section.label,
@@ -165,6 +168,7 @@ fun CategoryFilterSheet(
                 label = { Text("Search categories") },
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), singleLine = true,
                 shape = MaterialTheme.shapes.large,
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent),
             )
         }
         if (state.busy) item("category-loading") { LoadingState("Loading categories…", Modifier.fillMaxWidth()) }

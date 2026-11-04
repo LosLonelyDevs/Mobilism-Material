@@ -27,8 +27,8 @@ android {
         applicationId = "cum.ahfu.mobi.material"
         minSdk = 26
         targetSdk = 36
-        versionCode = 19
-        versionName = "0.1.18"
+        versionCode = 20
+        versionName = "0.1.19"
         buildConfigField("String", "DAILY_USAGE_ENDPOINT", dailyUsageEndpoint.buildConfigString())
         val releaseNotes = changelog.substringAfter("## $versionName\n", "")
             .substringBefore("\n## ").trim()
@@ -105,6 +105,7 @@ dependencies {
     implementation(libs.compose.icons)
     implementation(libs.coil.compose)
     implementation(libs.coil.network)
+    implementation(libs.coil.gif)
     implementation(libs.jsoup)
     implementation(libs.okhttp)
     debugImplementation(libs.compose.tooling)

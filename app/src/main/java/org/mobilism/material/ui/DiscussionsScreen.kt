@@ -230,9 +230,12 @@ private fun DiscussionTopics(state: DiscussionsState, onTopic: (DiscussionTopic)
                             if (preview.isNotBlank()) Text(preview, style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.testTag("discussion-preview:${topic.key}"))
-                            UsernameLink(topic.author)
                             Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                DiscussionDate(topic.activityAt)
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    UsernameLink(topic.author, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+                                    DiscussionDate(topic.activityAt)
+                                }
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)

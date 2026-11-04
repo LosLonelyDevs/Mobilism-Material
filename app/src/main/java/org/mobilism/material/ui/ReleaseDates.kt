@@ -44,6 +44,7 @@ fun ActiveFilterSummary(filters: FeedFilters, onEdit: () -> Unit, onClear: () ->
         if (showSearchSort) add(filters.searchSort.label)
         val categoryCount = filters.categoryIds.size + filters.customCategoryIds.size
         if (categoryCount > 0) add(if (categoryCount == 1) "1 category" else "$categoryCount categories")
+        org.mobilism.material.data.BookFormat.entries.filter { it in filters.bookFormats }.forEach { add(it.label) }
         filters.postedFrom?.let { add("From ${it.format(formatter)}") }
         filters.postedThrough?.let { add("Through ${it.format(formatter)}") }
     }
