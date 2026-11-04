@@ -10,6 +10,8 @@ The repository Actions variable `DAILY_USAGE_ENDPOINT` supplies future release b
 
 The dashboard adapts GAYERFyTV's login, activity chart, and responsive layout to Mobilism's Android reports. It works at phone width, with date selection, 14/30/90-day trends, and device/version breakdowns.
 
+Version, device model, manufacturer, and Android distributions show counts and percentages for the selected UTC day. Use the chart slider to inspect another day. App versions combine build numbers; details retain individual builds. Percentages describe reporting installations, not unique people across the date range.
+
 1. Read `ADMIN_USERNAME` and `ADMIN_PASSWORD` from the ignored root `.env`.
 2. Add `ADMIN_TOTP_SECRET` to an authenticator app as a Base32 setup key: time-based, SHA-1, six digits, 30 seconds. Suggested label: Mobilism usage.
 3. Enter the username/password, then the authenticator code. The code screen appears only after valid credentials.

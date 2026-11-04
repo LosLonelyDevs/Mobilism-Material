@@ -18,11 +18,15 @@ for (let days = 0; days < 90; days++) {
   await query(`INSERT INTO daily_usage VALUES ($1, '0.1.17', 18, 35, 'Samsung', 'Galaxy S25 Ultra', $2)`, [day, 5 + days % 7]);
 }
 const session = sessionHandler({ database: query, env });
-const stats = statsHandler(query, () => '', () => new Date(), req => isAdminRequest(req, env));
-const files = { '/': 'index.html', '/index.html': 'index.html', '/dashboard.js': 'dashboard.js', '/dashboard.css': 'dashboard.css', '/site.css': 'site.css' };
+const dashboardPreview = process.argv.includes('--dashboard');
+const stats = statsHandler(query, () => '', () => new Date(), req => dashboardPreview || isAdminRequest(req, env));
+const files = { '/': 'index.html', '/index.html': 'index.html', '/dashboard.js': 'dashboard.js', '/metrics.js': 'metrics.js', '/dashboard.css': 'dashboard.css', '/site.css': 'site.css' };
 http.createServer(async (req, res) => {
   try {
     const path = new URL(req.url, 'http://localhost').pathname;
+    if (dashboardPreview && path === '/api/admin-session' && req.method === 'GET') {
+      res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ isAdmin: true })); return;
+    }
     if (path === '/api/admin-session' || path === '/api/stats') {
       const chunks = []; let length = 0;
       for await (const chunk of req) { length += chunk.length; if (length > 2048) { res.writeHead(413); res.end(); return; } chunks.push(chunk); }
@@ -37,7 +41,9 @@ http.createServer(async (req, res) => {
   } catch { res.writeHead(500); res.end('Preview unavailable'); }
 }).listen(43921, '127.0.0.1', () => {
   console.log('Synthetic dashboard preview: http://127.0.0.1:43921');
-  console.log('Temporary local username:', env.ADMIN_USERNAME);
-  console.log('Temporary local password:', env.ADMIN_PASSWORD);
-  console.log('Temporary local authenticator setup key:', env.ADMIN_TOTP_SECRET);
+  if (!dashboardPreview) {
+    console.log('Temporary local username:', env.ADMIN_USERNAME);
+    console.log('Temporary local password:', env.ADMIN_PASSWORD);
+    console.log('Temporary local authenticator setup key:', env.ADMIN_TOTP_SECRET);
+  }
 });
