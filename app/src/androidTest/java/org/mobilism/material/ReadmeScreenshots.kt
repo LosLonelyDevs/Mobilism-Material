@@ -84,10 +84,11 @@ class ReadmeScreenshots {
 
     @Test fun downloads() {
         releaseScreen()
-        compose.onNode(verticalList).performScrollToNode(hasText("Downloads"))
+        compose.onNodeWithTag("open-downloads").performScrollTo().performClick()
+        compose.onNodeWithTag("release-downloads-sheet").assertIsDisplayed()
         compose.onAllNodesWithText("Rapidgator").onFirst().assertExists()
         compose.onNodeWithText("Uploadrar").assertExists()
-        capture("downloads")
+        capture("downloads", wholeWindow = true)
     }
 
     @Test fun singleImageStillOpensTheFullSizeViewer() {
@@ -119,7 +120,7 @@ class ReadmeScreenshots {
             developer = org.mobilism.material.settings.DeveloperPreferences(enabled = true, debridEnabled = true),
             diagnostics = logs) }
         capture("settings")
-        compose.onNodeWithText("Premium").performScrollTo()
+        compose.onNodeWithText("Premium").performScrollTo().performClick()
         capture("debrid")
         compose.onNode(verticalList).performScrollToNode(hasText("2 Mobilism hosts"))
         compose.onNodeWithText("2 Mobilism hosts").assertIsDisplayed().performClick()
@@ -127,6 +128,7 @@ class ReadmeScreenshots {
         compose.onNodeWithText("send.now").assertIsDisplayed()
         capture("debrid-hosts", wholeWindow = true)
         compose.onNodeWithText("Rapidgator").performClick()
+        compose.onNodeWithContentDescription("Back").performClick()
         compose.onNode(verticalList).performScrollToNode(hasText("Tap to export logs for troubleshooting"))
         compose.onNodeWithText("Export logs").assertDoesNotExist()
         capture("settings-logs")
@@ -207,7 +209,8 @@ class ReadmeScreenshots {
     @Test fun hostOpenSignalsDownloadButCopyDoesNot() {
         var downloads = 0
         releaseScreen(onDownloaded = { if (it) downloads++ })
-        compose.onNode(verticalList).performScrollToNode(hasText("Downloads"))
+        compose.onNodeWithTag("open-downloads").performScrollTo().performClick()
+        compose.onNodeWithTag("release-downloads-sheet").assertIsDisplayed()
         compose.onAllNodesWithContentDescription("Copy Rapidgator link").onFirst().performClick()
         compose.runOnIdle { assertEquals(0, downloads) }
         // The copy snackbar can cover a host button on shorter viewports.

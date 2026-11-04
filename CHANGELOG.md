@@ -6,6 +6,7 @@
 - Add updates, changelogs, usage pings, Announcements, Downloads, and in-app help.
 - Improve messaging, Settings, palettes, refresh gestures, thumbnails, and dots.
 - Default to Tokyo Night; remember Description state; verify thumbs up.
+- Fix screenshots.
 
 ## 0.1.18
 
