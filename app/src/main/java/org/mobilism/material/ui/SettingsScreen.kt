@@ -87,7 +87,8 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
     onDeveloperOptions: () -> Unit = {}, diagnostics: org.mobilism.material.settings.DiagnosticLogStore? = null,
     preferredHosts: Set<String> = emptySet(),
     landingPage: org.mobilism.material.settings.LandingPage = org.mobilism.material.settings.LandingPage(),
-    onLandingPage: (org.mobilism.material.settings.LandingPage) -> Unit = {}) {
+    onLandingPage: (org.mobilism.material.settings.LandingPage) -> Unit = {},
+    dailyUsageEnabled: Boolean = true, onDailyUsage: (Boolean) -> Unit = {}) {
     val theme = LocalAppTheme.current
     Scaffold(topBar = {
         TopAppBar(title = { AppHeading("Settings", HeadingLevel.Page) }, navigationIcon = {
@@ -132,6 +133,21 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             }
             item {
                 ContentVisibilitySetting(hideAdult, onHideAdult)
+            }
+            item(key = "daily-usage") {
+                AppSurface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                    Row(Modifier.fillMaxWidth().toggleable(dailyUsageEnabled,
+                        role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onDailyUsage).padding(20.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            AppHeading("Anonymous usage", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
+                            SettingsSubtitle("Help count daily users and supported devices.")
+                            Text("Sends app version, Android version, manufacturer, and model once per active day. " +
+                                "No account data or permanent device ID.", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        androidx.compose.material3.Switch(dailyUsageEnabled, onCheckedChange = null)
+                    }
+                }
             }
             if (developer.debridEnabled) {
                 item {

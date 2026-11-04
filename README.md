@@ -35,6 +35,7 @@ Screenshots use sample data. CI refreshes them on version bumps and screenshot t
 - [Comments](docs/release-comments.md) with nested replies, threads sorted by latest activity, saved drafts, and collapse controls.
 - [Discussions](docs/discussions.md) with forum browsing, topic search, and replies.
 - Inbox, Sent, conversation history, mark as read, and message replies.
+- Optional [anonymous daily usage reporting](services/daily-usage/README.md), with a Settings opt-out. Disabled until an endpoint is configured.
 - Clickable URLs and emoji support in release text, comments, and messages.
 - Following with background update checks and optional notifications. My Applications tracks installed and downloaded apps.
 - Mobilism Premium, MegaDebrid, and Real-Debrid links with encrypted account storage.

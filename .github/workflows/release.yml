@@ -102,6 +102,7 @@ jobs:
         run: printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
       - name: Test, lint, and build signed APK
         env:
+          DAILY_USAGE_ENDPOINT: ${{ vars.DAILY_USAGE_ENDPOINT }}
           KEYSTORE_FILE: ${{ runner.temp }}/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}

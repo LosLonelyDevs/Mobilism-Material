@@ -1,0 +1,28 @@
+name: Daily usage endpoint checks
+
+on:
+  push:
+    branches: [main]
+    paths: ['services/daily-usage/**', '.github/workflows/daily-usage.yml']
+  pull_request:
+    paths: ['services/daily-usage/**', '.github/workflows/daily-usage.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/daily-usage
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: services/daily-usage/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm test

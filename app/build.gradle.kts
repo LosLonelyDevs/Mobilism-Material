@@ -1,9 +1,17 @@
+import java.net.URI
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
 
 val signingPath = providers.environmentVariable("KEYSTORE_FILE").orNull
+val dailyUsageEndpoint = providers.environmentVariable("DAILY_USAGE_ENDPOINT").orElse("").get().trim()
+if (dailyUsageEndpoint.isNotEmpty()) {
+    val endpoint = URI(dailyUsageEndpoint)
+    require(endpoint.scheme == "https" && !endpoint.host.isNullOrBlank() && endpoint.userInfo == null &&
+        endpoint.query == null && endpoint.fragment == null) { "DAILY_USAGE_ENDPOINT must be an HTTPS URL without credentials or query parameters" }
+}
 val readme = providers.fileContents(rootProject.layout.projectDirectory.file("README.md")).asText.get()
 val changelog = providers.fileContents(rootProject.layout.projectDirectory.file("CHANGELOG.md")).asText.get().replace("\r\n", "\n")
 
@@ -21,6 +29,7 @@ android {
         targetSdk = 36
         versionCode = 19
         versionName = "0.1.18"
+        buildConfigField("String", "DAILY_USAGE_ENDPOINT", dailyUsageEndpoint.buildConfigString())
         val releaseNotes = changelog.substringAfter("## $versionName\n", "")
             .substringBefore("\n## ").trim()
         check(releaseNotes.isNotBlank()) { "Add CHANGELOG.md notes for $versionName" }
@@ -97,6 +106,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network)
     implementation(libs.jsoup)
+    implementation(libs.okhttp)
     debugImplementation(libs.compose.tooling)
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     androidTestImplementation(platform(libs.compose.bom))

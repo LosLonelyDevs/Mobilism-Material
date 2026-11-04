@@ -15,6 +15,16 @@ import org.mobilism.material.designsystem.MobilismTheme
 import org.mobilism.material.designsystem.resolveAppTheme
 import org.mobilism.material.ui.MobilismApp
 import org.mobilism.material.following.FollowingNotifications
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneOffset
+import org.mobilism.material.usage.DailyUsageSchedule
 
 class MainActivity : ComponentActivity() {
     private var notificationRelease by mutableStateOf<Long?>(null)
@@ -26,6 +36,18 @@ class MainActivity : ComponentActivity() {
         fromNotification = savedInstanceState?.getBoolean("fromNotification") ?: (intent.action != Intent.ACTION_VIEW)
         enableEdgeToEdge()
         val app = application as MobilismApplication
+        if (DailyUsageSchedule.configured) lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                app.dailyUsage.enabled.collectLatest { enabled ->
+                    if (enabled) while (true) {
+                        DailyUsageSchedule.recordForegroundUse(app)
+                        val now = Instant.now()
+                        val tomorrow = now.atOffset(ZoneOffset.UTC).toLocalDate().plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC)
+                        delay(Duration.between(now, tomorrow).toMillis().coerceAtLeast(1_000))
+                    }
+                }
+            }
+        }
         app.checkAppUpdatesOnColdStart()
         setContent {
             org.mobilism.material.ui.AppUpdatePermissionEffect(app.appUpdates)

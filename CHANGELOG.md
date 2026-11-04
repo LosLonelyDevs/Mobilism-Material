@@ -2,10 +2,11 @@
 
 ## Unreleased
 
-- Show collapsible message bubbles with full timestamps.
-- Show new-release dots on Home and Latest until viewed.
-- Add forum verification for thumbs up and reuse verified post IDs.
-- Clear stale message read errors and verify missing confirmations.
+- Add collapsible message bubbles with full timestamps.
+- Show new-release dots until viewed.
+- Verify thumbs up through forum posts and reuse IDs.
+- Fix stuck message read errors.
+- Add anonymous daily usage reporting with an opt-out.
 
 ## 0.1.18
 

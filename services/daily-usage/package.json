@@ -1,0 +1,9 @@
+{
+  "name": "mobilism-daily-usage",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "22.x" },
+  "scripts": { "test": "node --test" },
+  "dependencies": { "@neondatabase/serverless": "1.0.2" },
+  "devDependencies": { "@electric-sql/pglite": "0.3.14" }
+}

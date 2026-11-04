@@ -35,6 +35,8 @@ local.properties
 **/local.properties
 .cxx/
 .externalNativeBuild/
+node_modules/
+.vercel/
 captures/
 .codex-remote-attachments/
 **/screenshots/

@@ -265,6 +265,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             }
         }
         composable("settings") {
+            val dailyUsageEnabled by app.dailyUsage.enabled.collectAsStateWithLifecycle()
             val hideAdult by model.contentPreferences.hideAdult.collectAsStateWithLifecycle()
             val landingPage by model.landingPage.state.collectAsStateWithLifecycle()
             SettingsScreen(debrid, model.debrid, onAppearance = { nav.navigate("appearance") },
@@ -273,7 +274,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onAbout = { nav.navigate("about") }, developer = developer,
                 onDeveloperOptions = { nav.navigate("developer-options") }, diagnostics = app.diagnostics,
                 preferredHosts = downloads.preferredHosts, landingPage = landingPage,
-                onLandingPage = model.landingPage::select)
+                onLandingPage = model.landingPage::select, dailyUsageEnabled = dailyUsageEnabled,
+                onDailyUsage = { app.dailyUsage.setEnabled(app, it) })
         }
         composable("developer-options") {
             LaunchedEffect(developer.enabled) {
