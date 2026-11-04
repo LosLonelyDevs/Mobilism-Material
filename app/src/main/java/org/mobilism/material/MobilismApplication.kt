@@ -21,6 +21,7 @@ import org.mobilism.material.settings.DeveloperPreferencesStore
 import org.mobilism.material.settings.DiagnosticLogStore
 
 class MobilismApplication : Application() {
+    val messageReads by lazy { org.mobilism.material.settings.MessageReadStore(this) }
     val dailyUsage by lazy { org.mobilism.material.usage.DailyUsageStore(this) }
     val contentPreferences by lazy { org.mobilism.material.data.ContentPreferencesStore(this) }
     val developer by lazy { DeveloperPreferencesStore(this) }

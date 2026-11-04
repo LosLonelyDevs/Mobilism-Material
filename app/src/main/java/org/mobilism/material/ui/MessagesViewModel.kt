@@ -20,6 +20,7 @@ import org.mobilism.material.data.MessageFolder
 import org.mobilism.material.data.MessagesRepository
 import org.mobilism.material.data.PrivateMessage
 import org.mobilism.material.data.PrivateMessages
+import org.mobilism.material.settings.MessageReadHistory
 
 data class MailboxState(
     val items: List<PrivateMessage> = emptyList(), val page: Int = 0, val busy: Boolean = false,
@@ -42,7 +43,8 @@ data class MessagesState(
 }
 
 class MessagesViewModel(private val repository: MessagesRepository, private val username: String,
-    private val savedState: SavedStateHandle, private val now: () -> Long = System::currentTimeMillis) : ViewModel() {
+    private val savedState: SavedStateHandle, private val now: () -> Long = System::currentTimeMillis,
+    private val readHistory: MessageReadHistory = MessageReadHistory()) : ViewModel() {
     private val mutableState = MutableStateFlow(MessagesState(
         folder = MessageFolder.entries.firstOrNull { it.name == savedState.get<String>("message-folder") } ?: MessageFolder.Inbox,
         conversationId = savedState["conversation-id"], messageId = savedState["message-id"],
@@ -83,9 +85,10 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
                 val page = if (refresh) 1 else snapshot.page + 1
                 val result = repository.messages(folder, page)
                 ensureActive()
+                if (folder == MessageFolder.Inbox) readHistory.remember(result.items.filter { it.read }.map { it.messageId })
                 val previous = if (refresh) emptyList() else snapshot.items
-                val items = (previous + result.items).distinctBy { it.messageId }.map {
-                    if (it.messageId in readIds) it.copy(read = true) else it
+                val items = (previous + result.items).associateBy { it.messageId }.values.map {
+                    if (folder == MessageFolder.Inbox && it.messageId in readHistory) it.copy(read = true) else it
                 }
                 updateMailbox(folder) { MailboxState(items, page, canLoadMore = result.canLoadMore &&
                     (refresh || items.size > previous.size)) }
@@ -136,9 +139,15 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
                 val messages = repository.conversation(id)
                 ensureActive()
                 if (messages.isEmpty()) throw ApiFailure(FailureKind.InvalidResponse, "This conversation is no longer available.")
+                // Viewing a message clears its local badge even if the server read receipt fails.
+                val incomingIds = messages.filter { it.to.equals(username, ignoreCase = true) }.map { it.id }
+                readHistory.remember(incomingIds)
+                updateMailbox(MessageFolder.Inbox) { box -> box.copy(items = box.items.map {
+                    if (it.messageId in readHistory) it.copy(read = true) else it
+                }) }
                 messages.filter { it.read && it.to.equals(username, ignoreCase = true) }.forEach { confirmRead(it.id) }
                 mutableState.update { it.copy(loading = false, conversation = messages.map { message ->
-                    if (message.id in readIds) message.copy(read = true) else message
+                    if (message.to.equals(username, ignoreCase = true) && message.id in readHistory) message.copy(read = true) else message
                 }) }
                 messages.filter { !it.read && it.to.equals(username, ignoreCase = true) }.forEach { markRead(it.id) }
                 if (state.value.sendUnconfirmed) startDeliveryCheck(messages)
@@ -182,10 +191,11 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
 
     private fun confirmRead(id: Long) {
         readIds += id
+        readHistory.remember(listOf(id))
         readErrors.remove(id)
         mutableState.update { state -> state.copy(
-            mailboxes = state.mailboxes.mapValues { (_, box) -> box.copy(items = box.items.map {
-                if (it.messageId == id) it.copy(read = true) else it
+            mailboxes = state.mailboxes.mapValues { (folder, box) -> box.copy(items = box.items.map {
+                if (folder == MessageFolder.Inbox && it.messageId == id) it.copy(read = true) else it
             }) },
             conversation = state.conversation.map { if (it.id == id) it.copy(read = true) else it },
             readError = readErrors.values.firstOrNull(),
@@ -284,7 +294,7 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
                             if (messages != null) {
                                 readSucceeded = true
                                 if (messages.isNotEmpty()) mutableState.update { it.copy(conversation = messages.map { message ->
-                                    if (message.id in readIds) message.copy(read = true) else message
+                                    if (message.to.equals(username, ignoreCase = true) && message.id in readHistory) message.copy(read = true) else message
                                 }) }
                                 if (messages.any(attempt::matches)) { sent.cancel(); return@coroutineScope true }
                             }

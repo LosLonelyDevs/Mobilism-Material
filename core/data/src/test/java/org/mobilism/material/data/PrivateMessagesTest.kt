@@ -5,6 +5,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PrivateMessagesTest {
+    @Test fun acceptsNumericAndBooleanReadFlags() {
+        for (flag in listOf("1", "\"1\"", "true", "\"true\"")) {
+            assertTrue(PrivateMessages.parse(JSONObject("""{"response":[{"id":42,"readed":$flag}]}""")).single().read)
+        }
+        for (flag in listOf("0", "\"0\"", "false", "\"false\"", "null")) {
+            assertFalse(PrivateMessages.parse(JSONObject("""{"response":[{"id":42,"readed":$flag}]}""")).single().read)
+        }
+    }
+
     @Test fun preservesConversationAndMessageIdsAndDecodesReadState() {
         val messages = PrivateMessages.parse(JSONObject("""{"response":[
             {"id":10,"msg_id":42,"subject":"Question &amp; answer","from_user":"Author","to_user":"Reader",

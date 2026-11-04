@@ -250,7 +250,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         composable("messages") { entry ->
             if (auth is AuthState.SignedIn) {
                 val messages: MessagesViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
-                    initializer { MessagesViewModel(app.repository, auth.username, createSavedStateHandle()) }
+                    initializer { MessagesViewModel(app.repository, auth.username, createSavedStateHandle(),
+                        readHistory = app.messageReads.forAccount(auth.username)) }
                 })
                 val state by messages.state.collectAsStateWithLifecycle()
                 MessagesScreen(state, auth.username, onFolder = messages::selectFolder,

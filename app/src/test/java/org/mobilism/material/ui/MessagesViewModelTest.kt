@@ -12,6 +12,7 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.mobilism.material.data.*
+import org.mobilism.material.settings.MessageReadHistory
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MessagesViewModelTest {
@@ -56,14 +57,16 @@ class MessagesViewModelTest {
         assertNull(model.state.value.mailbox.error)
     }
 
-    @Test fun openMarksIncomingMessagesOnlyAfterServerConfirms() = runTest(dispatcher) {
+    @Test fun openingMarksIncomingMessagesLocallyAndSendsServerReceipt() = runTest(dispatcher) {
         val repo = Repository()
         val model = MessagesViewModel(repo, "reader", SavedStateHandle())
         advanceUntilIdle()
         model.openMessage(incoming)
         runCurrent()
         assertEquals(listOf(42L), repo.reads)
-        assertFalse(model.state.value.mailbox.items.single().read)
+        assertTrue(model.state.value.mailbox.items.single().read)
+        assertTrue(model.state.value.conversation.first().read)
+        assertFalse(model.state.value.conversation.last().read)
         assertTrue(42L in model.state.value.marking)
         repo.readResult.complete(Unit)
         advanceUntilIdle()
@@ -132,10 +135,82 @@ class MessagesViewModelTest {
         }
         val model = MessagesViewModel(repo, "Reader", SavedStateHandle())
         advanceUntilIdle()
-        model.openMessage(incoming)
+        model.markRead(42)
         advanceUntilIdle()
         assertNotNull(model.state.value.readError)
         assertFalse(model.state.value.mailbox.items.single().read)
+    }
+
+    @Test fun viewedMessageStaysReadAfterReceiptFailureRefreshAndAppRecreation() = runTest(dispatcher) {
+        var storedIds = emptySet<Long>()
+        fun history() = MessageReadHistory(load = { storedIds }, save = { storedIds = it })
+        val repo = Repository().apply {
+            readResult.completeExceptionally(ApiFailure(FailureKind.Connection, "Offline"))
+        }
+        val model = MessagesViewModel(repo, "Reader", SavedStateHandle(), readHistory = history())
+        advanceUntilIdle()
+        model.openMessage(incoming)
+        advanceUntilIdle()
+        assertEquals(setOf(42L), storedIds)
+        assertEquals(listOf(42L), repo.reads)
+        assertTrue(model.state.value.mailbox.items.single().read)
+        model.closeConversation()
+        model.loadMailbox(refresh = true)
+        advanceUntilIdle()
+        assertTrue(model.state.value.mailbox.items.single().read)
+        val restored = MessagesViewModel(repo, "Reader", SavedStateHandle(), readHistory = history())
+        advanceUntilIdle()
+        assertTrue(restored.state.value.mailbox.items.single().read)
+        repo.readResult = CompletableDeferred(Unit)
+        restored.openMessage(incoming)
+        advanceUntilIdle()
+        assertEquals(listOf(42L, 42L), repo.reads)
+        assertNull(restored.state.value.readError)
+    }
+
+    @Test fun failedConversationDoesNotClearUnreadBadge() = runTest(dispatcher) {
+        val history = MessageReadHistory()
+        val repo = Repository().apply { conversationError = ApiFailure(FailureKind.Connection, "Offline") }
+        val model = MessagesViewModel(repo, "Reader", SavedStateHandle(), readHistory = history)
+        advanceUntilIdle()
+        model.openMessage(incoming)
+        advanceUntilIdle()
+        assertFalse(model.state.value.mailbox.items.single().read)
+        assertFalse(42L in history)
+        assertTrue(repo.reads.isEmpty())
+    }
+
+    @Test fun newReplyInReadConversationStillShowsUnread() = runTest(dispatcher) {
+        val history = MessageReadHistory().apply { remember(listOf(42L)) }
+        val repo = Repository().apply { inboxItems = listOf(incoming.copy(messageId = 44, publishedAt = 2)) }
+        val model = MessagesViewModel(repo, "Reader", SavedStateHandle(), readHistory = history)
+        advanceUntilIdle()
+        assertFalse(model.state.value.mailbox.items.single().read)
+        assertEquals(44L, model.state.value.mailbox.items.single().messageId)
+    }
+
+    @Test fun incomingReadHistoryDoesNotChangeRecipientsReadStateInSentFolder() = runTest(dispatcher) {
+        val history = MessageReadHistory().apply { remember(listOf(42L)) }
+        val repo = Repository().apply { sentItems = listOf(outgoing.copy(messageId = 42)) }
+        val model = MessagesViewModel(repo, "Reader", SavedStateHandle(), readHistory = history)
+        advanceUntilIdle()
+        assertTrue(model.state.value.mailbox.items.single().read)
+        model.selectFolder(MessageFolder.Sent)
+        advanceUntilIdle()
+        assertFalse(model.state.value.mailbox.items.single().read)
+    }
+
+    @Test fun overlappingMailboxPageUsesUpdatedReadState() = runTest(dispatcher) {
+        val repo = Repository()
+        val model = MessagesViewModel(repo, "Reader", SavedStateHandle())
+        advanceUntilIdle()
+        assertFalse(model.state.value.mailbox.items.single().read)
+        repo.inboxItems = listOf(incoming.copy(read = true, preview = "Updated preview"))
+        model.loadMailbox()
+        advanceUntilIdle()
+        assertTrue(model.state.value.mailbox.items.single().read)
+        assertEquals("Updated preview", model.state.value.mailbox.items.single().preview)
+        assertFalse(model.state.value.mailbox.canLoadMore)
     }
 
     @Test fun lateReadFailureCannotLeakIntoAnotherConversation() = runTest(dispatcher) {
@@ -445,7 +520,7 @@ class MessagesViewModelTest {
 
     private fun TestScope.ready(repo: Repository, saved: SavedStateHandle = SavedStateHandle()): MessagesViewModel {
         repo.readResult.complete(Unit)
-        val model = MessagesViewModel(repo, "Reader", saved) { 1_700_000_100_000 }
+        val model = MessagesViewModel(repo, "Reader", saved, now = { 1_700_000_100_000 })
         advanceUntilIdle()
         model.openMessage(incoming)
         advanceUntilIdle()
@@ -461,6 +536,7 @@ class MessagesViewModelTest {
         var readResult = CompletableDeferred<Unit>()
         var sendResult = CompletableDeferred<Unit>()
         var conversationItems = listOf(incoming.copy(id = 42), outgoing.copy(id = 43))
+        var inboxItems = listOf(incoming)
         var sentItems = listOf(outgoing)
         val otherConversations = mutableMapOf<Long, List<PrivateMessage>>()
         val conversationCalls = mutableListOf<Long>()
@@ -470,7 +546,7 @@ class MessagesViewModelTest {
         override suspend fun messages(folder: MessageFolder, page: Int): MessagePage {
             pages += folder to page
             mailboxError?.let { throw it }
-            return MessagePage(if (folder == MessageFolder.Inbox) listOf(incoming) else sentItems, true)
+            return MessagePage(if (folder == MessageFolder.Inbox) inboxItems else sentItems, true)
         }
         override suspend fun conversation(id: Long): List<PrivateMessage> {
             conversationCalls += id

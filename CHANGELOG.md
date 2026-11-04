@@ -5,7 +5,7 @@
 - Add collapsible message bubbles with full timestamps.
 - Show new-release dots until viewed.
 - Verify thumbs up through forum posts and reuse IDs.
-- Fix stuck message read errors.
+- Fix message errors and unread badges; distinguish sender colors.
 - Add anonymous daily usage reporting with an opt-out.
 
 ## 0.1.18

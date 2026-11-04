@@ -84,7 +84,7 @@ internal fun MessageBubble(message: PrivateMessage, username: String, onRead: ()
                     }
                     Column(Modifier.weight(1f)) {
                         Text(if (outgoing) "You" else message.from, style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            color = accent, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (!expanded) MessageTimestamp(message.publishedAt, Modifier.testTag("message-time-${message.id}"))
                     }
                     if (!expanded) CommentCollapseButton(false, toggle, label = "Expand message")

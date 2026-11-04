@@ -38,7 +38,7 @@ object PrivateMessages {
                 id = id, messageId = json.optLong("msg_id").takeIf { it > 0 } ?: id,
                 subject = Jsoup.parse(text("subject")).text(), from = text("from_user"), to = text("to_user"),
                 contentHtml = CommentMarkup.html(text("content")), preview = Jsoup.parse(CommentMarkup.html(text("preview"))).text(),
-                publishedAt = json.optLong("times"), read = json.optInt("readed") == 1,
+                publishedAt = json.optLong("times"), read = json.optInt("readed") == 1 || json.optBoolean("readed"),
             )
         }.distinctBy { it.messageId }
     }

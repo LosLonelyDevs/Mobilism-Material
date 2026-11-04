@@ -120,7 +120,8 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Text(if (state.folder == MessageFolder.Inbox) message.from else "To ${message.to}",
-                                            Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                                            Modifier.weight(1f), style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                                         if (state.folder == MessageFolder.Inbox && !message.read) Text("Unread",
                                             color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                                     }
