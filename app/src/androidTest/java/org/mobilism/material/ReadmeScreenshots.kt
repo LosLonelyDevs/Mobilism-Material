@@ -129,14 +129,14 @@ class ReadmeScreenshots {
         capture("debrid-hosts", wholeWindow = true)
         compose.onNodeWithText("Rapidgator").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
-        compose.onNode(verticalList).performScrollToNode(hasText("Tap to export logs for troubleshooting"))
+        compose.onNode(verticalList).performScrollToNode(hasText("Diagnostic logs"))
         compose.onNodeWithText("Export logs").assertDoesNotExist()
         capture("settings-logs")
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val monitor = instrumentation.addMonitor(IntentFilter(Intent.ACTION_CHOOSER),
             Instrumentation.ActivityResult(Activity.RESULT_OK, null), true)
         try {
-            compose.onNodeWithText("Tap to export logs for troubleshooting").assertHasClickAction().performClick()
+            compose.onNodeWithText("Diagnostic logs").assertHasClickAction().performClick()
             compose.waitUntil(10_000) { monitor.hits == 1 }
         } finally {
             instrumentation.removeMonitor(monitor)

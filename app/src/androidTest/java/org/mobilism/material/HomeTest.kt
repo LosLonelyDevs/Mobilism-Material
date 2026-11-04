@@ -109,7 +109,8 @@ class HomeTest {
             compose.onNodeWithContentDescription("More Reviews").performClick()
             compose.runOnIdle { assertEquals(current.name, forum?.area?.name) }
             home.performScrollToNode(hasText("A community review"))
-            compose.onNodeWithText("A community review").performClick()
+            // The merged card also contains a separate username action. Tap the title itself.
+            compose.onNodeWithText("A community review", useUnmergedTree = true).performClick()
             compose.runOnIdle { assertEquals(80L, topic?.id) }
             home.performScrollToNode(hasContentDescription("More Recent discussions"))
             compose.onNodeWithContentDescription("More Recent discussions").performClick()
