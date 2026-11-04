@@ -42,15 +42,25 @@ fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fro
         initializer { MobilismViewModel(app, app.repository, app.appearance, app.debrid, app.library, app.contentPreferences, app.developer, app.customCategories) }
     })
     val auth by model.auth.collectAsStateWithLifecycle()
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        // Auth boundaries discard the previous account's navigation and screen state.
-        key(auth) {
-            when (auth) {
-                AuthState.Restoring -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    LoadingState("Opening Mobilism…")
+    val updater: org.mobilism.material.updates.AppUpdateViewModel = viewModel(factory = viewModelFactory {
+        initializer { org.mobilism.material.updates.AppUpdateViewModel(app) }
+    })
+    val changelogStore = remember(app) { org.mobilism.material.updates.AppChangelogStore(app) }
+    var changelog by remember(changelogStore) { mutableStateOf(changelogStore.pending()) }
+    AppUpdateHost(app.appUpdates, updater, changelog, onChangelogDismiss = {
+        changelog?.let { changelogStore.markSeen(it.version) }
+        changelog = null
+    }) { onUpdates ->
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            // Auth boundaries discard the previous account's navigation and screen state.
+            key(auth) {
+                when (auth) {
+                    AuthState.Restoring -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        LoadingState("Opening Mobilism…")
+                    }
+                    AuthState.SignedOut -> AccountNavigation(model, app.diagnostics)
+                    else -> MainNavigation(model, auth, notificationRelease, fromNotification, onNotificationHandled, onUpdates)
                 }
-                AuthState.SignedOut -> AccountNavigation(model, app.diagnostics)
-                else -> MainNavigation(model, auth, notificationRelease, fromNotification, onNotificationHandled)
             }
         }
     }
@@ -88,7 +98,7 @@ private fun AccountNavigation(model: MobilismViewModel, diagnostics: org.mobilis
 
 @Composable
 private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificationRelease: Long?, fromNotification: Boolean,
-    onNotificationHandled: () -> Unit) {
+    onNotificationHandled: () -> Unit, onUpdates: () -> Unit) {
     val nav = rememberNavController()
     val motion = screenMotion()
     val feed by model.feed.collectAsStateWithLifecycle()
@@ -159,6 +169,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onFollowing = { nav.navigate("following") { launchSingleTop = true } },
                 onMessages = { nav.navigate("messages") { launchSingleTop = true } },
                 onDiscussions = { nav.navigate("discussions") { launchSingleTop = true } },
+                onAnnouncements = { nav.navigate("announcements") { launchSingleTop = true } },
                 onSignOut = model::signOut,
                 categories = categories, onLoadCategories = model::loadCategories,
                 customCategories = categoryStore,
@@ -247,6 +258,13 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             })
             DiscussionsScreen(discussions, auth, onBack = { nav.popBackStack() }, onSignIn = model::signInForDiscussion)
         }
+        composable("announcements") { entry ->
+            val announcements: DiscussionsViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
+                initializer { DiscussionsViewModel(app.repository, (auth as? AuthState.SignedIn)?.username,
+                    createSavedStateHandle(), announcementsOnly = true) }
+            })
+            DiscussionsScreen(announcements, auth, onBack = { nav.popBackStack() }, onSignIn = model::signInForDiscussion)
+        }
         composable("messages") { entry ->
             if (auth is AuthState.SignedIn) {
                 val messages: MessagesViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
@@ -276,7 +294,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onDeveloperOptions = { nav.navigate("developer-options") }, diagnostics = app.diagnostics,
                 preferredHosts = downloads.preferredHosts, landingPage = landingPage,
                 onLandingPage = model.landingPage::select, dailyUsageEnabled = dailyUsageEnabled,
-                onDailyUsage = { app.dailyUsage.setEnabled(app, it) })
+                onDailyUsage = { app.dailyUsage.setEnabled(app, it) }, onUpdates = onUpdates)
         }
         composable("developer-options") {
             LaunchedEffect(developer.enabled) {

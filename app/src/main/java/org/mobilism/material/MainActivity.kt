@@ -50,7 +50,6 @@ class MainActivity : ComponentActivity() {
         }
         app.checkAppUpdatesOnColdStart()
         setContent {
-            org.mobilism.material.ui.AppUpdatePermissionEffect(app.appUpdates)
             val appearance by app.appearance.state.collectAsStateWithLifecycle()
             val theme = resolveAppTheme(appearance.theme)
             SideEffect {

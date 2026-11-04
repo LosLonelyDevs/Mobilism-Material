@@ -21,6 +21,7 @@ class AppReleaseUpdatesTest {
         assertEquals("0.1.18", release.version)
         assertEquals("${AppReleaseUpdates.REPOSITORY_URL}/releases/tag/v0.1.18", release.pageUrl)
         assertEquals("${AppReleaseUpdates.REPOSITORY_URL}/releases/download/v0.1.18/MobilismMaterial_v0.1.18-release.apk", release.apkUrl)
+        assertEquals(123L, release.apk?.size)
     }
 
     @Test fun missingOrForeignApkFallsBackToTheReleasePage() {
@@ -38,9 +39,23 @@ class AppReleaseUpdatesTest {
         }
     }
 
+    @Test fun refusesUnboundedDownloadsAndMalformedChecksums() {
+        for (size in listOf(0L, -1L, MAX_UPDATE_APK_BYTES + 1)) {
+            val json = payload()
+            json.getJSONArray("assets").getJSONObject(0).put("size", size)
+            assertNull(AppReleaseUpdates.parse(json).apk)
+        }
+        val json = payload()
+        val asset = json.getJSONArray("assets").getJSONObject(0)
+        asset.put("digest", "sha256:" + "A".repeat(64))
+        assertEquals("a".repeat(64), AppReleaseUpdates.parse(json).apk?.sha256)
+        asset.put("digest", "sha256:broken")
+        assertTrue(runCatching { AppReleaseUpdates.parse(json) }.exceptionOrNull() is IOException)
+    }
+
     private fun payload() = JSONObject("""{
         "tag_name":"v0.1.18","draft":false,"prerelease":false,
-        "assets":[{"name":"MobilismMaterial_v0.1.18-release.apk",
+        "assets":[{"name":"MobilismMaterial_v0.1.18-release.apk","size":123,
           "browser_download_url":"https://github.com/LosLonelyDevs/Mobilism-Material/releases/download/v0.1.18/MobilismMaterial_v0.1.18-release.apk"},
           {"name":"MobilismMaterial_v0.1.18-debug.apk","browser_download_url":"https://example.org/debug.apk"}]
     }""")

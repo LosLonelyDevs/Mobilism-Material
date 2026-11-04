@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Menu
@@ -109,6 +110,7 @@ fun FeedScreen(
     onFilters: (FeedFilters) -> Unit,
     onMessages: () -> Unit = {},
     onDiscussions: () -> Unit = {},
+    onAnnouncements: () -> Unit = {},
     tab: BrowseTab = if (state.order == FeedOrder.Latest) BrowseTab.Latest else BrowseTab.Top,
     onTab: (BrowseTab) -> Unit = { onOrder(if (it == BrowseTab.Top) FeedOrder.Top else FeedOrder.Latest) },
     onHomeRefresh: () -> Unit = {},
@@ -167,6 +169,12 @@ fun FeedScreen(
                         )
                     }
                     HorizontalDivider(Modifier.padding(16.dp))
+                    NavigationDrawerItem(
+                        label = { Text("Announcements") }, selected = false,
+                        icon = { Icon(Icons.Outlined.Campaign, null, tint = theme.featured) },
+                        onClick = { scope.launch { drawer.close() }; onAnnouncements() },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
                     val discussionsInteraction = remember { MutableInteractionSource() }
                     NavigationDrawerItem(
                         label = { Text("Discussions") }, selected = false,

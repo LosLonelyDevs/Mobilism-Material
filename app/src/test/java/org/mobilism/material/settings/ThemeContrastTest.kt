@@ -17,7 +17,7 @@ class ThemeContrastTest {
             org.junit.Assert.assertEquals(Color.Black, surface)
         }
         org.junit.Assert.assertEquals(0f, theme.colors.surfaceTint.alpha)
-        org.junit.Assert.assertEquals("catppuccin-frappe", ThemeCatalog.default.id)
+        org.junit.Assert.assertEquals("tokyo-night", ThemeCatalog.default.id)
     }
 
     @Test fun builtInThemesKeepHeadingsAndDownloadButtonsReadable() {

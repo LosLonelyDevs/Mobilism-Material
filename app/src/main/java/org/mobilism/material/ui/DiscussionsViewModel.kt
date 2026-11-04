@@ -27,6 +27,7 @@ data class DiscussionsState(
     val commentRefreshFailed: Boolean = false, val composer: CommentComposerState = CommentComposerState(),
     val notice: String? = null, val forward: Boolean = true,
     val categoryActivity: Map<String, Long> = emptyMap(),
+    val announcementsOnly: Boolean = false,
 ) {
     val destination: String get() = topic?.let { "topic:${it.key}" } ?: category?.let { "category:${it.key}" } ?: "categories"
 }
@@ -34,9 +35,12 @@ data class DiscussionsState(
 class DiscussionsViewModel(
     private val repository: DiscussionsRepository, private val username: String?, private val saved: SavedStateHandle,
     initialTopic: DiscussionTopic? = null, initialCategory: DiscussionCategory? = null,
+    private val announcementsOnly: Boolean = false,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(DiscussionsState(
-        area = initialCategory?.area ?: DiscussionArea.entries.firstOrNull { it.name == saved.get<String>("discussion-area") } ?: DiscussionArea.Apps,
+        area = if (announcementsOnly) DiscussionArea.Community else initialCategory?.area
+            ?: DiscussionArea.entries.firstOrNull { it.name == saved.get<String>("discussion-area") } ?: DiscussionArea.Apps,
+        announcementsOnly = announcementsOnly,
     ))
     val state = mutableState.asStateFlow()
     private var categoriesJob: Job? = null
@@ -53,7 +57,7 @@ class DiscussionsViewModel(
     }
 
     fun selectArea(area: DiscussionArea) {
-        if (state.value.area == area) return
+        if (announcementsOnly || state.value.area == area) return
         saved["discussion-area"] = area.name
         mutableState.update { it.copy(area = area, categories = emptyList(), categoryActivity = emptyMap(), error = null) }
         loadCategories(refreshActivity = false)
@@ -67,10 +71,13 @@ class DiscussionsViewModel(
         mutableState.update { it.copy(loading = true, error = null) }
         categoriesJob = viewModelScope.launch {
             try {
-                val result = repository.discussionCategories(area)
+                val result = repository.discussionCategories(area).let { categories ->
+                    if (announcementsOnly) categories.filter { it.section == "Announcements" } else categories
+                }
                 ensureActive()
                 val cached = result.mapNotNull { category -> activityCache[category.key]?.second?.let { category.key to it } }.toMap()
                 mutableState.update { it.copy(categories = result, loading = false, categoryActivity = cached) }
+                if (announcementsOnly && result.size == 1 && state.value.category == null) openCategory(result.single())
                 result.filter { it.topics != 0L }.forEach { category ->
                     val checkedAt = activityCache[category.key]?.first
                     if (!refreshActivity && checkedAt != null && System.currentTimeMillis() - checkedAt < 5 * 60_000) return@forEach
@@ -152,6 +159,7 @@ class DiscussionsViewModel(
             return true
         }
         if (state.value.category != null) {
+            if (announcementsOnly && state.value.categories.size == 1) return false
             topicsJob?.cancel()
             mutableState.update { it.copy(category = null, topics = DiscussionListState(), query = "", submittedQuery = "", forward = false) }
             return true

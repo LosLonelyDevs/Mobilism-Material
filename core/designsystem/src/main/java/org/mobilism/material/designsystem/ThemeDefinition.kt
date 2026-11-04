@@ -28,8 +28,8 @@ data class ThemeDefinition(
 data class ThemePair(val name: String, val light: ThemeDefinition, val dark: ThemeDefinition)
 
 object ThemeCatalog {
-    val default = CatppuccinFrappe
-    val pairs = listOf(ThemePair("Catppuccin", CatppuccinLatte, default),
+    val default = TokyoNight
+    val pairs = listOf(ThemePair("Catppuccin", CatppuccinLatte, CatppuccinFrappe),
         ThemePair("Rosé Pine", RosePineDawn, RosePine), ThemePair("Solarized", SolarizedLight, SolarizedDark),
         ThemePair("Atom One", AtomOneLight, AtomOneDark), ThemePair("Tokyo", TokyoDay, TokyoNight),
         ThemePair("Dracula", Alucard, Dracula))

@@ -9,7 +9,7 @@ import androidx.compose.ui.text.style.TextOverflow
 
 @Composable
 internal fun SettingsSubtitle(text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
-    Text(text, modifier, style = MaterialTheme.typography.bodyMedium,
+    Text(text, modifier, style = MaterialTheme.typography.bodySmall,
         color = color,
         maxLines = 2, overflow = TextOverflow.Ellipsis)
 }

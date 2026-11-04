@@ -35,17 +35,7 @@ import org.mobilism.material.settings.LandingPage
 @Composable
 internal fun LandingPageSetting(selected: LandingPage, onSelect: (LandingPage) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    ExpressiveCard({ expanded = true }, Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Icon(Icons.Outlined.Home, null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                AppHeading("Landing page", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                SettingsSubtitle(selected.label)
-            }
-            Icon(Icons.Outlined.ChevronRight, null, tint = MaterialTheme.colorScheme.primary)
-        }
-    }
+    SettingsNavigationRow("Landing page", selected.label, Icons.Outlined.Home, onClick = { expanded = true })
     if (expanded) AlertDialog(
         onDismissRequest = { expanded = false },
         title = { Text("Default landing page") },

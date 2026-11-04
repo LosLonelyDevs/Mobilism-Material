@@ -75,6 +75,8 @@ class LivePremiumRecoveryTest {
                 val state by displayed.state.collectAsState()
                 SettingsScreen(state, displayed, onAppearance = {}, onDownloads = {}, onBack = {})
             } }
+            compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Premium"))
+            compose.onNodeWithText("Premium").performClick()
             assertUsable(repository)
             blockCatalog.set(true)
             val before = hostRequests.get()

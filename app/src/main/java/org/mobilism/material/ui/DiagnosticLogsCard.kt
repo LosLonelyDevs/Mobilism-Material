@@ -2,9 +2,9 @@ package org.mobilism.material.ui
 
 import android.content.ClipData
 import android.content.Intent
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,7 +19,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import org.mobilism.material.designsystem.ExpressiveCard
 import org.mobilism.material.settings.DiagnosticLogExporter
 import org.mobilism.material.settings.DiagnosticLogStore
 
@@ -29,7 +28,9 @@ internal fun DiagnosticLogsCard(logs: DiagnosticLogStore) {
     val scope = rememberCoroutineScope()
     var exporting by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
-    ExpressiveCard(onClick = {
+    Column {
+    SettingsNavigationRow("Diagnostic logs", if (exporting) "Preparing logs…" else "Export logs for troubleshooting.",
+        Icons.Outlined.BugReport, onClick = {
         if (!exporting) scope.launch {
             exporting = true
             message = null
@@ -51,12 +52,8 @@ internal fun DiagnosticLogsCard(logs: DiagnosticLogStore) {
                 message = "Logs could not be exported. Try again."
             } finally { exporting = false }
         }
-    }, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            AppHeading("Diagnostic logs", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-            SettingsSubtitle(if (exporting) "Preparing logs…" else "Tap to export logs for troubleshooting")
-            message?.let { Text(it, style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        }
+    })
+    message?.let { Text(it, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }

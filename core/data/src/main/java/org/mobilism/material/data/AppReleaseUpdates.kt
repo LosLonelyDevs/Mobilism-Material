@@ -8,7 +8,20 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 
-data class AppRelease(val version: String, val pageUrl: String, val apkUrl: String?)
+data class AppRelease(
+    val version: String,
+    val pageUrl: String,
+    val apkUrl: String?,
+    val apkSize: Long? = null,
+    val apkSha256: String? = null,
+) {
+    val apk: ReleaseApk? get() = apkUrl?.let { url ->
+        apkSize?.takeIf { it in 1..MAX_UPDATE_APK_BYTES }?.let { ReleaseApk(url, it, apkSha256) }
+    }
+}
+
+const val MAX_UPDATE_APK_BYTES = 250L * 1024 * 1024
+data class ReleaseApk(val url: String, val size: Long, val sha256: String? = null)
 
 object AppVersions {
     private val stable = Regex("v?([0-9]+)\\.([0-9]+)\\.([0-9]+)")
@@ -49,7 +62,11 @@ class AppReleaseUpdates(private val client: OkHttpClient = OkHttpClient.Builder(
             val assets = json.optJSONArray("assets")
             val apk = (0 until (assets?.length() ?: 0)).mapNotNull { assets?.optJSONObject(it) }
                 .firstOrNull { it.optString("name") == apkName && it.optString("browser_download_url") == expectedApkUrl }
-            return AppRelease(version, pageUrl, apk?.optString("browser_download_url"))
+            val size = apk?.optLong("size")?.takeIf { it in 1..MAX_UPDATE_APK_BYTES }
+            val digest = apk?.optString("digest").orEmpty()
+            val hash = digest.takeIf { it.matches(Regex("sha256:[a-fA-F0-9]{64}")) }?.substringAfter(':')?.lowercase()
+            if (digest.isNotBlank() && digest != "null" && hash == null) throw IOException("Invalid APK checksum")
+            return AppRelease(version, pageUrl, apk?.optString("browser_download_url"), size, hash)
         }
     }
 }

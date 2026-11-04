@@ -27,7 +27,9 @@ data class MailboxState(
     val items: List<PrivateMessage> = emptyList(), val page: Int = 0, val busy: Boolean = false,
     val canLoadMore: Boolean = true, val error: ScreenError? = null, val needsSignIn: Boolean = false,
     val refreshFailed: Boolean = false,
-)
+) {
+    internal val threads = messageThreads(items)
+}
 
 data class MessagesState(
     val folder: MessageFolder = MessageFolder.Inbox,

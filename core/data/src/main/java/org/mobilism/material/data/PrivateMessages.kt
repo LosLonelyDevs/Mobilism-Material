@@ -10,6 +10,7 @@ enum class MessageFolder(val label: String, val apiPath: String) {
 data class PrivateMessage(
     val id: Long, val messageId: Long, val subject: String, val from: String, val to: String,
     val contentHtml: String, val preview: String, val publishedAt: Long, val read: Boolean,
+    val avatar: String? = null,
 ) {
     fun recipient(username: String): String = if (to.equals(username, ignoreCase = true)) from else to
     override fun toString(): String = "PrivateMessage(id=$id, messageId=$messageId, read=$read)"
@@ -39,6 +40,9 @@ object PrivateMessages {
                 subject = Jsoup.parse(text("subject")).text(), from = text("from_user"), to = text("to_user"),
                 contentHtml = CommentMarkup.html(text("content")), preview = Jsoup.parse(CommentMarkup.html(text("preview"))).text(),
                 publishedAt = json.optLong("times"), read = json.optInt("readed") == 1 || json.optBoolean("readed"),
+                avatar = webUrlOrNull(text("avatar").let {
+                    if (it.startsWith("/") && !it.startsWith("//")) "https://forum.mobilism.org$it" else it
+                }),
             )
         }.distinctBy { it.messageId }
     }

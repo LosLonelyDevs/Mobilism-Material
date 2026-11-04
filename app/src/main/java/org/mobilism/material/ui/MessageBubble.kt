@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -76,12 +76,7 @@ internal fun MessageBubble(message: PrivateMessage, username: String, onRead: ()
                         onClickLabel = if (expanded) "Collapse message" else "Expand message", onClick = toggle)
                     .padding(horizontal = 12.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Surface(Modifier.size(28.dp), shape = CircleShape, color = accent, contentColor = onAccent) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(message.from.firstOrNull()?.uppercase() ?: "?", style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold)
-                        }
-                    }
+                    MessageAvatar(message.from, message.avatar, Modifier.size(28.dp), color = accent, contentColor = onAccent)
                     Column(Modifier.weight(1f)) {
                         Text(if (outgoing) "You" else message.from, style = MaterialTheme.typography.titleSmall,
                             color = accent, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -116,7 +111,7 @@ internal fun MessageBubble(message: PrivateMessage, username: String, onRead: ()
 }
 
 @Composable
-private fun MessageTimestamp(timestamp: Long, modifier: Modifier = Modifier) {
+internal fun MessageTimestamp(timestamp: Long, modifier: Modifier = Modifier, color: Color = Color.Unspecified) {
     if (timestamp <= 0) return
     val context = LocalContext.current
     val locale = LocalConfiguration.current.locales[0]
@@ -128,5 +123,5 @@ private fun MessageTimestamp(timestamp: Long, modifier: Modifier = Modifier) {
         val time = android.text.format.DateFormat.getTimeFormat(context).format(date)
         "$day · $time"
     }
-    Text(label, modifier, style = MaterialTheme.typography.labelSmall)
+    Text(label, modifier, color = color, style = MaterialTheme.typography.labelSmall)
 }

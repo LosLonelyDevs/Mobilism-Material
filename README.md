@@ -41,7 +41,7 @@ Screenshots use sample data. CI refreshes them on version bumps and screenshot t
 - Mobilism Premium, MegaDebrid, and Real-Debrid links with encrypted account storage.
 - Grouped downloads, preferred architectures, and preferred file hosts.
 - Material You wallpaper colors on Android 12+, 13 preset themes including AMOLED Black, bundled and custom fonts, and reduced motion.
-- [App update checks](docs/app-updates.md) with GitHub release notifications and a manual check in Settings and About.
+- [In-app updates](docs/app-updates.md) with automatic checks, verified downloads, Android installation, and release notes. Open Updates from Settings.
 
 Downloads open in your browser. Green buttons resolve through a verified Premium account first. Native downloads and several legacy features are still pending. [Remaining work](docs/feature-parity.md).
 

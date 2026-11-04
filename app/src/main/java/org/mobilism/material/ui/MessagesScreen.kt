@@ -43,8 +43,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.mobilism.material.data.MessageFolder
 import org.mobilism.material.data.PrivateMessage
@@ -52,7 +50,6 @@ import org.mobilism.material.data.PrivateMessages
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.AppTextButton
 import org.mobilism.material.designsystem.ExpressiveButton
-import org.mobilism.material.designsystem.ExpressiveCard
 import org.mobilism.material.designsystem.LoadingState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,25 +112,8 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
                         state = if (state.folder == MessageFolder.Inbox) inboxScroll else sentScroll,
                         contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         state.readError?.let { item { ErrorPanel(it, onRetry = onRefresh) } }
-                        items(mailbox.items, key = { it.messageId }) { message ->
-                            ExpressiveCard({ onOpen(message) }, Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text(if (state.folder == MessageFolder.Inbox) message.from else "To ${message.to}",
-                                            Modifier.weight(1f), style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                                        if (state.folder == MessageFolder.Inbox && !message.read) Text("Unread",
-                                            color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
-                                    }
-                                    Text(message.subject.ifBlank { "No subject" }, style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = if (!message.read && state.folder == MessageFolder.Inbox) FontWeight.Bold else FontWeight.Normal)
-                                    if (message.preview.isNotBlank()) Text(message.preview, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    ReleasePostDate(message.publishedAt)
-                                    if (state.folder == MessageFolder.Inbox && !message.read) AppTextButton("Mark as read",
-                                        { onRead(message.messageId) }, enabled = message.messageId !in state.marking)
-                                }
-                            }
+                        items(mailbox.threads, key = { it.id }) { thread ->
+                            MessageThreadCard(thread, state.folder, state.marking, onOpen, onRead)
                         }
                         if (mailbox.busy) item { LoadingState("Loading messages…", Modifier.fillMaxWidth()) }
                         mailbox.error?.let { item {

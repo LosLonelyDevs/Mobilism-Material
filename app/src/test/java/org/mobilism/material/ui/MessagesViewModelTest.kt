@@ -20,6 +20,56 @@ class MessagesViewModelTest {
     @Before fun setMain() = Dispatchers.setMain(dispatcher)
     @After fun resetMain() = Dispatchers.resetMain()
 
+    @Test fun threadGroupingAcrossPagesDoesNotStopPaginationOrLoseUnreadReplies() = runTest(dispatcher) {
+        val newest = incoming.copy(messageId = 45, publishedAt = 300, read = true)
+        val repo = Repository().apply {
+            inboxPages[1] = listOf(newest)
+            inboxPages[2] = listOf(incoming, incoming.copy(messageId = 44, publishedAt = 200))
+            inboxPages[3] = listOf(incoming.copy(id = 11, messageId = 50))
+        }
+        val model = MessagesViewModel(repo, "Reader", SavedStateHandle())
+        advanceUntilIdle()
+        model.loadMailbox()
+        advanceUntilIdle()
+        val thread = model.state.value.mailbox.threads.single()
+        assertEquals(newest, thread.latest)
+        assertEquals(setOf(42L, 44L), thread.unreadIds.toSet())
+        assertTrue(model.state.value.mailbox.canLoadMore)
+        model.loadMailbox()
+        advanceUntilIdle()
+        assertEquals(listOf(10L, 11L), model.state.value.mailbox.threads.map { it.id })
+        model.openMessage(thread.latest)
+        advanceUntilIdle()
+        assertEquals(10L, model.state.value.conversationId)
+        assertEquals(45L, model.state.value.messageId)
+        model.closeConversation()
+        model.loadMailbox(refresh = true)
+        advanceUntilIdle()
+        assertEquals(listOf(newest), model.state.value.mailbox.threads.map { it.latest })
+    }
+
+    @Test fun threadStaysUnreadUntilEveryReadIsConfirmedAndCanRetryFailures() = runTest(dispatcher) {
+        val repo = Repository().apply { inboxPages[1] = listOf(incoming, incoming.copy(messageId = 44)) }
+        val model = MessagesViewModel(repo, "Reader", SavedStateHandle())
+        advanceUntilIdle()
+        model.state.value.mailbox.threads.single().unreadIds.forEach(model::markRead)
+        runCurrent()
+        assertEquals(setOf(42L, 44L), model.state.value.mailbox.threads.single().unreadIds.toSet())
+        repo.readResult.completeExceptionally(ApiFailure(FailureKind.Connection, "Offline"))
+        advanceUntilIdle()
+        assertEquals(2, model.state.value.mailbox.threads.single().unreadIds.size)
+        repo.readResult = CompletableDeferred(Unit)
+        model.markRead(42)
+        advanceUntilIdle()
+        assertEquals(listOf(44L), model.state.value.mailbox.threads.single().unreadIds)
+        model.markRead(44)
+        advanceUntilIdle()
+        assertTrue(model.state.value.mailbox.threads.single().unreadIds.isEmpty())
+        model.loadMailbox(refresh = true)
+        advanceUntilIdle()
+        assertTrue(model.state.value.mailbox.threads.single().unreadIds.isEmpty())
+    }
+
     @Test fun tabsKeepIndependentPagesAndStopRepeatedResults() = runTest(dispatcher) {
         val repo = Repository()
         val model = MessagesViewModel(repo, "Reader", SavedStateHandle())
@@ -627,6 +677,7 @@ class MessagesViewModelTest {
         var conversationItems = listOf(incoming.copy(id = 42), outgoing.copy(id = 43))
         var inboxItems = listOf(incoming)
         var sentItems = listOf(outgoing)
+        val inboxPages = mutableMapOf<Int, List<PrivateMessage>>()
         val otherConversations = mutableMapOf<Long, List<PrivateMessage>>()
         val conversationCalls = mutableListOf<Long>()
         var conversationError: Exception? = null
@@ -635,7 +686,7 @@ class MessagesViewModelTest {
         override suspend fun messages(folder: MessageFolder, page: Int): MessagePage {
             pages += folder to page
             mailboxError?.let { throw it }
-            return MessagePage(if (folder == MessageFolder.Inbox) inboxItems else sentItems, true)
+            return MessagePage(if (folder == MessageFolder.Inbox) inboxPages[page] ?: inboxItems else sentItems, true)
         }
         override suspend fun conversation(id: Long): List<PrivateMessage> {
             conversationCalls += id

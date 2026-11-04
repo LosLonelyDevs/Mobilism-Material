@@ -31,6 +31,29 @@ import org.mobilism.material.ui.*
 class DiscussionsTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun announcementsOpenCommunityForumReadTopicsAndReturnToCaller() {
+        val fixture = Fixture()
+        fixture.communityBody = """{"announcements":[{"id":13,"name":"Announcements"}],"contests":[],"talk":[{"id":66,"name":"General chat"}],"services":[],"feedback":[]}"""
+        lateinit var model: DiscussionsViewModel
+        var closed = false
+        compose.runOnUiThread { model = DiscussionsViewModel(fixture.repository, null, SavedStateHandle(), announcementsOnly = true) }
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            DiscussionsScreen(model, AuthState.Guest, { closed = true }, { _, _ -> })
+        } }
+        compose.waitUntil(10_000) { model.state.value.topics.items.isNotEmpty() }
+        compose.onNodeWithText("Announcements").assertIsDisplayed()
+        compose.onNodeWithText("Community").assertDoesNotExist()
+        assertTrue(fixture.requests.any { it.url.encodedPath.contains("/other/category/13/") })
+        compose.onNodeWithText("Getting started with Mobilism").performClick()
+        compose.onNodeWithText("Announcement").assertIsDisplayed()
+        compose.onNodeWithText("Sign in to comment").assertIsDisplayed()
+        capture("announcements-tokyo")
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithText("Getting started with Mobilism").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").performClick()
+        assertTrue(closed)
+    }
+
     @Test fun forumBrowserLinksExcludeOurReleaseLinkHandler() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val url = "https://forum.mobilism.org/viewtopic.php?t=80"
@@ -243,6 +266,7 @@ class DiscussionsTest {
         @Volatile var postBody = """{"response":{"comment_id":99}}"""
         @Volatile var listStatus = 200
         @Volatile var topicsBody = """{"response":[$TOPIC]}"""
+        @Volatile var communityBody = """{"announcements":[],"contests":[],"talk":[{"id":66,"name":"General chat"}],"services":[],"feedback":[]}"""
         @Volatile var categoriesBody = """{"response":{"app|game":[{"id":500,"name":"Help &amp; support","topics":42}],"books":[{"id":501,"name":"Book discussions"}]}}"""
         private val context = object : ContextWrapper(InstrumentationRegistry.getInstrumentation().targetContext) {
             override fun getApplicationContext(): Context = this
@@ -256,7 +280,7 @@ class DiscussionsTest {
             val response = when {
                 path == "auth/login" -> """{"access_token":"sample-session","id":7}"""
                 path == "discussion/categories" -> categoriesBody
-                path == "other/category" -> """{"announcements":[],"contests":[],"talk":[{"id":66,"name":"General chat"}],"services":[],"feedback":[]}"""
+                path == "other/category" -> communityBody
                 path.endsWith("/comment") -> { status = postStatus; postBody }
                 path == "search" -> if (body(request).contains("missing")) """{"discussions":[],"others":[]}""" else """{"discussions":[$TOPIC],"others":[$TOPIC]}"""
                 path.contains("/comments/") -> { status = listStatus; """{"response":[{"id":44,"name":"Helpful reader","date":1700000000,"content":"Welcome! Take a look at https://example.org/help for more details."}]}""" }

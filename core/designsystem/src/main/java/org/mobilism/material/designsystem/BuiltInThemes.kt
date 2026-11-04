@@ -131,24 +131,9 @@ val TokyoDay = paletteTheme(
     onInfo = Color(0xFFFFFFFF),
 )
 
-val TokyoNight = paletteTheme(
-    id = "tokyo-night", name = "Tokyo Night", dark = true,
-    background = Color(0xFF16161E),
-    surface = Color(0xFF1A1B26),
-    surfaceAlt = Color(0xFF24283B),
-    text = Color(0xFFC0CAF5),
-    subtext = Color(0xFFA9B1D6),
-    outline = Color(0xFF414868),
-    primary = Color(0xFF7AA2F7),
-    onPrimary = Color(0xFF16161E),
-    success = Color(0xFF9ECE6A),
-    onSuccess = Color(0xFF16161E),
-    warning = Color(0xFFE0AF68),
-    onWarning = Color(0xFF16161E),
-    error = Color(0xFFF7768E),
-    onError = Color(0xFF16161E),
-    info = Color(0xFF7DCFFF),
-    onInfo = Color(0xFF16161E),
+val TokyoNight = ThemeDefinition(
+    id = "tokyo-night", name = "Tokyo Night", isDark = true,
+    colors = GayerfyTokyoNightColors,
 )
 
 val Alucard = paletteTheme(

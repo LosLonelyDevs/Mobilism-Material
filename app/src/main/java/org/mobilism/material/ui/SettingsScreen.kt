@@ -12,6 +12,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -25,10 +29,11 @@ import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.WorkspacePremium
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
@@ -41,7 +46,6 @@ import org.mobilism.material.designsystem.AppSurface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,7 +54,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardType
@@ -75,7 +78,6 @@ import org.mobilism.material.data.DebridState
 import org.mobilism.material.data.HostOrder
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.ExpressiveButton
-import org.mobilism.material.designsystem.ExpressiveCard
 import org.mobilism.material.designsystem.LoadingState
 import org.mobilism.material.designsystem.LocalAppTheme
 
@@ -88,106 +90,54 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
     preferredHosts: Set<String> = emptySet(),
     landingPage: org.mobilism.material.settings.LandingPage = org.mobilism.material.settings.LandingPage(),
     onLandingPage: (org.mobilism.material.settings.LandingPage) -> Unit = {},
-    dailyUsageEnabled: Boolean = true, onDailyUsage: (Boolean) -> Unit = {}) {
-    val theme = LocalAppTheme.current
+    dailyUsageEnabled: Boolean = true, onDailyUsage: (Boolean) -> Unit = {}, onUpdates: () -> Unit = {}) {
+    var premiumOpen by rememberSaveable { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    LaunchedEffect(developer.debridEnabled) { if (!developer.debridEnabled) premiumOpen = false }
+    BackHandler(enabled = premiumOpen) { premiumOpen = false }
+    if (premiumOpen && developer.debridEnabled) {
+        PremiumSettingsScreen(state, repository, preferredHosts, onBack = { premiumOpen = false })
+        return
+    }
     Scaffold(topBar = {
         TopAppBar(title = { AppHeading("Settings", HeadingLevel.Page) }, navigationIcon = {
             AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack)
         })
     }) { insets ->
         LazyColumn(
+            state = listState,
             modifier = Modifier.padding(insets),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            item {
-                ExpressiveCard(onAppearance, Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
-                    containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, theme.personalization, 0.12f),
-                )) {
-                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Icon(Icons.Outlined.Palette, null, tint = theme.personalization, modifier = Modifier.size(32.dp))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            AppHeading("Appearance", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                            SettingsSubtitle("Theme, font, and motion")
-                        }
-                        Icon(Icons.Outlined.ChevronRight, null, tint = theme.personalization)
-                    }
-                }
+            item("preferences-section") { SettingsSectionLabel("Preferences") }
+            item("appearance") { SettingsNavigationRow("Appearance", "Theme, font, and motion.", Icons.Outlined.Palette, onAppearance) }
+            item("landing-page") { LandingPageSetting(landingPage, onLandingPage) }
+            item("content") { ContentVisibilitySetting(hideAdult, onHideAdult) }
+            item("downloads-section") { SettingsSectionLabel("Downloads") }
+            item("downloads") { SettingsNavigationRow("Download preferences", "CPU architecture and favorite hosts.",
+                Icons.Outlined.Download, onDownloads) }
+            if (developer.debridEnabled) item("premium") {
+                SettingsNavigationRow("Premium", "Manage verified Premium accounts.", Icons.Outlined.WorkspacePremium,
+                    onClick = { premiumOpen = true })
             }
-            item {
-                ExpressiveCard(onDownloads, Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
-                    containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, theme.reading, 0.12f),
-                )) {
-                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Icon(Icons.Outlined.Download, null, tint = theme.reading, modifier = Modifier.size(32.dp))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            AppHeading("Download preferences", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                            SettingsSubtitle("CPU architecture and favorite hosts")
-                        }
-                        Icon(Icons.Outlined.ChevronRight, null, tint = theme.reading)
-                    }
-                }
-            }
-            item {
-                LandingPageSetting(landingPage, onLandingPage)
-            }
-            item {
-                ContentVisibilitySetting(hideAdult, onHideAdult)
-            }
+            item("privacy-section") { SettingsSectionLabel("Privacy and diagnostics") }
             item(key = "daily-usage") {
-                AppSurface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                    Row(Modifier.fillMaxWidth().toggleable(dailyUsageEnabled,
-                        role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onDailyUsage).padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            AppHeading("Anonymous usage", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                            SettingsSubtitle("Help count daily users and supported devices.")
-                            Text("Sends app version, Android version, manufacturer, and model once per active day. " +
-                                "No account data or permanent device ID.", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        androidx.compose.material3.Switch(dailyUsageEnabled, onCheckedChange = null)
-                    }
-                }
-            }
-            if (developer.debridEnabled) {
-                item {
-                    AppHeading("Premium", HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall)
-                    SettingsSubtitle(
-                        "Checkmarked buttons resolve downloads through verified Premium accounts.",
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-                items(Alphabetical.sorted(state.accounts) { it.provider.label }
-                    .sortedBy { it.provider != DebridProvider.Mobilism }, key = { it.provider }) { account ->
-                    DebridAccountCard(account, repository, state, preferredHosts)
-                }
-            }
-            if (developer.enabled) item(key = "developer") {
-                ExpressiveCard(onDeveloperOptions, Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Icon(Icons.Outlined.Code, null, tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp))
-                        AppHeading("Developer options", HeadingLevel.Section, modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.titleLarge)
-                        Icon(Icons.Outlined.ChevronRight, null, tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
+                SettingsToggleRow("Anonymous usage", "Help count daily users and supported devices.", Icons.Outlined.Insights,
+                    dailyUsageEnabled, onDailyUsage)
+                Text("Sends app version, Android version, manufacturer, and model once per active day. " +
+                    "No account data or permanent device ID.", Modifier.padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             diagnostics?.let { logs -> item(key = "diagnostics") { DiagnosticLogsCard(logs) } }
-            item(key = "app-updates") { AppUpdatesCard() }
+            item("app-section") { SettingsSectionLabel("App") }
+            item(key = "app-updates") { AppUpdatesEntry(onUpdates) }
+            if (developer.enabled) item(key = "developer") {
+                SettingsNavigationRow("Developer options", "Diagnostics and experimental features.", Icons.Outlined.Code, onDeveloperOptions)
+            }
             item(key = "about") {
-                ExpressiveCard(onAbout, Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            AppHeading("About Mobilism Material", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            SettingsSubtitle("v${org.mobilism.material.BuildConfig.VERSION_NAME}")
-                        }
-                        Icon(Icons.Outlined.ChevronRight, null, tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
+                SettingsNavigationRow("About Mobilism Material", "v${org.mobilism.material.BuildConfig.VERSION_NAME}",
+                    Icons.Outlined.Info, onAbout)
             }
         }
     }
@@ -195,14 +145,25 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
 
 @Composable
 internal fun ContentVisibilitySetting(hideAdult: Boolean, onHideAdult: (Boolean) -> Unit) {
-    AppSurface(shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-        Row(Modifier.fillMaxWidth().toggleable(hideAdult, role = androidx.compose.ui.semantics.Role.Switch,
-            onValueChange = onHideAdult).padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            AppHeading("Hide 18+ content", HeadingLevel.Section, modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleLarge)
-            androidx.compose.material3.Switch(hideAdult, onCheckedChange = null)
+    SettingsToggleRow("Hide 18+ content", "Hide adult releases while browsing.", Icons.Outlined.VisibilityOff,
+        hideAdult, onHideAdult)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PremiumSettingsScreen(state: DebridState, repository: DebridRepository, preferredHosts: Set<String>, onBack: () -> Unit) {
+    Scaffold(topBar = {
+        TopAppBar(title = { AppHeading("Premium", HeadingLevel.Page) }, navigationIcon = {
+            AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack)
+        })
+    }) { insets ->
+        LazyColumn(Modifier.padding(insets), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            item { SettingsSubtitle("Checkmarked buttons resolve downloads through verified Premium accounts.") }
+            items(Alphabetical.sorted(state.accounts) { it.provider.label }
+                .sortedBy { it.provider != DebridProvider.Mobilism }, key = { it.provider }) { account ->
+                DebridAccountCard(account, repository, state, preferredHosts)
+            }
         }
     }
 }
@@ -244,7 +205,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                     modifier = Modifier.padding(end = 12.dp).size(24.dp),
                 )
                 Box(Modifier.weight(1f)) {
-                    AppHeading(account.provider.label, HeadingLevel.Subsection, style = MaterialTheme.typography.titleLarge)
+                    AppHeading(account.provider.label, HeadingLevel.Subsection, style = MaterialTheme.typography.titleMedium)
                 }
             }
             if (!account.configured || signingInAgain) {
@@ -340,7 +301,7 @@ private fun DebridHostMenu(account: DebridAccount, debrid: DebridState, preferre
     val hosts = HostOrder.sorted(account.hosts, preferredHosts, debrid, { it.domain }) { it.name }
         .distinctBy { it.name.lowercase(java.util.Locale.ROOT) }
     val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
-    val menuWidth = (windowWidth - 64.dp).coerceIn(240.dp, 560.dp)
+    val menuWidth = (windowWidth - 24.dp).coerceIn(0.dp, 560.dp)
     var expanded by remember(account.provider) { mutableStateOf(false) }
     val rotation by animateFloatAsState(
         if (expanded) 180f else 0f,

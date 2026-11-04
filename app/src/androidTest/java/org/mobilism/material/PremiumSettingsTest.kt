@@ -65,6 +65,8 @@ class PremiumSettingsTest {
                 val state by repository.state.collectAsState()
                 SettingsScreen(state, repository, onAppearance = {}, onDownloads = {}, onBack = {})
             } }
+            scrollTo("Premium")
+            compose.onNodeWithText("Premium").performClick()
             scrollTo("${connected.hostNames.size} Mobilism hosts")
             compose.onNodeWithContentDescription("Account verified").assertExists()
             compose.onNodeWithText("0 Mobilism hosts").assertDoesNotExist()
@@ -106,6 +108,8 @@ class PremiumSettingsTest {
                 val state by repository.state.collectAsState()
                 SettingsScreen(state, repository, onAppearance = {}, onDownloads = {}, onBack = {})
             } }
+            scrollTo("Premium")
+            compose.onNodeWithText("Premium").performClick()
             scrollTo("Mobilism username")
             compose.onNodeWithText("Mobilism username").performTextInput("sample-user")
             compose.onNodeWithText("Mobilism Premium password").performScrollTo().performTextInput("sample-password")
@@ -144,6 +148,8 @@ class PremiumSettingsTest {
             SettingsScreen(state, DebridRepository(compose.activity), {}, {}, {},
                 developer = DeveloperPreferences(debridEnabled = true))
         } }
+        scrollTo("Premium")
+        compose.onNodeWithText("Premium").performClick()
         scrollTo("1 Mobilism host")
         compose.onNodeWithContentDescription("Account verified").assertIsDisplayed()
         compose.onNodeWithText("Sign in again").assertDoesNotExist()
@@ -165,6 +171,8 @@ class PremiumSettingsTest {
             SettingsScreen(state, DebridRepository(compose.activity), {}, {}, {},
                 developer = DeveloperPreferences(debridEnabled = true))
         } }
+        scrollTo("Premium")
+        compose.onNodeWithText("Premium").performClick()
         scrollTo("2 Mobilism hosts")
         val label = compose.onNodeWithText("2 Mobilism hosts")
         val bounds = label.fetchSemanticsNode().boundsInRoot
@@ -177,7 +185,8 @@ class PremiumSettingsTest {
         val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
         providers.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
         assertEquals(1, layouts.single().lineCount)
-        val bitmap = compose.onNode(isPopup()).captureToImage().asAndroidBitmap()
+        compose.waitForIdle()
+        val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
         val directory = java.io.File(compose.activity.getExternalFilesDir(null), "download-polish")
         check(directory.mkdirs() || directory.isDirectory)
         java.io.File(directory, "host-menu.png").outputStream().use {

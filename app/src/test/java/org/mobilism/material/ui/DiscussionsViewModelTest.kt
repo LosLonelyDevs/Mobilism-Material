@@ -17,6 +17,42 @@ class DiscussionsViewModelTest {
     @Before fun setup() = Dispatchers.setMain(dispatcher)
     @After fun teardown() = Dispatchers.resetMain()
 
+    @Test fun announcementsOpenTheirOnlyForumAndReturnToCallerAfterReading() = runTest(dispatcher) {
+        val repo = Repository()
+        val announcement = category.copy(id = 13, name = "Announcements", area = DiscussionArea.Community, section = "Announcements")
+        repo.categories = listOf(announcement, category.copy(section = "Chitchat"))
+        val model = DiscussionsViewModel(repo, null, SavedStateHandle(), announcementsOnly = true)
+        advanceUntilIdle()
+        assertEquals(listOf(announcement), model.state.value.categories)
+        assertEquals(announcement, model.state.value.category)
+        assertEquals(DiscussionKind.Other, model.state.value.category!!.kind)
+        assertEquals(listOf(1), repo.pages)
+        model.selectArea(DiscussionArea.Games)
+        assertEquals(DiscussionArea.Community, model.state.value.area)
+        model.openTopic(topic)
+        advanceUntilIdle()
+        assertTrue(model.back())
+        assertFalse(model.back())
+    }
+
+    @Test fun announcementsKeepMultipleForumsSelectableAndHandleEmptyResults() = runTest(dispatcher) {
+        val repo = Repository()
+        repo.categories = listOf(category.copy(section = "Announcements"), category.copy(id = 501, section = "Announcements"))
+        val model = DiscussionsViewModel(repo, null, SavedStateHandle(), announcementsOnly = true)
+        advanceUntilIdle()
+        assertNull(model.state.value.category)
+        model.openCategory(model.state.value.categories.last())
+        advanceUntilIdle()
+        assertTrue(model.back())
+        assertNull(model.state.value.category)
+        repo.categories = emptyList()
+        model.loadCategories()
+        advanceUntilIdle()
+        assertFalse(model.state.value.loading)
+        assertTrue(model.state.value.categories.isEmpty())
+        assertNull(model.state.value.error)
+    }
+
     @Test fun activityLoadsAfterCategoriesAndReusesCacheUntilRefresh() = runTest(dispatcher) {
         val repo = Repository()
         val pending = CompletableDeferred<Long?>()

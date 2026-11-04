@@ -38,7 +38,7 @@ internal fun RoundedMenuItem(
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(label, style = MaterialTheme.typography.titleSmall,
                     maxLines = if (singleLine) 1 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis)
-                supportLabel?.let { Text(it, style = MaterialTheme.typography.labelMedium,
+                supportLabel?.let { Text(it, style = if (singleLine) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = if (singleLine) 1 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis) }
             }

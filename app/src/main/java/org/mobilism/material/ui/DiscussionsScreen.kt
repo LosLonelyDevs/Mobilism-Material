@@ -81,7 +81,9 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(title = { AppHeading(if (state.topic != null) "Discussion" else state.category?.name ?: "Discussions",
+            TopAppBar(title = { AppHeading(if (state.topic != null) {
+                if (state.announcementsOnly) "Announcement" else "Discussion"
+            } else state.category?.name ?: if (state.announcementsOnly) "Announcements" else "Discussions",
                 HeadingLevel.Page, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", back, enabled = !state.composer.posting) },
                 actions = {
@@ -152,7 +154,7 @@ private fun DiscussionCategories(state: DiscussionsState, onArea: (DiscussionAre
         while (true) { delay(60_000); value = System.currentTimeMillis() }
     }
     Column(Modifier.fillMaxSize()) {
-        AppChoiceTabs(DiscussionArea.entries.map { it.label }, state.area.ordinal) { onArea(DiscussionArea.entries[it]) }
+        if (!state.announcementsOnly) AppChoiceTabs(DiscussionArea.entries.map { it.label }, state.area.ordinal) { onArea(DiscussionArea.entries[it]) }
         key(state.area) {
             LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize().testTag("discussion-categories")) {

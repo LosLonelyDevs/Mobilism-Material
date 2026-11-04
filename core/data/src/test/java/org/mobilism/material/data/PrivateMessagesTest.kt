@@ -5,6 +5,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PrivateMessagesTest {
+    @Test fun preservesSafeAvatarUrlsAndRejectsNonWebSources() {
+        for ((url, expected) in listOf(
+            "//images.example.com/avatar.png" to "https://images.example.com/avatar.png",
+            "/download/file.php?avatar=42.png" to "https://forum.mobilism.org/download/file.php?avatar=42.png",
+            "https://images.example.com/avatar.png" to "https://images.example.com/avatar.png",
+            "javascript:alert(1)" to null, "" to null,
+        )) {
+            val message = PrivateMessages.parse(JSONObject().put("response", org.json.JSONArray()
+                .put(JSONObject().put("id", 42).put("avatar", url)))).single()
+            assertEquals(expected, message.avatar)
+        }
+    }
+
     @Test fun acceptsNumericAndBooleanReadFlags() {
         for (flag in listOf("1", "\"1\"", "true", "\"true\"")) {
             assertTrue(PrivateMessages.parse(JSONObject("""{"response":[{"id":42,"readed":$flag}]}""")).single().read)

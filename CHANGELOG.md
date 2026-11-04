@@ -2,11 +2,10 @@
 
 ## Unreleased
 
-- Add collapsible message bubbles with full timestamps.
-- Show new-release dots until viewed.
-- Verify thumbs up through forum posts and reuse IDs.
-- Fix reply confirmation and unread badges; distinguish sender colors.
-- Add anonymous daily usage reporting with an opt-out.
+- Improve message threads, avatars, replies, and unread badges.
+- Add update installation, changelogs, anonymous usage, Announcements navigation, and link actions.
+- Refine Settings and palettes; default to Tokyo Night.
+- Show release dots and verify thumbs up through forum posts.
 
 ## 0.1.18
 

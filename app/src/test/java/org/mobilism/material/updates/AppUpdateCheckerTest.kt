@@ -10,6 +10,39 @@ import org.junit.Test
 import org.mobilism.material.data.AppRelease
 
 class AppUpdateCheckerTest {
+    @Test fun cachedUpdatePromptsSurviveRestartUntilDismissedAndNewVersionsPromptAgain() = runBlocking {
+        val fixture = Fixture()
+        val checker = fixture.checker()
+        checker.check(automatic = true)
+        assertEquals("0.1.18", checker.state.value.prompt?.version)
+        val restarted = fixture.checker()
+        restarted.check(automatic = true)
+        assertEquals(1, fixture.reads)
+        assertNotNull(restarted.state.value.prompt)
+        restarted.dismissPrompt()
+        assertNull(fixture.checker().state.value.prompt)
+        fixture.version = "0.1.19"
+        fixture.time += AppUpdateChecker.AUTOMATIC_INTERVAL_MS
+        val next = fixture.checker()
+        next.check(automatic = true)
+        assertEquals("0.1.19", next.state.value.prompt?.version)
+        next.setEnabled(false)
+        assertNull(next.state.value.prompt)
+        assertNull(fixture.checker().state.value.prompt)
+    }
+
+    @Test fun disablingDuringLookupPreventsTheModalAsWellAsNotifications() = runBlocking {
+        val answer = CompletableDeferred<AppRelease>()
+        val settings = Saved()
+        val checker = AppUpdateChecker(settings, { answer.await() }, { true }, installed = "0.1.17")
+        val job = async(start = CoroutineStart.UNDISPATCHED) { checker.check(automatic = true) }
+        checker.setEnabled(false)
+        answer.complete(AppRelease("0.1.18", "https://example.org", null))
+        job.await()
+        assertNull(checker.state.value.prompt)
+        assertNull(AppUpdateChecker(settings, { error("no lookup") }, { true }, installed = "0.1.17").state.value.prompt)
+    }
+
     @Test fun installingTheNotifiedVersionClearsItsAlertWithoutAnotherRequest() = runBlocking {
         val fixture = Fixture()
         fixture.settings.notifiedVersion = "0.1.17"
@@ -127,6 +160,8 @@ class AppUpdateCheckerTest {
     }
 
     private class Saved : AppUpdateSettings {
+        override var dismissedVersion: String? = null
+        override var cachedRelease: AppRelease? = null
         override var enabled = true
         override var lastAutomaticAttempt = 0L
         override var notifiedVersion: String? = null

@@ -17,6 +17,8 @@ internal interface AppUpdateSettings {
     var lastAutomaticAttempt: Long
     var notifiedVersion: String?
     var permissionRequested: Boolean
+    var dismissedVersion: String?
+    var cachedRelease: AppRelease?
 }
 
 private class SavedAppUpdateSettings(context: Context) : AppUpdateSettings {
@@ -33,6 +35,27 @@ private class SavedAppUpdateSettings(context: Context) : AppUpdateSettings {
     override var permissionRequested: Boolean
         get() = prefs.getBoolean("permission-requested", false)
         set(value) { prefs.edit { putBoolean("permission-requested", value) } }
+    override var dismissedVersion: String?
+        get() = prefs.getString("dismissed-version", null)
+        set(value) { prefs.edit { putString("dismissed-version", value) } }
+    override var cachedRelease: AppRelease?
+        get() {
+            val version = prefs.getString("release-version", null) ?: return null
+            if (AppVersions.parts(version) == null) return null
+            val page = "${AppReleaseUpdates.REPOSITORY_URL}/releases/tag/v$version"
+            val url = prefs.getString("release-url", null)?.takeIf {
+                it == "${AppReleaseUpdates.REPOSITORY_URL}/releases/download/v$version/MobilismMaterial_v$version-release.apk" ||
+                    it == "${AppReleaseUpdates.REPOSITORY_URL}/releases/download/$version/MobilismMaterial_v$version-release.apk"
+            }
+            return AppRelease(version, page, url, prefs.getLong("release-size", 0),
+                prefs.getString("release-hash", null)?.takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) })
+        }
+        set(value) { prefs.edit {
+            putString("release-version", value?.version)
+            putString("release-url", value?.apkUrl)
+            putLong("release-size", value?.apkSize ?: 0)
+            putString("release-hash", value?.apkSha256)
+        } }
 }
 
 internal data class AppUpdateState(
@@ -41,6 +64,7 @@ internal data class AppUpdateState(
     val checked: Boolean = false,
     val available: AppRelease? = null,
     val error: String? = null,
+    val prompt: AppRelease? = null,
 )
 
 internal class AppUpdateChecker(
@@ -54,7 +78,9 @@ internal class AppUpdateChecker(
     constructor(context: Context, notifications: AppUpdateNotifications = AppUpdateNotifications(context)) : this(
         SavedAppUpdateSettings(context), AppReleaseUpdates()::latest, notifications::post, notifications::cancel)
 
-    private val mutable = MutableStateFlow(AppUpdateState(enabled = settings.enabled))
+    private val cached = settings.cachedRelease?.takeIf { AppVersions.newer(it.version, installed) }
+    private val mutable = MutableStateFlow(AppUpdateState(enabled = settings.enabled, available = cached,
+        prompt = cached?.takeIf { settings.enabled && it.version != settings.dismissedVersion }))
     val state = mutable.asStateFlow()
     private val checking = Mutex()
     init {
@@ -67,8 +93,14 @@ internal class AppUpdateChecker(
 
     fun setEnabled(enabled: Boolean) = synchronized(settings) {
         settings.enabled = enabled
-        mutable.update { it.copy(enabled = enabled) }
+        mutable.update { it.copy(enabled = enabled,
+            prompt = it.available?.takeIf { release -> enabled && release.version != settings.dismissedVersion }) }
         if (!enabled) cancelNotification()
+    }
+
+    fun dismissPrompt() = synchronized(settings) {
+        state.value.prompt?.let { settings.dismissedVersion = it.version }
+        mutable.update { it.copy(prompt = null) }
     }
 
     suspend fun check(automatic: Boolean = false) {
@@ -88,7 +120,11 @@ internal class AppUpdateChecker(
             }
             mutable.update { it.copy(checking = true, error = null) }
             val release = latest().takeIf { AppVersions.newer(it.version, installed) }
-            mutable.update { it.copy(checked = true, available = release) }
+            synchronized(settings) {
+                settings.cachedRelease = release
+                mutable.update { it.copy(checked = true, available = release,
+                    prompt = release?.takeIf { automatic && settings.enabled && it.version != settings.dismissedVersion }) }
+            }
             if (release == null) cancelNotification()
             else if (automatic) notifyAvailable()
         } catch (cancelled: CancellationException) {

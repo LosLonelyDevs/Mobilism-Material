@@ -1,5 +1,7 @@
 # Discussions
 
+Announcements has its own drawer entry. It loads the Community announcement forums through the original app's `other` routes. One forum opens directly; multiple forums show a picker. Topics keep native search, refresh, comments, and sign-in handling.
+
 Native forum browsing follows the original app's discussion and other-forum routes. Apps, Games, and Books keep their category lists. Community includes Announcements, Contests, Chitchat, Services, and Suggestions & Feedback.
 
 Scope: categories, topic lists, search within a category, original posts, paged comments, and signed-in comments or quoted replies. Topic creation stays on the forum website because the original API has no create-topic route. Empty, loading, offline, expired-session, and unconfirmed-post states must stay actionable. Drafts belong to their topic and account.

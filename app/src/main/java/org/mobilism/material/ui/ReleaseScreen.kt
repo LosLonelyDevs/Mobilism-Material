@@ -3,7 +3,6 @@ package org.mobilism.material.ui
 import android.content.ClipData
 import android.graphics.Typeface
 import android.text.method.LinkMovementMethod
-import android.text.style.ClickableSpan
 import android.text.style.URLSpan
 import android.view.View
 import android.widget.TextView
@@ -356,6 +355,9 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
     val context = LocalContext.current
     val currentOnRelease = androidx.compose.runtime.rememberUpdatedState(onRelease)
     val currentForumLinkHandler = androidx.compose.runtime.rememberUpdatedState(LocalForumLinkHandler.current)
+    var heldUrl by remember(html, baseUrl) { mutableStateOf<String?>(null) }
+    val currentOnHold = androidx.compose.runtime.rememberUpdatedState<(String) -> Unit>({ heldUrl = it })
+    heldUrl?.let { ForumLinkActions(it, onDismiss = { heldUrl = null }) }
     val textColor = contentColor.toArgb()
     val linkArgb = linkColor.toArgb()
     val textSize = MaterialTheme.typography.bodyLarge.fontSize.value
@@ -372,7 +374,7 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
                 val end = getSpanEnd(link)
                 val flags = getSpanFlags(link)
                 removeSpan(link)
-                setSpan(object : ClickableSpan() {
+                setSpan(object : URLSpan(link.url) {
                     override fun onClick(widget: View) {
                         val topic = org.mobilism.material.ReleaseLinks.topicId(link.url)
                         val navigate = currentOnRelease.value
@@ -389,6 +391,7 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
         factory = { viewContext -> TextView(viewContext).apply {
             setTextIsSelectable(true)
             movementMethod = LinkMovementMethod.getInstance()
+            setOnTouchListener(ForumLinkTouchListener(this) { currentOnHold.value(it) })
         } },
         update = { view ->
             if (view.tag !== richText) { view.text = richText; view.tag = richText }
