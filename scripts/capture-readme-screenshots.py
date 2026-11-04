@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 import re
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = "cum.ahfu.mobi.material"
@@ -18,9 +19,16 @@ if not re.fullmatch(r"emulator-\d+", args.serial):
     parser.error("Select an emulator, not a physical device.")
 
 
-def adb(*command):
-    return subprocess.run([args.adb, "-s", args.serial, *command], check=True,
-                          capture_output=True, text=True, encoding="utf-8", timeout=180).stdout
+def adb(*command, timeout=180):
+    try:
+        return subprocess.run([args.adb, "-s", args.serial, *command], check=True,
+                              capture_output=True, text=True, encoding="utf-8", timeout=timeout).stdout
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
+        for output in (error.stdout, error.stderr):
+            if output:
+                print(output.decode("utf-8", errors="replace") if isinstance(output, bytes) else output,
+                      file=sys.stderr, flush=True)
+        raise
 
 
 if adb("shell", "getprop", "ro.kernel.qemu").strip() != "1":
@@ -35,7 +43,7 @@ output = f"/sdcard/Android/data/{PACKAGE}/files"
 adb("shell", "rm", "-f", *(f"{output}/{folder}/{name}.png" for name, folder in CAPTURES.items()))
 result = adb("shell", "am", "instrument", "-w", "-r", "-e", "class",
              "org.mobilism.material.ReadmeScreenshots,org.mobilism.material.DebridDownloadsTest,org.mobilism.material.DebridRepositoryTest,org.mobilism.material.AboutScreenTest,org.mobilism.material.DiagnosticExportTest,org.mobilism.material.AppearanceOptionsTest,org.mobilism.material.HomeTest#allThreeSectionsExposeHeroCollectionsAndWorkingShortcuts,org.mobilism.material.MessageMailboxTest,org.mobilism.material.ui.UserProfileTest,org.mobilism.material.ui.SearchDiscoveryTest,org.mobilism.material.ui.MessageAvatarTest",
-             f"{PACKAGE}.test/org.mobilism.material.ReadmeScreenshotRunner")
+             f"{PACKAGE}.test/org.mobilism.material.ReadmeScreenshotRunner", timeout=600)
 passed = re.search(r"OK \(([1-9][0-9]*) tests?\)", result)
 # adb can exit successfully even when JUnit fails.
 if not passed or "FAILURES!!!" in result or "INSTRUMENTATION_FAILED" in result:
