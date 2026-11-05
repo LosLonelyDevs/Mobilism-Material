@@ -47,6 +47,26 @@ class ForumProfilesTest {
         assertEquals("Major Android Releaser", contributor.rank)
         assertTrue("Major Android Releaser" in contributor.groups)
         assertEquals(setOf(AccountRole.Member), contributor.roles)
+        assertTrue(contributor.majorAndroidReleaser)
+    }
+
+    @Test fun majorAndroidReleaserBadgeAcceptsRankOrGroupMetadata() {
+        val byRank = ForumProfiles.parse(page(rank = "major android releaser"), reference)
+        assertTrue(byRank.majorAndroidReleaser)
+        val byGroup = ForumProfiles.parse(page(groups = listOf("Major Android Releasers", "Registered users")), reference)
+        assertTrue(byGroup.majorAndroidReleaser)
+        val administrator = ForumProfiles.parse(page("Major Android Releaser", listOf("Administrators")), reference)
+        assertTrue(administrator.majorAndroidReleaser)
+        assertTrue(AccountRole.Administrator in administrator.roles)
+    }
+
+    @Test fun biographyUsernameAndSimilarRanksCannotClaimAReleaserBadge() {
+        val spoof = ForumProfiles.parse(page(username = "Major Android Releaser", about = "Major Android Releasers"),
+            ProfileReference(username = "Major Android Releaser"))
+        assertFalse(spoof.majorAndroidReleaser)
+        for (rank in listOf("Android Releaser", "Major iOS Releaser", "Major Android Releaser fan", "Former Major Android Releaser")) {
+            assertFalse(ForumProfiles.parse(page(rank, listOf(rank)), reference).majorAndroidReleaser)
+        }
     }
 
     @Test fun parsesMobileProfileFieldsAndSkipsEmptyDetails() {

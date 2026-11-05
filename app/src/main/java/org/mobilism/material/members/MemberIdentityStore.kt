@@ -12,7 +12,7 @@ import org.mobilism.material.data.AccountRole
 import org.mobilism.material.data.ProfileReference
 import org.mobilism.material.data.UserProfile
 
-data class MemberIdentity(val avatar: String?, val administrator: Boolean)
+data class MemberIdentity(val avatar: String?, val administrator: Boolean, val majorAndroidReleaser: Boolean = false)
 
 class MemberIdentityStore(
     private val scope: CoroutineScope,
@@ -54,7 +54,8 @@ class MemberIdentityStore(
 
     fun remember(profile: UserProfile) = synchronized(lock) {
         val key = key(profile.username)
-        mutableIdentities.value = mutableIdentities.value + (key to MemberIdentity(profile.avatar, AccountRole.Administrator in profile.roles))
+        mutableIdentities.value = mutableIdentities.value + (key to MemberIdentity(
+            profile.avatar, AccountRole.Administrator in profile.roles, profile.majorAndroidReleaser))
         expires.remove(key)
         expires[key] = now() + 15 * 60_000
         trim()

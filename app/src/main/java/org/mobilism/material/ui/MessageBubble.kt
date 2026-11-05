@@ -79,7 +79,8 @@ internal fun MessageBubble(message: PrivateMessage, username: String, onRead: ()
                     MessageAvatar(message.from, message.avatar, Modifier.size(28.dp), color = accent, contentColor = onAccent)
                     Column(Modifier.weight(1f)) {
                         UsernameLink(message.from, label = if (outgoing) "You" else message.from,
-                            style = MaterialTheme.typography.titleSmall, color = accent, fontWeight = FontWeight.SemiBold)
+                            style = MaterialTheme.typography.titleSmall, color = accent, fontWeight = FontWeight.SemiBold,
+                            showAvatar = false)
                         if (!expanded) MessageTimestamp(message.publishedAt, Modifier.testTag("message-time-${message.id}"))
                     }
                     if (!expanded) CommentCollapseButton(false, toggle, label = "Expand message")

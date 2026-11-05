@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Show member avatars beside usernames, including release authors.
+- Load missing comment avatars in the background and retry failed lookups while browsing.
+- Show Major Android Releaser badges beside usernames.
+
 ## 0.1.19
 
 - Add in-app updates, changelogs, Announcements, profiles, badges, and message alerts.

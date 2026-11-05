@@ -73,10 +73,9 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
                     onClickLabel = if (expanded) "Collapse comment" else "Expand comment", onClick = toggle)
                 .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (comment.avatar != null) AsyncImage(comment.avatar, null, Modifier.size(28.dp).clip(MaterialTheme.shapes.large), contentScale = ContentScale.Crop)
-                else CommentAuthorDot(comment.author)
+                MessageAvatar(comment.author, comment.avatar, Modifier.size(28.dp))
                 Column(Modifier.weight(1f)) {
-                    UsernameLink(comment.author, style = MaterialTheme.typography.titleSmall)
+                    UsernameLink(comment.author, style = MaterialTheme.typography.titleSmall, showAvatar = false)
                     if (earlierComment) Text("Earlier comment", style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (comment.publishedAt > 0) {

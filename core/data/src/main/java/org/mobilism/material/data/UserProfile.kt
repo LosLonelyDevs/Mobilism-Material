@@ -34,7 +34,12 @@ data class UserProfile(
     val rank: String, val groups: List<String>, val about: String, val details: Map<String, String>,
     val joined: String?, val lastVisited: String?, val posts: String?, val balance: String?,
     val contacts: List<ProfileContact> = emptyList(),
-)
+) {
+    val majorAndroidReleaser: Boolean get() = (listOf(rank) + groups).any {
+        it.trim().equals("Major Android Releaser", ignoreCase = true) ||
+            it.trim().equals("Major Android Releasers", ignoreCase = true)
+    }
+}
 
 object ForumProfiles {
     fun parse(html: String, reference: ProfileReference): UserProfile {

@@ -35,14 +35,20 @@ internal val LocalProfileHandler = staticCompositionLocalOf<((ProfileReference) 
 @Composable
 internal fun UsernameLink(name: String, modifier: Modifier = Modifier, label: String = name,
     style: TextStyle = MaterialTheme.typography.bodyMedium, color: Color = MaterialTheme.colorScheme.primary,
-    maxLines: Int = 1, fontWeight: FontWeight? = null, onOpen: () -> Unit = {}) {
+    maxLines: Int = 1, fontWeight: FontWeight? = null, showAvatar: Boolean = true, onOpen: () -> Unit = {}) {
     val open = LocalProfileHandler.current
-    Box(modifier.minimumInteractiveComponentSize().clip(MaterialTheme.shapes.small)
+    val identity = memberIdentity(name)
+    Row(modifier.minimumInteractiveComponentSize().clip(MaterialTheme.shapes.small)
         .clickable(enabled = open != null && name.isNotBlank(), role = Role.Button, onClickLabel = "View $name profile") {
             onOpen()
             open?.invoke(ProfileReference(username = name))
-        }, contentAlignment = Alignment.CenterStart) {
-        MemberName(name, label, style = style, color = color, maxLines = maxLines, fontWeight = fontWeight)
+        }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (showAvatar && !identity?.avatar.isNullOrBlank()) {
+            MessageAvatar(name, identity.avatar, Modifier.size(24.dp))
+        }
+        MemberName(name, label, modifier = Modifier.weight(1f, fill = false), style = style, color = color,
+            maxLines = maxLines, fontWeight = fontWeight, administrator = identity?.administrator == true,
+            majorAndroidReleaser = identity?.majorAndroidReleaser == true)
     }
 }
 
@@ -106,7 +112,8 @@ internal fun UserProfileContent(profile: UserProfile, onOpenContact: ((String) -
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     MessageAvatar(profile.username, profile.avatar, Modifier.size(80.dp), initialStyle = MaterialTheme.typography.headlineMedium)
                     MemberName(profile.username, style = MaterialTheme.typography.headlineSmall, color = colors.primary,
-                        textAlign = TextAlign.Center, maxLines = 2, administrator = AccountRole.Administrator in profile.roles)
+                        textAlign = TextAlign.Center, maxLines = 2, administrator = AccountRole.Administrator in profile.roles,
+                        majorAndroidReleaser = profile.majorAndroidReleaser)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         profile.roles.forEach { role -> ProfileRoleBadge(role,
                             if (role == AccountRole.Member) profile.rank.ifBlank { "Member" } else role.label) }
