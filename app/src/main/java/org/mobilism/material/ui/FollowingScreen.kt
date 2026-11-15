@@ -117,6 +117,8 @@ fun FollowingScreen(
                                 Icon(Icons.Outlined.Refresh, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
                                 Text(if (check.busy) "Checking ${check.done} of ${check.total}…" else "Check now")
                             }
+                            Text("Checks up to five apps, starting with those checked longest ago. Each app waits six hours between checks; batches wait at least 15 minutes.",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (check.busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large))
                             if (!check.busy && check.total > 0) Text("Checked ${check.done} of ${check.total}" +
                                 if (check.failed > 0) " · ${check.failed} failed. Try again." else "",

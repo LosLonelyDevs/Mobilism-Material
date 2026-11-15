@@ -20,6 +20,14 @@ internal class SortedSearchPager(
     private var sourceHasMore = true
     private var nextActivityAtMost: Long? = null
     private var lastShownDate: Long? = null
+    private var sourceRequests = 0
+
+    private suspend fun loadSortedPage(page: Int): ReleasePage {
+        if (sourceRequests >= 3) throw ApiFailure(FailureKind.InvalidResponse,
+            "Too many search pages to sort by post date. Narrow your search or use Latest activity.")
+        sourceRequests++
+        return load(page)
+    }
 
     suspend fun next(onProgress: (Int) -> Unit): ReleasePage {
         if (sort == SearchSort.Activity) {
@@ -34,7 +42,7 @@ internal class SortedSearchPager(
             var page = 1
             do {
                 currentCoroutineContext().ensureActive()
-                val result = load(page)
+                val result = loadSortedPage(page)
                 val lastPage = result.lastPage ?: page
                 check(lastPage >= page) { "Search pagination did not advance. Try again." }
                 val fresh = result.items.filter { it.id !in matches }
@@ -68,7 +76,7 @@ internal class SortedSearchPager(
                 ready.lastOrNull()?.let { lastShownDate = it.publishedAt }
                 return ReleasePage(ready, sourceHasMore || pending.isNotEmpty())
             }
-            val result = load(sourcePage)
+            val result = loadSortedPage(sourcePage)
             val lastPage = result.lastPage ?: sourcePage
             check(lastPage >= sourcePage) { "Search pagination did not advance. Try again." }
             val fresh = result.items.filter { it.id !in seen }

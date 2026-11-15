@@ -34,6 +34,7 @@ internal class CustomCategorySearchPager(
     private var lastDate: Long? = null
     private val pages = mutableMapOf<Int, ReleasePage>()
     private val permits = Semaphore(4)
+    private var requests = 0
     private val ranking = compareByDescending<Release> { if (order == FeedOrder.Top) it.views else it.publishedAt }
         .thenByDescending { it.publishedAt }.thenByDescending { it.id }
 
@@ -63,8 +64,12 @@ internal class CustomCategorySearchPager(
                 ready.lastOrNull()?.let { lastDate = it.publishedAt }
                 return ReleasePage(ready, active.isNotEmpty() || candidates.isNotEmpty()).also { pages[number] = it }
             }
+            val searches = next.filterValues { !it.ended }
+            if (requests + searches.size > 6) throw ApiFailure(FailureKind.InvalidResponse,
+                "This category needs too many searches. Use a smaller category or search for an app directly.")
+            requests += searches.size
             val responses = coroutineScope {
-                next.filterValues { !it.ended }.map { (query, cursor) ->
+                searches.map { (query, cursor) ->
                     async { query to permits.withPermit { load(query, cursor.page + 1) } }
                 }.awaitAll()
             }

@@ -32,12 +32,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -49,8 +47,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
 import org.mobilism.material.data.SearchScope
 import org.mobilism.material.data.FeedFilters
 import org.mobilism.material.designsystem.AppIconButton
@@ -81,13 +77,6 @@ fun SearchScreen(
     if (showReleaseFilters) CategoryFilterSheet(categories, state.filters, onLoadCategories, onFilters,
         onDismiss = { showReleaseFilters = false }, showCategories = state.scope.section != null, showSearchSort = true,
         customCategories = customCategories, onManageCategories = { showReleaseFilters = false; onManageCategories() })
-    LaunchedEffect(list, state.page, state.items.size, state.busy, state.error, state.canLoadMore, state.awaitingMore) {
-        if (!state.busy && state.error == null && state.canLoadMore) {
-            if (state.awaitingMore) onMore()
-            else if (state.items.isNotEmpty()) snapshotFlow { (list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.items.size - 3 }
-                .distinctUntilChanged().filter { it }.collect { onMore() }
-        }
-    }
     if (filters) {
         var selection by remember { mutableStateOf(state.scope) }
         FilterSheet(
@@ -142,9 +131,14 @@ fun SearchScreen(
                     items(state.items, key = { it.id }) { release ->
                         ReleaseCard(release, MaterialTheme.colorScheme.primary) { onRelease(release.id) }
                     }
-                    if (state.busy || (state.awaitingMore && state.error == null)) item { LoadingState(state.sortingMatches?.let { "Checking post dates · $it matches…" }
+                    if (state.busy) item { LoadingState(state.sortingMatches?.let { "Checking post dates · $it matches…" }
                         ?: "Searching…", Modifier.fillMaxWidth()) }
                     state.error?.let { error -> item { ErrorPanel(error, onRetry = onMore) } }
+                    if (!state.busy && state.error == null && state.submitted.isNotBlank() && state.page > 0 && state.canLoadMore) item {
+                        if (state.awaitingMore) Text("No matches in the posts just checked.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        ExpressiveButton(onMore, modifier = Modifier.fillMaxWidth()) { Text("Load more") }
+                    }
                     val showRecent = state.query.isBlank() && state.submitted.isBlank() && state.items.isEmpty() &&
                         !state.busy && state.error == null && recentQueries.isNotEmpty()
                     if (showRecent) {

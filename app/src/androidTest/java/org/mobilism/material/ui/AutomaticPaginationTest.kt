@@ -34,7 +34,7 @@ class AutomaticPaginationTest {
         compose.runOnIdle { assertEquals(3, calls) }
     }
 
-    @Test fun searchContinuesEmptyBatchesAndStopsWhenTheSourceEnds() {
+    @Test fun searchWaitsForEachExplicitPageAndStopsWhenTheSourceEnds() {
         var state by mutableStateOf(SearchState(query = "Example", submitted = "Example", page = 1, awaitingMore = true))
         var calls = 0
         compose.setContent { MobilismTheme(reduceMotion = true) {
@@ -43,7 +43,12 @@ class AutomaticPaginationTest {
                 state = state.copy(page = state.page + 1, awaitingMore = calls < 3, canLoadMore = calls < 3)
             }, {}, {}, CategoryState(), {}, {})
         } }
-        compose.waitUntil { calls == 3 }
+        compose.runOnIdle { assertEquals(0, calls) }
+        repeat(3) {
+            compose.onNodeWithText("Load more").performClick()
+            compose.waitForIdle()
+            compose.runOnIdle { assertEquals(it + 1, calls) }
+        }
         compose.onNodeWithText("Keep looking").assertDoesNotExist()
         compose.onNodeWithText("No matches in the posts just checked.").assertDoesNotExist()
         compose.onNodeWithText("No releases found for “Example”.").assertIsDisplayed()
@@ -59,6 +64,7 @@ class AutomaticPaginationTest {
         } }
         compose.onNodeWithText("Searching…").assertIsDisplayed()
         compose.runOnIdle { assertEquals(0, calls); state = state.copy(busy = false) }
+        compose.onNodeWithText("Load more").performClick()
         compose.waitUntil { calls == 1 }
         compose.runOnIdle { state = state.copy(busy = false, error = ApiFailure(FailureKind.Connection, "Offline").forScreen()) }
         compose.onNodeWithText("Keep looking").assertDoesNotExist()

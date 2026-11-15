@@ -41,7 +41,7 @@ internal fun SearchSortOptions(selected: SearchSort, onSelect: (SearchSort) -> U
                 }
             }
         }
-        Text("Sorting by post date may take longer for broad searches.",
+        Text("Post date sorting checks up to three pages. Use Latest activity for broader searches.",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

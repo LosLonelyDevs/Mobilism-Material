@@ -228,7 +228,7 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         }) return ReleasePage(emptyList(), false)
         val hideAdult = contentPreferences.hideAdult.value
         return filteredReleasePages(page, effective, excludedCategories = excludedCategories(hideAdult),
-            customCategories = local) { sourcePage ->
+            customCategories = local, maxPages = 1) { sourcePage ->
             withSession { token -> api.search(query, scope, sourcePage, token, hideAdult) }
         }
     }

@@ -25,7 +25,7 @@ class CustomCategorySearchPagerTest {
         assertEquals(setOf("Alpha" to 1, "Beta" to 1), calls.toSet())
     }
 
-    @Test fun emptyAndUnmatchedPagesContinueAutomaticallyPastFiveBatches() = runBlocking {
+    @Test fun emptyAndUnmatchedPagesStopAtTheRequestBudget() = runBlocking {
         val calls = mutableListOf<Int>()
         val pager = CustomCategorySearchPager(listOf(member(release(1))), ContentSection.Apps, FeedOrder.Latest,
             matches = { ReleaseVersions.sameApp(it, release(1)) }) { _, page ->
@@ -36,8 +36,21 @@ class CustomCategorySearchPagerTest {
                 else -> ReleasePage(listOf(release(100)), false)
             }
         }
-        assertEquals(listOf(100L), pager.page(1).items.map { it.id })
-        assertEquals((1..8).toList(), calls)
+        repeat(3) {
+            assertTrue(runCatching { pager.page(1) }.exceptionOrNull() is ApiFailure)
+        }
+        assertEquals((1..6).toList(), calls)
+    }
+
+    @Test fun oversizedCategoriesFailBeforeLaunchingAnySearches() = runBlocking {
+        var calls = 0
+        val pager = CustomCategorySearchPager((1L..100L).map { member(release(it, "App $it")) },
+            ContentSection.Apps, FeedOrder.Top, matches = { true }) { _, _ ->
+            calls++
+            ReleasePage(emptyList(), false)
+        }
+        assertTrue(runCatching { pager.page(1) }.exceptionOrNull() is ApiFailure)
+        assertEquals(0, calls)
     }
 
     @Test fun latestUsesActivityBoundsToKeepOldActiveThreadsBehindNewReleases() = runBlocking {

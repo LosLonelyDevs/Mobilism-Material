@@ -6,7 +6,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.mobilism.material.data.*
 
@@ -33,8 +32,15 @@ class FollowingChecker(
         }
     }
 
-    suspend fun check(): FollowCheckState = mutex.withLock {
-        val watches = library.state.value.filter { it.watched }
+    suspend fun check(): FollowCheckState {
+        if (!mutex.tryLock()) return mutableState.value
+        return try { checkDue() } finally { mutex.unlock() }
+    }
+
+    private suspend fun checkDue(): FollowCheckState {
+        val now = System.currentTimeMillis()
+        val watches = FollowCheckPolicy.due(library.state.value, now)
+        if (watches.isEmpty() || !preferences.beginCheck(now)) return mutableState.value
         mutableState.value = FollowCheckState(busy = true, total = watches.size)
         try {
             if (repository.auth.value == AuthState.Restoring) repository.restoreSession()
@@ -42,14 +48,7 @@ class FollowingChecker(
             for (original in watches) {
                 val entry = library.state.value.firstOrNull { it.watched && it.release.id == original.release.id } ?: continue
                 try {
-                    val candidates = mutableListOf<Release>()
-                    val seen = mutableSetOf<Long>()
-                    for (page in 1..3) {
-                        val response = repository.search(ReleaseTitles.parse(entry.release.title).name, SearchScope.Apps, page)
-                        val fresh = response.items.filter { seen.add(it.id) }
-                        candidates += fresh
-                        if (!response.canLoadMore || fresh.isEmpty()) break
-                    }
+                    val candidates = repository.search(ReleaseTitles.parse(entry.release.title).name, SearchScope.Apps, 1).items
                     // Read again after the request. An install can finish while the search runs.
                     refreshInstalled()
                     val current = FollowingVersions.matchingInstalled(entry, installed.value)
@@ -68,10 +67,11 @@ class FollowingChecker(
                 catch (_: Exception) {
                     library.failed(entry, "Couldn't check for updates. Try again.")
                     mutableState.update { it.copy(failed = it.failed + 1) }
+                    break
                 }
                 mutableState.update { it.copy(done = it.done + 1) }
             }
         } finally { mutableState.update { it.copy(busy = false) } }
-        mutableState.value
+        return mutableState.value
     }
 }

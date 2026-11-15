@@ -27,8 +27,8 @@ android {
         applicationId = "cum.ahfu.mobi.material"
         minSdk = 26
         targetSdk = 36
-        versionCode = 20
-        versionName = "0.1.19"
+        versionCode = 21
+        versionName = "0.1.20"
         buildConfigField("String", "DAILY_USAGE_ENDPOINT", dailyUsageEndpoint.buildConfigString())
         val releaseNotes = changelog.substringAfter("## $versionName\n", "")
             .substringBefore("\n## ").trim()

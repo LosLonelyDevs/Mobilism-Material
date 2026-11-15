@@ -109,6 +109,7 @@ class SearchViewModel(
     fun submit() {
         val snapshot = mutableState.value
         val query = snapshot.query.trim()
+        if (job?.isActive == true && query == snapshot.submitted) return
         job?.cancel()
         mutableState.value = SearchState(query = snapshot.query, submitted = query, scope = snapshot.scope, filters = snapshot.filters)
         if (query.isNotEmpty()) { history.record(query); loadMore() }

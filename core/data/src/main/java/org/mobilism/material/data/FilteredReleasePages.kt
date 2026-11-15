@@ -7,13 +7,14 @@ internal suspend fun filteredReleasePages(
     newestFirst: Boolean = false,
     excludedCategories: Set<Long> = emptySet(),
     customCategories: CustomCategoryState = CustomCategoryState(),
+    maxPages: Int = 5,
     load: suspend (Int) -> ReleasePage,
 ): ReleasePage {
-    require(firstPage > 0 && filters.validDates)
+    require(firstPage > 0 && filters.validDates && maxPages > 0)
     val seen = mutableSetOf<Long>()
     var page = firstPage
     var nextActivityAtMost: Long? = null
-    repeat(5) {
+    repeat(maxPages) {
         val source = load(page)
         nextActivityAtMost = source.nextActivityAtMost
         if (source.items.isEmpty() && source.canLoadMore) return ReleasePage(emptyList(), true, page, nextActivityAtMost)

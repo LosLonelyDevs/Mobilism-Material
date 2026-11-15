@@ -11,6 +11,22 @@ import org.mobilism.material.data.SearchSort
 class SortedSearchPagerTest {
     private fun release(id: Long, date: Long) = Release(id, "Sample v1", "", null, date, 0, 0)
 
+    @Test fun broadDateSortsStopAfterThreeRequestsIncludingExplicitRetries() = runTest {
+        for (sort in listOf(SearchSort.Newest, SearchSort.Oldest)) {
+            val requests = mutableListOf<Int>()
+            val pager = SortedSearchPager(sort) { page ->
+                requests += page
+                ReleasePage(listOf(release(page.toLong(), page.toLong())), true)
+            }
+            repeat(3) {
+                val failure = runCatching { pager.next {} }.exceptionOrNull()
+                assertTrue(failure is org.mobilism.material.data.ApiFailure)
+                assertTrue(failure!!.message!!.contains("Latest activity"))
+            }
+            assertEquals(listOf(1, 2, 3), requests)
+        }
+    }
+
     @Test fun newestSortChecksLaterSourcePagesBeforeShowingResults() = runTest {
         val requests = mutableListOf<Int>()
         val progress = mutableListOf<Int>()

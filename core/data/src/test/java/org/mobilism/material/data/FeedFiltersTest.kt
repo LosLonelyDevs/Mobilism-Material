@@ -9,6 +9,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FeedFiltersTest {
+    @Test fun searchFiltersConsumeOnlyOneSourcePageEvenWhenNothingMatches() = kotlinx.coroutines.runBlocking {
+        val calls = mutableListOf<Int>()
+        val result = filteredReleasePages(1, FeedFilters(categoryIds = setOf(10)), maxPages = 1) { page ->
+            calls += page
+            ReleasePage(listOf(release(page.toLong(), category = 20)), true)
+        }
+        assertEquals(listOf(1), calls)
+        assertTrue(result.items.isEmpty())
+        assertTrue(result.canLoadMore)
+        assertEquals(1, result.lastPage)
+    }
     private val date = LocalDate.of(2026, 10, 10)
     private fun release(id: Long, timestamp: String = "2026-10-10T12:00:00Z", category: Long? = 10) =
         Release(id, "Example v1.0", "", null, Instant.parse(timestamp).epochSecond, 0, 0, categoryId = category)

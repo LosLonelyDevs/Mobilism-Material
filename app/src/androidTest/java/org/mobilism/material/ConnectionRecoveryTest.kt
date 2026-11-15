@@ -57,12 +57,14 @@ class ConnectionRecoveryTest {
         assertEquals(fixture.requests.first().url, fixture.requests.last().url)
     }
 
-    @Test fun searchCanResumeItsReadOnlyPostAfterVerification() = runBlocking {
+    @Test fun blockedSearchStopsWithoutAutomaticVerificationOrReplay() = runBlocking {
         val fixture = RecoveringFixture()
-        assertTrue(fixture.repository.search("fixture", SearchScope.All, 1).items.isEmpty())
-        assertEquals(2, fixture.requests.size)
-        assertEquals(listOf(VerificationSite.App), fixture.sites)
+        assertTrue(runCatching { fixture.repository.search("fixture", SearchScope.All, 1) }.exceptionOrNull() is ApiFailure)
+        assertTrue(runCatching { fixture.repository.search("another", SearchScope.All, 1) }.exceptionOrNull() is ApiFailure)
+        assertEquals(1, fixture.requests.size)
+        assertTrue(fixture.sites.isEmpty())
         assertTrue(fixture.requests.all { it.method == "POST" })
+        assertTrue(checkNotNull(fixture.requests.single().body).isOneShot())
     }
 
     @Test fun aRepeatedChallengeOrCancelledCheckCannotLoop() = runBlocking {
@@ -130,6 +132,15 @@ class ConnectionRecoveryTest {
         assertEquals(2, fixture.calls)
         assertTrue(fixture.events.any { it.phase == DiagnosticPhase.Retrying && it.httpStatus == 503 })
         assertTrue(fixture.events.any { it.phase == DiagnosticPhase.Completed && it.httpStatus == 200 })
+    }
+
+    @Test fun failedSearchDoesNotRetryOrContinueToAnotherQuery() = runBlocking {
+        val fixture = Fixture(503, "<html>Unavailable</html>")
+        repeat(5) { index ->
+            assertTrue(runCatching { fixture.repository.search("fixture-$index", SearchScope.Apps, 1) }.exceptionOrNull() is ApiFailure)
+        }
+        assertEquals(1, fixture.calls)
+        assertFalse(fixture.events.any { it.phase == DiagnosticPhase.Retrying })
     }
 
     @Test fun cloudflareChallengeDoesNotRetryAndLogsTheActualCause() = runBlocking {

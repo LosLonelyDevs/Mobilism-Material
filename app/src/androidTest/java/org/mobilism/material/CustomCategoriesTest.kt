@@ -17,7 +17,7 @@ import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
-import okhttp3.FormBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -192,8 +192,9 @@ class CustomCategoriesTest {
             val path = chain.request().url.encodedPath
             paths += path
             if (path.endsWith("/search")) {
-                val form = chain.request().body as FormBody
-                queries += (0 until form.size).first { form.name(it) == "search" }.let(form::value)
+                val buffer = okio.Buffer()
+                checkNotNull(chain.request().body).writeTo(buffer)
+                queries += checkNotNull(("https://fixture.invalid/?" + buffer.readUtf8()).toHttpUrl().queryParameter("search"))
             }
             val rows = if ("/category/20/" in path)
                 """{"id":3,"subject":"Native v1.0","date":100,"section":"app"}"""
@@ -239,8 +240,10 @@ class CustomCategoriesTest {
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val request = chain.request()
             check(request.url.encodedPath.endsWith("/search")) { "Custom categories must search app names: ${request.url.encodedPath}" }
-            val form = request.body as FormBody
-            fun field(name: String) = (0 until form.size).first { form.name(it) == name }.let(form::value)
+            val buffer = okio.Buffer()
+            checkNotNull(request.body).writeTo(buffer)
+            val form = ("https://fixture.invalid/?" + buffer.readUtf8()).toHttpUrl()
+            fun field(name: String) = checkNotNull(form.queryParameter(name))
             val name = field("search")
             val page = field("count").toInt()
             queries += name to page

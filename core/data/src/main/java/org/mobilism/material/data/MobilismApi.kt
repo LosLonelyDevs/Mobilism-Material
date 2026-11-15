@@ -39,6 +39,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         .build()
     // Connection recovery can resend a request. Keep writes on the non-retrying client.
     private val readClient = this.client.newBuilder().retryOnConnectionFailure(true).build()
+    private val searches = SearchRequestPolicy()
     private val likePostIds = context.getSharedPreferences("release-post-ids", Context.MODE_PRIVATE)
     private val forumPostIds = ConcurrentHashMap<Long, Long>()
     private val forumCommentStarts = ConcurrentHashMap<Pair<Long, Int>, Int>()
@@ -243,6 +244,18 @@ internal class MobilismApi(private val context: Context, private val diagnostics
 
     private suspend fun request(path: String, token: String? = null, form: Map<String, String>? = null,
         emptyRecordsAsArray: Boolean = false, hideAdult: Boolean = false, retryRead: Boolean = true,
+        emptySuccess: Boolean = false, recovered: Boolean = false): JSONObject {
+        if (path != "search") return performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead, emptySuccess, recovered)
+        val identity = listOf(token, hideAdult.toString(), form?.toSortedMap().toString()).toString()
+        val key = java.security.MessageDigest.getInstance("SHA-256").digest(identity.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        return JSONObject(searches.request(key) {
+            performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead = false, emptySuccess = emptySuccess).toString()
+        })
+    }
+
+    private suspend fun performRequest(path: String, token: String? = null, form: Map<String, String>? = null,
+        emptyRecordsAsArray: Boolean = false, hideAdult: Boolean = false, retryRead: Boolean = true,
         emptySuccess: Boolean = false, recovered: Boolean = false): JSONObject =
         withContext(Dispatchers.IO) {
             val operation = when {
@@ -272,8 +285,8 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             token?.let { builder.header("X-Auth-Token", it) }
             form?.let { fields ->
                 val body = FormBody.Builder().apply { fields.forEach { (name, value) -> add(name, value) } }.build()
-                // Even HTTP follow-ups must not replay a comment or another account action.
-                builder.post(if (path == "search") body else object : RequestBody() {
+                // Searches are expensive too. HTTP follow-ups must not replay any POST.
+                builder.post(object : RequestBody() {
                     override fun contentType() = body.contentType()
                     override fun contentLength() = body.contentLength()
                     override fun writeTo(sink: BufferedSink) = body.writeTo(sink)
@@ -294,6 +307,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                     result = transport.newCall(request).await()
                 }
                 result.use { response ->
+                    if (path == "search" && !response.isSuccessful) searches.retryAfter(response.header("Retry-After"))
                     val body = response.body ?: throw ApiFailure(FailureKind.InvalidResponse, "The server returned an empty response.")
                     val source = body.source()
                     source.request(MAX_RESPONSE_BYTES + 1)

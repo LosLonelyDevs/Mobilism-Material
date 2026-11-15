@@ -12,6 +12,13 @@ class FollowingPreferences(context: Context) {
         preferences.getBoolean("notifications", false), preferences.getLong("hours", 6).takeIf { it in intervals } ?: 6))
     val state = mutableState.asStateFlow()
 
+    internal fun beginCheck(now: Long): Boolean {
+        val previous = preferences.getLong("last-check-attempt", 0)
+        if (previous > 0 && now - previous < FollowCheckPolicy.ATTEMPT_INTERVAL_MS) return false
+        preferences.edit().putLong("last-check-attempt", now).apply()
+        return true
+    }
+
     fun background(enabled: Boolean) = save(state.value.copy(backgroundChecks = enabled))
     fun notifications(enabled: Boolean) = save(state.value.copy(notifications = enabled))
     fun interval(hours: Long) { require(hours in intervals); save(state.value.copy(intervalHours = hours)) }
@@ -20,5 +27,5 @@ class FollowingPreferences(context: Context) {
             .putLong("hours", value.intervalHours).apply()
         mutableState.value = value
     }
-    companion object { val intervals = listOf(1L, 6L, 12L, 24L) }
+    companion object { val intervals = listOf(6L, 12L, 24L) }
 }

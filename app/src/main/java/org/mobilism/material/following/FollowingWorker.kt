@@ -10,9 +10,9 @@ class FollowingWorker(context: Context, parameters: WorkerParameters) : Coroutin
     override suspend fun doWork(): Result = try {
         val app = applicationContext as MobilismApplication
         if (!app.followPreferences.state.value.backgroundChecks) Result.success()
-        else if (app.following.check().failed > 0) Result.retry() else Result.success()
+        else { app.following.check(); Result.success() }
     } catch (cancelled: CancellationException) { throw cancelled }
-    catch (_: Exception) { Result.retry() }
+    catch (_: Exception) { Result.success() }
 }
 
 object FollowingSchedule {
@@ -20,9 +20,9 @@ object FollowingSchedule {
     fun update(context: Context, enabled: Boolean, hours: Long) {
         val manager = WorkManager.getInstance(context)
         if (!enabled) { manager.cancelUniqueWork(NAME); return }
-        val request = PeriodicWorkRequestBuilder<FollowingWorker>(hours, TimeUnit.HOURS)
+        val request = PeriodicWorkRequestBuilder<FollowingWorker>(maxOf(hours, FollowCheckPolicy.MIN_INTERVAL_HOURS), TimeUnit.HOURS)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES).build()
+            .setInitialDelay(kotlin.random.Random.nextLong(15, 61), TimeUnit.MINUTES).build()
         manager.enqueueUniquePeriodicWork(NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 }

@@ -2,12 +2,11 @@
 
 ## Unreleased
 
-- Show avatars and Major Android Releaser badges; retry missing avatars.
-- Edit or delete comments through forum forms.
-- Continue filtered searches automatically.
-- Accept message acknowledgements; allow new replies.
-- Improve download help and notes.
-- Renew verification quietly and resume blocked pages automatically.
+## 0.1.20
+
+- various bug fixes and improvements
+- Add avatars, releaser badges, and comment editing through forum forms.
+- Improve message replies, download help, and connection recovery.
 
 ## 0.1.19
 

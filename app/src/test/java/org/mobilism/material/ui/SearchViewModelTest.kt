@@ -17,6 +17,14 @@ class SearchViewModelTest {
     @Before fun setMain() = Dispatchers.setMain(dispatcher)
     @After fun resetMain() = Dispatchers.resetMain()
 
+    @Test fun repeatedSubmitDoesNotRestartAnActiveSearch() = runTest(dispatcher) {
+        val repository = SearchRepository()
+        val model = SearchViewModel(repository, SearchScope.Apps, "Example")
+        repeat(20) { model.submit() }
+        advanceUntilIdle()
+        assertEquals(1, repository.requests.size)
+    }
+
     @Test fun clearingQueryClearsResultsAndRecentQueryResubmitsWithBookFilters() = runTest(dispatcher) {
         val history = org.mobilism.material.settings.RecentSearches()
         val repository = SearchRepository()
