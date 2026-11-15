@@ -114,6 +114,15 @@ fun ReleaseScreen(
     val snackbar = remember { SnackbarHostState() }
     val release = state.release
     var downloadsOpen by rememberSaveable(release?.id) { mutableStateOf(false) }
+    var managedCommentId by rememberSaveable(release?.id) { mutableStateOf<Long?>(null) }
+    var commentAction by rememberSaveable(release?.id) { mutableStateOf(ForumCommentAction.Edit.name) }
+    if (release != null && auth is AuthState.SignedIn) managedCommentId?.let { postId ->
+        ForumCommentEditor(ForumCommentTarget(release.id, postId, ForumCommentAction.valueOf(commentAction)), auth.username) {
+            managedCommentId = null
+            onRefreshComments()
+            onRetry()
+        }
+    }
     val downloadRequests = remember(release?.id) { DownloadRequestTracker() }
     if (state.likeNeedsVerification && release != null) {
         ForumPostVerification(release.id, onLikePostVerified, onDismissLikeVerification)
@@ -293,7 +302,7 @@ fun ReleaseScreen(
                         CollapsibleSection("${release.id}-downloads", "Downloads", Icons.Outlined.Download, theme.success,
                             headingStyle = MaterialTheme.typography.titleMedium) {
                             content?.downloadNotesHtml?.takeIf { it.isNotBlank() }?.let {
-                                ReleaseBody(it, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
+                                DownloadNotes(it, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
                             }
                             groups.forEach { group ->
                                 ReleaseDownloadGroup(release.id, group, release.browserUrl ?: "https://forum.mobilism.org/",
@@ -320,10 +329,14 @@ fun ReleaseScreen(
                     }
                     items(commentRows, key = { "comment-${it.comment.id}" }) { row ->
                         val comment = row.comment
+                        val canManage = !row.placeholder && canManageComment(comment, auth)
                         CommentThreadRow(row.depth) {
                             ReleaseCommentCard(comment, release.browserUrl ?: "https://forum.mobilism.org/", onRelease = onRelease,
                             onReply = if (row.placeholder) null else ({ if (auth is AuthState.SignedIn) onReplyToComment(comment) else onSignIn() }),
                             replyEnabled = !state.composer.posting, threadContent = row.content, earlierComment = row.placeholder,
+                            onEdit = if (canManage) ({ commentAction = ForumCommentAction.Edit.name; managedCommentId = comment.id }) else null,
+                            onDelete = if (canManage) ({ commentAction = ForumCommentAction.Delete.name; managedCommentId = comment.id }) else null,
+                            actionsEnabled = !state.composer.posting,
                             collapsed = comment.id in collapsedComments,
                             onToggleThread = {
                                 collapsedComments = if (comment.id in collapsedComments) collapsedComments - comment.id
@@ -355,7 +368,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.releaseDetailItem(key
 @Composable
 internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Unit)? = null,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
-    linkColor: Color = MaterialTheme.colorScheme.primary) {
+    linkColor: Color = MaterialTheme.colorScheme.primary,
+    textStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge) {
     val context = LocalContext.current
     val currentOnRelease = androidx.compose.runtime.rememberUpdatedState(onRelease)
     val currentForumLinkHandler = androidx.compose.runtime.rememberUpdatedState(LocalForumLinkHandler.current)
@@ -366,7 +380,7 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
     heldUrl?.let { ForumLinkActions(it, onDismiss = { heldUrl = null }) }
     val textColor = contentColor.toArgb()
     val linkArgb = linkColor.toArgb()
-    val textSize = MaterialTheme.typography.bodyLarge.fontSize.value
+    val textSize = textStyle.fontSize.value
     val font = LocalAppFont.current
     val resources = LocalResources.current
     val typeface = remember(resources, font) {

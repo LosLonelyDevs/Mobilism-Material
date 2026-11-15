@@ -17,6 +17,7 @@ import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
+import okhttp3.FormBody
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -186,9 +187,14 @@ class CustomCategoriesTest {
         val preferences = ContentPreferencesStore(context).also { it.hideAdult(false) }
         var enabled = true
         val paths = CopyOnWriteArrayList<String>()
+        val queries = CopyOnWriteArrayList<String>()
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val path = chain.request().url.encodedPath
             paths += path
+            if (path.endsWith("/search")) {
+                val form = chain.request().body as FormBody
+                queries += (0 until form.size).first { form.name(it) == "search" }.let(form::value)
+            }
             val rows = if ("/category/20/" in path)
                 """{"id":3,"subject":"Native v1.0","date":100,"section":"app"}"""
             else """{"id":4,"subject":"Other v1.0","date":300,"category_id":30,"section":"app"},
@@ -206,7 +212,8 @@ class CustomCategoriesTest {
             customCategories = store, customCategoriesEnabled = { enabled })
         val filters = FeedFilters(categoryIds = setOf(20), customCategoryIds = setOf(sports.id))
         assertEquals(listOf(2L, 3L), repository.releases(ContentSection.Apps, FeedOrder.Latest, 1, filters).items.map { it.id })
-        assertTrue(paths.any { it.contains("/category/all/") })
+        assertFalse(paths.any { it.contains("/category/all/") })
+        assertTrue(queries.isNotEmpty() && queries.all { it == "Example" })
         assertTrue(paths.any { it.contains("/category/20/") })
         val search = repository.search("Example", SearchScope.Apps, 1, filters)
         assertEquals(listOf(2L, 3L), search.items.map { it.id })
@@ -220,5 +227,40 @@ class CustomCategoriesTest {
         assertEquals(listOf(4L, 2L, 3L), repository.search("Example", SearchScope.Apps, 1,
             filters.copy(categoryIds = emptySet())).items.map { it.id })
         assertEquals(setOf(sports.id), CustomCategoryStore(context).state.value.memberships(release()))
+    }
+
+    @Test fun categorySearchesEachAssignedAppAndFindsPastAndFutureVersions() = runBlocking {
+        val context = context()
+        val store = CustomCategoryStore(context)
+        val category = store.create(ContentSection.Apps, "Favorites")
+        store.assign(release(), setOf(category.id))
+        store.assign(release().copy(id = 10, title = "Second App v2.0"), setOf(category.id))
+        val queries = CopyOnWriteArrayList<Pair<String, Int>>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            check(request.url.encodedPath.endsWith("/search")) { "Custom categories must search app names: ${request.url.encodedPath}" }
+            val form = request.body as FormBody
+            fun field(name: String) = (0 until form.size).first { form.name(it) == name }.let(form::value)
+            val name = field("search")
+            val page = field("count").toInt()
+            queries += name to page
+            val rows = if (page > 1) "" else when (name) {
+                "Example" -> """{"id":1,"subject":"Example v1.0","date":100},
+                    {"id":2,"subject":"Example v3.0","date":300},
+                    {"id":99,"subject":"Unrelated v4.0","date":900}"""
+                "Second App" -> """{"id":10,"subject":"Second App v1.0","date":50},
+                    {"id":11,"subject":"Second App v4.0","date":400}"""
+                else -> error("Unexpected search: $name")
+            }
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("Fixture")
+                .body("""{"releases":[$rows]}""".toResponseBody()).build()
+        }.build()
+        val repository = DefaultMobilismRepository(context, ContentPreferencesStore(context).also { it.hideAdult(false) },
+            client = client, customCategories = store, customCategoriesEnabled = { true })
+        val result = repository.releases(ContentSection.Apps, FeedOrder.Latest, 1,
+            FeedFilters(customCategoryIds = setOf(category.id)))
+        assertEquals(listOf(11L, 2L, 1L, 10L), result.items.map { it.id })
+        assertFalse(result.canLoadMore)
+        assertEquals(setOf("Example" to 1, "Example" to 2, "Second App" to 1, "Second App" to 2), queries.toSet())
     }
 }

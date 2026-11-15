@@ -63,6 +63,14 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
     val savedScreens = rememberSaveableStateHolder()
     var menu by remember(state.destination) { mutableStateOf(false) }
     var gallery by remember { mutableStateOf<Pair<List<String>, Int>?>(null) }
+    var managedCommentId by rememberSaveable(state.topic?.key) { mutableStateOf<Long?>(null) }
+    var commentAction by rememberSaveable(state.topic?.key) { mutableStateOf(ForumCommentAction.Edit.name) }
+    if (auth is AuthState.SignedIn) state.topic?.let { topic -> managedCommentId?.let { postId ->
+        ForumCommentEditor(ForumCommentTarget(topic.id, postId, ForumCommentAction.valueOf(commentAction)), auth.username) {
+            managedCommentId = null
+            model.refreshManagedComment(postId)
+        }
+    } }
     val busy = when { state.topic != null -> state.comments.busy; state.category != null -> state.topics.busy; else -> state.loading }
     val refresh = {
         if (!state.composer.posting && !busy) {
@@ -133,6 +141,7 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
                         when {
                             screen.topic != null -> DiscussionReader(screen, model::loadComments,
                                 onReply = { if (auth is AuthState.SignedIn) model.openComposer(it) else onSignIn(screen.topic, screen.category) },
+                                auth = auth, onManage = { comment, action -> commentAction = action.name; managedCommentId = comment.id },
                                 onImage = { urls, index -> gallery = urls to index })
                             screen.category != null -> DiscussionTopics(screen, model::openTopic, model::loadTopics,
                                 model::editQuery, onSearch = { keyboard?.hide(); model.search() }, model::clearSearch)
@@ -274,6 +283,7 @@ private fun DiscussionTopics(state: DiscussionsState, onTopic: (DiscussionTopic)
 
 @Composable
 private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit, onReply: (ReleaseComment) -> Unit,
+    auth: AuthState, onManage: (ReleaseComment, ForumCommentAction) -> Unit,
     onImage: (List<String>, Int) -> Unit) {
     val topic = state.topic ?: return
     var collapsedComments by rememberSaveable(topic.key) { mutableStateOf(emptyList<Long>()) }
@@ -298,9 +308,13 @@ private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit,
         item { AppHeading("Comments · latest activity first", HeadingLevel.Section, style = MaterialTheme.typography.titleMedium) }
         items(commentRows, key = { it.comment.id }) { row ->
             val comment = row.comment
+            val canManage = !row.placeholder && canManageComment(comment, auth)
             CommentThreadRow(row.depth) {
                 ReleaseCommentCard(comment, topic.browserUrl, onReply = if (row.placeholder) null else ({ onReply(comment) }),
                     replyEnabled = !state.composer.posting, threadContent = row.content, earlierComment = row.placeholder,
+                    onEdit = if (canManage) ({ onManage(comment, ForumCommentAction.Edit) }) else null,
+                    onDelete = if (canManage) ({ onManage(comment, ForumCommentAction.Delete) }) else null,
+                    actionsEnabled = !state.composer.posting,
                     collapsed = comment.id in collapsedComments,
                     onToggleThread = {
                         collapsedComments = if (comment.id in collapsedComments) collapsedComments - comment.id

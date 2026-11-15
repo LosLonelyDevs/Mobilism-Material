@@ -20,9 +20,10 @@ object ReleaseContentParser {
 
     fun parse(html: String, apiUrls: List<String>, baseUrl: String): ReleaseContent {
         val api = apiUrls.mapNotNull(::downloadUrl).distinct()
-        val lines = ReleaseDownloadLines.read(html, baseUrl)
+        val normalized = ForumCodeBlocks.normalize(html, baseUrl)
+        val lines = ReleaseDownloadLines.read(normalized, baseUrl)
         val boundary = lines.indexOfFirst { ReleaseDownloadLines.marker.matches(it.text) }
-        if (boundary < 0) return ReleaseContent(removeUrls(html, api.toSet(), baseUrl), api.map(::DownloadLink))
+        if (boundary < 0) return ReleaseContent(removeUrls(normalized, api.toSet(), baseUrl), api.map(::DownloadLink))
 
         val blocks = mutableListOf<Block>()
         val pending = mutableListOf<DownloadLine>()

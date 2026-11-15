@@ -139,9 +139,10 @@ fun FeedScreen(
         onApply = onFilters, onDismiss = { showFilters = false },
         customCategories = customCategories, onManageCategories = { showFilters = false; onManageCategories() },
     )
-    LaunchedEffect(tab, listState, state.items.size, state.busy, state.canLoadMore, state.error) {
-        if (tab != BrowseTab.Home && state.items.isNotEmpty() && !state.busy && state.canLoadMore && state.error == null && !state.awaitingMore) {
-            snapshotFlow { (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.items.size - 3 }
+    LaunchedEffect(tab, listState, state.page, state.items.size, state.busy, state.canLoadMore, state.error, state.awaitingMore) {
+        if (tab != BrowseTab.Home && !state.busy && state.canLoadMore && state.error == null) {
+            if (state.awaitingMore) onMore()
+            else if (state.items.isNotEmpty()) snapshotFlow { (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.items.size - 3 }
                 .distinctUntilChanged().filter { it }.collect { onMore() }
         }
     }
@@ -281,16 +282,11 @@ fun FeedScreen(
                                         ReleaseCard(release, sectionStyle.accent, compact,
                                             isNew = state.order == FeedOrder.Latest && release.id in state.newReleaseIds) { onRelease(release.id) }
                                     }
-                                    if (state.busy && !state.refreshing) item(key = "loading") { LoadingState("Loading releases…", Modifier.fillMaxWidth()) }
+                                    if ((state.busy || (state.awaitingMore && state.error == null)) && !state.refreshing)
+                                        item(key = "loading") { LoadingState("Loading releases…", Modifier.fillMaxWidth()) }
                                     state.error?.let { error -> item(key = "error") {
                                         ErrorPanel(error, onRetry = if (state.items.isEmpty()) onRefresh else onMore)
                                     } }
-                                    if (!state.busy && state.error == null && state.awaitingMore) item(key = "continue") {
-                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Text("No matches in the posts just checked.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            org.mobilism.material.designsystem.ExpressiveButton(onMore, Modifier.fillMaxWidth()) { Text("Keep looking") }
-                                        }
-                                    }
                                     if (!state.busy && state.error == null && state.items.isEmpty() && !state.canLoadMore) item(key = "empty") {
                                         Text("No releases found.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge)
                                     }

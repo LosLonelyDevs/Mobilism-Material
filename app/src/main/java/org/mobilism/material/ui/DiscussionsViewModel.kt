@@ -198,6 +198,14 @@ class DiscussionsViewModel(
         mutableState.update { it.copy(composer = it.composer.copy(open = true)) }
     }
 
+    fun refreshManagedComment(commentId: Long) {
+        val topic = state.value.topic ?: return
+        if (state.value.composer.posting) return
+        // Locally confirmed posts must not overwrite a later forum edit or restore a deleted comment.
+        confirmed[topic.key] = confirmed[topic.key].orEmpty().filterNot { it.id == commentId }
+        loadComments(refresh = true)
+    }
+
     fun removeReply() = setReply(null)
 
     private fun setReply(reply: CommentReplyTarget?) {

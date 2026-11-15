@@ -104,11 +104,8 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             ?: throw ApiFailure(FailureKind.InvalidResponse, "The server did not confirm the thumbs-up state.")
     }
 
-    suspend fun downloadHelp(token: String?): DiscussionTopic {
-        val page = release(DownloadHelp.TOPIC_ID, token)
-        return DiscussionTopic(page.id, page.title, page.author, page.contentHtml, DiscussionKind.Other,
-            page.categoryId ?: 399, publishedAt = page.publishedAt, browserUrl = DownloadHelp.URL, images = page.images)
-    }
+    // This is a forum guide, not a release in the app catalog.
+    suspend fun downloadHelp(): DiscussionTopic = DownloadHelp.parse(forumPage(DownloadHelp.URL.toHttpUrl()))
 
     suspend fun comments(id: Long, page: Int, token: String?): CommentPage {
         require(id > 0 && page > 0)
@@ -179,7 +176,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
 
     suspend fun markMessageRead(id: Long, token: String) {
         require(id > 0)
-        PrivateMessages.confirm(request("message/$id/read", token, retryRead = false))
+        PrivateMessages.confirm(request("message/$id/read", token, retryRead = false, emptySuccess = true))
     }
 
     suspend fun replyToMessage(message: PrivateMessage, text: String, account: Session) {
@@ -189,7 +186,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         PrivateMessages.confirm(request("message/reply/send", account.accessToken, form = mapOf(
             "to" to recipient, "from" to account.username, "subject" to message.subject,
             "content" to text.trim(), "reply" to message.messageId.toString(),
-        )))
+        ), emptySuccess = true))
     }
 
     suspend fun search(query: String, scope: SearchScope, page: Int, token: String?, hideAdult: Boolean = false): ReleasePage {
@@ -246,7 +243,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
 
     private suspend fun request(path: String, token: String? = null, form: Map<String, String>? = null,
         emptyRecordsAsArray: Boolean = false, hideAdult: Boolean = false, retryRead: Boolean = true,
-        recovered: Boolean = false): JSONObject =
+        emptySuccess: Boolean = false, recovered: Boolean = false): JSONObject =
         withContext(Dispatchers.IO) {
             val operation = when {
                 path.startsWith("auth/") -> DiagnosticOperation.Login
@@ -305,7 +302,10 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                     )
                     val text = source.readUtf8()
                     NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", text)?.let { throw it }
-                    val json = try { JSONObject(text) } catch (_: JSONException) {
+                    val json = try {
+                        if (emptySuccess && response.isSuccessful && (text.isBlank() || text.trim() == "null")) JSONObject()
+                        else JSONObject(text)
+                    } catch (_: JSONException) {
                         throw ApiFailure(FailureKind.InvalidResponse, "The server returned an unreadable response.")
                     }
                     // Comments use HTTP 400 for an empty page, including the end of pagination.
@@ -335,7 +335,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             } catch (failure: ApiFailure) {
                 if (!recovered && retryRead && (form == null || path == "search") &&
                     failure.kind == FailureKind.Challenge && challengeRecovery.recover(VerificationSite.App)) {
-                    return@withContext request(path, token, form, emptyRecordsAsArray, hideAdult, retryRead,
+                    return@withContext request(path, token, form, emptyRecordsAsArray, hideAdult, retryRead, emptySuccess,
                         recovered = true)
                 }
                 diagnostics.record(DiagnosticEvent(DiagnosticSource.Forum, operation, DiagnosticPhase.Failed,

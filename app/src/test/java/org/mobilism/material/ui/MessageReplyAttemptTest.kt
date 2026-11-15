@@ -17,7 +17,7 @@ class MessageReplyAttemptTest {
     @Test fun previewOldIdsAndDifferentEnvelopeDoNotProveDelivery() {
         assertFalse(attempt.matches(reply.copy(contentHtml = "")))
         assertFalse(attempt.matches(reply.copy(messageId = 43)))
-        assertFalse(attempt.matches(reply.copy(messageId = 41)))
+        assertFalse(attempt.copy(knownIds = setOf(41, 42, 43)).matches(reply.copy(messageId = 41)))
         assertFalse(attempt.matches(reply.copy(from = "Other")))
         assertFalse(attempt.matches(reply.copy(to = "Other")))
         assertFalse(attempt.matches(reply.copy(subject = "Different topic")))
@@ -37,7 +37,7 @@ class MessageReplyAttemptTest {
 
     @Test fun newSentMessageUsesItsOwnBaselineAndRequiresFullContent() {
         val sentAttempt = attempt.copy(knownIds = setOf(900, 901), sentIds = setOf(40, 43))
-        assertFalse(sentAttempt.matches(reply))
+        assertTrue(sentAttempt.matches(reply))
         assertTrue(sentAttempt.matchesSent(reply))
         assertFalse(sentAttempt.matchesSent(reply.copy(contentHtml = "")))
         assertFalse(sentAttempt.matchesSent(reply.copy(contentHtml = "Thanks")))
@@ -51,5 +51,13 @@ class MessageReplyAttemptTest {
 
     @Test fun replyAlreadyInSentCannotBeConfirmedByStaleConversation() {
         assertFalse(attempt.copy(sentIds = setOf(44)).matches(reply))
+    }
+
+    @Test fun conversationReplyCanOmitEnvelopeFieldsAndUseNonSequentialIds() {
+        assertTrue(attempt.matches(reply.copy(messageId = 41, subject = "", to = "")))
+        assertFalse(attempt.copy(freshBaseline = false).matches(reply.copy(messageId = 41)))
+        assertFalse(attempt.copy(sentIds = setOf(40)).matchesSent(reply.copy(subject = "", to = "")))
+        assertFalse(attempt.matches(reply.copy(from = "")))
+        assertFalse(attempt.matches(reply.copy(to = "Someone else")))
     }
 }

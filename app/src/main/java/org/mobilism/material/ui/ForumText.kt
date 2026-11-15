@@ -10,8 +10,19 @@ import org.jsoup.safety.Safelist
 import org.mobilism.material.data.webUrlOrNull
 
 internal fun forumText(html: String, baseUrl: String): SpannableStringBuilder {
-    val allowed = Safelist.basic().removeProtocols("a", "href", "ftp", "mailto")
-    val cleaned = Jsoup.clean(html, baseUrl, allowed)
+    val allowed = Safelist.basic().addTags("tt").removeProtocols("a", "href", "ftp", "mailto")
+    val document = Jsoup.parseBodyFragment(ForumCodeBlocks.normalize(html, baseUrl), baseUrl)
+    document.select("pre").forEach { block ->
+        val text = block.wholeText()
+        block.tagName("p").empty().appendElement("tt").apply {
+            text.split('\n').forEachIndexed { index, line ->
+                if (index > 0) appendElement("br")
+                appendText(line.replace(" ", "\u00a0"))
+            }
+        }
+    }
+    document.select("code").tagName("tt")
+    val cleaned = Jsoup.clean(document.body().html(), baseUrl, allowed)
     return SpannableStringBuilder(Html.fromHtml(cleaned, Html.FROM_HTML_MODE_LEGACY)).apply {
         Regex("\n(?:[ \\t\\u00a0]*\n){2,}").findAll(this).toList().asReversed().forEach {
             replace(it.range.first, it.range.last + 1, "\n\n")

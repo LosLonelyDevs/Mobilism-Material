@@ -253,6 +253,46 @@ class DiscussionsViewModelTest {
     private fun model(repo: Repository, username: String? = "Reader", saved: SavedStateHandle = SavedStateHandle()) =
         DiscussionsViewModel(repo, username, saved)
 
+    @Test fun forumEditReplacesTheLocallyConfirmedCommentAndKeepsAnUnfinishedReply() = runTest(dispatcher) {
+        val repo = Repository()
+        repo.postResult.complete(101)
+        val model = model(repo)
+        model.openTopic(topic)
+        model.editDraft("Original")
+        model.post()
+        advanceUntilIdle()
+        assertEquals("Original", model.state.value.comments.items.first().contentHtml)
+        model.openComposer(comment)
+        model.editDraft("Unfinished reply")
+        model.closeComposer()
+        val edited = ReleaseComments.posted(101, "Reader", "Edited on forum", 1)
+        repo.comments = CommentPage(listOf(edited, comment), false)
+        model.refreshManagedComment(101)
+        advanceUntilIdle()
+        assertEquals(listOf(edited, comment), model.state.value.comments.items)
+        assertEquals("Unfinished reply", model.state.value.composer.draft)
+        assertEquals(comment.id, model.state.value.composer.replyTo?.id)
+        assertEquals(1, repo.posts)
+    }
+
+    @Test fun forumDeletionDoesNotResurrectAConfirmedCommentAfterRefreshOrReopen() = runTest(dispatcher) {
+        val repo = Repository()
+        repo.postResult.complete(101)
+        val model = model(repo)
+        model.openTopic(topic)
+        model.editDraft("Delete this")
+        model.post()
+        advanceUntilIdle()
+        assertTrue(model.state.value.comments.items.any { it.id == 101L })
+        model.refreshManagedComment(101)
+        advanceUntilIdle()
+        assertEquals(listOf(comment), model.state.value.comments.items)
+        model.back()
+        model.openTopic(topic)
+        advanceUntilIdle()
+        assertEquals(listOf(comment), model.state.value.comments.items)
+    }
+
     private class Repository : DiscussionsRepository {
         val pages = mutableListOf<Int>()
         val queries = mutableListOf<String>()
@@ -261,6 +301,7 @@ class DiscussionsViewModelTest {
         var replyTo: Long? = null
         var wait: CompletableDeferred<DiscussionPage>? = null
         var categories = listOf(category)
+        var comments = CommentPage(listOf(comment), true)
         var activity: suspend (DiscussionCategory) -> Long? = { null }
         val activityKeys = mutableListOf<String>()
         val postResult = CompletableDeferred<Long>()
@@ -274,7 +315,7 @@ class DiscussionsViewModelTest {
             if (fail) throw ApiFailure(FailureKind.Connection, "Offline")
             return wait?.await() ?: DiscussionPage(listOf(topic), true)
         }
-        override suspend fun discussionComments(topic: DiscussionTopic, page: Int) = CommentPage(listOf(comment), true)
+        override suspend fun discussionComments(topic: DiscussionTopic, page: Int) = comments
         override suspend fun postDiscussionComment(topic: DiscussionTopic, text: String, replyTo: Long?): Long {
             posts++; this.replyTo = replyTo
             return postResult.await()

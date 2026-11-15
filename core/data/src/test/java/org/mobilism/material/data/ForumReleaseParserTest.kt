@@ -11,7 +11,7 @@ import org.junit.Test
 class ForumReleaseParserTest {
     @Test fun helpTopicsKeepTheirContentWithoutPretendingToBeAppReleases() {
         val html = topic().replace("6075324", DownloadHelp.TOPIC_ID.toString()).replace(">Apps<", ">Help<")
-        val help = ForumReleaseParser.topic(html, DownloadHelp.TOPIC_ID)
+        val help = DownloadHelp.parse(html)
         assertEquals(DownloadHelp.TOPIC_ID, help.id)
         assertEquals(DiscussionKind.Other, help.kind)
         assertTrue(help.contentHtml.contains("Download Instructions:"))

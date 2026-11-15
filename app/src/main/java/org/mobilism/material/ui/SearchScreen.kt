@@ -81,9 +81,10 @@ fun SearchScreen(
     if (showReleaseFilters) CategoryFilterSheet(categories, state.filters, onLoadCategories, onFilters,
         onDismiss = { showReleaseFilters = false }, showCategories = state.scope.section != null, showSearchSort = true,
         customCategories = customCategories, onManageCategories = { showReleaseFilters = false; onManageCategories() })
-    LaunchedEffect(list, state.items.size, state.busy, state.error, state.canLoadMore) {
-        if (state.items.isNotEmpty() && !state.busy && state.error == null && state.canLoadMore && !state.awaitingMore) {
-            snapshotFlow { (list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.items.size - 3 }
+    LaunchedEffect(list, state.page, state.items.size, state.busy, state.error, state.canLoadMore, state.awaitingMore) {
+        if (!state.busy && state.error == null && state.canLoadMore) {
+            if (state.awaitingMore) onMore()
+            else if (state.items.isNotEmpty()) snapshotFlow { (list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.items.size - 3 }
                 .distinctUntilChanged().filter { it }.collect { onMore() }
         }
     }
@@ -141,15 +142,9 @@ fun SearchScreen(
                     items(state.items, key = { it.id }) { release ->
                         ReleaseCard(release, MaterialTheme.colorScheme.primary) { onRelease(release.id) }
                     }
-                    if (state.busy) item { LoadingState(state.sortingMatches?.let { "Checking post dates · $it matches…" }
+                    if (state.busy || (state.awaitingMore && state.error == null)) item { LoadingState(state.sortingMatches?.let { "Checking post dates · $it matches…" }
                         ?: "Searching…", Modifier.fillMaxWidth()) }
                     state.error?.let { error -> item { ErrorPanel(error, onRetry = onMore) } }
-                    if (!state.busy && state.error == null && state.awaitingMore) item {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("No matches in the posts just checked.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            ExpressiveButton(onMore, Modifier.fillMaxWidth()) { Text("Keep looking") }
-                        }
-                    }
                     val showRecent = state.query.isBlank() && state.submitted.isBlank() && state.items.isEmpty() &&
                         !state.busy && state.error == null && recentQueries.isNotEmpty()
                     if (showRecent) {

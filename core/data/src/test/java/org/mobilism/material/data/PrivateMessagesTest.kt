@@ -73,11 +73,14 @@ class PrivateMessagesTest {
         assertEquals(1, PrivateMessages.parse(JSONObject("""{"response":[{"id":1,"msg_id":2},{"id":1,"msg_id":2}]}""")).size)
     }
 
-    @Test fun requiresExplicitActionConfirmation() {
-        PrivateMessages.confirm(JSONObject("""{"status":"success"}"""))
-        for (body in listOf("{}", """{"status":"error"}""")) {
-            assertEquals(FailureKind.InvalidResponse,
-                (runCatching { PrivateMessages.confirm(JSONObject(body)) }.exceptionOrNull() as ApiFailure).kind)
+    @Test fun successfulMessageActionsDoNotRequireStatusField() {
+        for (body in listOf("{}", """{"status":null}""", """{"response":null}""", """{"status":"success"}""")) {
+            PrivateMessages.confirm(JSONObject(body))
         }
+    }
+
+    @Test fun explicitMessageActionErrorIsRejected() {
+        assertEquals(FailureKind.InvalidResponse,
+            (runCatching { PrivateMessages.confirm(JSONObject("""{"status":"error"}""")) }.exceptionOrNull() as ApiFailure).kind)
     }
 }

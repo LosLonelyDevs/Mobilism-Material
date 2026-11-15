@@ -8,6 +8,14 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ForumTextTest {
+    @Test fun forumCodeBoxShowsItsLinkWithoutBrowserOnlyControls() {
+        val text = forumText("<div class='codebox'><span>Code: <a href='#'>Select all</a></span>" +
+            "<code>https://github.com/LosLonelyDevs/Mobilism-Material</code></div>", "https://forum.mobilism.org/")
+        assertEquals("https://github.com/LosLonelyDevs/Mobilism-Material", text.toString())
+        assertEquals(listOf(text.toString()), text.getSpans(0, text.length, URLSpan::class.java).map { it.url })
+        assertTrue(text.getSpans(0, text.length, android.text.style.TypefaceSpan::class.java).isNotEmpty())
+    }
+
     @Test fun bareUrlsAreClickableWithoutTrailingPunctuation() {
         val text = forumText("Visit https://example.org/path?a=1&amp;b=2. Also www.example.net/help!", "https://forum.mobilism.org/")
         val urls = text.getSpans(0, text.length, URLSpan::class.java).map { it.url }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.OpenInBrowser
@@ -30,6 +31,7 @@ internal fun DownloadHelpScreen(load: suspend () -> DiscussionTopic, onBack: () 
     var gallery by remember { mutableStateOf<Int?>(null) }
     var verify by remember { mutableStateOf(false) }
     var canVerify by remember { mutableStateOf(false) }
+    val blocks = remember(topic) { topic?.let { DownloadHelpContent.parse(it.contentHtml, it.browserUrl) }.orEmpty() }
     LaunchedEffect(attempt) {
         error = null
         try { topic = load() }
@@ -50,15 +52,17 @@ internal fun DownloadHelpScreen(load: suspend () -> DiscussionTopic, onBack: () 
             actions = { AppIconButton(Icons.Outlined.OpenInBrowser, "Open in browser", { openForumBrowser(context, DownloadHelp.URL) }) })
     }) { insets ->
         LazyColumn(Modifier.padding(insets), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            error?.let { item { ErrorPanel(it, onRetry = { attempt++ }) } }
-            if (error != null && canVerify) item {
-                org.mobilism.material.designsystem.ExpressiveButton({ verify = true }) { androidx.compose.material3.Text("Verify forum access") }
-            }
+            error?.let { item { ErrorPanel(it, onRetry = { attempt++ },
+                onVerify = if (canVerify) ({ verify = true }) else null) } }
             if (topic == null && error == null) item { LoadingState("Loading download help…") }
             topic?.let { article ->
-                item { AppHeading(article.title, HeadingLevel.Section) }
-                if (article.images.isNotEmpty()) item { ReleaseImageCarousel(article.images) { gallery = it } }
-                item { ReleaseBody(article.contentHtml, article.browserUrl, onRelease) }
+                item { androidx.compose.material3.Text(article.title,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant) }
+                itemsIndexed(blocks) { index, block ->
+                    DownloadHelpBlock(block, index.toString(), article.browserUrl, onRelease,
+                        onImage = { url -> gallery = article.images.indexOf(url).takeIf { it >= 0 } })
+                }
             }
         }
     }

@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.mobilism.material.data.MessageFolder
+import org.mobilism.material.data.FailureKind
 import org.mobilism.material.data.PrivateMessage
 import org.mobilism.material.data.PrivateMessages
 import org.mobilism.material.designsystem.AppIconButton
@@ -59,7 +60,7 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
     onBack: () -> Unit, onSignIn: () -> Unit, onRefreshConversation: () -> Unit,
     onReply: () -> Unit, onEdit: (String) -> Unit, onSend: () -> Unit, onCloseReply: () -> Unit,
     onNoticeShown: () -> Unit, onRelease: (Long) -> Unit = {},
-    onCheckReply: () -> Unit = {}, onRetryReply: () -> Unit = {}) {
+    onCheckReply: () -> Unit = {}, onRetryReply: () -> Unit = {}, onNewReply: () -> Unit = {}) {
     val snackbar = remember { SnackbarHostState() }
     val inboxScroll = rememberLazyListState()
     val sentScroll = rememberLazyListState()
@@ -67,7 +68,7 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
     BackHandler(detail) { if (!state.sending) onBack() }
     LaunchedEffect(state.notice) { state.notice?.let { snackbar.showSnackbar(it); onNoticeShown() } }
     if (state.replying) MessageReplyComposer(state, username, onEdit, onSend, onCloseReply,
-        onCheck = onCheckReply, onRetry = onRetryReply)
+        onCheck = onCheckReply, onRetry = onRetryReply, onNew = onNewReply, onSignIn = onSignIn)
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = { TopAppBar(
@@ -101,9 +102,11 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
                                 marking = message.id in state.marking, onRelease = onRelease)
                         }
                         if (state.replyTarget != null) item("reply") {
-                            ExpressiveButton(onReply, Modifier.fillMaxWidth(), enabled = !state.loading && !state.sending) {
-                                Text(if (state.draft.isBlank()) "Reply" else "Continue reply")
+                            ExpressiveButton(if (state.sendUnconfirmed) onNewReply else onReply,
+                                Modifier.fillMaxWidth(), enabled = !state.loading && !state.sending) {
+                                Text(if (state.sendUnconfirmed) "New reply" else if (state.draft.isBlank()) "Reply" else "Continue reply")
                             }
+                            if (state.sendUnconfirmed) AppTextButton("Review previous reply", onReply)
                         }
                     }
                 } else {
@@ -134,8 +137,14 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MessageReplyComposer(state: MessagesState, username: String, onEdit: (String) -> Unit,
-    onSend: () -> Unit, onClose: () -> Unit, onCheck: () -> Unit, onRetry: () -> Unit) {
+    onSend: () -> Unit, onClose: () -> Unit, onCheck: () -> Unit, onRetry: () -> Unit,
+    onNew: () -> Unit, onSignIn: () -> Unit) {
     var confirmRetry by remember(state.messageId) { mutableStateOf(false) }
+    var verifying by remember(state.messageId) { mutableStateOf(false) }
+    val needsSignIn = state.sendFailure in setOf(FailureKind.Session, FailureKind.Credentials)
+    val needsVerification = state.sendFailure == FailureKind.Challenge
+    if (verifying) MessageAccessVerification(onDismiss = { verifying = false },
+        onContinue = { verifying = false; onCheck() })
     if (confirmRetry && state.sendUnconfirmed && !state.sending) AlertDialog(
         onDismissRequest = { confirmRetry = false },
         title = { Text("Send this reply again?") },
@@ -166,12 +175,18 @@ private fun MessageReplyComposer(state: MessagesState, username: String, onEdit:
             else if (state.checkingReply) LoadingState("Checking send status…", Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 AppTextButton("Close", onClose, enabled = !state.sending)
-                if (state.sendUnconfirmed) ExpressiveButton(onCheck, Modifier.weight(1f).testTag("check-message-delivery"),
+                if (needsVerification) ExpressiveButton({ verifying = true }, Modifier.weight(1f).testTag("verify-message-access"),
+                    enabled = !state.sending && !state.checkingReply) { Text("Verify access") }
+                else if (needsSignIn) ExpressiveButton(onSignIn, Modifier.weight(1f),
+                    enabled = !state.sending && !state.checkingReply) { Text("Sign in again") }
+                else if (state.sendUnconfirmed) ExpressiveButton(onCheck, Modifier.weight(1f).testTag("check-message-delivery"),
                     enabled = !state.sending && !state.checkingReply) { Text("Check status") }
                 else ExpressiveButton(onSend, Modifier.weight(1f).testTag("send-message"),
-                    enabled = !state.sending && state.draft.isNotBlank() && state.draft.length <= PrivateMessages.MAX_LENGTH) { Text("Send reply") }
+                    enabled = !state.sending && !state.checkingReply && state.draft.isNotBlank() && state.draft.length <= PrivateMessages.MAX_LENGTH) { Text("Send reply") }
             }
-            if (state.sendUnconfirmed && !state.sending && !state.checkingReply)
+            if (state.sendUnconfirmed && !state.sending)
+                AppTextButton("New reply", onNew, modifier = Modifier.testTag("new-message-reply"))
+            if (state.sendUnconfirmed && !state.sending && !state.checkingReply && !needsSignIn && !needsVerification)
                 AppTextButton("Send again…", { confirmRetry = true }, modifier = Modifier.testTag("retry-message"))
             Text("Your draft stays here when you close this sheet.", style = MaterialTheme.typography.bodySmall)
         }

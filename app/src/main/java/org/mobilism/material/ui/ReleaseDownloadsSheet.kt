@@ -75,10 +75,13 @@ internal fun ReleaseDownloadsSheet(releaseId: Long, title: String, groups: List<
                 LazyColumn(Modifier.fillMaxWidth().testTag("download-sheet-list"),
                     contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    if (notesHtml.isNotBlank()) item("notes") { ReleaseBody(notesHtml, baseUrl, onRelease) }
+                    if (notesHtml.isNotBlank()) item("notes") {
+                        DownloadNotes(notesHtml, baseUrl, onRelease, onBeforeHelp = onDismiss)
+                    }
                     items(groups, key = { it.id }) { group ->
                         ReleaseDownloadGroup(releaseId, group, baseUrl, debrid, requests, onResolve, onOpened,
-                            onCopied = { snackbar.showSnackbar("Link copied") }, onRelease = onRelease)
+                            onCopied = { snackbar.showSnackbar("Link copied") }, onRelease = onRelease,
+                            onBeforeHelp = onDismiss)
                     }
                     if (groups.isEmpty()) item("empty") {
                         Text("No download links available.", style = MaterialTheme.typography.bodyMedium)
@@ -93,7 +96,7 @@ internal fun ReleaseDownloadsSheet(releaseId: Long, title: String, groups: List<
 @Composable
 internal fun ReleaseDownloadGroup(releaseId: Long, group: DownloadGroup, baseUrl: String, debrid: DebridState,
     requests: DownloadRequestTracker, onResolve: suspend (String) -> String, onOpened: () -> Unit,
-    onCopied: suspend () -> Unit, onRelease: (Long) -> Unit) {
+    onCopied: suspend () -> Unit, onRelease: (Long) -> Unit, onBeforeHelp: () -> Unit = {}) {
     var expanded by rememberSaveable(releaseId, group.id, group.collapsed) { mutableStateOf(!group.collapsed) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).heightIn(min = 48.dp)
@@ -108,7 +111,7 @@ internal fun ReleaseDownloadGroup(releaseId: Long, group: DownloadGroup, baseUrl
         }
         AnimatedVisibility(expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (group.notesHtml.isNotBlank()) ReleaseBody(group.notesHtml, baseUrl, onRelease)
+                if (group.notesHtml.isNotBlank()) DownloadNotes(group.notesHtml, baseUrl, onRelease, onBeforeHelp)
                 group.links.forEach { link ->
                     DownloadLinkRow(link, debrid, onOpened, resolveLink = onResolve, requests = requests, onCopied = onCopied)
                 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,11 +21,16 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ripple
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Reply
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.MoreVert
+import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.LocalReducedMotion
 import org.mobilism.material.designsystem.focusOutline
 import androidx.compose.material3.Text
@@ -56,8 +62,11 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
     onReply: (() -> Unit)? = null, replyEnabled: Boolean = true,
     collapsed: Boolean? = null, onToggleThread: (() -> Unit)? = null,
     threadContent: CommentContent? = null, earlierComment: Boolean = false,
+    onEdit: (() -> Unit)? = null, onDelete: (() -> Unit)? = null,
+    actionsEnabled: Boolean = true,
     onImage: (List<String>, Int) -> Unit) {
     var localExpanded by rememberSaveable(baseUrl, comment.id) { mutableStateOf(true) }
+    var menu by remember(comment.id) { mutableStateOf(false) }
     val expanded = collapsed?.not() ?: localExpanded
     val toggle = { if (onToggleThread != null) onToggleThread() else localExpanded = !localExpanded }
     val bodyState = rememberSaveableStateHolder()
@@ -81,6 +90,16 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
                     if (comment.publishedAt > 0) {
                         val date = remember(comment.publishedAt) { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(comment.publishedAt * 1000)) }
                         Text(date, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (onEdit != null || onDelete != null) Box {
+                    AppIconButton(Icons.Outlined.MoreVert, "Comment options", { menu = true }, enabled = actionsEnabled)
+                    DropdownMenu(expanded = menu && actionsEnabled, onDismissRequest = { menu = false },
+                        shape = MaterialTheme.shapes.extraLarge) {
+                        onEdit?.let { edit -> RoundedMenuItem("Edit comment", { menu = false; edit() },
+                            MaterialTheme.colorScheme.primary, Icons.Outlined.Edit) }
+                        onDelete?.let { delete -> RoundedMenuItem("Delete comment", { menu = false; delete() },
+                            MaterialTheme.colorScheme.error, Icons.Outlined.Delete) }
                     }
                 }
                 if (!expanded) CommentCollapseButton(false, toggle)

@@ -310,6 +310,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                     onReply = messages::openReply, onEdit = messages::editReply, onSend = messages::sendReply,
                     onCloseReply = messages::closeReply, onNoticeShown = messages::noticeShown,
                     onCheckReply = messages::checkReplyDelivery, onRetryReply = messages::retryReply,
+                    onNewReply = messages::newReply,
                     onRelease = { nav.navigate("release/$it") })
             }
         }

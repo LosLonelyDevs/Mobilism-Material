@@ -71,9 +71,61 @@ class MessagesTest {
         assertTrue(runCatching { fixture.repository.markMessageRead(42) }.isFailure)
         assertEquals(1, fixture.requests.size)
         fixture.actionStatus = 200
-        fixture.actionBody = "{}"
+        fixture.actionBody = "{"
         assertEquals(FailureKind.InvalidResponse,
             (runCatching { fixture.repository.replyToMessage(message, "Private draft") }.exceptionOrNull() as ApiFailure).kind)
+        fixture.repository.signOut()
+    }
+
+    @Test fun messageActionAcknowledgementsAllowEmptySuccessButRejectFailures() = runBlocking {
+        val fixture = Fixture()
+        fixture.repository.signIn("Reader", "sample-password")
+        val message = fixture.repository.messages(MessageFolder.Inbox, 1).items.single()
+        for ((status, body) in listOf(200 to "", 200 to "null", 200 to "{}", 200 to """{"status":null}""",
+            200 to """{"response":null}""", 204 to "")) {
+            fixture.actionStatus = status
+            fixture.actionBody = body
+            fixture.readBody = body
+            fixture.requests.clear()
+            fixture.repository.replyToMessage(message, "Private draft")
+            fixture.repository.markMessageRead(42)
+            assertEquals(2, fixture.requests.size)
+        }
+        for ((status, body, kind) in listOf(
+            Triple(200, """{"status":"error","error":{"text":"Message rejected"}}""", FailureKind.Server),
+            Triple(200, "{", FailureKind.InvalidResponse),
+            Triple(200, "<html>Unexpected page</html>", FailureKind.InvalidResponse),
+            Triple(503, "", FailureKind.Server),
+            Triple(403, "<html><div id='cf-chl-widget'>Browser check</div></html>", FailureKind.Challenge),
+        )) {
+            fixture.actionStatus = status
+            fixture.actionBody = body
+            fixture.requests.clear()
+            assertEquals(kind, (runCatching { fixture.repository.replyToMessage(message, "Private draft") }
+                .exceptionOrNull() as ApiFailure).kind)
+            assertEquals(1, fixture.requests.size)
+        }
+        fixture.listBody = ""
+        assertEquals(FailureKind.InvalidResponse, (runCatching { fixture.repository.messages(MessageFolder.Inbox, 1) }
+            .exceptionOrNull() as ApiFailure).kind)
+        fixture.repository.signOut()
+    }
+
+    @Test fun successfulRepliesWithoutStatusFieldsNeverEnterDeliveryRecovery() = runBlocking {
+        val fixture = Fixture().apply { actionBody = "{}" }
+        val model = openComposer(fixture)
+        compose.onNodeWithTag("send-message").performScrollTo().performClick()
+        compose.waitUntil(10_000) { !model.state.value.replying && model.state.value.draft.isEmpty() }
+        assertFalse(model.state.value.sendUnconfirmed)
+        assertNull(model.state.value.sendError)
+        compose.onNodeWithText("Reply", substring = false).performScrollTo().performClick()
+        compose.onNodeWithTag("message-draft").performTextInput("A second reply")
+        fixture.actionBody = ""
+        compose.onNodeWithTag("send-message").performScrollTo().performClick()
+        compose.waitUntil(10_000) { !model.state.value.replying && model.state.value.draft.isEmpty() }
+        assertFalse(model.state.value.sendUnconfirmed)
+        assertNull(model.state.value.sendError)
+        assertEquals(2, fixture.requests.count { it.url.encodedPath.endsWith("message/reply/send") })
         fixture.repository.signOut()
     }
 
@@ -110,7 +162,7 @@ class MessagesTest {
                 onBack = model::closeConversation, onSignIn = {}, onRefreshConversation = model::loadConversation,
                 onReply = model::openReply, onEdit = model::editReply, onSend = model::sendReply,
                 onCloseReply = model::closeReply, onNoticeShown = model::noticeShown,
-                onCheckReply = model::checkReplyDelivery, onRetryReply = model::retryReply)
+                onCheckReply = model::checkReplyDelivery, onRetryReply = model::retryReply, onNewReply = model::newReply)
         } }
         compose.waitUntil(10_000) { model.state.value.mailbox.items.isNotEmpty() }
         compose.onNodeWithText("Inbox").assertIsSelected()
@@ -143,7 +195,7 @@ class MessagesTest {
     }
 
     @Test fun lostAcknowledgementRecoversDeliveredReplyWithoutAnotherPost() = runBlocking {
-        val fixture = Fixture().apply { actionBody = "{}"; deliverOnSend = true }
+        val fixture = Fixture().apply { actionBody = "{"; deliverOnSend = true }
         val model = openComposer(fixture)
         compose.onNodeWithTag("send-message").performScrollTo().assertIsEnabled().performClick()
         try {
@@ -162,7 +214,7 @@ class MessagesTest {
     }
 
     @Test fun uncertainReplyChecksDeliveryAndRequiresExplicitRetryConfirmation() = runBlocking {
-        val fixture = Fixture().apply { actionBody = "{}" }
+        val fixture = Fixture().apply { actionBody = "{" }
         val model = openComposer(fixture)
         compose.onNodeWithTag("send-message").performScrollTo().performClick()
         compose.waitUntil(15_000) {
@@ -176,7 +228,7 @@ class MessagesTest {
         compose.waitUntil(15_000) { !model.state.value.checkingReply }
         assertEquals(1, fixture.requests.count { it.url.encodedPath.endsWith("message/reply/send") })
         compose.onNodeWithText("Close", substring = false).performScrollTo().performClick()
-        compose.onNodeWithText("Continue reply", substring = false).performScrollTo().performClick()
+        compose.onNodeWithText("Review previous reply", substring = false).performScrollTo().performClick()
         compose.onNodeWithTag("message-draft").assertTextContains("A private reply")
         compose.onNodeWithTag("retry-message").performScrollTo().performClick()
         compose.onNodeWithText("Send this reply again?").assertIsDisplayed()
@@ -191,6 +243,87 @@ class MessagesTest {
         fixture.repository.signOut()
     }
 
+    @Test fun unconfirmedReplyDoesNotBlockWritingAndSendingAnotherReply() = runBlocking {
+        val fixture = Fixture().apply { actionBody = "{" }
+        val model = openComposer(fixture)
+        compose.onNodeWithTag("send-message").performScrollTo().performClick()
+        compose.waitUntil(15_000) { model.state.value.sendUnconfirmed && !model.state.value.checkingReply }
+        compose.onNodeWithTag("new-message-reply").performScrollTo().performClick()
+        assertEquals("", model.state.value.draft)
+        compose.onNodeWithTag("message-draft").performTextInput("Another private reply")
+        assertEquals("Another private reply", model.state.value.draft)
+        assertEquals(1, fixture.requests.count { it.url.encodedPath.endsWith("message/reply/send") })
+        fixture.actionBody = """{"status":"success"}"""
+        compose.onNodeWithTag("send-message").performScrollTo().assertIsEnabled().performClick()
+        compose.waitUntil(10_000) { !model.state.value.replying && model.state.value.draft.isEmpty() }
+        val replies = fixture.requests.filter { it.url.encodedPath.endsWith("message/reply/send") }
+        assertEquals(2, replies.size)
+        assertTrue(okio.Buffer().also(replies.last().body!!::writeTo).readUtf8().contains("content=Another%20private%20reply"))
+        fixture.repository.signOut()
+    }
+
+    @Test fun visibleReplyWithSparseEnvelopeUnlocksNextReply() = runBlocking {
+        val fixture = Fixture().apply { actionBody = "{"; deliverOnSend = true; sparseReply = true }
+        val model = openComposer(fixture)
+        compose.onNodeWithTag("send-message").performScrollTo().performClick()
+        compose.waitUntil(15_000) { !model.state.value.replying && model.state.value.draft.isEmpty() }
+        compose.onNodeWithText("Reply", substring = false).performScrollTo().performClick()
+        compose.onNodeWithTag("message-draft").performTextInput("A follow-up")
+        compose.onNodeWithTag("send-message").performScrollTo().assertIsEnabled()
+        compose.onNodeWithTag("check-message-delivery").assertDoesNotExist()
+        assertEquals("A follow-up", model.state.value.draft)
+        assertEquals(1, fixture.requests.count { it.url.encodedPath.endsWith("message/reply/send") })
+        fixture.repository.signOut()
+    }
+
+    @Test fun verificationAfterUncertainSendChecksDeliveryWithoutResending() = runBlocking {
+        val fixture = Fixture().apply { actionBody = "{"; blockAfterSend = true; deliverOnSend = true }
+        val model = openComposer(fixture)
+        compose.onNodeWithTag("send-message").performScrollTo().performClick()
+        compose.waitUntil(15_000) { model.state.value.sendFailure == FailureKind.Challenge && !model.state.value.checkingReply }
+        compose.onNodeWithTag("verify-message-access").performScrollTo().performClick()
+        compose.onNodeWithText("Verify message access").assertIsDisplayed()
+        fixture.blockReads = false
+        compose.onNodeWithTag("continue-message-verification").performClick()
+        compose.waitUntil(15_000) { !model.state.value.replying && model.state.value.draft.isEmpty() }
+        assertEquals(1, fixture.requests.count { it.url.encodedPath.endsWith("message/reply/send") })
+        assertFalse(model.state.value.sendUnconfirmed)
+        fixture.repository.signOut()
+    }
+
+    @Test fun verificationCookiesStayOnApiOriginAndBrowserCannotNavigateToSendEndpoints() = runBlocking {
+        val cookies = android.webkit.CookieManager.getInstance()
+        cookies.setCookie("https://app.mobilism.org/", "message_test_clearance=fixture; Path=/; Secure")
+        cookies.setCookie("https://forum.mobilism.org/", "message_test_forum=fixture; Path=/; Secure")
+        cookies.flush()
+        try {
+            val fixture = Fixture()
+            fixture.repository.signIn("Reader", "sample-password")
+            fixture.repository.messages(MessageFolder.Inbox, 1)
+            val request = fixture.requests.last()
+            assertTrue(request.header("Cookie").orEmpty().contains("message_test_clearance=fixture"))
+            assertFalse(request.header("Cookie").orEmpty().contains("message_test_forum"))
+            assertEquals(android.webkit.WebSettings.getDefaultUserAgent(fixture.context), request.header("User-Agent"))
+            assertTrue(fixture.requests.first().header("Cookie").orEmpty().contains("message_test_clearance=fixture"))
+            assertFalse(fixture.requests.first().header("Cookie").orEmpty().contains("message_test_forum"))
+            fun accepts(value: String) = org.mobilism.material.ui.acceptsMessageVerificationUrl(android.net.Uri.parse(value))
+            assertTrue(accepts(VerificationSite.App.url))
+            assertTrue(accepts("${VerificationSite.App.url}?__cf_chl_rt_tk=fixture"))
+            assertTrue(accepts("https://app.mobilism.org/cdn-cgi/challenge-platform/check"))
+            assertFalse(accepts("https://app.mobilism.org/"))
+            assertFalse(accepts("https://app.mobilism.org/api-new/message/reply/send"))
+            assertFalse(accepts("https://forum.mobilism.org/"))
+            assertFalse(accepts("http://app.mobilism.org/"))
+            assertFalse(accepts("https://app.mobilism.org.evil.example/"))
+            assertFalse(accepts("https://user@app.mobilism.org/"))
+            fixture.repository.signOut()
+        } finally {
+            cookies.setCookie("https://app.mobilism.org/", "message_test_clearance=; Path=/; Secure; Max-Age=0")
+            cookies.setCookie("https://forum.mobilism.org/", "message_test_forum=; Path=/; Secure; Max-Age=0")
+            cookies.flush()
+        }
+    }
+
     private suspend fun openComposer(fixture: Fixture): MessagesViewModel {
         fixture.repository.signIn("Reader", "sample-password")
         lateinit var model: MessagesViewModel
@@ -202,7 +335,7 @@ class MessagesTest {
                 onBack = model::closeConversation, onSignIn = {}, onRefreshConversation = model::loadConversation,
                 onReply = model::openReply, onEdit = model::editReply, onSend = model::sendReply,
                 onCloseReply = model::closeReply, onNoticeShown = model::noticeShown,
-                onCheckReply = model::checkReplyDelivery, onRetryReply = model::retryReply)
+                onCheckReply = model::checkReplyDelivery, onRetryReply = model::retryReply, onNewReply = model::newReply)
         } }
         compose.waitUntil(10_000) { model.state.value.mailbox.items.isNotEmpty() }
         compose.onNodeWithText("Question").performClick()
@@ -231,8 +364,12 @@ class MessagesTest {
         var loginId: Long? = 7
         var actionStatus = 200
         @Volatile var actionBody = """{"status":"success"}"""
+        @Volatile var readBody = """{"status":"success"}"""
         @Volatile var deliverOnSend = false
         @Volatile var delivered = false
+        @Volatile var sparseReply = false
+        @Volatile var blockReads = false
+        @Volatile var blockAfterSend = false
         var listStatus = 200
         var listBody: String? = null
         var preview = "Hello"
@@ -245,13 +382,18 @@ class MessagesTest {
             requests += request
             val path = request.url.encodedPath.removePrefix("/api-new/")
             var status = 200
-            val body = when {
+            var body = when {
                 path == "auth/login" -> """{"access_token":"sample-session","id":${loginId ?: "null"}}"""
                 path == "release/comment" -> """{"status":"success","response":{"comment_id":99}}"""
-                path == "message/reply/send" -> { if (deliverOnSend) delivered = true; status = actionStatus; actionBody }
-                path.endsWith("/read") -> { status = actionStatus; """{"status":"success"}""" }
+                path == "message/reply/send" -> {
+                    if (deliverOnSend) delivered = true
+                    if (blockAfterSend) blockReads = true
+                    status = actionStatus
+                    actionBody
+                }
+                path.endsWith("/read") -> { status = actionStatus; readBody }
                 path == "message/10/orderby/times/asc" -> {
-                    val reply = if (delivered) """,{"id":43,"subject":"Re: Question","from_user":"Reader","to_user":"Author","content":"A private reply","times":${System.currentTimeMillis() / 1000},"readed":1}""" else ""
+                    val reply = if (delivered) """,{"id":43,"subject":"${if (sparseReply) "" else "Re: Question"}","from_user":"Reader","to_user":"${if (sparseReply) "" else "Author"}","content":"A private reply","times":${System.currentTimeMillis() / 1000},"readed":1}""" else ""
                     """{"response":[{"id":42,"subject":"Question","from_user":"Author","to_user":"Reader","content":"Hello https://example.org","times":1700000000,"readed":0}$reply]}"""
                 }
                 path.startsWith("message/to/") || path.startsWith("message/from/") -> {
@@ -260,6 +402,10 @@ class MessagesTest {
                     listBody ?: """{"response":[{"id":10,"msg_id":42,"subject":"Question","from_user":"${if (sent) "Reader" else "Author"}","to_user":"${if (sent) "Author" else "Reader"}","preview":"$preview","times":1700000000,"readed":0}]}"""
                 }
                 else -> error("Unexpected fixture path")
+            }
+            if (blockReads && request.method == "GET" && !path.endsWith("/read")) {
+                status = 403
+                body = "<html><div id='cf-chl-widget'>Browser verification</div></html>"
             }
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(status).message("Fixture")
                 .body(body.toResponseBody()).build()

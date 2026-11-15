@@ -46,8 +46,9 @@ object PrivateMessages {
     }
 
     internal fun confirm(response: JSONObject) {
-        if (response.optString("status") != "success") throw ApiFailure(
-            FailureKind.InvalidResponse, "The server did not confirm the message action.",
+        // Message actions use HTTP success; the legacy API does not require a status field.
+        if (response.optString("status") == "error") throw ApiFailure(
+            FailureKind.InvalidResponse, "The server rejected the message action.",
         )
     }
 }

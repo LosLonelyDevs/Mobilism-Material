@@ -21,6 +21,44 @@ import org.mobilism.material.designsystem.MobilismTheme
 class ForumLinkActionsTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun nativeDownloadHelpActionKeepsLongPressMenuAndTapOpensReader() {
+        var helpOpened = false
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            DownloadHelpAction { helpOpened = true }
+        } }
+        compose.onNodeWithTag("download-help-action").performTouchInput { longClick() }
+        compose.onNodeWithText("Link options").assertIsDisplayed()
+        compose.onNodeWithText("Open in browser").assertIsDisplayed()
+        compose.runOnIdle { assertFalse(helpOpened) }
+        compose.onNodeWithText("Copy to clipboard").performClick()
+        compose.waitUntil { compose.onAllNodesWithText("Link options").fetchSemanticsNodes().isEmpty() }
+        compose.runOnUiThread {
+            val clipboard = compose.activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            assertEquals(org.mobilism.material.data.DownloadHelp.URL, clipboard.primaryClip!!.getItemAt(0).text.toString())
+        }
+        compose.onNodeWithTag("download-help-action").performClick()
+        compose.runOnIdle { assertTrue(helpOpened) }
+    }
+
+    @Test fun downloadSheetDismissesBeforeOpeningNativeHelp() {
+        var dismissed = false
+        var helpOpened = false
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            androidx.compose.runtime.CompositionLocalProvider(LocalDownloadHelpHandler provides {
+                assertTrue(dismissed)
+                helpOpened = true
+            }) {
+                ReleaseDownloadsSheet(42, "Example", emptyList(),
+                    "Trouble downloading? Read <a href='${org.mobilism.material.data.DownloadHelp.URL}'>This</a>.",
+                    "https://forum.mobilism.org/", org.mobilism.material.data.DebridState(), DownloadRequestTracker(),
+                    onResolve = { it }, onOpened = {}, onRelease = { fail("Help must not open as a release") },
+                    onDismiss = { dismissed = true })
+            }
+        } }
+        compose.onNodeWithTag("download-help-action").performScrollTo().performClick()
+        compose.runOnIdle { assertTrue(helpOpened) }
+    }
+
     @Test fun downloadHelpLinkUsesItsNativeReaderInsteadOfReleaseOrBrowserRouting() {
         var helpOpened = false
         var releaseOpened = false

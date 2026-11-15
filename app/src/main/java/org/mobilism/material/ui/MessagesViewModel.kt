@@ -40,6 +40,7 @@ data class MessagesState(
     val replying: Boolean = false, val draft: String = "", val sending: Boolean = false,
     val sendError: String? = null, val notice: String? = null,
     val sendUnconfirmed: Boolean = false, val checkingReply: Boolean = false,
+    val sendFailure: FailureKind? = null,
 ) {
     val mailbox: MailboxState get() = mailboxes.getValue(folder)
     val replyTarget: PrivateMessage? get() = conversation.firstOrNull()?.let { it.copy(messageId = messageId ?: it.id) }
@@ -131,7 +132,7 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
         savedState.remove<Long>("message-id")
         mutableState.update { it.copy(conversationId = null, messageId = null, conversation = emptyList(),
             loading = false, error = null, readError = null, replying = false, draft = "", sendError = null,
-            sendUnconfirmed = false, checkingReply = false) }
+            sendUnconfirmed = false, checkingReply = false, sendFailure = null) }
     }
 
     fun loadConversation() {
@@ -156,7 +157,7 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
                     if (message.to.equals(username, ignoreCase = true) && message.id in readHistory) message.copy(read = true) else message
                 }) }
                 messages.filter { !it.read && it.to.equals(username, ignoreCase = true) }.forEach { markRead(it.id) }
-                if (state.value.sendUnconfirmed) startDeliveryCheck(messages)
+                if (!confirmVisibleReply(messages) && state.value.sendUnconfirmed) startDeliveryCheck(messages)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) { mutableState.update { it.copy(loading = false, error = failure.forScreen()) } }
         }
@@ -216,7 +217,19 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
 
     fun openReply() {
         if (state.value.replyTarget?.recipient(username).isNullOrBlank() || state.value.loading) return
+        confirmVisibleReply(state.value.conversation)
         mutableState.update { it.copy(replying = true) }
+    }
+
+    fun newReply() {
+        val id = state.value.messageId ?: return
+        if (state.value.sending) return
+        deliveryGeneration++
+        deliveryJob?.cancel()
+        clearAttempt(id)
+        savedState.remove<String>("message-draft-$id")
+        mutableState.update { it.copy(replying = true, draft = "", sendUnconfirmed = false,
+            checkingReply = false, sendError = null, sendFailure = null, notice = null) }
     }
 
     fun closeReply() { if (!state.value.sending) mutableState.update { it.copy(replying = false) } }
@@ -241,56 +254,103 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
         val text = snapshot.draft.trim()
         if (snapshot.sending || snapshot.loading || snapshot.checkingReply ||
             snapshot.sendUnconfirmed && !allowUnconfirmed || text.isBlank() || text.length > PrivateMessages.MAX_LENGTH) return
-        mutableState.update { it.copy(sending = true, sendError = null) }
+        mutableState.update { it.copy(sending = true, sendError = null, sendFailure = null) }
         viewModelScope.launch {
             var checkDelivery = false
+            var postStarted = false
             try {
+                var accessFailure: ApiFailure? = null
+                fun rememberAccessFailure(failure: Exception) {
+                    if (failure is ApiFailure && failure.kind in setOf(FailureKind.Challenge, FailureKind.Session, FailureKind.Credentials))
+                        accessFailure = failure
+                }
                 val (baseline, sentBaseline) = coroutineScope {
-                    val conversation = async { readDelivery { repository.conversation(conversationId) }?.takeIf { it.isNotEmpty() } }
-                    val sent = async { readDelivery { repository.messages(MessageFolder.Sent, 1) } }
+                    val conversation = async { readDelivery(onFailure = ::rememberAccessFailure) {
+                        repository.conversation(conversationId) }?.takeIf { it.isNotEmpty() } }
+                    val sent = async { readDelivery(onFailure = ::rememberAccessFailure) { repository.messages(MessageFolder.Sent, 1) } }
                     conversation.await() to sent.await()
                 }
                 ensureActive()
                 // A reply may arrive after the user opens the retry dialog.
                 if (allowUnconfirmed && pendingReply?.let { attempt ->
-                    withTimeoutOrNull(12_000) { replyDelivered(attempt, baseline, sentBaseline) } == true
+                    withTimeoutOrNull(12_000) { replyDelivered(attempt, baseline, sentBaseline, ::rememberAccessFailure) } == true
                 } == true) {
                     finishReply(target.messageId)
                     return@launch
                 }
+                accessFailure?.let { throw it }
                 val attempt = MessageReplyAttempt(conversationId, target.messageId, username, target.recipient(username),
                     target.subject, text, now(), (snapshot.conversation + baseline.orEmpty()).map { it.messageId }.toSet() + target.messageId,
                     freshBaseline = baseline != null, sentIds = sentBaseline?.items?.map { it.messageId }?.toSet())
                 saveAttempt(attempt)
+                postStarted = true
                 repository.replyToMessage(target, text)
                 finishReply(target.messageId)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) {
-                val rejected = failure is ApiFailure && (failure.kind == FailureKind.Server && failure.httpStatus in 200..299 ||
+                val rejected = !postStarted || failure is ApiFailure && (failure.kind == FailureKind.Server && failure.httpStatus in 200..299 ||
                     failure.httpStatus in 400..499 && failure.httpStatus != 408 ||
                     failure.kind in setOf(FailureKind.Credentials, FailureKind.Session, FailureKind.Permission, FailureKind.Dns))
-                if (rejected) clearAttempt(target.messageId)
-                mutableState.update { it.copy(sendUnconfirmed = !rejected, checkingReply = !rejected,
-                    sendError = if (rejected) failure.forScreen().message else null) }
+                val keepPending = !postStarted && snapshot.sendUnconfirmed
+                if (rejected && !keepPending) clearAttempt(target.messageId)
+                mutableState.update { it.copy(sendUnconfirmed = !rejected || keepPending, checkingReply = !rejected,
+                    sendError = if (rejected) sendFailureMessage(failure) else null,
+                    sendFailure = (failure as? ApiFailure)?.kind) }
                 checkDelivery = !rejected
             } finally { mutableState.update { it.copy(sending = false) } }
             if (checkDelivery) startDeliveryCheck()
         }
     }
 
-    fun checkReplyDelivery() = startDeliveryCheck()
+    fun checkReplyDelivery() {
+        if (state.value.sendUnconfirmed) startDeliveryCheck()
+        else {
+            val id = state.value.conversationId ?: return
+            if (state.value.sending || state.value.checkingReply) return
+            mutableState.update { it.copy(checkingReply = true) }
+            val generation = ++deliveryGeneration
+            deliveryJob = viewModelScope.launch {
+                try {
+                    repository.conversation(id)
+                    ensureActive()
+                    mutableState.update { it.copy(sendFailure = null, sendError = null) }
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (failure: Exception) {
+                    mutableState.update { it.copy(sendFailure = (failure as? ApiFailure)?.kind,
+                        sendError = sendFailureMessage(failure)) }
+                } finally {
+                    if (generation == deliveryGeneration) mutableState.update { it.copy(checkingReply = false) }
+                }
+            }
+        }
+    }
+
+    private fun confirmVisibleReply(messages: List<PrivateMessage>): Boolean {
+        val attempt = pendingReply ?: return false
+        if (!state.value.sendUnconfirmed || !messages.any(attempt::matches)) return false
+        deliveryGeneration++
+        deliveryJob?.cancel()
+        finishReply(attempt.targetId)
+        return true
+    }
 
     private fun startDeliveryCheck(initialConversation: List<PrivateMessage>? = null) {
         val snapshot = state.value
+        if (confirmVisibleReply(initialConversation ?: snapshot.conversation)) return
         if (!snapshot.sendUnconfirmed || snapshot.sending || deliveryJob?.isActive == true) return
         val target = snapshot.replyTarget ?: return
         // Older saved drafts have no send baseline. Keep them unconfirmed instead of guessing.
         val attempt = pendingReply ?: MessageReplyAttempt(snapshot.conversationId ?: return, target.messageId,
             username, target.recipient(username), target.subject, snapshot.draft.trim(), 0, setOf(target.messageId), false)
-        mutableState.update { it.copy(checkingReply = true, sendError = null) }
+        mutableState.update { it.copy(checkingReply = true, sendError = null, sendFailure = null) }
         val generation = ++deliveryGeneration
         deliveryJob = viewModelScope.launch {
             var readSucceeded = false
+            var accessFailure: ApiFailure? = null
+            fun rememberFailure(failure: Exception) {
+                if (failure is ApiFailure && failure.kind in setOf(FailureKind.Challenge, FailureKind.Session, FailureKind.Credentials))
+                    accessFailure = failure
+            }
             try {
                 val found = withTimeoutOrNull(12_000) {
                     repeat(3) { round ->
@@ -298,9 +358,9 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
                         val matched = coroutineScope {
                             val conversation = async {
                                 if (round == 0 && initialConversation != null) initialConversation
-                                else readDelivery { repository.conversation(attempt.conversationId) }
+                                else readDelivery(onFailure = ::rememberFailure) { repository.conversation(attempt.conversationId) }
                             }
-                            val sent = async { readDelivery { repository.messages(MessageFolder.Sent, 1) } }
+                            val sent = async { readDelivery(onFailure = ::rememberFailure) { repository.messages(MessageFolder.Sent, 1) } }
                             val messages = conversation.await()
                             ensureActive()
                             if (messages != null) {
@@ -312,27 +372,30 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
                             }
                             val page = sent.await()
                             if (page != null) readSucceeded = true
-                            replyDelivered(attempt, messages, page)
+                            replyDelivered(attempt, messages, page, ::rememberFailure)
                         }
                         if (matched) return@withTimeoutOrNull true
+                        if (accessFailure != null) return@withTimeoutOrNull false
                     }
                     false
                 } == true
                 ensureActive()
                 if (found) finishReply(attempt.targetId)
-                else mutableState.update { it.copy(sendError = if (readSucceeded) UNCONFIRMED_REPLY else DELIVERY_UNAVAILABLE) }
+                else mutableState.update { it.copy(sendFailure = accessFailure?.kind,
+                    sendError = accessFailure?.let(::sendFailureMessage) ?: if (readSucceeded) UNCONFIRMED_REPLY else DELIVERY_UNAVAILABLE) }
             } finally {
                 if (generation == deliveryGeneration) mutableState.update { it.copy(checkingReply = false) }
             }
         }
     }
 
-    private suspend fun replyDelivered(attempt: MessageReplyAttempt, conversation: List<PrivateMessage>?, sent: MessagePage?): Boolean {
+    private suspend fun replyDelivered(attempt: MessageReplyAttempt, conversation: List<PrivateMessage>?, sent: MessagePage?,
+        onFailure: (Exception) -> Unit = {}): Boolean {
         if (conversation?.any(attempt::matches) == true) return true
         val candidates = sent?.items.orEmpty().filter { attempt.newSentCandidate(it) || attempt.sameEnvelope(it) }
         for (candidate in candidates.take(3)) {
             if (attempt.matchesSent(candidate) || candidate.id == attempt.conversationId && attempt.matches(candidate)) return true
-            val thread = readDelivery { repository.conversation(candidate.id) } ?: continue
+            val thread = readDelivery(onFailure) { repository.conversation(candidate.id) } ?: continue
             // A newly added Sent entry can have its own conversation ID without the original thread's history.
             if (thread.any { it.messageId == candidate.messageId && attempt.matchesSent(it) }) return true
             if (thread.any { it.messageId in attempt.knownIds } && thread.any(attempt::matches)) return true
@@ -340,17 +403,17 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
         return false
     }
 
-    private suspend fun <T> readDelivery(block: suspend () -> T): T? = withTimeoutOrNull(4_000) {
+    private suspend fun <T> readDelivery(onFailure: (Exception) -> Unit = {}, block: suspend () -> T): T? = withTimeoutOrNull(4_000) {
         try { block() }
         catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) { null }
+        catch (failure: Exception) { onFailure(failure); null }
     }
 
     private fun finishReply(id: Long) {
         savedState.remove<String>("message-draft-$id")
         clearAttempt(id)
         mutableState.update { it.copy(sending = false, checkingReply = false, sendUnconfirmed = false,
-            replying = false, draft = "", sendError = null, notice = "Reply sent") }
+            replying = false, draft = "", sendError = null, sendFailure = null, notice = "Reply sent") }
         loadConversation()
         MessageFolder.entries.forEach { loadMailbox(refresh = true, folder = it) }
     }
@@ -393,7 +456,14 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
                 subject, text, savedState["$key-started"] ?: 0, savedState.get<LongArray>("$key-known")?.toSet().orEmpty(),
                 savedState["$key-fresh"] ?: false, savedState.get<LongArray>("$key-sent")?.toSet()) else null
         mutableState.update { it.copy(draft = savedState["message-draft-$id"] ?: "",
-            sendUnconfirmed = pending, checkingReply = false, sendError = if (pending) UNCONFIRMED_REPLY else null) }
+            sendUnconfirmed = pending, checkingReply = false, sendFailure = null,
+            sendError = if (pending) UNCONFIRMED_REPLY else null) }
+    }
+
+    private fun sendFailureMessage(failure: Exception): String = when ((failure as? ApiFailure)?.kind) {
+        FailureKind.Challenge -> "Complete browser verification to reconnect to messages. Your reply is saved."
+        FailureKind.Session, FailureKind.Credentials -> "Sign in again to reconnect to messages."
+        else -> failure.forScreen().message
     }
 
     private fun updateMailbox(folder: MessageFolder, change: (MailboxState) -> MailboxState) {
@@ -401,7 +471,7 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
     }
 
     private companion object {
-        const val UNCONFIRMED_REPLY = "Couldn't confirm sending. Check Sent before sending again."
-        const val DELIVERY_UNAVAILABLE = "Couldn't check send status. Try again when connected."
+        const val UNCONFIRMED_REPLY = "Delivery isn't confirmed yet. You can check again or write another reply."
+        const val DELIVERY_UNAVAILABLE = "Can't check delivery while disconnected. You can write another reply."
     }
 }

@@ -2,6 +2,12 @@
 
 Modern Mobilism Android client rewritten in Kotlin and Jetpack Compose. Built with Material 3 Expressive components and motion.
 
+[![Latest release](https://img.shields.io/github/v/release/LosLonelyDevs/Mobilism-Material?label=version&color=7aa2f7)](https://github.com/LosLonelyDevs/Mobilism-Material/releases/latest)
+[![Total GitHub release downloads](https://img.shields.io/github/downloads/LosLonelyDevs/Mobilism-Material/total?color=9ece6a)](https://github.com/LosLonelyDevs/Mobilism-Material/releases)
+[![Tests and lint](https://img.shields.io/github/actions/workflow/status/LosLonelyDevs/Mobilism-Material/ci.yml?branch=main&event=push&label=tests%20%26%20lint)](https://github.com/LosLonelyDevs/Mobilism-Material/actions/workflows/ci.yml?query=branch%3Amain)
+[![Android 8.0 or newer](https://img.shields.io/badge/Android-8.0%2B-9ece6a?logo=android&logoColor=white)](https://github.com/LosLonelyDevs/Mobilism-Material/releases/latest)
+[![License](https://img.shields.io/github/license/LosLonelyDevs/Mobilism-Material?color=bb9af7)](LICENSE)
+
 <p>
 <a href="https://github.com/LosLonelyDevs/Mobilism-Material/releases"><img src="docs/images/github.png" alt="Get it on GitHub" width="180"></a>
 <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22cum.ahfu.mobi.material%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2FLosLonelyDevs%2FMobilism-Material%22%2C%22author%22%3A%22LosLonelyDevs%22%2C%22name%22%3A%22Mobilism%20Material%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Atrue%7D%22%7D"><img src="docs/images/obtainium.png" alt="Install with Obtainium" width="180"></a>

@@ -86,8 +86,8 @@ internal fun UserProfileScreen(reference: ProfileReference, load: suspend (Profi
                 animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(), label = "profile content") { member ->
                 if (member != null) UserProfileContent(member)
                 else Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    error?.let { ErrorPanel(it, onRetry = { attempt++ }) } ?: LoadingState("Loading profile…")
-                    if (error != null && canVerify) ExpressiveButton({ verify = true }) { Text("Verify forum access") }
+                    error?.let { ErrorPanel(it, onRetry = { attempt++ },
+                        onVerify = if (canVerify) ({ verify = true }) else null) } ?: LoadingState("Loading profile…")
                 }
             }
         }

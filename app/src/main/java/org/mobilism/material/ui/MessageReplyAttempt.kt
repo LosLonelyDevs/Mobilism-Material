@@ -16,10 +16,11 @@ internal data class MessageReplyAttempt(
     val sentIds: Set<Long>? = null,
 ) {
     fun sameEnvelope(message: PrivateMessage): Boolean =
-        message.messageId > (knownIds.maxOrNull() ?: 0) && message.messageId !in knownIds &&
+        message.messageId !in knownIds &&
             message.messageId !in sentIds.orEmpty() &&
-            sameParticipantsAndSubject(message) &&
-            (freshBaseline || startedAt > 0 && message.publishedAt >= startedAt / 1000 - 5)
+            sameParticipantsAndSubject(message, inConversation = true) &&
+            (freshBaseline || message.messageId > (knownIds.maxOrNull() ?: 0) &&
+                startedAt > 0 && message.publishedAt >= startedAt / 1000 - 5)
 
     fun newSentCandidate(message: PrivateMessage): Boolean = sentIds != null &&
         message.messageId > (sentIds.maxOrNull() ?: 0) && message.messageId !in sentIds &&
@@ -28,10 +29,10 @@ internal data class MessageReplyAttempt(
 
     fun matchesSent(message: PrivateMessage): Boolean = newSentCandidate(message) && sameBody(message)
 
-    private fun sameParticipantsAndSubject(message: PrivateMessage): Boolean =
+    private fun sameParticipantsAndSubject(message: PrivateMessage, inConversation: Boolean = false): Boolean =
         message.from.trim().equals(sender.trim(), ignoreCase = true) &&
-            message.to.trim().equals(recipient.trim(), ignoreCase = true) &&
-            subjectKey(message.subject).equals(subjectKey(subject), ignoreCase = true)
+            (message.to.trim().equals(recipient.trim(), ignoreCase = true) || inConversation && message.to.isBlank()) &&
+            (subjectKey(message.subject).equals(subjectKey(subject), ignoreCase = true) || inConversation && message.subject.isBlank())
 
     fun matches(message: PrivateMessage): Boolean = sameEnvelope(message) && sameBody(message)
 

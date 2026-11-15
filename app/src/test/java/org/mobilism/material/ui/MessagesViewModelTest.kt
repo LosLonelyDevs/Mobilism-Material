@@ -311,7 +311,7 @@ class MessagesViewModelTest {
         advanceUntilIdle()
         assertEquals("  Thanks & hello  ", model.state.value.draft)
         assertTrue(model.state.value.sendUnconfirmed)
-        assertEquals("Couldn't confirm sending. Check Sent before sending again.", model.state.value.sendError)
+        assertEquals("Delivery isn't confirmed yet. You can check again or write another reply.", model.state.value.sendError)
         model.sendReply()
         model.editReply("Changed")
         advanceUntilIdle()
@@ -542,7 +542,7 @@ class MessagesViewModelTest {
         repo.mailboxError = repo.conversationError
         repo.sendResult.completeExceptionally(repo.conversationError!!)
         advanceUntilIdle()
-        assertEquals("Couldn't check send status. Try again when connected.", model.state.value.sendError)
+        assertEquals("Can't check delivery while disconnected. You can write another reply.", model.state.value.sendError)
         assertEquals("Thanks & hello", model.state.value.draft)
         repo.conversationError = null
         repo.mailboxError = null
@@ -657,6 +657,158 @@ class MessagesViewModelTest {
         assertEquals(1, repo.posts.size)
     }
 
+    @Test fun newReplyReleasesUnconfirmedDraftAndDoesNotResendIt() = runTest(dispatcher) {
+        val repo = Repository()
+        val saved = SavedStateHandle()
+        val model = ready(repo, saved)
+        model.sendReply()
+        runCurrent()
+        repo.sendResult.completeExceptionally(ApiFailure(FailureKind.Connection, "Timeout"))
+        advanceUntilIdle()
+        model.newReply()
+        assertTrue(model.state.value.replying)
+        assertFalse(model.state.value.sendUnconfirmed)
+        assertEquals("", model.state.value.draft)
+        assertNull(model.state.value.notice)
+        assertTrue(saved.keys().none { it.startsWith("message-pending-") || it.startsWith("message-draft-") })
+        model.editReply("A different reply")
+        assertEquals(1, repo.posts.size)
+        val restored = MessagesViewModel(repo, "Reader", saved)
+        advanceUntilIdle()
+        assertEquals("A different reply", restored.state.value.draft)
+        assertFalse(restored.state.value.sendUnconfirmed)
+        repo.sendResult = CompletableDeferred(Unit)
+        model.sendReply()
+        advanceUntilIdle()
+        assertEquals(listOf(42L to "Thanks & hello", 42L to "A different reply"), repo.posts)
+    }
+
+    @Test fun startingNewReplyCancelsOldCheckWithoutClearingNewDraft() = runTest(dispatcher) {
+        val repo = Repository()
+        val model = ready(repo)
+        model.sendReply()
+        runCurrent()
+        val oldRead = CompletableDeferred<List<PrivateMessage>>()
+        repo.pendingConversation = oldRead
+        repo.sendResult.completeExceptionally(ApiFailure(FailureKind.Connection, "Timeout"))
+        runCurrent()
+        assertTrue(model.state.value.checkingReply)
+        model.newReply()
+        model.editReply("Next reply")
+        oldRead.complete(listOf(incoming, delivered))
+        advanceUntilIdle()
+        assertEquals("Next reply", model.state.value.draft)
+        assertFalse(model.state.value.checkingReply)
+        assertFalse(model.state.value.sendUnconfirmed)
+        assertNull(model.state.value.notice)
+        assertEquals(1, repo.posts.size)
+    }
+
+    @Test fun refreshedVisibleReplyConfirmsWhileOlderCheckIsStillWaiting() = runTest(dispatcher) {
+        val repo = Repository()
+        val model = ready(repo)
+        model.sendReply()
+        runCurrent()
+        repo.pendingConversation = CompletableDeferred()
+        repo.sendResult.completeExceptionally(ApiFailure(FailureKind.InvalidResponse, "Missing acknowledgement"))
+        runCurrent()
+        assertTrue(model.state.value.checkingReply)
+        repo.pendingConversation = null
+        repo.conversationItems += delivered.copy(subject = "", to = "", messageId = 41)
+        model.loadConversation()
+        advanceUntilIdle()
+        assertFalse(model.state.value.sendUnconfirmed)
+        assertFalse(model.state.value.checkingReply)
+        assertEquals("Reply sent", model.state.value.notice)
+        assertEquals("", model.state.value.draft)
+        model.openReply()
+        model.editReply("Another reply")
+        assertEquals("Another reply", model.state.value.draft)
+        assertEquals(1, repo.posts.size)
+    }
+
+    @Test fun blockedAccessBeforeSendPreservesDraftAndVerificationOnlyReads() = runTest(dispatcher) {
+        val repo = Repository()
+        val model = ready(repo)
+        repo.conversationError = ApiFailure(FailureKind.Challenge, "Browser check", 403)
+        model.sendReply()
+        advanceUntilIdle()
+        assertTrue(repo.posts.isEmpty())
+        assertFalse(model.state.value.sendUnconfirmed)
+        assertEquals(FailureKind.Challenge, model.state.value.sendFailure)
+        assertEquals("Thanks & hello", model.state.value.draft)
+        repo.conversationError = null
+        model.checkReplyDelivery()
+        advanceUntilIdle()
+        assertNull(model.state.value.sendFailure)
+        assertNull(model.state.value.sendError)
+        assertEquals("Thanks & hello", model.state.value.draft)
+        assertTrue(repo.posts.isEmpty())
+        repo.sendResult.complete(Unit)
+        model.sendReply()
+        advanceUntilIdle()
+        assertEquals(1, repo.posts.size)
+    }
+
+    @Test fun blockedDeliveryCheckSurfacesVerificationAndRecoversWithoutResend() = runTest(dispatcher) {
+        val repo = Repository()
+        val model = ready(repo)
+        model.sendReply()
+        runCurrent()
+        repo.conversationError = ApiFailure(FailureKind.Challenge, "Browser check", 403)
+        repo.mailboxError = repo.conversationError
+        val reads = repo.conversationCalls.size
+        repo.sendResult.completeExceptionally(ApiFailure(FailureKind.InvalidResponse, "Missing acknowledgement"))
+        advanceUntilIdle()
+        assertEquals(reads + 1, repo.conversationCalls.size)
+        assertEquals(FailureKind.Challenge, model.state.value.sendFailure)
+        assertTrue(model.state.value.sendUnconfirmed)
+        assertFalse(model.state.value.checkingReply)
+        repo.conversationError = null
+        repo.mailboxError = null
+        repo.conversationItems += delivered
+        model.checkReplyDelivery()
+        advanceUntilIdle()
+        assertEquals("Reply sent", model.state.value.notice)
+        assertNull(model.state.value.sendFailure)
+        assertEquals(1, repo.posts.size)
+    }
+
+    @Test fun retryWithExpiredSessionKeepsPendingAttemptAndDoesNotPost() = runTest(dispatcher) {
+        val repo = Repository()
+        val saved = SavedStateHandle()
+        val model = ready(repo, saved)
+        model.sendReply()
+        runCurrent()
+        repo.sendResult.completeExceptionally(ApiFailure(FailureKind.Connection, "Timeout"))
+        advanceUntilIdle()
+        repo.conversationError = ApiFailure(FailureKind.Session, "Expired", 401)
+        repo.mailboxError = repo.conversationError
+        model.retryReply()
+        advanceUntilIdle()
+        assertEquals(FailureKind.Session, model.state.value.sendFailure)
+        assertTrue(model.state.value.sendUnconfirmed)
+        assertEquals(true, saved.get<Boolean>("message-pending-42"))
+        assertEquals(1, repo.posts.size)
+    }
+
+    @Test fun retryDoesNotPostWhenReadingSentCandidateNeedsVerification() = runTest(dispatcher) {
+        val repo = Repository()
+        val model = ready(repo)
+        model.sendReply()
+        runCurrent()
+        repo.sendResult.completeExceptionally(ApiFailure(FailureKind.Connection, "Timeout"))
+        advanceUntilIdle()
+        repo.sentItems = listOf(delivered.copy(id = 99, contentHtml = ""))
+        repo.conversationErrors[99] = ApiFailure(FailureKind.Challenge, "Browser check", 403)
+        model.retryReply()
+        advanceUntilIdle()
+        assertEquals(1, repo.posts.size)
+        assertEquals(FailureKind.Challenge, model.state.value.sendFailure)
+        assertTrue(model.state.value.sendUnconfirmed)
+        assertFalse(model.state.value.checkingReply)
+    }
+
     private fun TestScope.ready(repo: Repository, saved: SavedStateHandle = SavedStateHandle()): MessagesViewModel {
         repo.readResult.complete(Unit)
         val model = MessagesViewModel(repo, "Reader", saved, now = { 1_700_000_100_000 })
@@ -679,6 +831,7 @@ class MessagesViewModelTest {
         var sentItems = listOf(outgoing)
         val inboxPages = mutableMapOf<Int, List<PrivateMessage>>()
         val otherConversations = mutableMapOf<Long, List<PrivateMessage>>()
+        val conversationErrors = mutableMapOf<Long, Exception>()
         val conversationCalls = mutableListOf<Long>()
         var conversationError: Exception? = null
         var mailboxError: Exception? = null
@@ -691,6 +844,7 @@ class MessagesViewModelTest {
         override suspend fun conversation(id: Long): List<PrivateMessage> {
             conversationCalls += id
             conversationError?.let { throw it }
+            conversationErrors[id]?.let { throw it }
             return pendingConversation?.await() ?: otherConversations[id] ?: conversationItems
         }
         override suspend fun markMessageRead(id: Long) { reads += id; readResult.await() }
