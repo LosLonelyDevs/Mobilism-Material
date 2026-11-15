@@ -28,7 +28,7 @@ import org.json.JSONException
 import org.json.JSONObject
 
 internal class MobilismApi(private val context: Context, private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
-    client: OkHttpClient = OkHttpClient()) {
+    client: OkHttpClient = OkHttpClient(), private val challengeRecovery: ChallengeRecovery = ChallengeRecovery.None) {
     private val client = client.newBuilder()
         .apply { interceptors().add(0, DiagnosticInterceptor(diagnostics)) }
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -215,12 +215,12 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         return forumPage(url)
     }
 
-    private suspend fun forumPage(url: okhttp3.HttpUrl): String = withContext(Dispatchers.IO) {
+    private suspend fun forumPage(url: okhttp3.HttpUrl, recovered: Boolean = false): String = withContext(Dispatchers.IO) {
         try {
             // Forum reads never receive the API session token.
             val request = Request.Builder().url(url)
             runCatching { android.webkit.WebSettings.getDefaultUserAgent(context) }.getOrNull()?.let { request.header("User-Agent", it) }
-            runCatching { android.webkit.CookieManager.getInstance().getCookie("https://forum.mobilism.org/") }.getOrNull()
+            runCatching { android.webkit.CookieManager.getInstance().getCookie(url.toString()) }.getOrNull()
                 ?.takeIf { it.isNotBlank() }?.let { request.header("Cookie", it) }
             readClient.newCall(request.build()).await().use { response ->
                 val source = response.body?.source() ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum returned an empty response.")
@@ -228,18 +228,25 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                 if (source.buffer.size > MAX_RESPONSE_BYTES) throw ApiFailure(FailureKind.InvalidResponse, "The forum response was too large.")
                 val html = source.readUtf8()
                 if (!response.isSuccessful || response.header("cf-mitigated") == "challenge") {
-                    NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", html)?.let { throw it }
+                    NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", html,
+                        VerificationSite.Forum)?.let { throw it }
                     throw ApiFailure(FailureKind.Server, "The forum could not load this page (HTTP ${response.code}).", response.code)
                 }
                 html
             }
+        } catch (failure: ApiFailure) {
+            if (!recovered && failure.kind == FailureKind.Challenge && challengeRecovery.recover(VerificationSite.Forum)) {
+                return@withContext forumPage(url, recovered = true)
+            }
+            throw failure
         } catch (failure: IOException) {
             throw NetworkFailures.forScreen(failure)
         }
     }
 
     private suspend fun request(path: String, token: String? = null, form: Map<String, String>? = null,
-        emptyRecordsAsArray: Boolean = false, hideAdult: Boolean = false, retryRead: Boolean = true): JSONObject =
+        emptyRecordsAsArray: Boolean = false, hideAdult: Boolean = false, retryRead: Boolean = true,
+        recovered: Boolean = false): JSONObject =
         withContext(Dispatchers.IO) {
             val operation = when {
                 path.startsWith("auth/") -> DiagnosticOperation.Login
@@ -259,6 +266,11 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                 if (hideAdult) addQueryParameter("no_adult", "1")
             }.build()
             val builder = Request.Builder().url(url).header("Accept", "application/json")
+            // Clearance belongs to the browser's origin and user agent, across all API requests.
+            runCatching { android.webkit.WebSettings.getDefaultUserAgent(context) }.getOrNull()
+                ?.let { builder.header("User-Agent", it) }
+            runCatching { android.webkit.CookieManager.getInstance().getCookie(url.toString()) }.getOrNull()
+                ?.takeIf { it.isNotBlank() }?.let { builder.header("Cookie", it) }
             // This client is used only for the API origin, never images or download URLs.
             token?.let { builder.header("X-Auth-Token", it) }
             form?.let { fields ->
@@ -321,6 +333,11 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: ApiFailure) {
+                if (!recovered && retryRead && (form == null || path == "search") &&
+                    failure.kind == FailureKind.Challenge && challengeRecovery.recover(VerificationSite.App)) {
+                    return@withContext request(path, token, form, emptyRecordsAsArray, hideAdult, retryRead,
+                        recovered = true)
+                }
                 diagnostics.record(DiagnosticEvent(DiagnosticSource.Forum, operation, DiagnosticPhase.Failed,
                     httpStatus = failure.httpStatus, failure = when (failure.kind) {
                         FailureKind.Challenge -> DiagnosticFailure.Challenge

@@ -85,7 +85,13 @@ internal data class Session(val username: String, val accessToken: String, val r
 
 enum class FailureKind { Permission, Dns, Connection, Challenge, Credentials, Session, Server, InvalidResponse }
 
-class ApiFailure(val kind: FailureKind, override val message: String, val httpStatus: Int? = null) : Exception(message)
+enum class VerificationSite(val url: String) {
+    App("https://app.mobilism.org/api-new/release/category"),
+    Forum("https://forum.mobilism.org/"),
+}
+
+class ApiFailure(val kind: FailureKind, override val message: String, val httpStatus: Int? = null,
+    val verificationSite: VerificationSite = VerificationSite.App) : Exception(message)
 
 interface MobilismRepository {
     val auth: kotlinx.coroutines.flow.StateFlow<AuthState>

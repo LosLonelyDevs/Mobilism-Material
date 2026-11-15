@@ -27,11 +27,12 @@ internal object NetworkFailures {
         else -> ApiFailure(FailureKind.Connection, "Could not reach Mobilism. Check your connection or switch networks, then try again.")
     }
 
-    fun response(status: Int, challenged: Boolean, body: String): ApiFailure? {
+    fun response(status: Int, challenged: Boolean, body: String,
+        verificationSite: VerificationSite = VerificationSite.App): ApiFailure? {
         val html = body.trimStart().startsWith('<')
         return when {
             challenged || html && (body.contains("cf-chl-", true) || body.contains("challenge-platform", true)) ->
-                ApiFailure(FailureKind.Challenge, "Cloudflare is asking this connection for browser verification. Try another network or use the forum in your browser.", status)
+                ApiFailure(FailureKind.Challenge, "Cloudflare needs a browser check. Verify this connection, then try again.", status, verificationSite)
             status in 500..599 -> ApiFailure(FailureKind.Server, "Mobilism is temporarily unavailable (HTTP $status). Try again later.", status)
             status == 429 && !body.trimStart().startsWith('{') ->
                 ApiFailure(FailureKind.Server, "Mobilism is limiting requests. Wait a moment and try again.", status)

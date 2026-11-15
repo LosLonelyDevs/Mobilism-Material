@@ -80,14 +80,16 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
             }
             MobilismTheme(theme, appearance.font, appearance.reduceMotion, appearance.customFontFile) {
-                MobilismApp(app, notificationRelease, fromNotification = fromNotification, notificationMessage = notificationMessage) {
-                    notificationRelease = null
-                    notificationMessage = null
-                    intent.removeExtra(FollowingNotifications.EXTRA_RELEASE)
-                    intent.removeExtra(MessageNotifications.EXTRA_ACCOUNT)
-                    intent.removeExtra(MessageNotifications.EXTRA_CONVERSATION)
-                    intent.removeExtra(MessageNotifications.EXTRA_MESSAGE)
-                    intent.data = null
+                org.mobilism.material.ui.ConnectionRecoveryHost(app.connectionRecovery) {
+                    MobilismApp(app, notificationRelease, fromNotification = fromNotification, notificationMessage = notificationMessage) {
+                        notificationRelease = null
+                        notificationMessage = null
+                        intent.removeExtra(FollowingNotifications.EXTRA_RELEASE)
+                        intent.removeExtra(MessageNotifications.EXTRA_ACCOUNT)
+                        intent.removeExtra(MessageNotifications.EXTRA_CONVERSATION)
+                        intent.removeExtra(MessageNotifications.EXTRA_MESSAGE)
+                        intent.data = null
+                    }
                 }
             }
         }

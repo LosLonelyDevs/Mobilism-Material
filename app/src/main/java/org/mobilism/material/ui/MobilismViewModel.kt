@@ -28,10 +28,12 @@ import org.mobilism.material.settings.AppearanceStore
 import org.mobilism.material.settings.DownloadPreferencesStore
 import org.mobilism.material.settings.NewReleaseSession
 
-data class ScreenError(val message: String, val showNetworkSettings: Boolean = false)
+data class ScreenError(val message: String, val showNetworkSettings: Boolean = false,
+    val verificationSite: org.mobilism.material.data.VerificationSite? = null)
 
 internal fun Exception.forScreen(): ScreenError = when (this) {
-    is ApiFailure -> ScreenError(message, kind == FailureKind.Permission || kind == FailureKind.Dns)
+    is ApiFailure -> ScreenError(message, kind == FailureKind.Permission || kind == FailureKind.Dns,
+        verificationSite.takeIf { kind == FailureKind.Challenge })
     else -> ScreenError("Something went wrong. Please try again.")
 }
 

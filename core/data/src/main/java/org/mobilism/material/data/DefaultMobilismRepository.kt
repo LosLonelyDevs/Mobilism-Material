@@ -10,8 +10,9 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     diagnostics: DiagnosticLogger = DiagnosticLogger.None, client: okhttp3.OkHttpClient = okhttp3.OkHttpClient(),
     private val customCategories: CustomCategoryStore? = null,
     private val customCategoriesEnabled: () -> Boolean = { false },
+    challengeRecovery: ChallengeRecovery = ChallengeRecovery.None,
 ) : MobilismRepository, MessagesRepository, DiscussionsRepository, HomeRepository {
-    private val api = MobilismApi(context.applicationContext, diagnostics, client)
+    private val api = MobilismApi(context.applicationContext, diagnostics, client, challengeRecovery)
     private val store = SessionStore(context.applicationContext)
     private val reactions = context.getSharedPreferences("release-reactions", Context.MODE_PRIVATE)
     private val authMutex = Mutex()

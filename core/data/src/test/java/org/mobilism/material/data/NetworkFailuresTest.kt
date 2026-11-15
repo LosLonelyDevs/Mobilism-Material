@@ -8,6 +8,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NetworkFailuresTest {
+    @Test fun challengeKeepsTheOriginThatNeedsVerification() {
+        assertEquals(VerificationSite.App, NetworkFailures.response(403, true, "")!!.verificationSite)
+        assertEquals(VerificationSite.Forum,
+            NetworkFailures.response(403, true, "", VerificationSite.Forum)!!.verificationSite)
+    }
+
     @Test fun distinguishesChallengeServerOutageAndMalformedHtml() {
         assertEquals(FailureKind.Challenge, NetworkFailures.response(403, true, "private-body")!!.kind)
         assertEquals(FailureKind.Challenge, NetworkFailures.response(403, false, "<html>challenge-platform</html>")!!.kind)

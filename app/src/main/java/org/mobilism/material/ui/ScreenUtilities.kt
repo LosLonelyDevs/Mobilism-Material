@@ -14,6 +14,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -22,10 +30,29 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import org.mobilism.material.designsystem.AppTextButton
+import kotlinx.coroutines.launch
 
 @Composable
-fun ErrorPanel(error: ScreenError, modifier: Modifier = Modifier, onRetry: (() -> Unit)? = null) {
+fun ErrorPanel(error: ScreenError, modifier: Modifier = Modifier, onRetry: (() -> Unit)? = null,
+    onVerify: (() -> Unit)? = null) {
     val context = LocalContext.current
+    val recovery = LocalConnectionRecovery.current
+    val scope = rememberCoroutineScope()
+    if (recovery != null && error.verificationSite != null) {
+        val completed by recovery.completed.collectAsState()
+        val generation = completed[error.verificationSite] ?: 0
+        var handled by remember(error) { mutableLongStateOf(generation) }
+        LaunchedEffect(generation, error) {
+            if (generation > handled) { handled = generation; onRetry?.invoke() }
+        }
+    }
+    var verify by remember(error) { mutableStateOf(false) }
+    if (verify) error.verificationSite?.let { site ->
+        ConnectionVerification(site, onDismiss = { verify = false }, onContinue = {
+            verify = false
+            onRetry?.invoke()
+        })
+    }
     Surface(
         modifier = modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
         color = MaterialTheme.colorScheme.errorContainer,
@@ -34,6 +61,11 @@ fun ErrorPanel(error: ScreenError, modifier: Modifier = Modifier, onRetry: (() -
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(error.message, style = MaterialTheme.typography.bodyMedium)
+            if (onVerify != null) AppTextButton("Verify forum access", onVerify)
+            else if (error.verificationSite != null) AppTextButton("Verify connection", {
+                if (recovery == null) verify = true
+                else scope.launch { recovery.verifyManually(error.verificationSite) }
+            })
             onRetry?.let { AppTextButton("Try again", it) }
             if (error.showNetworkSettings) AppTextButton("Open app permissions", {
                 launch(context, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)))
