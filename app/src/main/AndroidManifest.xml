@@ -21,15 +21,16 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MobilismMaterial"
         android:usesCleartextTraffic="false">
+        <!-- Android reuses provider instances by component class, so each authority needs its own class. -->
         <provider
-            android:name="androidx.core.content.FileProvider"
+            android:name=".settings.DiagnosticFileProvider"
             android:authorities="${applicationId}.diagnostics"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/diagnostic_paths" />
         </provider>
         <provider
-            android:name="androidx.core.content.FileProvider"
+            android:name=".updates.UpdateFileProvider"
             android:authorities="${applicationId}.updates"
             android:exported="false"
             android:grantUriPermissions="true">

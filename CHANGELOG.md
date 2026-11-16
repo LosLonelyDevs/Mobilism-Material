@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Bug fixes and stability improvements
+
 ## 0.1.21
 
 - Bug fixes and stability improvements
