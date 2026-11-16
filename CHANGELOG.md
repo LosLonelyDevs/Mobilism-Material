@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- various bug fixes and improvements
+## 0.1.21
+
+- Bug fixes and stability improvements
 
 ## 0.1.20
 
