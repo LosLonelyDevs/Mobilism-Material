@@ -40,6 +40,8 @@ internal class MobilismApi(private val context: Context, private val diagnostics
     // Connection recovery can resend a request. Keep writes on the non-retrying client.
     private val readClient = this.client.newBuilder().retryOnConnectionFailure(true).build()
     private val searches = SearchRequestPolicy()
+    private val reads = ReadRequestPolicy()
+    private val forumReads = ReadRequestPolicy()
     private val likePostIds = context.getSharedPreferences("release-post-ids", Context.MODE_PRIVATE)
     private val forumPostIds = ConcurrentHashMap<Long, Long>()
     private val forumCommentStarts = ConcurrentHashMap<Pair<Long, Int>, Int>()
@@ -132,10 +134,12 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             }))
     }
 
-    suspend fun discussionCategories(area: DiscussionArea, token: String?): List<DiscussionCategory> =
-        DiscussionJson.categories(request(if (area == DiscussionArea.Community) "other/category" else "discussion/categories", token), area)
+    suspend fun discussionCategories(area: DiscussionArea, token: String?, fresh: Boolean = false): List<DiscussionCategory> =
+        DiscussionJson.categories(request(if (area == DiscussionArea.Community) "other/category" else "discussion/categories", token,
+            cacheMillis = 5 * 60_000, fresh = fresh), area)
 
-    suspend fun discussionTopics(category: DiscussionCategory, page: Int, query: String, token: String?, includePinned: Boolean = true): DiscussionPage {
+    suspend fun discussionTopics(category: DiscussionCategory, page: Int, query: String, token: String?, includePinned: Boolean = true,
+        fresh: Boolean = false): DiscussionPage {
         require(page > 0)
         if (query.isNotBlank()) return DiscussionJson.page(request("search", token, form = mapOf(
             "search" to query.trim(), "count" to page.toString(), "limits" to PAGE_SIZE.toString(),
@@ -144,7 +148,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             "id" to if (category.id == 12L) "all" else category.id.toString(),
         )), category.kind, search = true)
         return DiscussionJson.page(request("${category.kind.path}/category/${category.apiId}/page/$page/limit/$PAGE_SIZE/orderby/topic_last_post_time/desc/${if (includePinned) 1 else 0}",
-            token, emptyRecordsAsArray = true), category.kind)
+            token, emptyRecordsAsArray = true, cacheMillis = if (page == 1) 60_000 else 0, fresh = fresh), category.kind)
     }
 
     suspend fun discussionComments(topic: DiscussionTopic, page: Int, token: String?): CommentPage {
@@ -213,7 +217,9 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         return forumPage(url)
     }
 
-    private suspend fun forumPage(url: okhttp3.HttpUrl, recovered: Boolean = false): String = withContext(Dispatchers.IO) {
+    private suspend fun forumPage(url: okhttp3.HttpUrl): String = forumReads.request(url.toString()) { performForumPage(url) }
+
+    private suspend fun performForumPage(url: okhttp3.HttpUrl, recovered: Boolean = false): String = withContext(Dispatchers.IO) {
         try {
             // Forum reads never receive the API session token.
             val request = Request.Builder().url(url)
@@ -225,6 +231,9 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                 source.request(MAX_RESPONSE_BYTES + 1)
                 if (source.buffer.size > MAX_RESPONSE_BYTES) throw ApiFailure(FailureKind.InvalidResponse, "The forum response was too large.")
                 val html = source.readUtf8()
+                val challenged = NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", html,
+                    VerificationSite.Forum)?.kind == FailureKind.Challenge
+                forumReads.response(response.code, response.header("Retry-After"), challenged)
                 if (!response.isSuccessful || response.header("cf-mitigated") == "challenge") {
                     NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", html,
                         VerificationSite.Forum)?.let { throw it }
@@ -234,7 +243,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             }
         } catch (failure: ApiFailure) {
             if (!recovered && failure.kind == FailureKind.Challenge && challengeRecovery.recover(VerificationSite.Forum)) {
-                return@withContext forumPage(url, recovered = true)
+                return@withContext performForumPage(url, recovered = true)
             }
             throw failure
         } catch (failure: IOException) {
@@ -244,12 +253,17 @@ internal class MobilismApi(private val context: Context, private val diagnostics
 
     private suspend fun request(path: String, token: String? = null, form: Map<String, String>? = null,
         emptyRecordsAsArray: Boolean = false, hideAdult: Boolean = false, retryRead: Boolean = true,
-        emptySuccess: Boolean = false, recovered: Boolean = false): JSONObject {
-        if (path != "search") return performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead, emptySuccess, recovered)
-        val identity = listOf(token, hideAdult.toString(), form?.toSortedMap().toString()).toString()
+        emptySuccess: Boolean = false, recovered: Boolean = false, cacheMillis: Long = 0, fresh: Boolean = false): JSONObject {
+        if (path != "search" && (form != null || !retryRead))
+            return performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead, emptySuccess, recovered)
+        val identity = listOf(path, token, hideAdult.toString(), form?.toSortedMap().toString()).toString()
         val key = java.security.MessageDigest.getInstance("SHA-256").digest(identity.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
+        if (path != "search") return JSONObject(reads.request(key, cacheMillis, fresh) {
+            performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead, emptySuccess, recovered).toString()
+        })
         return JSONObject(searches.request(key) {
+            reads.checkAllowed()
             performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead = false, emptySuccess = emptySuccess).toString()
         })
     }
@@ -299,7 +313,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                 val transport = if (readOnly) readClient else client
                 var result = transport.newCall(request).await()
                 if (readOnly && result.code in setOf(502, 503, 504, 520, 521, 522, 523, 524) &&
-                    result.header("cf-mitigated") != "challenge") {
+                    result.header("cf-mitigated") != "challenge" && result.header("Retry-After") == null) {
                     diagnostics.record(DiagnosticEvent(DiagnosticSource.Forum, operation, DiagnosticPhase.Retrying,
                         httpStatus = result.code, failure = DiagnosticFailure.Server))
                     result.close()
@@ -315,6 +329,9 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                         FailureKind.InvalidResponse, "The server response was too large.",
                     )
                     val text = source.readUtf8()
+                    val challenged = NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", text)
+                        ?.kind == FailureKind.Challenge
+                    if (readOnly || path == "search") reads.response(response.code, response.header("Retry-After"), challenged)
                     NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", text)?.let { throw it }
                     val json = try {
                         if (emptySuccess && response.isSuccessful && (text.isBlank() || text.trim() == "null")) JSONObject()
@@ -349,7 +366,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             } catch (failure: ApiFailure) {
                 if (!recovered && retryRead && (form == null || path == "search") &&
                     failure.kind == FailureKind.Challenge && challengeRecovery.recover(VerificationSite.App)) {
-                    return@withContext request(path, token, form, emptyRecordsAsArray, hideAdult, retryRead, emptySuccess,
+                    return@withContext performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead, emptySuccess,
                         recovered = true)
                 }
                 diagnostics.record(DiagnosticEvent(DiagnosticSource.Forum, operation, DiagnosticPhase.Failed,

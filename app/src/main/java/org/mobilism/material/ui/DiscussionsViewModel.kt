@@ -28,6 +28,7 @@ data class DiscussionsState(
     val notice: String? = null, val forward: Boolean = true,
     val categoryActivity: Map<String, Long> = emptyMap(),
     val announcementsOnly: Boolean = false,
+    val activityGeneration: Int = 0,
 ) {
     val destination: String get() = topic?.let { "topic:${it.key}" } ?: category?.let { "category:${it.key}" } ?: "categories"
 }
@@ -49,6 +50,7 @@ class DiscussionsViewModel(
     private val confirmed = mutableMapOf<String, List<ReleaseComment>>()
     private val activityRequests = Semaphore(3)
     private val activityCache = mutableMapOf<String, Pair<Long, Long?>>()
+    private val refreshActivityKeys = mutableSetOf<String>()
 
     init {
         loadCategories(refreshActivity = false)
@@ -71,31 +73,45 @@ class DiscussionsViewModel(
         mutableState.update { it.copy(loading = true, error = null) }
         categoriesJob = viewModelScope.launch {
             try {
-                val result = repository.discussionCategories(area).let { categories ->
+                val result = (if (refreshActivity) repository.refreshDiscussionCategories(area)
+                    else repository.discussionCategories(area)).let { categories ->
                     if (announcementsOnly) categories.filter { it.section == "Announcements" } else categories
                 }
                 ensureActive()
                 val cached = result.mapNotNull { category -> activityCache[category.key]?.second?.let { category.key to it } }.toMap()
-                mutableState.update { it.copy(categories = result, loading = false, categoryActivity = cached) }
-                if (announcementsOnly && result.size == 1 && state.value.category == null) openCategory(result.single())
-                result.filter { it.topics != 0L }.forEach { category ->
-                    val checkedAt = activityCache[category.key]?.first
-                    if (!refreshActivity && checkedAt != null && System.currentTimeMillis() - checkedAt < 5 * 60_000) return@forEach
-                    launch {
-                        activityRequests.withPermit {
-                            try {
-                                val timestamp = repository.discussionLastActivity(category)?.takeIf { it > 0 }
-                                ensureActive()
-                                activityCache[category.key] = System.currentTimeMillis() to timestamp
-                                mutableState.update { it.copy(categoryActivity = if (timestamp == null) it.categoryActivity - category.key
-                                    else it.categoryActivity + (category.key to timestamp)) }
-                            } catch (cancelled: CancellationException) { throw cancelled }
-                            catch (_: Exception) { /* Optional activity must not block forum browsing. */ }
-                        }
-                    }
+                if (refreshActivity) {
+                    activityCache.clear()
+                    refreshActivityKeys.addAll(result.map { it.key })
                 }
+                mutableState.update { it.copy(categories = result, loading = false, categoryActivity = cached,
+                    activityGeneration = it.activityGeneration + 1) }
+                if (announcementsOnly && result.size == 1 && state.value.category == null) openCategory(result.single())
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) { mutableState.update { it.copy(loading = false, error = failure.forScreen()) } }
+        }
+    }
+
+    suspend fun loadActivity(category: DiscussionCategory) {
+        if (category.topics == 0L || state.value.category != null || category !in state.value.categories) return
+        val generation = state.value.activityGeneration
+        activityRequests.withPermit {
+            if (generation != state.value.activityGeneration || state.value.category != null || category !in state.value.categories) return@withPermit
+            val checkedAt = activityCache[category.key]?.first
+            if (checkedAt != null && System.currentTimeMillis() - checkedAt < 5 * 60_000) return@withPermit
+            try {
+                val timestamp = (if (category.key in refreshActivityKeys) repository.refreshDiscussionLastActivity(category)
+                    else repository.discussionLastActivity(category))?.takeIf { it > 0 }
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (generation != state.value.activityGeneration || category !in state.value.categories) return@withPermit
+                refreshActivityKeys.remove(category.key)
+                activityCache[category.key] = System.currentTimeMillis() to timestamp
+                mutableState.update { it.copy(categoryActivity = if (timestamp == null) it.categoryActivity - category.key
+                    else it.categoryActivity + (category.key to timestamp)) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                if (generation == state.value.activityGeneration)
+                    activityCache[category.key] = System.currentTimeMillis() to state.value.categoryActivity[category.key]
+            }
         }
     }
 
@@ -126,7 +142,8 @@ class DiscussionsViewModel(
         topicsJob = viewModelScope.launch {
             try {
                 val page = if (restart) 1 else snapshot.topics.page + 1
-                val result = repository.discussionTopics(category, page, snapshot.submittedQuery)
+                val result = if (restart) repository.refreshDiscussionTopics(category, snapshot.submittedQuery)
+                    else repository.discussionTopics(category, page, snapshot.submittedQuery)
                 ensureActive()
                 val previous = if (restart) emptyList() else snapshot.topics.items
                 val items = (previous + result.items).distinctBy { it.id }

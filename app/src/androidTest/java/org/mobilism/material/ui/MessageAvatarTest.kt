@@ -28,7 +28,7 @@ class MessageAvatarTest {
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         bitmap.recycle()
         val identities = org.mobilism.material.members.MemberIdentityStore(
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main), { error("No profile") })
+            { error("No profile") })
         identities.remember(UserProfile(ProfileReference(username = "Verified"), "Verified", file.absolutePath,
             setOf(AccountRole.Member), "", emptyList(), "", emptyMap(), null, null, null, null))
         try {

@@ -12,6 +12,33 @@ import org.mobilism.material.settings.MessageReadHistory
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MessageNotificationCheckerTest {
+    @Test fun repeatedForegroundStartsShareTheCooldownButNewMessagesArriveOnTheNextCheck() = runTest {
+        val f = Fixture()
+        repeat(10) { f.checker.check() }
+        assertEquals(1, f.loads)
+        f.pages = mapOf(1 to MessagePage(listOf(message), false))
+        f.time += 60_000
+        f.checker.check()
+        assertEquals(2, f.loads)
+        assertEquals(listOf("Reader" to 42L), f.posts)
+    }
+
+    @Test fun failedPollsStopAcrossRepeatedResumesAndCanRecover() = runTest {
+        val f = Fixture()
+        f.afterLoad = { throw ApiFailure(FailureKind.Server, "Unavailable", 503) }
+        repeat(10) { runCatching { f.checker.check() } }
+        assertEquals(1, f.loads)
+        f.time += 60_000
+        runCatching { f.checker.check() }
+        f.time += 60_000
+        f.checker.check()
+        assertEquals(2, f.loads)
+        f.afterLoad = {}
+        f.time += 60_000
+        f.checker.check()
+        assertEquals(3, f.loads)
+    }
+
     private val message = PrivateMessage(10, 42, "Subject", "Sender", "Reader", "", "Preview", 100, false)
 
     private class Fixture : MessagesRepository {
@@ -19,6 +46,7 @@ class MessageNotificationCheckerTest {
         var allowed = true
         var acceptsPosts = true
         var loads = 0
+        var time = 1_000L
         var pages = emptyMap<Int, MessagePage>()
         var afterLoad: suspend () -> Unit = {}
         val histories = mutableMapOf<String, MessageReadHistory>()
@@ -28,7 +56,7 @@ class MessageNotificationCheckerTest {
         val checker = MessageNotificationChecker(this, { username }, { allowed },
             { histories.getOrPut(it) { MessageReadHistory() } }, { read },
             { account, message -> if (acceptsPosts) { posts += account to message.messageId; true } else false },
-            { _, ids -> cancelled += ids })
+            { _, ids -> cancelled += ids }, now = { time })
         override suspend fun messages(folder: MessageFolder, page: Int): MessagePage {
             assertEquals(MessageFolder.Inbox, folder)
             loads++
@@ -80,8 +108,10 @@ class MessageNotificationCheckerTest {
         f.checker.check()
         assertFalse(42L in f.histories.getValue("Reader"))
         f.acceptsPosts = true
+        f.time += 60_000
         f.checker.check()
         f.pages = mapOf(1 to MessagePage(listOf(message.copy(messageId = 50, publishedAt = 200), message), false))
+        f.time += 60_000
         f.checker.check()
         assertEquals(listOf("Reader" to 42L, "Reader" to 50L), f.posts)
     }
@@ -98,6 +128,7 @@ class MessageNotificationCheckerTest {
         assertEquals(1, f.loads)
         response.complete(Unit)
         first.await(); second.await()
+        assertEquals(1, f.loads)
         assertEquals(listOf("Reader" to 42L), f.posts)
     }
 

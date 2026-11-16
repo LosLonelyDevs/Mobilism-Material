@@ -96,10 +96,13 @@ object HostMatcher {
 
 class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
     private val isEnabled: () -> Boolean = { true },
-    private val diagnostics: DiagnosticLogger = DiagnosticLogger.None) {
+    private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
+    private val now: () -> Long = { System.nanoTime() / 1_000_000 }) {
     private val keys = DebridKeyStore(context)
     private val cache = context.getSharedPreferences("material-debrid-hosts", Context.MODE_PRIVATE)
     private val mutex = Mutex()
+    private val loading = Mutex()
+    @Volatile private var lastLoad: Long? = null
     private val mutableState = MutableStateFlow(DebridState(enabled = isEnabled()))
     val state = mutableState.asStateFlow()
     private val client = client.newBuilder().connectTimeout(15, TimeUnit.SECONDS)
@@ -116,6 +119,7 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
         legacyPremiumUntil = { cache.getLong("mega-premium-until", 0) }, diagnostics = diagnostics)
 
     fun deactivate() {
+        lastLoad = null
         client.dispatcher.cancelAll()
         mutableState.value = DebridState(enabled = false)
     }
@@ -135,19 +139,28 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
             deactivate()
             return@withContext
         }
-        mutex.withLock {
-            mutableState.value = DebridState(DebridProvider.entries.map { provider ->
-                try {
-                    val configured = !keys.read(provider).isNullOrBlank()
-                    DebridAccount(provider, configured, if (configured) cachedHosts(provider) else emptyList())
-                } catch (_: Exception) {
-                    DebridAccount(provider, error = "The saved key could not be read. Enter it again.")
-                }
-            }, enabled = isEnabled())
-        }
-        for (account in state.value.accounts.filter { it.configured }) {
-            refresh(account.provider)
-        }
+        if (!loading.tryLock()) return@withContext
+        try {
+            val previous = lastLoad
+            if (previous != null && now() - previous in 0 until 15 * 60_000) return@withContext
+            lastLoad = now()
+            mutex.withLock {
+                mutableState.value = DebridState(DebridProvider.entries.map { provider ->
+                    try {
+                        val configured = !keys.read(provider).isNullOrBlank()
+                        DebridAccount(provider, configured, if (configured) cachedHosts(provider) else emptyList())
+                    } catch (_: Exception) {
+                        DebridAccount(provider, error = "The saved key could not be read. Enter it again.")
+                    }
+                }, enabled = isEnabled())
+            }
+            for (account in state.value.accounts.filter { it.configured }) {
+                refresh(account.provider)
+            }
+        } catch (cancelled: CancellationException) {
+            lastLoad = null
+            throw cancelled
+        } finally { loading.unlock() }
     }
 
     suspend fun saveKey(provider: DebridProvider, value: String) = withContext(Dispatchers.IO) {

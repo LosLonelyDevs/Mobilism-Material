@@ -1,7 +1,5 @@
 package org.mobilism.material.data
 
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -43,10 +41,7 @@ internal class SearchRequestPolicy(
     }
 
     fun retryAfter(value: String?) {
-        val seconds = value?.trim()?.toLongOrNull()?.takeIf { it >= 0 }
-        val duration = if (seconds != null) seconds.coerceAtMost(Long.MAX_VALUE / 1_000) * 1_000 else
-            runCatching { ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli() - wallTime() }
-                .getOrDefault(0)
+        val duration = retryAfterMillis(value, wallTime())
         val cooldown = maxOf(60_000, duration).coerceAtMost(Long.MAX_VALUE - now())
         blockedUntil = maxOf(blockedUntil, now() + cooldown)
     }

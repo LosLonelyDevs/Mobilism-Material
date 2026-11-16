@@ -83,6 +83,7 @@ class MobilismViewModel(
     val categories = mutableCategories.asStateFlow()
     private var categoryJob: Job? = null
     private var feedJob: Job? = null
+    private var feedVisible = false
     private var loginJob: Job? = null
     var releaseAfterSignIn: Long? = null
         private set
@@ -205,18 +206,17 @@ class MobilismViewModel(
     }
 
     fun selectSection(section: ContentSection) {
+        if (section == mutableFeed.value.section) return
         feedJob?.cancel()
         categoryJob?.cancel()
         mutableCategories.value = CategoryState(section = section)
         mutableFeed.value = newFeed(section, mutableFeed.value.order)
-        loadFeed(refresh = true)
     }
 
     fun selectOrder(order: FeedOrder) {
         if (mutableFeed.value.order == order) return
         feedJob?.cancel()
         mutableFeed.value = FeedState(section = mutableFeed.value.section, order = order, filters = mutableFeed.value.filters)
-        loadFeed(refresh = true)
     }
 
     fun observeNewReleases(section: ContentSection, releases: List<Release>): Set<Long> =
@@ -291,10 +291,10 @@ class MobilismViewModel(
         if (snapshot.section != section) return
         feedJob?.cancel()
         mutableFeed.value = FeedState(section = section, order = snapshot.order, filters = filters)
-        loadFeed(refresh = true)
     }
 
     fun loadFeed(refresh: Boolean = false) {
+        if (!feedVisible) return
         if (auth.value == AuthState.SignedOut || auth.value == AuthState.Restoring) return
         if (!refresh && (feedJob?.isActive == true || !mutableFeed.value.canLoadMore)) return
         feedJob?.cancel()
@@ -320,6 +320,15 @@ class MobilismViewModel(
             catch (error: Exception) {
                 mutableFeed.update { it.copy(busy = false, refreshing = false, error = error.forScreen()) }
             }
+        }
+    }
+
+    fun setFeedVisible(visible: Boolean) {
+        feedVisible = visible
+        if (visible && mutableFeed.value.page == 0) loadFeed()
+        else if (!visible) {
+            feedJob?.cancel()
+            mutableFeed.update { it.copy(busy = false, refreshing = false) }
         }
     }
 }

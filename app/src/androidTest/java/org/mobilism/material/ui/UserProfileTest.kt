@@ -65,7 +65,7 @@ class UserProfileTest {
 
     @Test fun adminBadgeIsInlineAndUsernameStillOpensProfile() {
         val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main)
-        val identities = org.mobilism.material.members.MemberIdentityStore(scope, { error("Cached") })
+        val identities = org.mobilism.material.members.MemberIdentityStore({ error("Cached") })
         identities.remember(profile.copy(roles = setOf(AccountRole.Administrator)))
         var opened: ProfileReference? = null
         compose.setContent { MobilismTheme(reduceMotion = true) {

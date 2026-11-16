@@ -33,6 +33,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import org.jsoup.Jsoup
@@ -145,7 +148,7 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
                                 onImage = { urls, index -> gallery = urls to index })
                             screen.category != null -> DiscussionTopics(screen, model::openTopic, model::loadTopics,
                                 model::editQuery, onSearch = { keyboard?.hide(); model.search() }, model::clearSearch)
-                            else -> DiscussionCategories(screen, model::selectArea, model::openCategory, model::loadCategories)
+                            else -> DiscussionCategories(screen, model::selectArea, model::openCategory, model::loadCategories, model::loadActivity)
                         }
                     }
                 }
@@ -156,8 +159,9 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
 
 @Composable
 private fun DiscussionCategories(state: DiscussionsState, onArea: (DiscussionArea) -> Unit,
-    onCategory: (DiscussionCategory) -> Unit, onRetry: () -> Unit) {
+    onCategory: (DiscussionCategory) -> Unit, onRetry: () -> Unit, onVisible: suspend (DiscussionCategory) -> Unit) {
     val colors = MaterialTheme.colorScheme
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val accents = listOf(colors.primary, colors.tertiary, colors.secondary)
     val now by produceState(System.currentTimeMillis()) {
         while (true) { delay(60_000); value = System.currentTimeMillis() }
@@ -174,6 +178,9 @@ private fun DiscussionCategories(state: DiscussionsState, onArea: (DiscussionAre
                         AppHeading(section, HeadingLevel.Section, Modifier.padding(top = 12.dp), style = MaterialTheme.typography.titleMedium)
                     }
                     itemsIndexed(categories, key = { _, category -> category.key }) { index, category ->
+                        LaunchedEffect(category, state.activityGeneration, lifecycle) {
+                            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { onVisible(category) }
+                        }
                         val accent = accents[index % accents.size]
                         ExpressiveCard({ onCategory(category) }, Modifier.fillMaxWidth(),
                             border = BorderStroke(1.dp, accent.copy(alpha = 0.45f))) {

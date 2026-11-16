@@ -37,23 +37,26 @@ data class HomeState(
 
 class HomeViewModel(private val repository: HomeRepository, initialSection: ContentSection,
     hideAdult: StateFlow<Boolean> = MutableStateFlow(false),
-    private val observeNewReleases: (ContentSection, List<Release>) -> Set<Long> = { _, _ -> emptySet() }) : ViewModel() {
+    private val observeNewReleases: (ContentSection, List<Release>) -> Set<Long> = { _, _ -> emptySet() },
+    private val now: () -> Long = { System.nanoTime() / 1_000_000 }) : ViewModel() {
     private val mutableState = MutableStateFlow(HomeState(initialSection))
     val state = mutableState.asStateFlow()
     private val cache = mutableMapOf<ContentSection, HomeState>()
     private val jobs = mutableMapOf<HomeCollection, Job>()
+    private val latestLoadedAt = mutableMapOf<ContentSection, Long>()
     private var adultFilter = hideAdult.value
+    private var visible = false
 
     init {
-        refresh()
         viewModelScope.launch {
             hideAdult.collect { hidden ->
                 if (hidden == adultFilter) return@collect
                 adultFilter = hidden
                 cancelLoads()
                 cache.clear()
+                latestLoadedAt.clear()
                 mutableState.value = HomeState(state.value.section)
-                refresh()
+                if (visible) refresh()
             }
         }
     }
@@ -65,8 +68,19 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
             popular = it.popular.copy(busy = false), categories = it.categories.copy(busy = false),
             reviews = it.reviews.copy(busy = false), discussions = it.discussions.copy(busy = false)) }
         mutableState.value = cache[section] ?: HomeState(section)
-        HomeCollection.entries.filterNot(::loaded).forEach(::retry)
+        if (visible) loadMissing()
     }
+
+    fun setVisible(value: Boolean) {
+        visible = value
+        if (value) loadMissing()
+        else {
+            cancelLoads()
+            HomeCollection.entries.forEach { mark(it, busy = false) }
+        }
+    }
+
+    private fun loadMissing() = HomeCollection.entries.filter { !loaded(it) && jobs[it]?.isActive != true }.forEach(::retry)
 
     fun refresh() = HomeCollection.entries.forEach(::retry)
 
@@ -81,6 +95,7 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
                         val order = if (collection == HomeCollection.Latest) FeedOrder.Latest else FeedOrder.Top
                         val items = repository.homeReleases(section, order).distinctBy { it.id }
                         ensureActive()
+                        if (collection == HomeCollection.Latest) latestLoadedAt[section] = now()
                         val newReleaseIds = if (collection == HomeCollection.Latest) observeNewReleases(section, items) else emptySet()
                         mutableState.update { if (collection == HomeCollection.Latest) it.copy(latest = HomeShelf(items, loaded = true),
                             newReleaseIds = newReleaseIds)
@@ -112,7 +127,7 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
 
     private fun loaded(collection: HomeCollection) = with(state.value) {
         when (collection) {
-            HomeCollection.Latest -> latest.loaded
+            HomeCollection.Latest -> latest.loaded && latestLoadedAt[section]?.let { now() - it < 5 * 60_000 } == true
             HomeCollection.Popular -> popular.loaded
             HomeCollection.Categories -> categories.loaded
             HomeCollection.Reviews -> reviews.loaded

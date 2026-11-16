@@ -46,7 +46,7 @@ class UsernameAvatarTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val ready = CompletableDeferred<Unit>()
         val calls = AtomicInteger()
-        val identities = MemberIdentityStore(scope, { reference ->
+        val identities = MemberIdentityStore({ reference ->
             calls.incrementAndGet()
             ready.await()
             profile(reference, file.absolutePath).copy(rank = "Major Android Releaser")
@@ -80,7 +80,7 @@ class UsernameAvatarTest {
         val file = avatarFile()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val calls = AtomicInteger()
-        val identities = MemberIdentityStore(scope, { reference ->
+        val identities = MemberIdentityStore({ reference ->
             calls.incrementAndGet()
             profile(reference, file.absolutePath)
         })
@@ -102,7 +102,7 @@ class UsernameAvatarTest {
 
     @Test fun missingAvatarKeepsUsernameVisible() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-        val identities = MemberIdentityStore(scope, { reference -> profile(reference, null) })
+        val identities = MemberIdentityStore({ reference -> profile(reference, null) })
         try {
             compose.setContent { MobilismTheme(reduceMotion = true) {
                 CompositionLocalProvider(LocalMemberIdentities provides identities) {

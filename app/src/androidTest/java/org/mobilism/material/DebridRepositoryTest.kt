@@ -15,6 +15,44 @@ import org.mobilism.material.data.*
 
 @RunWith(AndroidJUnit4::class)
 class DebridRepositoryTest {
+    @Test fun automaticReloadsAreThrottledButManualRefreshAndExpiryStillWork() = runBlocking {
+        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        val prefix = "premium-traffic-${java.util.UUID.randomUUID()}"
+        val context = object : android.content.ContextWrapper(base) {
+            override fun getSharedPreferences(name: String, mode: Int) = base.getSharedPreferences("$prefix-$name", mode)
+        }
+        var calls = 0
+        var time = 1_000L
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            calls++
+            val request = chain.request()
+            val body = when {
+                request.url.encodedPath.endsWith("/user") -> """{"id":1,"type":"premium","premium":3600}"""
+                request.url.encodedPath.endsWith("/hosts/domains") -> """["send.now"]"""
+                request.url.encodedPath.endsWith("/hosts/status") -> """{"send.now":{"supported":1,"status":"up"}}"""
+                else -> error("Unexpected provider request")
+            }
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("Fixture")
+                .body(body.toResponseBody()).build()
+        }.build()
+        val repository = DebridRepository(context, client, now = { time })
+        try {
+            repository.saveKey(DebridProvider.RealDebrid, "fixture")
+            val restored = DebridRepository(context, client, now = { time })
+            val before = calls
+            restored.load()
+            assertEquals(before + 3, calls)
+            repeat(10) { restored.load() }
+            assertEquals(before + 3, calls)
+            restored.refresh(DebridProvider.RealDebrid)
+            assertEquals(before + 6, calls)
+            time += 15 * 60_000
+            restored.load()
+            assertEquals(before + 9, calls)
+            assertTrue(restored.state.value.accounts.single { it.provider == DebridProvider.RealDebrid }.hostsVerified)
+        } finally { repository.removeKey(DebridProvider.RealDebrid) }
+    }
+
     @Test fun expiredMegaSessionRenewsAfterReloadAndDuringConcurrentDownloads() = runBlocking {
         val base = InstrumentationRegistry.getInstrumentation().targetContext
         val context = object : android.content.ContextWrapper(base) {

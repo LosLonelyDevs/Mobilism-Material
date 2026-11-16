@@ -1,5 +1,8 @@
 package org.mobilism.material.members
 
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -11,13 +14,59 @@ import org.mobilism.material.data.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MemberIdentityStoreTest {
+    @Test fun repeatedFailuresPauseAllOptionalLookupsAndIncreaseTheCooldown() = runTest {
+        var calls = 0
+        val store = MemberIdentityStore({ calls++; error("Unavailable") }, { testScheduler.currentTime + 1 })
+        repeat(3) {
+            repeat(10) { user -> store.request("Member $user") }
+            advanceTimeBy(60_000)
+        }
+        assertEquals(2, calls)
+        store.request("Member 9")
+        assertEquals(3, calls)
+    }
+
+    @Test fun leavingTheScreenCancelsActiveAndQueuedLookupsAndAllowsLaterRetry() = runTest {
+        val response = CompletableDeferred<Unit>()
+        var calls = 0
+        val store = MemberIdentityStore({ reference ->
+            calls++
+            response.await()
+            profile().copy(reference = reference, username = reference.username!!)
+        }, { testScheduler.currentTime + 1 })
+        val lookups = (1..30).map { user -> launch { store.request("Member $user") } }
+        runCurrent()
+        assertEquals(1, calls)
+        lookups.forEach { it.cancelAndJoin() }
+        response.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(1, calls)
+        store.request("Member 1")
+        assertEquals(2, calls)
+        assertTrue(store.identities.value.containsKey("member 1"))
+    }
+
+    @Test fun missingMemberDoesNotPauseValidMembers() = runTest {
+        var calls = 0
+        val store = MemberIdentityStore({ reference ->
+            calls++
+            if (reference.username == "Missing") throw ApiFailure(FailureKind.Server, "Missing", 404)
+            profile()
+        }, { testScheduler.currentTime + 1 })
+        store.request("Missing")
+        store.request("Example")
+        store.request("Missing")
+        assertEquals(2, calls)
+        assertTrue(store.identities.value.containsKey("example"))
+    }
+
     private fun profile(roles: Set<AccountRole> = setOf(AccountRole.Member)) = UserProfile(
         ProfileReference(username = "Example"), "Example", "https://example.org/avatar.gif", roles,
         "", emptyList(), "Administrator", emptyMap(), null, null, null, null)
 
     @Test fun repeatedUsernameRequestsShareOneLookupAndOnlyTrustedRolesGrantBadges() = runTest {
         var calls = 0
-        val store = MemberIdentityStore(this, { calls++; profile() })
+        val store = MemberIdentityStore({ calls++; profile() })
         store.request(" Example "); store.request("example")
         advanceUntilIdle()
         store.request("EXAMPLE"); advanceUntilIdle()
@@ -31,9 +80,9 @@ class MemberIdentityStoreTest {
     @Test fun failuresHaveCooldownAndExpiredAdminRolesAreRemoved() = runTest {
         var time = 1L
         var calls = 0
-        val store = MemberIdentityStore(this, { calls++; error("Unavailable") }, { time })
+        val store = MemberIdentityStore({ calls++; error("Unavailable") }, { time })
         store.remember(profile(setOf(AccountRole.Administrator)))
-        time += 15 * 60_000
+        time += 60 * 60_000
         store.request("Example"); advanceUntilIdle()
         assertNull(store.identities.value["example"])
         store.request("Example"); advanceUntilIdle()
@@ -45,33 +94,33 @@ class MemberIdentityStoreTest {
 
     @Test fun failedBackgroundLookupDoesNotEraseManuallyVerifiedProfile() = runTest {
         val wait = CompletableDeferred<Unit>()
-        val store = MemberIdentityStore(this, { wait.await(); error("Unavailable") })
-        store.request("Example"); runCurrent()
+        val store = MemberIdentityStore({ wait.await(); error("Unavailable") })
+        launch { store.request("Example") }; runCurrent()
         store.remember(profile(setOf(AccountRole.Administrator)))
         wait.complete(Unit); advanceUntilIdle()
         assertTrue(store.identities.value.getValue("example").administrator)
     }
 
-    @Test fun coldLookupsRunInBackgroundWithAtMostTwoRequestsAtOnce() = runTest {
+    @Test fun coldLookupsArePacedAndDuplicateUsernamesShareTheResult() = runTest {
         val wait = CompletableDeferred<Unit>()
         var calls = 0
         var active = 0
         var maximum = 0
-        val store = MemberIdentityStore(this, { reference ->
+        val store = MemberIdentityStore({ reference ->
             calls++; active++; maximum = maxOf(maximum, active)
             try {
                 wait.await()
                 profile().copy(reference = reference, username = reference.username!!)
             } finally { active-- }
-        })
-        listOf("First", "Second", "Third", " FIRST ").forEach(store::request)
+        }, { testScheduler.currentTime + 1 })
+        listOf("First", "Second", "Third", " FIRST ").forEach { launch { store.request(it) } }
         assertEquals(0, calls)
         runCurrent()
-        assertEquals(2, calls)
+        assertEquals(1, calls)
         assertTrue(store.identities.value.isEmpty())
         wait.complete(Unit); advanceUntilIdle()
         assertEquals(3, calls)
-        assertEquals(2, maximum)
+        assertEquals(1, maximum)
         assertEquals(setOf("first", "second", "third"), store.identities.value.keys)
         assertTrue(store.identities.value.values.all { it.avatar == "https://example.org/avatar.gif" })
     }
@@ -79,7 +128,7 @@ class MemberIdentityStoreTest {
     @Test fun failedLookupCanPopulateAvatarAfterCooldownWithoutOpeningProfile() = runTest {
         var time = 1L
         var calls = 0
-        val store = MemberIdentityStore(this, {
+        val store = MemberIdentityStore({
             if (++calls == 1) error("Unavailable") else profile()
         }, { time })
         store.request("Example"); advanceUntilIdle()
@@ -94,7 +143,7 @@ class MemberIdentityStoreTest {
 
     @Test fun membersWithoutAvatarsAreCachedAndBlankNamesAreIgnored() = runTest {
         var calls = 0
-        val store = MemberIdentityStore(this, { calls++; profile().copy(avatar = null) })
+        val store = MemberIdentityStore({ calls++; profile().copy(avatar = null) })
         store.request(" "); store.request("Example"); advanceUntilIdle()
         store.request("EXAMPLE"); advanceUntilIdle()
         assertEquals(1, calls)
@@ -106,7 +155,7 @@ class MemberIdentityStoreTest {
         var time = 1L
         var calls = 0
         var current = profile(setOf(AccountRole.Administrator)).copy(rank = "Major Android Releaser")
-        val store = MemberIdentityStore(this, { calls++; current }, { time })
+        val store = MemberIdentityStore({ calls++; current }, { time })
         store.request("Example"); store.request("EXAMPLE"); advanceUntilIdle()
         val identity = store.identities.value.getValue("example")
         assertEquals(1, calls)
@@ -115,7 +164,7 @@ class MemberIdentityStoreTest {
         assertTrue(identity.majorAndroidReleaser)
 
         current = profile().copy(avatar = null, rank = "Member")
-        time += 15 * 60_000
+        time += 60 * 60_000
         store.request("Example"); advanceUntilIdle()
         val refreshed = store.identities.value.getValue("example")
         assertEquals(2, calls)

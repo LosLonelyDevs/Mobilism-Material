@@ -167,9 +167,13 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     }
 
     override suspend fun discussionCategories(area: DiscussionArea) = withSession { api.discussionCategories(area, it) }
+    override suspend fun refreshDiscussionCategories(area: DiscussionArea) = withSession { api.discussionCategories(area, it, fresh = true) }
 
     override suspend fun discussionLastActivity(category: DiscussionCategory): Long? = withSession { token ->
         api.discussionTopics(category, 1, "", token).items.maxOfOrNull { it.activityAt }?.takeIf { it > 0 }
+    }
+    override suspend fun refreshDiscussionLastActivity(category: DiscussionCategory): Long? = withSession { token ->
+        api.discussionTopics(category, 1, "", token, fresh = true).items.maxOfOrNull { it.activityAt }?.takeIf { it > 0 }
     }
 
     override suspend fun homeReleases(section: ContentSection, order: FeedOrder) =
@@ -181,16 +185,18 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         val category = api.discussionCategories(section.discussionArea(), token)
             .firstOrNull { Regex("\\breviews?\\b", RegexOption.IGNORE_CASE).containsMatchIn(it.name) }
             ?: return@withSession null
-        HomeTopics(category, api.discussionTopics(category, 1, "", token, includePinned = false).items.take(3))
+        HomeTopics(category, api.discussionTopics(category, 1, "", token, includePinned = false, fresh = true).items.take(3))
     }
 
     override suspend fun homeDiscussions(section: ContentSection): HomeTopics = withSession { token ->
         val category = DiscussionCategory(12, "Recent discussions", section.discussionArea())
-        HomeTopics(category, api.discussionTopics(category, 1, "", token, includePinned = false).items.take(3))
+        HomeTopics(category, api.discussionTopics(category, 1, "", token, includePinned = false, fresh = true).items.take(3))
     }
 
     override suspend fun discussionTopics(category: DiscussionCategory, page: Int, query: String) =
         withSession { api.discussionTopics(category, page, query, it) }
+    override suspend fun refreshDiscussionTopics(category: DiscussionCategory, query: String) =
+        withSession { api.discussionTopics(category, 1, query, it, fresh = true) }
 
     override suspend fun discussionComments(topic: DiscussionTopic, page: Int) = withSession { api.discussionComments(topic, page, it) }
 

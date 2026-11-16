@@ -1,6 +1,7 @@
 package org.mobilism.material.messages
 
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -17,12 +18,26 @@ class MessageNotificationChecker(
     private val readHistory: (String) -> MessageReadHistory,
     private val post: (String, PrivateMessage) -> Boolean,
     private val cancelRead: (String, Set<Long>) -> Unit,
+    private val policy: MessagePollPolicy = MessagePollPolicy(),
+    private val now: () -> Long = System::currentTimeMillis,
 ) {
     private val mutex = Mutex()
 
     suspend fun check() = mutex.withLock {
         val account = username() ?: return@withLock
         if (!allowed()) return@withLock
+        if (!policy.begin(account, now())) return@withLock
+        try {
+            checkInbox(account)
+            if (username() == account && allowed()) policy.completed(account, now())
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) {
+            policy.completed(account, now(), failed = true)
+            throw failure
+        }
+    }
+
+    private suspend fun checkInbox(account: String) {
         val notified = history(account)
         val read = readHistory(account)
         val visited = mutableSetOf<Long>()
@@ -30,12 +45,12 @@ class MessageNotificationChecker(
         for (page in 1..5) {
             val result = repository.messages(MessageFolder.Inbox, page)
             currentCoroutineContext().ensureActive()
-            if (username() != account || !allowed()) return@withLock
+            if (username() != account || !allowed()) return
             val incoming = result.items.filter { it.to.equals(account, ignoreCase = true) && !it.from.equals(account, ignoreCase = true) }
             val known = incoming.any { it.messageId in notified }
             cancelRead(account, incoming.filter { it.read || it.messageId in read }.map { it.messageId }.toSet())
             incoming.distinctBy { it.messageId }.sortedBy { it.publishedAt }.forEach { message ->
-                if (username() != account || !allowed()) return@withLock
+                if (username() != account || !allowed()) return
                 if (message.read || message.messageId in read) notified.remember(listOf(message.messageId))
                 else if (message.messageId !in notified && post(account, message)) notified.remember(listOf(message.messageId))
             }

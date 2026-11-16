@@ -10,8 +10,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.mobilism.material.data.DiagnosticEvent
 import org.mobilism.material.data.DiagnosticSource
 import org.mobilism.material.data.DiagnosticOperation
@@ -23,7 +23,7 @@ import org.mobilism.material.messages.*
 import org.mobilism.material.data.AuthState
 
 class MobilismApplication : Application() {
-    val memberIdentities by lazy { org.mobilism.material.members.MemberIdentityStore(scope, repository::profile) }
+    val memberIdentities by lazy { org.mobilism.material.members.MemberIdentityStore(repository::profile) }
     val recentSearches by lazy { org.mobilism.material.settings.RecentSearchStore(this) }
     val messageAlerts by lazy { MessageAlertStore(this) }
     val messageNotifications by lazy { MessageNotifications(this) }
@@ -35,7 +35,7 @@ class MobilismApplication : Application() {
         post = { account, message ->
             if ((repository.auth.value as? AuthState.SignedIn)?.username == account && messageAlerts.enabled.value &&
                 message.messageId !in messageReads.forAccount(account)) messageNotifications.post(account, message) else false
-        }, cancelRead = messageNotifications::cancelRead) }
+        }, cancelRead = messageNotifications::cancelRead, policy = messageAlerts.polls) }
     val dailyUsage by lazy { org.mobilism.material.usage.DailyUsageStore(this) }
     val contentPreferences by lazy { org.mobilism.material.data.ContentPreferencesStore(this) }
     val developer by lazy { DeveloperPreferencesStore(this) }
@@ -56,6 +56,12 @@ class MobilismApplication : Application() {
     val followNotifications by lazy { FollowingNotifications(this) }
     val following by lazy { FollowingChecker(library, repository, InstalledApps(this), followPreferences, followNotifications) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val foreground = MutableStateFlow(false)
+    private val visibleActivities = mutableSetOf<Any>()
+    @Synchronized internal fun setForeground(activity: Any, visible: Boolean) {
+        if (visible) visibleActivities.add(activity) else visibleActivities.remove(activity)
+        foreground.value = visibleActivities.isNotEmpty()
+    }
     internal val appUpdates by lazy { org.mobilism.material.updates.AppUpdateChecker(this) }
     private val updateLaunchStarted = java.util.concurrent.atomic.AtomicBoolean(false)
 
@@ -77,9 +83,10 @@ class MobilismApplication : Application() {
         }
         scope.launch {
             diagnostics.record(DiagnosticEvent(DiagnosticSource.App, DiagnosticOperation.Startup, DiagnosticPhase.Completed))
-            developer.state.map { it.debridEnabled }.distinctUntilChanged()
-                .onEach { if (!it) debrid.deactivate() }.collectLatest { enabled ->
-                    if (enabled) {
+            combine(developer.state.map { it.debridEnabled }, foreground) { enabled, visible -> enabled to visible }
+                .distinctUntilChanged().collectLatest { (enabled, visible) ->
+                    if (!enabled) debrid.deactivate()
+                    else if (visible) {
                         try { debrid.load() }
                         catch (cancelled: CancellationException) { throw cancelled }
                         catch (_: Exception) {

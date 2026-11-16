@@ -36,8 +36,11 @@ data class DiscussionPage(val items: List<DiscussionTopic>, val canLoadMore: Boo
 
 interface DiscussionsRepository {
     suspend fun discussionCategories(area: DiscussionArea): List<DiscussionCategory>
+    suspend fun refreshDiscussionCategories(area: DiscussionArea): List<DiscussionCategory> = discussionCategories(area)
     suspend fun discussionLastActivity(category: DiscussionCategory): Long?
+    suspend fun refreshDiscussionLastActivity(category: DiscussionCategory): Long? = discussionLastActivity(category)
     suspend fun discussionTopics(category: DiscussionCategory, page: Int, query: String = ""): DiscussionPage
+    suspend fun refreshDiscussionTopics(category: DiscussionCategory, query: String = ""): DiscussionPage = discussionTopics(category, 1, query)
     suspend fun discussionComments(topic: DiscussionTopic, page: Int): CommentPage
     suspend fun postDiscussionComment(topic: DiscussionTopic, text: String, replyTo: Long? = null): Long
 }

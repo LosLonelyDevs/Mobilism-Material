@@ -44,7 +44,8 @@ class DiscussionsTest {
         compose.onNodeWithText("Announcements").assertIsDisplayed()
         compose.onNodeWithText("Community").assertDoesNotExist()
         assertTrue(fixture.requests.any { it.url.encodedPath.contains("/other/category/13/") })
-        compose.onNodeWithText("Getting started with Mobilism").performClick()
+        // The merged card also contains a separate username action.
+        compose.onNodeWithText("Getting started with Mobilism", useUnmergedTree = true).performClick()
         compose.onNodeWithText("Announcement").assertIsDisplayed()
         compose.onNodeWithText("Sign in to comment").assertIsDisplayed()
         capture("announcements-tokyo")
@@ -95,9 +96,10 @@ class DiscussionsTest {
         fixture.topicsBody = """{"response":[{"id":80,"status":1,"topic_last_post_time":10},{"id":81,"topic_last_post_time":500}]}"""
         assertEquals(500L, fixture.repository.discussionLastActivity(category))
         fixture.topicsBody = """{"response":[]}"""
-        assertNull(fixture.repository.discussionLastActivity(category))
+        assertEquals(500L, fixture.repository.discussionLastActivity(category))
+        assertNull(fixture.repository.refreshDiscussionLastActivity(category))
         fixture.topicsBody = """{"response":[{"id":80}]}"""
-        assertNull(fixture.repository.discussionLastActivity(category))
+        assertNull(fixture.repository.refreshDiscussionLastActivity(category))
     }
 
     @Test fun dedicatedGameForumsStayOutOfAppsWhenSwitchingTabs() {
@@ -172,7 +174,7 @@ class DiscussionsTest {
         compose.waitUntil(10_000) { model.state.value.topics.items.isNotEmpty() }
         compose.onNodeWithText("Getting started with Mobilism").assertIsDisplayed()
         capture("topics-light")
-        compose.onNodeWithText("Getting started with Mobilism").performClick()
+        compose.onNodeWithText("Getting started with Mobilism", useUnmergedTree = true).performClick()
         compose.waitUntil(10_000) { model.state.value.comments.items.isNotEmpty() }
         compose.onNodeWithText("Original post").assertIsDisplayed()
         capture("topic-light")
@@ -198,7 +200,7 @@ class DiscussionsTest {
 
     @Test fun guestGetsSignInActionAndOfflineForumCanRetry() {
         val fixture = Fixture()
-        fixture.listStatus = 503
+        fixture.offline = true
         lateinit var model: DiscussionsViewModel
         var requested: DiscussionTopic? = null
         compose.runOnUiThread { model = DiscussionsViewModel(fixture.repository, null, SavedStateHandle()) }
@@ -209,10 +211,10 @@ class DiscussionsTest {
         compose.onNodeWithText("Help & support").performClick()
         compose.waitUntil(10_000) { model.state.value.topics.error != null }
         compose.onNodeWithText("Try again").assertIsDisplayed()
-        fixture.listStatus = 200
+        fixture.offline = false
         compose.onNodeWithText("Try again").performClick()
         compose.waitUntil(10_000) { model.state.value.topics.items.isNotEmpty() }
-        compose.onNodeWithText("Getting started with Mobilism").performClick()
+        compose.onNodeWithText("Getting started with Mobilism", useUnmergedTree = true).performClick()
         compose.onNodeWithText("Sign in to comment").performClick()
         assertEquals(80L, requested?.id)
         assertFalse(model.state.value.composer.open)
@@ -237,7 +239,7 @@ class DiscussionsTest {
         capture("focus-large-text")
         compose.onNodeWithText("Help & support").performClick()
         compose.waitUntil(10_000) { model.state.value.topics.items.isNotEmpty() }
-        compose.onNodeWithText("Getting started with Mobilism").performClick()
+        compose.onNodeWithText("Getting started with Mobilism", useUnmergedTree = true).performClick()
         compose.onNodeWithText("Comment").performClick()
         compose.onNodeWithTag("comment-draft").performTextInput("Keep this draft")
         compose.onNodeWithText("Close", substring = false).performScrollTo().performClick()
@@ -262,6 +264,7 @@ class DiscussionsTest {
         @Volatile var postStatus = 200
         @Volatile var postBody = """{"response":{"comment_id":99}}"""
         @Volatile var listStatus = 200
+        @Volatile var offline = false
         @Volatile var topicsBody = """{"response":[$TOPIC]}"""
         @Volatile var communityBody = """{"announcements":[],"contests":[],"talk":[{"id":66,"name":"General chat"}],"services":[],"feedback":[]}"""
         @Volatile var categoriesBody = """{"response":{"app|game":[{"id":500,"name":"Help &amp; support","topics":42}],"books":[{"id":501,"name":"Book discussions"}]}}"""
@@ -273,6 +276,7 @@ class DiscussionsTest {
             val request = chain.request()
             requests += request
             val path = request.url.encodedPath.removePrefix("/api-new/")
+            if (offline && path.contains("/category/")) throw java.io.IOException("Fixture offline")
             var status = 200
             val response = when {
                 path == "auth/login" -> """{"access_token":"sample-session","id":7}"""

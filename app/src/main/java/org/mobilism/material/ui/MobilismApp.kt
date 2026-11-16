@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -125,7 +126,6 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         })
     }
     LaunchedEffect(Unit) {
-        model.loadFeed(refresh = true)
         if (auth is AuthState.SignedIn) model.releaseAfterSignIn?.let {
             nav.navigate("release/$it") { launchSingleTop = true }
             model.releaseSignInHandled()
@@ -166,7 +166,12 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             val homeState by home.state.collectAsStateWithLifecycle()
             var tab by rememberSaveable(feed.section) { mutableStateOf(openingTab ?: BrowseTab.Home) }
             LaunchedEffect(Unit) { openingTab = null }
-            LaunchedEffect(feed.section) { home.selectSection(feed.section) }
+            DisposableEffect(tab, feed.section, feed.order, feed.filters) {
+                home.selectSection(feed.section)
+                home.setVisible(tab == BrowseTab.Home)
+                model.setFeedVisible(tab != BrowseTab.Home)
+                onDispose { home.setVisible(false); model.setFeedVisible(false) }
+            }
             val openRelease: (Long) -> Unit = { nav.navigate("release/$it") { launchSingleTop = true } }
             val openFeed: (FeedOrder, FeedFilters) -> Unit = { order, filters ->
                 model.selectOrder(order)
@@ -177,7 +182,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 state = feed, auth = auth,
                 compact = appearance.compactFeed, onCompact = model.appearance::compactFeed,
                 onReleasesViewed = model::markReleasesViewed,
-                onSection = { home.selectSection(it); model.selectSection(it) }, onOrder = model::selectOrder,
+                onSection = model::selectSection, onOrder = model::selectOrder,
                 onRefresh = { model.loadFeed(refresh = true) }, onMore = { model.loadFeed() },
                 onRelease = openRelease,
                 onSettings = { nav.navigate("settings") { launchSingleTop = true } },
@@ -193,13 +198,11 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onManageCategories = { nav.navigate("categories/${feed.section.name}") },
                 onFilters = { filters -> openFeed(if (tab == BrowseTab.Top) FeedOrder.Top else FeedOrder.Latest, filters) },
                 tab = tab, onTab = { selected ->
-                    val previousTab = tab
                     tab = selected
                     if (selected != BrowseTab.Home) {
                         val order = if (selected == BrowseTab.Top) FeedOrder.Top else FeedOrder.Latest
-                        if (previousTab != selected && order == feed.order) model.loadFeed(refresh = true)
-                        else model.selectOrder(order)
-                    } else if (previousTab != selected) home.retry(HomeCollection.Latest)
+                        model.selectOrder(order)
+                    }
                 },
                 onHomeRefresh = home::refresh,
                 homeRefreshing = homeState.busy,

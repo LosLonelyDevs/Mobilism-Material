@@ -16,7 +16,7 @@ class AutomaticPaginationTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val release = Release(42, "Example v2.0", "Author", null, 1, 0, 0, section = ContentSection.Apps)
 
-    @Test fun customCategoryAutomaticallyContinuesEmptyBatchesUntilAReleaseAppears() {
+    @Test fun sparseFeedWaitsForExplicitContinuationAfterEveryEmptyBatch() {
         var state by mutableStateOf(FeedState(page = 1, awaitingMore = true,
             filters = FeedFilters(customCategoryIds = setOf("favorites"))))
         var calls = 0
@@ -27,7 +27,12 @@ class AutomaticPaginationTest {
                     items = if (calls < 3) emptyList() else listOf(release))
             }, {}, {}, {}, {}, {}, {}, CategoryState(), {}, {})
         } }
-        compose.waitUntil { calls == 3 }
+        compose.runOnIdle { assertEquals(0, calls) }
+        repeat(3) {
+            compose.onNodeWithText("Load more").performClick()
+            compose.waitForIdle()
+            compose.runOnIdle { assertEquals(it + 1, calls) }
+        }
         compose.onNodeWithText("Example", substring = false).assertIsDisplayed()
         compose.onNodeWithText("No matches in the posts just checked.").assertDoesNotExist()
         compose.onNodeWithText("Keep looking").assertDoesNotExist()

@@ -5,9 +5,7 @@ import androidx.work.*
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import org.mobilism.material.MobilismApplication
-import org.mobilism.material.data.ApiFailure
 import org.mobilism.material.data.AuthState
-import org.mobilism.material.data.FailureKind
 
 class MessageWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result = try {
@@ -16,9 +14,7 @@ class MessageWorker(context: Context, parameters: WorkerParameters) : CoroutineW
         app.messageChecker.check()
         Result.success()
     } catch (cancelled: CancellationException) { throw cancelled }
-    catch (failure: ApiFailure) {
-        if (failure.kind in setOf(FailureKind.Credentials, FailureKind.Session)) Result.success() else Result.retry()
-    } catch (_: Exception) { Result.retry() }
+    catch (_: Exception) { Result.success() }
 }
 
 object MessageSchedule {

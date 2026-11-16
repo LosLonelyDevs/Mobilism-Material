@@ -220,8 +220,10 @@ class HomeTest {
             repository.homeDiscussions(section)
             assertTrue(requests.last().url.encodedPath.contains("discussion/category/${section.name.lowercase()}/"))
             assertTrue(requests.last().url.encodedPath.endsWith("/desc/0"))
-            repository.discussionTopics(review.category, 1)
-            assertTrue(requests.last().url.encodedPath.endsWith("/desc/1"))
+            assertEquals(80L, repository.discussionTopics(review.category, 1).items.single().id)
+            // Apps and Games share the same review forum, including its cached first page.
+            assertEquals(1, requests.count { it.url.encodedPath.contains("discussion/category/${review.category.id}/page/1/") &&
+                it.url.encodedPath.endsWith("/desc/1") })
         }
         assertTrue(requests.all { it.method == "GET" })
     }

@@ -20,6 +20,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.collectLatest
 import java.time.Duration
 import java.time.Instant
@@ -45,6 +46,13 @@ class MainActivity : ComponentActivity() {
         } ?: MessageNotifications.target(intent)
         enableEdgeToEdge()
         val app = application as MobilismApplication
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                app.setForeground(this@MainActivity, true)
+                try { awaitCancellation() }
+                finally { app.setForeground(this@MainActivity, false) }
+            }
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 combine(app.repository.auth, app.messageAlerts.enabled) { auth, enabled -> auth to enabled }

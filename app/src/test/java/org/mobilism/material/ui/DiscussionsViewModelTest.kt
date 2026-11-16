@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.*
@@ -27,6 +28,7 @@ class DiscussionsViewModelTest {
         assertEquals(announcement, model.state.value.category)
         assertEquals(DiscussionKind.Other, model.state.value.category!!.kind)
         assertEquals(listOf(1), repo.pages)
+        assertTrue(repo.activityKeys.isEmpty())
         model.selectArea(DiscussionArea.Games)
         assertEquals(DiscussionArea.Community, model.state.value.area)
         model.openTopic(topic)
@@ -62,6 +64,9 @@ class DiscussionsViewModelTest {
         assertFalse(model.state.value.loading)
         assertEquals(listOf(category), model.state.value.categories)
         assertTrue(model.state.value.categoryActivity.isEmpty())
+        assertTrue(repo.activityKeys.isEmpty())
+        launch { model.loadActivity(category) }
+        runCurrent()
         pending.complete(1234L)
         advanceUntilIdle()
         assertEquals(1234L, model.state.value.categoryActivity[category.key])
@@ -69,11 +74,13 @@ class DiscussionsViewModelTest {
         advanceUntilIdle()
         model.selectArea(DiscussionArea.Apps)
         advanceUntilIdle()
+        model.loadActivity(category)
         assertEquals(1, repo.activityKeys.count { it == category.key })
         assertEquals(1234L, model.state.value.categoryActivity[category.key])
         repo.activity = { 2000L }
         model.loadCategories()
         advanceUntilIdle()
+        model.loadActivity(category)
         assertEquals(2, repo.activityKeys.count { it == category.key })
         assertEquals(2000L, model.state.value.categoryActivity[category.key])
     }
@@ -84,8 +91,11 @@ class DiscussionsViewModelTest {
         repo.activity = { if (it.area == DiscussionArea.Apps) pending.await() else 5000L }
         val model = model(repo)
         runCurrent()
+        launch { model.loadActivity(category) }
+        runCurrent()
         model.selectArea(DiscussionArea.Games)
         advanceUntilIdle()
+        model.loadActivity(model.state.value.categories.single())
         pending.complete(9000L)
         advanceUntilIdle()
         val gameKey = category.copy(area = DiscussionArea.Games).key
@@ -93,6 +103,7 @@ class DiscussionsViewModelTest {
         repo.activity = { throw ApiFailure(FailureKind.Connection, "Offline") }
         model.loadCategories()
         advanceUntilIdle()
+        model.loadActivity(model.state.value.categories.single())
         assertNull(model.state.value.error)
         assertFalse(model.state.value.loading)
         assertTrue(model.state.value.categories.isNotEmpty())
@@ -113,12 +124,28 @@ class DiscussionsViewModelTest {
         val model = model(repo)
         runCurrent()
         assertFalse(model.state.value.loading)
+        assertEquals(0, active)
+        model.state.value.categories.forEach { launch { model.loadActivity(it) } }
+        runCurrent()
         assertEquals(3, active)
         pending.complete(Unit)
         advanceUntilIdle()
         assertEquals(3, maximum)
         assertEquals(7, repo.activityKeys.size)
         assertEquals(7, model.state.value.categoryActivity.size)
+    }
+
+    @Test fun offscreenCategoriesAndOpenTopicListsDoNotRequestActivity() = runTest(dispatcher) {
+        val repo = Repository().apply { categories = (1L..20L).map { category.copy(id = it, topics = 1) } }
+        val model = model(repo)
+        advanceUntilIdle()
+        assertTrue(repo.activityKeys.isEmpty())
+        model.state.value.categories.take(2).forEach { model.loadActivity(it) }
+        assertEquals(2, repo.activityKeys.size)
+        model.openCategory(model.state.value.categories.last())
+        model.loadActivity(model.state.value.categories.last())
+        advanceUntilIdle()
+        assertEquals(2, repo.activityKeys.size)
     }
 
     @Test fun paginationDeduplicatesAndFailedRefreshRetriesFirstPage() = runTest(dispatcher) {

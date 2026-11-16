@@ -19,9 +19,55 @@ class HomeViewModelTest {
     @Before fun setup() = Dispatchers.setMain(dispatcher)
     @After fun teardown() = Dispatchers.resetMain()
 
+    @Test fun returningAfterFiveMinutesRefreshesLatestWithoutReloadingTheOtherShelves() = runTest(dispatcher) {
+        val repo = Repository()
+        var time = 1_000L
+        val model = HomeViewModel(repo, ContentSection.Apps, now = { time })
+        model.setVisible(true)
+        advanceUntilIdle()
+        model.setVisible(false)
+        time += 299_999
+        model.setVisible(true)
+        advanceUntilIdle()
+        assertEquals(2, repo.calls.size)
+        model.setVisible(false)
+        time++
+        model.setVisible(true)
+        advanceUntilIdle()
+        assertEquals(listOf("Apps-Latest", "Apps-Top", "Apps-Latest"), repo.calls)
+    }
+
+    @Test fun hiddenHomeDoesNotLoadAndReturningReusesCompletedShelves() = runTest(dispatcher) {
+        val repo = Repository()
+        val hidden = MutableStateFlow(false)
+        val model = HomeViewModel(repo, ContentSection.Apps, hidden)
+        model.selectSection(ContentSection.Books)
+        hidden.value = true
+        advanceUntilIdle()
+        assertTrue(repo.calls.isEmpty())
+        model.setVisible(true)
+        advanceUntilIdle()
+        assertEquals(listOf("Books-Latest", "Books-Top"), repo.calls)
+        model.setVisible(false)
+        model.setVisible(true)
+        advanceUntilIdle()
+        assertEquals(2, repo.calls.size)
+        model.refresh()
+        advanceUntilIdle()
+        assertEquals(4, repo.calls.size)
+        model.setVisible(false)
+        hidden.value = false
+        advanceUntilIdle()
+        assertEquals(4, repo.calls.size)
+        model.setVisible(true)
+        advanceUntilIdle()
+        assertEquals(6, repo.calls.size)
+    }
+
     @Test fun collectionsFailIndependentlyAndRetryOnlyTheFailedCollection() = runTest(dispatcher) {
         val repo = Repository().apply { failPopular = true }
         val model = HomeViewModel(repo, ContentSection.Apps)
+        model.setVisible(true)
         advanceUntilIdle()
         assertEquals(1, model.state.value.latest.items.size)
         assertNotNull(model.state.value.popular.error)
@@ -39,6 +85,7 @@ class HomeViewModelTest {
     @Test fun switchingSectionsCachesCompletedCollectionsAndRejectsLateResults() = runTest(dispatcher) {
         val repo = Repository().apply { slowApps = true }
         val model = HomeViewModel(repo, ContentSection.Apps)
+        model.setVisible(true)
         runCurrent()
         model.selectSection(ContentSection.Books)
         advanceUntilIdle()
@@ -59,16 +106,17 @@ class HomeViewModelTest {
         val hidden = MutableStateFlow(false)
         val repo = Repository()
         val model = HomeViewModel(repo, ContentSection.Apps, hidden)
+        model.setVisible(true)
         hidden.value = true
         advanceUntilIdle()
-        assertEquals(2, repo.calls.count { it == "Apps-Latest" })
+        assertEquals(1, repo.calls.count { it == "Apps-Latest" })
         model.selectSection(ContentSection.Books)
         advanceUntilIdle()
         hidden.value = false
         advanceUntilIdle()
         model.selectSection(ContentSection.Apps)
         advanceUntilIdle()
-        assertEquals(3, repo.calls.count { it == "Apps-Latest" })
+        assertEquals(2, repo.calls.count { it == "Apps-Latest" })
     }
 
     private class Repository : HomeRepository {

@@ -48,6 +48,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import org.mobilism.material.designsystem.AppTextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
@@ -140,9 +141,8 @@ fun FeedScreen(
         customCategories = customCategories, onManageCategories = { showFilters = false; onManageCategories() },
     )
     LaunchedEffect(tab, listState, state.page, state.items.size, state.busy, state.canLoadMore, state.error, state.awaitingMore) {
-        if (tab != BrowseTab.Home && !state.busy && state.canLoadMore && state.error == null) {
-            if (state.awaitingMore) onMore()
-            else if (state.items.isNotEmpty()) snapshotFlow { (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.items.size - 3 }
+        if (tab != BrowseTab.Home && !state.busy && state.canLoadMore && state.error == null && !state.awaitingMore) {
+            if (state.items.isNotEmpty()) snapshotFlow { (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.items.size - 3 }
                 .distinctUntilChanged().filter { it }.collect { onMore() }
         }
     }
@@ -282,8 +282,10 @@ fun FeedScreen(
                                         ReleaseCard(release, sectionStyle.accent, compact,
                                             isNew = state.order == FeedOrder.Latest && release.id in state.newReleaseIds) { onRelease(release.id) }
                                     }
-                                    if ((state.busy || (state.awaitingMore && state.error == null)) && !state.refreshing)
+                                    if (state.busy && !state.refreshing)
                                         item(key = "loading") { LoadingState("Loading releases…", Modifier.fillMaxWidth()) }
+                                    if (!state.busy && state.awaitingMore && state.error == null && state.canLoadMore)
+                                        item(key = "continue") { AppTextButton("Load more", onMore, Modifier.fillMaxWidth()) }
                                     state.error?.let { error -> item(key = "error") {
                                         ErrorPanel(error, onRetry = if (state.items.isEmpty()) onRefresh else onMore)
                                     } }
