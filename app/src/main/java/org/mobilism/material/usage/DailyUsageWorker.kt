@@ -28,7 +28,7 @@ class DailyUsageWorker(context: Context, parameters: WorkerParameters) : Corouti
                 return@withContext Result.success()
             }
             val request = Request.Builder().url(BuildConfig.DAILY_USAGE_ENDPOINT)
-                .header("User-Agent", "Mobilism-Usage/1")
+                .header("User-Agent", org.mobilism.material.data.AppUserAgent.identity(applicationContext, "Mobilism-Usage/1"))
                 .post(body.toRequestBody("application/json".toMediaType())).build()
             client.newCall(request).execute().use { response ->
                 if (response.code == 200) {

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.23
+
+- Fix images that failed to load
+- various bug fixes and improvements
+
 ## 0.1.22
 
 - Add in app notices

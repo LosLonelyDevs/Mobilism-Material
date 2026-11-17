@@ -6,3 +6,12 @@
 GET https://app.mobilism.org/api-new/release/category
 Accept: application/json
 User-Agent: <Android WebView user agent or configured prefix> MobilismMaterial/{{versionName}} (Android; build {{versionCode}})
+
+### Mobilism-hosted image, without API credentials or cookies
+GET https://images.mobilism.org/?dm=UP6E
+User-Agent: <Android WebView user agent or configured prefix> MobilismMaterial/{{versionName}} (Android; build {{versionCode}})
+
+### Update checks use the shipped identity, independent of remote overrides
+GET https://api.github.com/repos/LosLonelyDevs/Mobilism-Material/releases/latest
+Accept: application/vnd.github+json
+User-Agent: MobilismMaterial/{{versionName}} (Android; build {{versionCode}})

@@ -36,10 +36,11 @@ object AppVersions {
     }
 }
 
-class AppReleaseUpdates(private val client: OkHttpClient = OkHttpClient.Builder()
+class AppReleaseUpdates(private val userAgent: String, private val client: OkHttpClient = OkHttpClient.Builder()
     .callTimeout(20, TimeUnit.SECONDS).build()) {
     suspend fun latest(): AppRelease = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(API_URL)
+            .header("User-Agent", userAgent)
             .header("Accept", "application/vnd.github+json").header("X-GitHub-Api-Version", "2022-11-28").build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IOException("Update check failed (${response.code})")

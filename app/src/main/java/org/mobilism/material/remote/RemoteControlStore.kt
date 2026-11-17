@@ -145,7 +145,8 @@ internal class RemoteControlStore(
         fun create(context: Context, diagnostics: DiagnosticLogger = DiagnosticLogger.None): RemoteControlStore {
             val prefs = context.getSharedPreferences("remote-notices", Context.MODE_PRIVATE)
             val notifications = RemoteNoticeNotifications(context, diagnostics)
-            return RemoteControlStore(RemoteConfigClient(BuildConfig.DAILY_USAGE_ENDPOINT)::fetch,
+            return RemoteControlStore(RemoteConfigClient(BuildConfig.DAILY_USAGE_ENDPOINT,
+                org.mobilism.material.data.AppUserAgent.identity(context))::fetch,
                 readDismissed = { prefs.getStringSet("dismissed", emptySet()).orEmpty().toSet() },
                 saveDismissed = { prefs.edit().putStringSet("dismissed", it).apply() }, androidApi = android.os.Build.VERSION.SDK_INT,
                 syncNotifications = notifications::sync, diagnostics = diagnostics)

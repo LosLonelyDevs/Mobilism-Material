@@ -22,7 +22,10 @@ import org.mobilism.material.settings.DiagnosticLogStore
 import org.mobilism.material.messages.*
 import org.mobilism.material.data.AuthState
 
-class MobilismApplication : Application(), org.mobilism.material.data.UserAgentPolicyProvider {
+class MobilismApplication : Application(), org.mobilism.material.data.UserAgentPolicyProvider, coil3.SingletonImageLoader.Factory {
+    override fun newImageLoader(context: android.content.Context): coil3.ImageLoader =
+        org.mobilism.material.images.appImageLoader(context)
+
     override val userAgentPolicy get() = remoteControl.userAgentPolicy
     val memberIdentities by lazy { org.mobilism.material.members.MemberIdentityStore(repository::profile,
         limits = { remoteControl.limits }) }

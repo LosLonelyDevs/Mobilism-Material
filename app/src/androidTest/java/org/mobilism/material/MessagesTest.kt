@@ -303,7 +303,7 @@ class MessagesTest {
             val request = fixture.requests.last()
             assertTrue(request.header("Cookie").orEmpty().contains("message_test_clearance=fixture"))
             assertFalse(request.header("Cookie").orEmpty().contains("message_test_forum"))
-            assertEquals(android.webkit.WebSettings.getDefaultUserAgent(fixture.context), request.header("User-Agent"))
+            assertEquals(AppUserAgent.value(fixture.context), request.header("User-Agent"))
             assertTrue(fixture.requests.first().header("Cookie").orEmpty().contains("message_test_clearance=fixture"))
             assertFalse(fixture.requests.first().header("Cookie").orEmpty().contains("message_test_forum"))
             fun accepts(value: String) = org.mobilism.material.ui.acceptsMessageVerificationUrl(android.net.Uri.parse(value))

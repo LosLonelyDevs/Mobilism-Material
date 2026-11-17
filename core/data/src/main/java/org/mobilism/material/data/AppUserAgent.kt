@@ -11,10 +11,12 @@ object AppUserAgent {
     }
 
     fun value(context: Context): String {
-        val browser = runCatching { android.webkit.WebSettings.getDefaultUserAgent(context) }.getOrNull()
         val configured = (context.applicationContext as? UserAgentPolicyProvider)?.userAgentPolicy?.prefix()
-        return identity(context, configured ?: browser)
+        return configured?.let { identity(context, it) } ?: defaultValue(context)
     }
+
+    fun defaultValue(context: Context): String = identity(context,
+        runCatching { android.webkit.WebSettings.getDefaultUserAgent(context) }.getOrNull())
 
     fun response(context: Context, status: Int): Boolean =
         (context.applicationContext as? UserAgentPolicyProvider)?.userAgentPolicy?.response(status) == true

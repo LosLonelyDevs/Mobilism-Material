@@ -110,6 +110,8 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
     private val client = client.newBuilder().connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS).callTimeout(30, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false)
+        .addNetworkInterceptor(AppUserAgentInterceptor(userAgent, { AppUserAgent.value(context) },
+            { AppUserAgent.response(context, it) }))
         .addInterceptor { chain ->
             if (!isEnabled()) throw java.io.IOException("Premium services disabled")
             chain.proceed(chain.request())

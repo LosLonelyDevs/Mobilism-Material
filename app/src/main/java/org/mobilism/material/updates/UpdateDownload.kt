@@ -12,6 +12,8 @@ import kotlinx.coroutines.withContext
 import org.mobilism.material.data.AppReleaseUpdates
 import org.mobilism.material.data.MAX_UPDATE_APK_BYTES
 import org.mobilism.material.data.ReleaseApk
+import org.mobilism.material.BuildConfig
+import org.mobilism.material.data.AppUserAgent
 
 internal fun isUpdateDownloadUrl(url: URL, initial: URL): Boolean =
     url.protocol == "https" && url.userInfo == null && url.port in listOf(-1, 443) &&
@@ -32,6 +34,7 @@ internal suspend fun downloadUpdateApk(apk: ReleaseApk, destination: File, onPro
                 instanceFollowRedirects = false
                 connectTimeout = 15_000
                 readTimeout = 15_000
+                setRequestProperty("User-Agent", AppUserAgent.format(null, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE.toLong()))
                 setRequestProperty("Accept", "application/vnd.android.package-archive, application/octet-stream")
                 setRequestProperty("Accept-Encoding", "identity")
             }

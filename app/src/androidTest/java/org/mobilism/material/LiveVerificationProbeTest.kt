@@ -10,8 +10,10 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.filters.SdkSuppress
 import androidx.test.runner.AndroidJUnitRunner
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -45,18 +47,26 @@ class LiveVerificationProbeTest {
                 if (!recovery.isCompleted) delay(1_000)
             }
             var browserState = "none"
+            val pageState = CompletableDeferred<String>()
             instrumentation.runOnMainSync {
                 val browsers = WindowInspector.getGlobalWindowViews().asSequence()
                     .flatMap(::descendants).filterIsInstance<WebView>().toList()
                 browserState = browsers.joinToString { browser ->
-                    "url=${browser.url?.substringBefore('?')}, attached=${browser.isAttachedToWindow}, " +
+                    "url=${browser.url?.substringBefore('?')}, title=${browser.title}, attached=${browser.isAttachedToWindow}, " +
                         "shown=${browser.isShown}, size=${browser.width}x${browser.height}"
+                }
+                val browser = browsers.firstOrNull()
+                if (browser == null) pageState.complete("none") else browser.evaluateJavascript(
+                    "JSON.stringify({title:document.title,ready:document.readyState,length:document.body?.innerText?.length," +
+                        "challenge:!!document.querySelector('[id*=cf-chl],iframe[src*=challenges]')})") {
+                    pageState.complete(it.take(500))
                 }
                 instrumentation.sendStatus(0, Bundle().apply {
                     putString("verificationBrowser", browserState)
                     putString("requestIdentity", AppUserAgent.value(application))
                 })
             }
+            instrumentation.sendStatus(0, Bundle().apply { putString("verificationPage", withTimeoutOrNull(2_000) { pageState.await() }) })
             val result = if (recovery.isCompleted) recovery.await() else null
             recovery.cancel()
             assertEquals("$site recovery did not finish; $browserState", true, result)
