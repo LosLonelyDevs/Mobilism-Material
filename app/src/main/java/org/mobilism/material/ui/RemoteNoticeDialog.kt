@@ -8,6 +8,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalUriHandler
@@ -55,8 +56,13 @@ internal fun RemoteNoticeDialog(notice: AppNotice, onDismiss: () -> Unit, onUpda
         onDismissRequest = dismiss,
         properties = DialogProperties(dismissOnBackPress = unlocked && !notice.required,
             dismissOnClickOutside = unlocked && !notice.required),
-        icon = { Icon(if (notice.mode == "notice") Icons.Outlined.Info else Icons.Outlined.SystemUpdate, null) },
-        title = { Text(notice.title) },
+        title = {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+                Icon(if (notice.mode == "notice") Icons.Outlined.Info else Icons.Outlined.SystemUpdate, null,
+                    Modifier.padding(top = 2.dp).size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                Text(notice.title, Modifier.weight(1f))
+            }
+        },
         text = {
             Column(Modifier.onGloballyPositioned { if (it.size.width > 0 && it.size.height > 0) laidOut = true }
                 .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {

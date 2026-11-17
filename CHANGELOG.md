@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.1.22
 
-- various bug fixes and improvements
+- Add in app notices
+- Fix built in installer
+- Bug fixes and stability improvements
 
 ## 0.1.21
 

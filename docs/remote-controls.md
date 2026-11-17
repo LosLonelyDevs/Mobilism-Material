@@ -104,7 +104,9 @@ Links appear after the message with the configured link text. They open in the u
 | Maximum failed member lookup cooldown | 900,000 ms | 60,000 to 3,600,000 ms |
 | Minimum debrid refresh interval | 900,000 ms | 60,000 to 3,600,000 ms |
 
-Blank fields remove the override. **Use app defaults** clears all threshold overrides in the draft. Publish to apply. Server `Retry-After` delays remain authoritative even when local limits change.
+Open **API controls > Limits** to edit thresholds. Blank fields remove the override. **Use app defaults** clears all threshold overrides in the draft; **Save API limits** applies them. Server `Retry-After` delays remain authoritative even when local limits change.
+
+For a starting profile that reduces request volume, see [API limit tuning](api-limit-tuning.md).
 
 Failure cooldowns double after repeated failures, up to the configured maximum. The effective maximum is never below the initial cooldown. Message checks use their normal interval as the initial cooldown. Background message work keeps Android's 15-minute minimum scheduling interval; the policy also applies to foreground checks. These controls preserve the request deduplication and refresh behavior introduced in 0.1.21.
 
@@ -125,3 +127,13 @@ The initial configuration contains no notices or threshold overrides. `/api/cont
 Forum API requests and embedded verification browsers use the same User-Agent. The browser identity is followed by `MobilismMaterial/<versionName> (Android; build <versionCode>)`. If the browser identity is unavailable, the app identifier remains.
 
 The identifier comes from the installed package. It does not need another hardcoded version string. Server rules can match it to distinguish builds. User-Agent is client-supplied identification, not authentication.
+
+`app/build.gradle.kts` is the version source. It generates package metadata and `BuildConfig.VERSION_NAME` / `VERSION_CODE`; the same `versionName` selects `CHANGELOG.md` notes. Header prefixes never replace the real version/build suffix. See the [request header example](request-headers.http).
+
+Open **API controls > User-Agent** to create a rule. Choose published app versions, or explicitly select all versions, including future releases. Enter a prefix and review the complete header preview. New rules save disabled; enable them from their saved card. The first enabled, matching rule wins.
+
+**Before every request** is the default. Use it when a server needs to distinguish a new app from clients sending `okhttp/4.12.0`. The optional **After an HTTP response** condition activates on a selected 403, 406, or 426 response, then changes later requests only. It does not set the server's response status, retry the failed request, bypass authentication, or remove rate limits. A 426 response means a protocol upgrade is required; changing User-Agent does not perform that upgrade. See [HTTP status semantics](https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5).
+
+Response-triggered activation lasts only in memory. Rule edits, removal, expiry, failed config checks, and process restarts reset it. The shipped header returns whenever no valid rule applies. Config is checked on the existing schedule; headers do not create another polling loop.
+
+Rules apply to Mobilism API and forum calls, plus newly opened verification browsers. They do not alter config checks, usage reporting, downloads, or debrid headers. Existing installations need an APK containing this support before remote header rules can affect them.

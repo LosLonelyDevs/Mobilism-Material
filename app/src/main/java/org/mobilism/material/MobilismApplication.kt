@@ -22,7 +22,8 @@ import org.mobilism.material.settings.DiagnosticLogStore
 import org.mobilism.material.messages.*
 import org.mobilism.material.data.AuthState
 
-class MobilismApplication : Application() {
+class MobilismApplication : Application(), org.mobilism.material.data.UserAgentPolicyProvider {
+    override val userAgentPolicy get() = remoteControl.userAgentPolicy
     val memberIdentities by lazy { org.mobilism.material.members.MemberIdentityStore(repository::profile,
         limits = { remoteControl.limits }) }
     val recentSearches by lazy { org.mobilism.material.settings.RecentSearchStore(this) }

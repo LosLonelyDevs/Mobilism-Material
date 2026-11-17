@@ -120,16 +120,20 @@ data class AppNotice(
     }
 }
 
-data class RemoteAppConfig(val limits: ApiRequestLimits = ApiRequestLimits.Defaults, val notices: List<AppNotice> = emptyList()) {
+data class RemoteAppConfig(val limits: ApiRequestLimits = ApiRequestLimits.Defaults, val notices: List<AppNotice> = emptyList(),
+    val userAgentRules: List<UserAgentRule> = emptyList()) {
     companion object {
         fun parse(text: String): RemoteAppConfig {
             require(text.toByteArray(Charsets.UTF_8).size <= 65_536)
             val json = JSONObject(text)
             require(json.opt("schema") == 2)
             val notices = json.optJSONArray("notices")
+            val rules = json.optJSONArray("userAgentRules")?.takeIf { it.length() <= 10 }
             require(notices == null || notices.length() <= 10)
             return RemoteAppConfig(ApiRequestLimits.parse(json.optJSONObject("limits")),
                 (0 until (notices?.length() ?: 0)).mapNotNull { notices?.optJSONObject(it)?.let(AppNotice::parse) }
+                    .distinctBy { it.id },
+                (0 until (rules?.length() ?: 0)).mapNotNull { rules?.optJSONObject(it)?.let(UserAgentRule::parse) }
                     .distinctBy { it.id })
         }
     }

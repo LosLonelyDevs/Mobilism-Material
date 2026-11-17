@@ -1,4 +1,5 @@
 import { validateAudience } from './audience.js';
+import { validateUserAgentRules } from './user-agent-rules.js';
 
 export const limitFields = [
   ['searchSpacingMs', 'Minimum search spacing (ms)', 3000, 1000, 60000],
@@ -23,7 +24,7 @@ export const limitFields = [
   ['debridRefreshIntervalMs', 'Minimum debrid refresh interval (ms)', 900000, 60000, 3600000],
 ];
 
-export function defaultConfig() { return { schema: 2, revision: 0, limits: {}, notices: [] }; }
+export function defaultConfig() { return { schema: 2, revision: 0, limits: {}, notices: [], userAgentRules: [] }; }
 
 export function validateConfig(input) {
   const object = value => value && typeof value === 'object' && !Array.isArray(value);
@@ -32,7 +33,7 @@ export function validateConfig(input) {
   const text = (value, max) => typeof value === 'string' && value.trim().length > 0 && value.length <= max && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value);
   if (!object(input) || input.schema !== 2 || !integer(input.revision, 0, 2147483646) || !object(input.limits) ||
       !Array.isArray(input.notices) || input.notices.length > 10) fail('Invalid configuration. Use up to 10 notices.');
-  if (Object.keys(input).some(key => !['schema', 'revision', 'limits', 'notices'].includes(key))) fail('Unknown configuration field.');
+  if (Object.keys(input).some(key => !['schema', 'revision', 'limits', 'notices', 'userAgentRules'].includes(key))) fail('Unknown configuration field.');
   const limits = {};
   for (const key of Object.keys(input.limits)) {
     const field = limitFields.find(field => field[0] === key);
@@ -69,5 +70,5 @@ export function validateConfig(input) {
     } else if (notice.linkText !== null) fail('Link text needs a URL.');
     return { ...notice, deviceNotification: notice.deviceNotification ?? false, audience: validateAudience(notice.audience) };
   });
-  return { schema: 2, revision: input.revision, limits, notices };
+  return { schema: 2, revision: input.revision, limits, notices, userAgentRules: validateUserAgentRules(input.userAgentRules) };
 }

@@ -28,6 +28,21 @@ test('empty database returns no overrides and no notices publicly', async () => 
   assert.deepEqual(result.body, defaultConfig());
   assert.equal(result.headers['Cache-Control'], 'no-store');
 });
+test('User-Agent rules round-trip publicly without changing notices or limits', async () => {
+  const rules = [{ id: 'new-client', name: 'New clients', enabled: true, allVersions: false,
+    versions: ['0.1.22'], userAgent: 'MobilismClient', statuses: [403] }];
+  const handler = adminHandler(query, () => true);
+  const saved = await call(handler, { method: 'PUT', body: { ...defaultConfig(),
+    notices: [notice()], limits: { searchSpacingMs: 10000 }, userAgentRules: rules } });
+  assert.equal(saved.statusCode, 200);
+  const read = (await call(publicHandler(query))).body;
+  assert.deepEqual(read.userAgentRules, rules);
+  assert.equal(read.notices.length, 1);
+  assert.equal(read.limits.searchSpacingMs, 10000);
+  const next = await call(handler, { method: 'PUT', body: { ...saved.body, userAgentRules: [] } });
+  assert.equal(next.statusCode, 200);
+  assert.deepEqual((await call(publicHandler(query))).body.userAgentRules, []);
+});
 test('device notifications default off and opt-in survives admin and public round trips', async () => {
   const config = { ...defaultConfig(), notices: [notice()] };
   assert.equal(validateConfig(config).notices[0].deviceNotification, false);

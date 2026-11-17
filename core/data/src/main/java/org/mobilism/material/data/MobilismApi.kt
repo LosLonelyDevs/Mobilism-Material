@@ -222,6 +222,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
     private suspend fun forumPage(url: okhttp3.HttpUrl): String = forumReads.request(url.toString()) { performForumPage(url) }
 
     private suspend fun performForumPage(url: okhttp3.HttpUrl, recovered: Boolean = false): String = withContext(Dispatchers.IO) {
+        var userAgentChanged = false
         try {
             // Forum reads never receive the API session token.
             val request = Request.Builder().url(url)
@@ -229,6 +230,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             runCatching { android.webkit.CookieManager.getInstance().getCookie(url.toString()) }.getOrNull()
                 ?.takeIf { it.isNotBlank() }?.let { request.header("Cookie", it) }
             readClient.newCall(request.build()).await().use { response ->
+                userAgentChanged = AppUserAgent.response(context, response.code)
                 val source = response.body?.source() ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum returned an empty response.")
                 source.request(MAX_RESPONSE_BYTES + 1)
                 if (source.buffer.size > MAX_RESPONSE_BYTES) throw ApiFailure(FailureKind.InvalidResponse, "The forum response was too large.")
@@ -244,7 +246,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                 html
             }
         } catch (failure: ApiFailure) {
-            if (!recovered && failure.kind == FailureKind.Challenge && challengeRecovery.recover(VerificationSite.Forum)) {
+            if (!recovered && !userAgentChanged && failure.kind == FailureKind.Challenge && challengeRecovery.recover(VerificationSite.Forum)) {
                 return@withContext performForumPage(url, recovered = true)
             }
             throw failure
@@ -308,6 +310,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                     override fun isOneShot() = true
                 })
             }
+            var userAgentChanged = false
             try {
                 val readOnly = retryRead && (form == null || path == "search")
                 val request = builder.build()
@@ -322,6 +325,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                     result = transport.newCall(request).await()
                 }
                 result.use { response ->
+                    userAgentChanged = AppUserAgent.response(context, response.code)
                     if (path == "search" && !response.isSuccessful) searches.retryAfter(response.header("Retry-After"))
                     val body = response.body ?: throw ApiFailure(FailureKind.InvalidResponse, "The server returned an empty response.")
                     val source = body.source()
@@ -365,7 +369,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: ApiFailure) {
-                if (!recovered && retryRead && (form == null || path == "search") &&
+                if (!recovered && !userAgentChanged && retryRead && (form == null || path == "search") &&
                     failure.kind == FailureKind.Challenge && challengeRecovery.recover(VerificationSite.App)) {
                     return@withContext performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead, emptySuccess,
                         recovered = true)

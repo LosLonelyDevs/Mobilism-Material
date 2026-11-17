@@ -12,8 +12,12 @@ object AppUserAgent {
 
     fun value(context: Context): String {
         val browser = runCatching { android.webkit.WebSettings.getDefaultUserAgent(context) }.getOrNull()
-        return identity(context, browser)
+        val configured = (context.applicationContext as? UserAgentPolicyProvider)?.userAgentPolicy?.prefix()
+        return identity(context, configured ?: browser)
     }
+
+    fun response(context: Context, status: Int): Boolean =
+        (context.applicationContext as? UserAgentPolicyProvider)?.userAgentPolicy?.response(status) == true
 
     fun identity(context: Context, browser: String? = null): String {
         val info = context.packageManager.getPackageInfo(context.packageName, 0)

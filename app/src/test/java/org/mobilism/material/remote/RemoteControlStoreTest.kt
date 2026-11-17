@@ -9,6 +9,23 @@ import org.mobilism.material.data.RemoteAppConfig
 import org.mobilism.material.data.NoticeAudience
 
 class RemoteControlStoreTest {
+    @Test fun remoteHeadersUseShippedFallbackBeforeFetchAfterFailureAndAtExpiry() = runBlocking {
+        var time = 1000L
+        var fail = false
+        val rule = org.mobilism.material.data.UserAgentRule("header", "Header", true, false,
+            setOf("0.1.22"), "MobilismClient", setOf(403))
+        val store = RemoteControlStore({ if (fail) error("offline") else RemoteAppConfig(userAgentRules = listOf(rule)) },
+            now = { time }, installedVersion = "0.1.22")
+        assertNull(store.userAgentPolicy.prefix())
+        store.refresh(); assertNull(store.userAgentPolicy.prefix())
+        assertTrue(store.userAgentPolicy.response(403)); assertEquals("MobilismClient", store.userAgentPolicy.prefix())
+        time += RemoteControlStore.MAX_AGE_MS; assertNull(store.userAgentPolicy.prefix())
+        store.refresh(); assertNull(store.userAgentPolicy.prefix())
+        store.userAgentPolicy.response(403); fail = true; time += RemoteControlStore.REFRESH_MS; store.refresh()
+        fail = false; time += RemoteControlStore.REFRESH_MS; store.refresh()
+        assertNull(store.userAgentPolicy.prefix())
+    }
+
     @Test fun fetchingDoesNotClaimTheNoticeWasRendered() = runBlocking {
         val events = mutableListOf<org.mobilism.material.data.DiagnosticEvent>()
         val target = notice()

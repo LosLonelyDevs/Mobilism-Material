@@ -3,6 +3,7 @@ import { api } from './api';
 import { Action, Box, Button, Card, Chip, CollapsibleCard, DateTimePicker, Heading, Help, HStack, InputField, Modal, Notice, SelectField, Skeleton, Switch, Tabs, TextArea, TextPairing } from './ui';
 import Audience, { NoticeTest } from './audience';
 import NoticeWorkspace from './notice-workspace';
+import UserAgentControls from './user-agent-controls';
 import { collectUsernames } from '../public/audience.js';
 import { defaultConfig, limitFields, validateConfig } from '../public/config-schema.js';
 import { noticeForEditor, noticesWithoutVersionTargeting } from '../public/notice-editor.js';
@@ -47,11 +48,12 @@ export default function Controls() {
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [status, setStatus] = useState('');
   const [testNotice, setTestNotice] = useState(null), [confirmReload, setConfirmReload] = useState(false);
   const [noticeDirty, setNoticeDirty] = useState(false), [workspaceKey, setWorkspaceKey] = useState(0);
+  const [headersDirty, setHeadersDirty] = useState(false), [apiTab, setApiTab] = useState('limits');
   const [confirmation, setConfirmation] = useState(null);
   const [catalog, setCatalog] = useState({ versions: [], comparisonsAvailable: false }), [catalogError, setCatalogError] = useState('');
   const generation = useRef(0);
   const catalogGeneration = useRef(0);
-  const dirty = noticeDirty || (!!published && JSON.stringify(draft) !== JSON.stringify(published));
+  const dirty = noticeDirty || headersDirty || (!!published && JSON.stringify(draft) !== JSON.stringify(published));
   const usernames = collectUsernames(draft.notices);
   async function load() {
     const id = ++generation.current; setBusy(true); setError(''); setStatus('');
@@ -90,13 +92,15 @@ export default function Controls() {
   }
   return <Box className="page controls-page">
     <header className="page-heading"><div><span className="eyebrow">ADMIN</span><Heading level={1}>App controls</Heading></div><div className="heading-meta"><Chip label={published ? `Revision ${published.revision}` : 'Loading'} size="small" /><Help label="About app controls">Changes stay in draft until published. Apps refresh within five minutes. Missing, invalid, offline, or expired configuration uses the hardcoded app defaults.</Help></div></header>
-    <div className="controls-topbar"><Tabs value={tab} onChange={setTab} items={[{ key: 'notices', label: `Notices (${draft.notices.length})` }, { key: 'limits', label: 'API limits' }]} /><Action icon="refresh" label="Reload published configuration" disabled={busy} onClick={() => dirty ? setConfirmReload(true) : load()} /></div>
+    <div className="controls-topbar"><Tabs value={tab} onChange={setTab} items={[{ key: 'notices', label: `Notices (${draft.notices.length})` }, { key: 'api', label: 'API controls' }]} /><Action icon="refresh" label="Reload published configuration" disabled={busy} onClick={() => dirty ? setConfirmReload(true) : load()} /></div>
+    {tab === 'api' && <div className="api-control-tabs"><Tabs value={apiTab} onChange={setApiTab} items={[{ key: 'limits', label: 'Limits' }, { key: 'headers', label: 'User-Agent' }]} /></div>}
     <div className="control-feedback" aria-live="polite">{error && <Notice variant="danger">{error}</Notice>}{status && <Notice variant="success">{status}</Notice>}</div>
     {catalogError && <div className="catalog-feedback"><Notice variant="warning"><HStack gap={12} justify="between"><span>{catalogError}</span><Button size="sm" onClick={loadCatalog}>Retry</Button></HStack></Notice></div>}
     {!published ? <div className="control-loading">{busy ? <><Skeleton height={110} variant="rounded" /><Skeleton height={190} variant="rounded" /></> : <Button onClick={load}>Retry</Button>}</div> : <fieldset disabled={busy} inert={busy} className="control-workspace">
       <div hidden={tab !== 'notices'}><NoticeWorkspace key={workspaceKey} config={published} catalog={catalog} usernames={usernames} freshNotice={freshNotice} Editor={NoticeEditor} busy={busy}
         onDirtyChange={setNoticeDirty} onTest={setTestNotice} onSave={(notices, onSaved) => publish({ ...published, notices }, onSaved, true)} /></div>
-      <div hidden={tab !== 'limits'}>
+      <div hidden={tab !== 'api' || apiTab !== 'headers'}><UserAgentControls key={workspaceKey} rules={published.userAgentRules} catalog={catalog} busy={busy} onDirtyChange={setHeadersDirty} onSave={(userAgentRules, onSaved) => publish({ ...published, userAgentRules }, onSaved, true)} /></div>
+      <div hidden={tab !== 'api' || apiTab !== 'limits'}>
         <div className="workspace-heading"><HStack gap={6}><TextPairing title="API limits" /><Help label="About API limits">Leave a field blank to use its shipped default. Durations are milliseconds. Exponential cooldowns never cap below the initial interval. Server Retry-After is always respected.</Help></HStack><Button onClick={() => setDraft(old => ({ ...old, limits: {} }))} disabled={!Object.keys(draft.limits).length}>Use app defaults</Button></div>
         <div className="limits-grid">{groups.map(group => <Card key={group.name} title={group.name} headerEnd={<Help label={`About ${group.name}`}>{group.hint}</Help>} style={{ borderRadius: 20 }}><div className="limit-fields">{group.keys.map(key => {
           const [, , fallback, min, max] = limitFields.find(f => f[0] === key);
@@ -104,7 +108,7 @@ export default function Controls() {
         })}</div></Card>)}</div>
       </div>
     </fieldset>}
-    {tab === 'limits' && <div className="limit-save-actions"><Button variant="filled" disabled={!published || busy || JSON.stringify(draft.limits) === JSON.stringify(published.limits)} loading={busy && !!published} onClick={() => publish()}>Save API limits</Button></div>}
+    {tab === 'api' && apiTab === 'limits' && <div className="limit-save-actions"><Button variant="filled" disabled={!published || busy || JSON.stringify(draft.limits) === JSON.stringify(published.limits)} loading={busy && !!published} onClick={() => publish()}>Save API limits</Button></div>}
     {testNotice && <NoticeTest notice={testNotice} onClose={() => setTestNotice(null)} catalog={catalog} />}
     <Modal open={!!confirmation} onClose={() => setConfirmation(null)} title="Save without version targeting?" size="small" footer={<><Button onClick={() => setConfirmation(null)}>Review targeting</Button><Button variant="danger" onClick={() => publish(confirmation.candidate, confirmation.onSaved, confirmation.preserveLimits, true)}>Save anyway</Button></>}>
       <p>These notices can match users on any app version, including future releases.</p>
