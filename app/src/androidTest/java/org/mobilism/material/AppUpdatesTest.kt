@@ -36,6 +36,9 @@ import androidx.compose.runtime.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import org.mobilism.material.updates.*
+import org.mobilism.material.remote.RemoteControlStore
+import org.mobilism.material.data.RemoteAppConfig
+import org.mobilism.material.data.AppNotice
 
 @RunWith(AndroidJUnit4::class)
 class AppUpdatesTest {
@@ -51,7 +54,7 @@ class AppUpdatesTest {
         }
         runBlocking { checker.check(automatic = true) }
         compose.setContent { MobilismTheme(reduceMotion = true) {
-            AppUpdateHost(checker, updater, null, {}) { open -> Button(open) { Text("Open update settings") } }
+            AppUpdateHost(checker, updater, remember { RemoteControlStore({ RemoteAppConfig() }) }, null, {}) { open -> Button(open) { Text("Open update settings") } }
         } }
         compose.onNodeWithText("Update available").assertIsDisplayed()
         compose.onNodeWithText("Download").performClick()
@@ -75,7 +78,7 @@ class AppUpdatesTest {
         runBlocking { checker.check(automatic = true) }
         compose.setContent { MobilismTheme(reduceMotion = true) {
             var notes by remember { mutableStateOf(AppChangelog("0.1.18", listOf("First change.", "Second change.")) as AppChangelog?) }
-            AppUpdateHost(checker, updater, notes, { notes = null }) { }
+            AppUpdateHost(checker, updater, remember { RemoteControlStore({ RemoteAppConfig() }) }, notes, { notes = null }) { }
         } }
         compose.onNodeWithText("What's new").assertIsDisplayed()
         compose.onNodeWithText("Update available").assertDoesNotExist()
@@ -85,6 +88,49 @@ class AppUpdatesTest {
         capture("app-update-modal.png")
         compose.onNodeWithText("Later").performClick()
         compose.runOnIdle { assertNull(checker.state.value.prompt) }
+    }
+
+    @Test fun requiredNoticeBlocksContentAndReturnsAfterLeavingUpdatesUntilRevoked() {
+        val checker = AppUpdateChecker(Saved(), { newer }, { true })
+        val updater = AppUpdateViewModel(File(compose.activity.cacheDir, "notice-ui-test.apk"), { _, _ -> })
+        var time = 1000L
+        var config = RemoteAppConfig(notices = listOf(AppNotice("required", "Update required", "Install the current release.",
+            "required", "once", true, null, null, 1, null, 999, "Release details", "https://example.org/release")))
+        val remote = RemoteControlStore({ config }, installedCode = 21, now = { time })
+        runBlocking { remote.refresh() }
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            AppUpdateHost(checker, updater, remote, null, {}) { Text("App content") }
+        } }
+        compose.onNodeWithText("Update required").assertIsDisplayed()
+        compose.onNodeWithText("App content").assertDoesNotExist()
+        compose.onNodeWithText("Later").assertDoesNotExist()
+        capture("required-update-notice.png")
+        compose.onNodeWithText("Open updates").performClick()
+        compose.onNodeWithText("Updates").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithText("Update required").assertIsDisplayed()
+        compose.onNodeWithText("App content").assertDoesNotExist()
+        config = RemoteAppConfig(); time += 15_000
+        compose.onNodeWithText("Refresh notice").performClick()
+        compose.waitUntil { remote.notice.value == null }
+        compose.onNodeWithText("App content").assertIsDisplayed()
+    }
+
+    @Test fun informationalNoticeShowsInlineLinkAndDismisses() {
+        val checker = AppUpdateChecker(Saved(), { newer }, { true })
+        val updater = AppUpdateViewModel(File(compose.activity.cacheDir, "notice-info-test.apk"), { _, _ -> })
+        val remote = RemoteControlStore({ RemoteAppConfig(notices = listOf(AppNotice("info", "Service notice", "A short message.",
+            "notice", "once", true, null, null, 1, null, null, "Read more", "https://example.org/help"))) })
+        runBlocking { remote.refresh() }
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            AppUpdateHost(checker, updater, remote, null, {}) { Text("App content") }
+        } }
+        compose.onNodeWithText("Service notice").assertIsDisplayed()
+        compose.onNodeWithText("A short message. Read more").assertIsDisplayed()
+        capture("informational-notice.png")
+        compose.onNodeWithText("Got it").performClick()
+        compose.onNodeWithText("Service notice").assertDoesNotExist()
+        compose.onNodeWithText("App content").assertIsDisplayed()
     }
 
     @Test fun installerRejectsSameVersionAndForeignPackagesAndSharesOnlyTheUpdateDirectory() {

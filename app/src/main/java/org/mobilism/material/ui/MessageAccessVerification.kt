@@ -35,6 +35,7 @@ internal fun MessageAccessVerification(onDismiss: () -> Unit, onContinue: () -> 
                         modifier = Modifier.testTag("continue-message-verification")) { Text("Continue") }
                 }
                 AndroidView(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context -> WebView(context).apply {
+                    settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(context)
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.allowFileAccess = false

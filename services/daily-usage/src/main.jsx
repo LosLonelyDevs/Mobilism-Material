@@ -1,0 +1,119 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { api, today } from './api';
+import { Button, Card, Heading, HStack, Icon, InputField, Link, Notice, Skeleton, Text, TextPairing, VStack, Help } from './ui';
+import Controls from './controls';
+import { mountUsage } from './usage';
+import usageMarkup from './usage.html?raw';
+import './app.css';
+
+const routes = [{ href: '/', label: 'Overview', icon: 'home' }, { href: '/app-usage', label: 'App usage', icon: 'chart' },
+  { href: '/app-controls', label: 'App controls', icon: 'controls' }];
+const path = window.location.pathname.replace(/\/$/, '') || '/';
+const route = routes.find(item => item.href === path);
+document.title = `${route?.label || 'Not found'} · Mobilism Material`;
+
+function Login({ initialStage, onSignedIn, initialError = '' }) {
+  const [stage, setStage] = useState(initialStage || 'password');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(initialError);
+  const [lockedUntil, setLockedUntil] = useState(0);
+  const [now, setNow] = useState(Date.now());
+  const remaining = Math.max(0, Math.ceil((lockedUntil - now) / 1000));
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
+  async function submit(event) {
+    event.preventDefault(); if (busy || remaining) return;
+    setBusy(true); setError('');
+    try {
+      const result = await api('/api/admin-session', { method: 'POST', body: stage === 'otp' ? { step: 'otp', code } : { step: 'password', username, password } });
+      setPassword(''); setCode('');
+      if (result.isAdmin) onSignedIn(); else setStage(result.stage || 'otp');
+    } catch (failure) {
+      setError(failure.message); setPassword(''); setCode('');
+      if (failure.stage) setStage(failure.stage);
+      if (failure.retryAfter) setLockedUntil(Date.now() + failure.retryAfter * 1000);
+    } finally { setBusy(false); }
+  }
+  async function reset() {
+    try { await api('/api/admin-session', { method: 'DELETE' }); setStage('password'); setCode(''); setError(''); }
+    catch (failure) { setError(failure.message); }
+  }
+  return <main className="login-page"><Card style={{ width: '100%', maxWidth: 420, borderRadius: 28 }}><form onSubmit={submit} className="login-fields">
+    <span className="brand-mark" aria-hidden="true">m</span><span className="eyebrow">MOBILISM MATERIAL</span>
+    <Heading level={1}>{stage === 'otp' ? 'Verify your sign-in' : 'Welcome back'}</Heading>
+    <Text>{stage === 'otp' ? 'Step 2 of 2' : 'Admin dashboard'}</Text>
+    {stage === 'otp' ? <InputField key="otp" label="Authenticator code" value={code} onChange={e => setCode(e.target.value)} inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" autoFocus required /> : <>
+      <InputField label="Username" value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" maxLength={64} required autoFocus />
+      <InputField label="Password" value={password} onChange={e => setPassword(e.target.value)} type="password" autoComplete="current-password" maxLength={256} required />
+    </>}
+    {error && <div role="alert"><Notice variant="danger">{error}</Notice></div>}
+    <Button type="submit" variant="filled" loading={busy} disabled={remaining > 0}>{remaining ? `Try again in ${remaining}s` : stage === 'otp' ? 'Verify & sign in' : 'Continue'}</Button>
+    {stage === 'otp' && <Button type="button" onClick={reset}>Use another account</Button>}
+  </form></Card></main>;
+}
+
+function Overview() {
+  const [usage, setUsage] = useState(null), [config, setConfig] = useState(null), [error, setError] = useState('');
+  useEffect(() => {
+    const abort = new AbortController(), day = today();
+    Promise.all([api(`/api/stats?from=${day}&to=${day}`, { signal: abort.signal }).then(setUsage),
+      api('/api/control-config', { signal: abort.signal }).then(setConfig)]).catch(e => { if (!abort.signal.aborted) setError(e.message); });
+    return () => abort.abort();
+  }, []);
+  const count = usage?.daily.reduce((total, day) => total + BigInt(day.devices), 0n);
+  const active = config?.notices.filter(n => n.enabled && (!n.startsAt || Date.parse(n.startsAt) <= Date.now()) && (!n.endsAt || Date.parse(n.endsAt) > Date.now())).length;
+  return <div className="page overview-page"><header className="page-heading"><div><span className="eyebrow">ADMIN</span><Heading level={1}>Overview</Heading></div><span className="muted overview-date">{today()} · UTC</span></header>
+    {error && <Notice variant="danger">{error}</Notice>}
+    <div className="overview-grid">
+      <a href="/app-usage" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
+        <div className="destination-top"><span className="destination-icon"><Icon name="chart" size={26} /></span><Icon name="arrow" /></div>
+        <Heading level={2}>App usage</Heading><Text>Activity, versions, and devices.</Text>
+        <div className="destination-metrics"><div><span className="metric-value">{count === undefined ? <Skeleton width={90} height={38} /> : new Intl.NumberFormat().format(count)}</span><span className="muted">Active today</span></div><div><span className="metric-value">{usage ? new Set(usage.breakdown.map(r => r.appVersion)).size : '…'}</span><span className="muted">App versions</span></div></div>
+        <span className="destination-action">View app usage <Icon name="arrow" size={17} /></span>
+      </Card></a>
+      <a href="/app-controls" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
+        <div className="destination-top"><span className="destination-icon violet"><Icon name="controls" size={26} /></span><Icon name="arrow" /></div>
+        <Heading level={2}>App controls</Heading><Text>Notices, updates, and API limits.</Text>
+        <div className="destination-metrics"><div><span className="metric-value">{active ?? <Skeleton width={60} height={38} />}</span><span className="muted">Live notices</span></div><div><span className="metric-value">{config ? Object.keys(config.limits).length : '…'}</span><span className="muted">API overrides</span></div></div>
+        <span className="destination-action">Manage app controls <Icon name="arrow" size={17} /></span>
+      </Card></a>
+    </div>
+    <div className="overview-note"><Help label="About these metrics">Activity counts installations active on the current UTC date. A live notice can still target only selected accounts or builds.</Help><span>Today’s snapshot</span></div>
+  </div>;
+}
+
+function Usage() {
+  const root = useRef(null);
+  useEffect(() => mountUsage(root.current, () => window.dispatchEvent(new Event('admin-expired'))), []);
+  return <div ref={root} className="admin-dashboard usage-page" dangerouslySetInnerHTML={{ __html: usageMarkup }} />;
+}
+
+function App() {
+  const [auth, setAuth] = useState(null), [error, setError] = useState('');
+  useEffect(() => {
+    const abort = new AbortController();
+    api('/api/admin-session', { signal: abort.signal }).then(setAuth).catch(e => { if (!abort.signal.aborted) { setError(e.message); setAuth({ isAdmin: false }); } });
+    const expired = () => { setError('Your session expired. Sign in again.'); setAuth({ isAdmin: false }); };
+    window.addEventListener('admin-expired', expired);
+    return () => { abort.abort(); window.removeEventListener('admin-expired', expired); };
+  }, []);
+  async function signOut() {
+    try { await api('/api/admin-session', { method: 'DELETE' }); setError(''); setAuth({ isAdmin: false }); }
+    catch (e) { setError(e.message); }
+  }
+  if (!auth) return <main className="loading-page"><Skeleton width={180} height={26} /><Text>Opening dashboard…</Text></main>;
+  if (!auth.isAdmin) return <Login initialStage={auth.stage} initialError={error} onSignedIn={() => { setError(''); setAuth({ isAdmin: true }); }} />;
+  return <><a className="skip-link" href="#main-content">Skip to content</a><header className="app-header"><div className="header-inner">
+    <Link href="/" style={{ textDecoration: 'none' }}><HStack gap={10}><span className="brand-mark" aria-hidden="true">m</span><span className="brand-name">Mobilism <strong>Material</strong></span></HStack></Link>
+    <nav aria-label="Admin navigation">{routes.map(item => <Link key={item.href} href={item.href} aria-current={path === item.href ? 'page' : undefined} className="nav-link"><Icon name={item.icon} size={18} /><span>{item.label}</span></Link>)}</nav>
+    <Button onClick={signOut} size="sm" className="sign-out">Sign out</Button>
+  </div></header><main id="main-content" className="main-content">
+    {error && <Notice variant="danger">{error}</Notice>}
+    {path === '/' ? <Overview /> : path === '/app-usage' ? <Usage /> : path === '/app-controls' ? <Controls /> : <VStack gap={16}><Heading level={1}>Page not found</Heading><Link href="/">Back to overview</Link></VStack>}
+  </main></>;
+}
+
+createRoot(document.getElementById('root')).render(<App />);

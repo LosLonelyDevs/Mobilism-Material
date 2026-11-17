@@ -8,6 +8,8 @@ The repository Actions variable `DAILY_USAGE_ENDPOINT` supplies future release b
 
 ## Dashboard sign-in
 
+The landing page shows an overview with links to **App usage** at `/app-usage` and **App controls** at `/app-controls`. App Controls uses AHFU components for notices, audience rules, schedules, and API thresholds. See [Remote app controls](../../docs/remote-controls.md) and [component notes](../../docs/dashboard-components.md). Apply `schema.sql` before deploying this feature.
+
 The dashboard adapts GAYERFyTV's login, activity chart, and responsive layout to Mobilism's Android reports. It works at phone width, with date selection, 14/30/90-day trends, and device/version breakdowns.
 
 Version, device model, manufacturer, and Android distributions show counts and percentages for the selected UTC day. Use the chart slider to inspect another day. App versions combine build numbers; details retain individual builds. Percentages describe reporting installations, not unique people across the date range.
@@ -77,7 +79,7 @@ The public endpoint accepts only small, validated JSON payloads. Counts are not 
 
 ## Verify
 
-`node scripts/preview.mjs` starts a local-only preview with synthetic data and temporary credentials printed in its console. It never connects to the production database. Use the standard TOTP settings above with its temporary setup key. The production dashboard has separate random credentials.
+Run `npm run build`, then `node scripts/preview.mjs` for a local-only preview with synthetic data and temporary credentials printed in its console. It never connects to production. `--dashboard` skips local sign-in; `--test-auth` uses fixed synthetic credentials for login checks. Both flags exist only in the excluded preview script. `PREVIEW_PORT` overrides the local port. Run `npm run typecheck` and `npm test` before deploying.
 
 ```sh
 cd services/daily-usage

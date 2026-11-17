@@ -33,3 +33,10 @@ CREATE TABLE IF NOT EXISTS admin_totp_counters (
     account text PRIMARY KEY,
     step bigint NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS app_control (
+    id integer PRIMARY KEY CHECK (id = 1),
+    revision integer NOT NULL CHECK (revision > 0),
+    config jsonb NOT NULL,
+    updated_at timestamptz NOT NULL
+);

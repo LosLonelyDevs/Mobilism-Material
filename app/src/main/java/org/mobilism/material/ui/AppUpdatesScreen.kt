@@ -32,7 +32,8 @@ import org.mobilism.material.updates.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun AppUpdatesScreen(checker: AppUpdateChecker, updater: AppUpdateViewModel, onBack: () -> Unit) {
+internal fun AppUpdatesScreen(checker: AppUpdateChecker, updater: AppUpdateViewModel, onBack: () -> Unit,
+    requiredBuild: Int? = null, onCheckNotices: (() -> Unit)? = null) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val state by updater.state.collectAsStateWithLifecycle()
@@ -74,7 +75,7 @@ internal fun AppUpdatesScreen(checker: AppUpdateChecker, updater: AppUpdateViewM
         })
     }) { insets ->
         AppUpdateSettings(checker, updater::downloadAndInstall, Modifier.fillMaxSize().padding(insets),
-            state, ::requestInstall, updater::cancel)
+            state, ::requestInstall, updater::cancel, requiredBuild = requiredBuild, onCheckNotices = onCheckNotices)
     }
 }
 
@@ -82,13 +83,18 @@ internal fun AppUpdatesScreen(checker: AppUpdateChecker, updater: AppUpdateViewM
 internal fun AppUpdateSettings(checker: AppUpdateChecker, onDownload: (AppRelease) -> Unit,
     modifier: Modifier = Modifier,
     install: UpdateInstallState = UpdateInstallState(), onInstall: () -> Unit = {}, onCancel: () -> Unit = {},
-    openUrl: (String) -> Unit = LocalUriHandler.current::openUri) {
+    openUrl: (String) -> Unit = LocalUriHandler.current::openUri, requiredBuild: Int? = null,
+    onCheckNotices: (() -> Unit)? = null) {
     val state by checker.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var browserError by remember { mutableStateOf(false) }
     LazyColumn(modifier, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item("enabled") {
+        if (requiredBuild != null) item("required") {
+            Text("Update the app to continue. If a download is unavailable, return to the notice and refresh it.",
+                modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
+        }
+        if (requiredBuild == null) item("enabled") {
             SettingsRow("Enable app updates", "Show new version alerts.",
                 Icons.Outlined.NewReleases, Modifier.toggleable(state.enabled, role = Role.Switch) { enabled ->
                     checker.setEnabled(enabled)
@@ -106,6 +112,10 @@ internal fun AppUpdateSettings(checker: AppUpdateChecker, onDownload: (AppReleas
                     scope.launch { checker.check() }
                 })
         }
+        if (onCheckNotices != null) item("check-notices") {
+            SettingsRow("Check app notices", "Check notices for this account and version.", Icons.Outlined.Campaign,
+                Modifier.clickable(enabled = !install.busy && !install.installRequested, role = Role.Button, onClick = onCheckNotices))
+        }
         if (state.checking || state.checked || state.available != null || state.error != null ||
             install.message != null || browserError) item("status") {
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -115,6 +125,7 @@ internal fun AppUpdateSettings(checker: AppUpdateChecker, onDownload: (AppReleas
                     state.checking -> "Checking for updates..."
                     state.error != null -> state.error
                     release != null -> "Version ${release.version} is available."
+                    state.checked && requiredBuild != null -> "No newer release is available yet. Try again shortly or refresh the notice."
                     state.checked -> "You're up to date (v${BuildConfig.VERSION_NAME})."
                     else -> null
                 }
@@ -157,17 +168,42 @@ internal fun AppUpdateSettings(checker: AppUpdateChecker, onDownload: (AppReleas
 
 @Composable
 internal fun AppUpdateHost(checker: AppUpdateChecker, updater: AppUpdateViewModel,
+    remoteControl: org.mobilism.material.remote.RemoteControlStore,
     changelog: AppChangelog?, onChangelogDismiss: () -> Unit, content: @Composable (() -> Unit) -> Unit) {
     val update by checker.state.collectAsStateWithLifecycle()
     val installing by updater.state.collectAsStateWithLifecycle()
     var showUpdates by rememberSaveable { mutableStateOf(false) }
+    val notice by remoteControl.notice.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    val required = notice?.required == true
     Box(Modifier.fillMaxSize()) {
-        Box(if (showUpdates) Modifier.fillMaxSize().clearAndSetSemantics { } else Modifier.fillMaxSize()) {
-            content { showUpdates = true }
+        if (required) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {}
+        } else {
+            Box(if (showUpdates) Modifier.fillMaxSize().clearAndSetSemantics { } else Modifier.fillMaxSize()) {
+                content { showUpdates = true }
+            }
         }
-        if (showUpdates) AppUpdatesScreen(checker, updater, onBack = { showUpdates = false })
+        if (showUpdates) AppUpdatesScreen(checker, updater, onBack = { showUpdates = false },
+            requiredBuild = notice?.takeIf { it.required }?.requiredVersionCode, onCheckNotices = {
+                scope.launch {
+                    updater.notice("Checking app notices...")
+                    remoteControl.refresh(force = true)
+                    if (remoteControl.notice.value != null) showUpdates = false
+                    else updater.notice(if (remoteControl.hasConfiguration) "No matching notices for this account and version."
+                        else "Notices couldn't be checked. App defaults are active.")
+                }
+            })
     }
-    if (changelog != null) AppChangelogDialog(changelog, onChangelogDismiss)
+    if (notice != null && !showUpdates) {
+        val current = checkNotNull(notice)
+        RemoteNoticeDialog(current, onDismiss = { remoteControl.dismiss(current) }, onUpdate = {
+            remoteControl.dismiss(current)
+            showUpdates = true
+            scope.launch { checker.check() }
+        }, onRefresh = { scope.launch { remoteControl.refresh(force = true) } })
+    }
+    else if (!required && changelog != null && !showUpdates) AppChangelogDialog(changelog, onChangelogDismiss)
     else if (!showUpdates && !installing.busy) {
         update.prompt?.takeIf { update.enabled }?.let { release ->
             AppUpdateDialog(release.version, release.apk != null, onUpdate = {

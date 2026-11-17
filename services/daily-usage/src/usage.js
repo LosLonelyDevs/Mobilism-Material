@@ -1,13 +1,12 @@
-import { groupUsage, percentage } from './metrics.js';
-
-const $ = id => document.getElementById(id);
+import { groupUsage, percentage } from '../public/metrics.js';
+export function mountUsage(root, onExpired) {
+const $ = id => id === 'dashboard' ? root : root.querySelector('#' + id);
 const number = value => new Intl.NumberFormat().format(BigInt(value));
-const dateLabel = day => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`));
+const dateLabel = day => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(day + 'T00:00:00Z'));
 const today = () => new Date().toISOString().slice(0, 10);
-let stage = 'password', busy = false, lockedUntil = 0, days = 14, data = null, controller;
-let deviceGroup = 'models', showAllDevices = false, selectedDay;
-const shareLabel = value => `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value)}%`;
-
+let days = 14, data = null, controller, selectedDay;
+let deviceGroup = 'models', showAllDevices = false;
+const shareLabel = value => new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value) + '%';
 function text(tag, className, value) {
   const node = document.createElement(tag);
   node.className = className;
@@ -15,60 +14,6 @@ function text(tag, className, value) {
   return node;
 }
 function notice(id, message = '') { $(id).textContent = message; $(id).hidden = !message; }
-function loginStage(next, focus = true) {
-  stage = next === 'otp' ? 'otp' : 'password';
-  $('login').hidden = false; $('dashboard').hidden = true; $('startup').hidden = true;
-  $('password-fields').hidden = stage === 'otp'; $('otp-fields').hidden = stage !== 'otp';
-  $('username').disabled = $('password').disabled = stage === 'otp'; $('code').disabled = stage !== 'otp';
-  $('start-over').hidden = stage !== 'otp';
-  $('login-title').textContent = stage === 'otp' ? 'Verify your sign-in' : 'Welcome back';
-  $('login-subtitle').textContent = stage === 'otp' ? 'One more step to your dashboard.' : 'Sign in to view daily app activity.';
-  $('login-step').textContent = stage === 'otp' ? 'Step 2 of 2' : 'Step 1 of 2';
-  $('password').value = ''; $('code').value = '';
-  updateLock();
-  if (focus) $(stage === 'otp' ? 'code' : 'username').focus();
-}
-function updateLock() {
-  const seconds = Math.max(0, Math.ceil((lockedUntil - Date.now()) / 1000));
-  $('login-submit').disabled = busy || seconds > 0;
-  $('login-submit').textContent = seconds ? `Try again in ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` :
-    busy ? 'Checking…' : stage === 'otp' ? 'Verify & sign in' : 'Continue';
-}
-setInterval(updateLock, 1000);
-async function session(method = 'GET', body) {
-  const response = await fetch('/api/admin-session', { method, credentials: 'same-origin', cache: 'no-store',
-    ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}) });
-  const result = await response.json();
-  if (result.retryAfter) lockedUntil = Date.now() + result.retryAfter * 1000;
-  if (!response.ok) {
-    if (result.stage) loginStage(result.stage);
-    throw new Error(result.error || 'Sign-in unavailable. Try again shortly.');
-  }
-  return result;
-}
-async function openDashboard() {
-  $('startup').hidden = $('login').hidden = true; $('dashboard').hidden = false;
-  $('username').value = $('password').value = $('code').value = '';
-  lockedUntil = 0; notice('login-error');
-  await loadReport();
-}
-$('login-form').addEventListener('submit', async event => {
-  event.preventDefault();
-  if (busy || lockedUntil > Date.now()) return;
-  busy = true; updateLock(); notice('login-error');
-  const body = stage === 'otp' ? { step: 'otp', code: $('code').value } : { step: 'password', username: $('username').value, password: $('password').value };
-  try {
-    const result = await session('POST', body);
-    if (result.isAdmin) await openDashboard(); else loginStage(result.stage);
-  } catch (error) { notice('login-error', error.message); $('password').value = ''; $('code').value = ''; }
-  finally { busy = false; updateLock(); }
-});
-async function signOut() {
-  try { await session('DELETE'); controller?.abort(); data = null; $('devices').replaceChildren(); $('report').hidden = true; notice('login-error'); loginStage('password'); }
-  catch (error) { notice($('dashboard').hidden ? 'login-error' : 'dashboard-error', error.message); }
-}
-$('sign-out').addEventListener('click', signOut);
-$('start-over').addEventListener('click', signOut);
 $('day').value = $('day').max = today();
 $('filters').addEventListener('submit', event => { event.preventDefault(); loadReport(); });
 $('day').addEventListener('change', () => { if ($('day').validity.valid) loadReport(); });
@@ -87,7 +32,7 @@ async function loadReport() {
   const from = new Date(new Date(`${to}T00:00:00Z`).getTime() - (days - 1) * 86400000).toISOString().slice(0, 10);
   try {
     const response = await fetch(`/api/stats?from=${from}&to=${to}`, { credentials: 'same-origin', cache: 'no-store', signal: request.signal });
-    if (response.status === 401) { data = null; loginStage('password'); notice('login-error', 'Your session expired. Sign in again.'); return; }
+    if (response.status === 401) { data = null; request.abort(); onExpired(); return; }
     if (!response.ok) throw new Error('Activity is unavailable. Try refreshing.');
     const report = await response.json();
     if (request.signal.aborted) return;
@@ -171,5 +116,6 @@ $('device-groups').addEventListener('click', event => {
   renderSnapshot();
 });
 $('show-devices').addEventListener('click', () => { showAllDevices = !showAllDevices; renderSnapshot(); });
-session().then(result => result.isAdmin ? openDashboard() : loginStage(result.stage, false))
-  .catch(error => { loginStage('password', false); notice('login-error', error.message); });
+loadReport();
+return () => controller?.abort();
+}

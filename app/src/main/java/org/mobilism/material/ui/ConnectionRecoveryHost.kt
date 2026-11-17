@@ -110,6 +110,7 @@ internal fun ConnectionRecoveryHost(controller: ConnectionRecoveryController,
                 }
             }
         }
+        view.settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(context)
         view.settings.javaScriptEnabled = true
         view.settings.domStorageEnabled = true
         view.settings.allowFileAccess = false

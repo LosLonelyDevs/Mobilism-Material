@@ -56,6 +56,7 @@ internal fun ForumAccessVerification(url: String, onRead: (String) -> Boolean, o
                     TextButton(onClick = { browser?.let { readPage(it, true) } }) { Text("Continue") }
                 }
                 AndroidView(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context -> WebView(context).apply {
+                    settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(context)
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.allowFileAccess = false

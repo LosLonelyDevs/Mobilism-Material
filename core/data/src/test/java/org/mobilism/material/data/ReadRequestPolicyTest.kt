@@ -12,6 +12,42 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReadRequestPolicyTest {
+    @Test fun remoteSpacingConcurrencyAndCacheReturnToDefaults() = runBlocking {
+        var time = 1_000L
+        var limits = ApiRequestLimits.Defaults.copy(readSpacingMs = 2_000, readConcurrency = 1)
+        val policy = ReadRequestPolicy({ time }, { time }, { limits }) { time += it }
+        val finish = CompletableDeferred<Unit>()
+        val starts = mutableListOf<Long>()
+        val jobs = (1..3).map { key -> async {
+            policy.request("$key", 60_000) { starts += time; finish.await(); "$key" }
+        } }
+        yield()
+        assertEquals(listOf(1_000L), starts)
+        finish.complete(Unit)
+        jobs.awaitAll()
+        assertEquals(listOf(1_000L, 3_000L, 5_000L), starts)
+        assertEquals("1", policy.request("1", 60_000) { error("Cached") })
+        limits = ApiRequestLimits.Defaults
+        assertEquals("new", policy.request("1", 60_000) { "new" })
+        assertEquals(5_250L, time)
+    }
+
+    @Test fun expiredOverridesRestoreBackoffButNeverShortenRetryAfter() {
+        var time = 1_000L
+        var limits = ApiRequestLimits.Defaults.copy(readFailureCooldownMs = 120_000)
+        val policy = ReadRequestPolicy({ time }, { time }, { limits })
+        policy.response(503, null)
+        time += 60_000
+        assertTrue(runCatching { policy.checkAllowed() }.isFailure)
+        limits = ApiRequestLimits.Defaults
+        policy.checkAllowed()
+        policy.response(429, "600")
+        time += 120_000
+        assertTrue(runCatching { policy.checkAllowed() }.isFailure)
+        time += 480_000
+        policy.checkAllowed()
+    }
+
     private class Clock {
         var time = 1_000L
         val policy = ReadRequestPolicy({ time }, { time }) { time += it }

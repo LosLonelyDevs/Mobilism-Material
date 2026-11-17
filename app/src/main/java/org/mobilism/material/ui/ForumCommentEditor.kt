@@ -57,6 +57,7 @@ internal fun ForumCommentEditor(target: ForumCommentTarget, username: String, on
                 if (loading) LoadingState("Loading forum form…", Modifier.fillMaxWidth())
                 AndroidView(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context ->
                     WebView(context).apply {
+                        settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(context)
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.allowFileAccess = false

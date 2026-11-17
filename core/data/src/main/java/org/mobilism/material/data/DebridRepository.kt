@@ -97,8 +97,10 @@ object HostMatcher {
 class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
     private val isEnabled: () -> Boolean = { true },
     private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
+    private val requestLimits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
     private val now: () -> Long = { System.nanoTime() / 1_000_000 }) {
     private val keys = DebridKeyStore(context)
+    private val userAgent = AppUserAgent.identity(context)
     private val cache = context.getSharedPreferences("material-debrid-hosts", Context.MODE_PRIVATE)
     private val mutex = Mutex()
     private val loading = Mutex()
@@ -112,7 +114,7 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
             if (!isEnabled()) throw java.io.IOException("Premium services disabled")
             chain.proceed(chain.request())
         }.addInterceptor(DiagnosticInterceptor(diagnostics)).build()
-    private val api = DebridApi(this.client, diagnostics)
+    private val api = DebridApi(this.client, diagnostics, userAgent)
     private val megaSessions = MegaDebridSessions(api,
         read = { keys.read(DebridProvider.MegaDebrid) },
         save = { value -> requireEnabled(); keys.write(DebridProvider.MegaDebrid, value) },
@@ -142,7 +144,7 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
         if (!loading.tryLock()) return@withContext
         try {
             val previous = lastLoad
-            if (previous != null && now() - previous in 0 until 15 * 60_000) return@withContext
+            if (previous != null && now() - previous in 0 until requestLimits().debridRefreshIntervalMs) return@withContext
             lastLoad = now()
             mutex.withLock {
                 mutableState.value = DebridState(DebridProvider.entries.map { provider ->
@@ -304,7 +306,7 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
         else block(keys.read(provider).orEmpty())
 
     private fun get(url: String): String = client.newCall(Request.Builder().url(url)
-        .header("User-Agent", "MobilismMaterial/0.1 (Android)")
+        .header("User-Agent", userAgent)
         .build()).execute().use { response ->
         if (!response.isSuccessful) throw DebridException("Real-Debrid host list returned HTTP ${response.code}. Try again later.")
         val source = checkNotNull(response.body).source()

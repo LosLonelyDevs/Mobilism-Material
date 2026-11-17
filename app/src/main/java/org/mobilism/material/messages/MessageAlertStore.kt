@@ -6,13 +6,14 @@ import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.mobilism.material.settings.MessageReadHistory
+import org.mobilism.material.data.ApiRequestLimits
 
-class MessageAlertStore(context: Context) {
+class MessageAlertStore(context: Context, limits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults }) {
     private val preferences = context.getSharedPreferences("message-alerts", Context.MODE_PRIVATE)
     private val mutableEnabled = MutableStateFlow(preferences.getBoolean("enabled", true))
     val enabled = mutableEnabled.asStateFlow()
     private val histories = mutableMapOf<String, MessageReadHistory>()
-    val polls = MessagePollPolicy(load = { account ->
+    val polls = MessagePollPolicy(limits = limits, load = { account ->
         val key = "poll-${accountKey(account)}"
         if (!preferences.contains(key)) null else MessagePollPolicy.Attempt(preferences.getLong(key, 0),
             preferences.getLong("$key-next", 0), preferences.getInt("$key-failures", 0).coerceIn(0, 5))

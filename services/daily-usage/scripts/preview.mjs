@@ -2,13 +2,24 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { resolve, extname, sep } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { createHandler as sessionHandler } from '../api/admin-session.js';
 import { createHandler as statsHandler } from '../api/stats.js';
+import { createHandler as configHandler } from '../api/app-config.js';
+import { createHandler as controlHandler } from '../api/control-config.js';
+import { createHandler as releasesHandler } from '../api/releases.js';
 import { encodeBase32, isAdminRequest } from '../lib/admin-auth.js';
 
 const env = { ADMIN_USERNAME: 'preview', ADMIN_PASSWORD: randomBytes(32).toString('base64url'),
   ADMIN_TOTP_SECRET: encodeBase32(randomBytes(20)), ADMIN_SESSION_SECRET: randomBytes(48).toString('base64url') };
+if (process.argv.includes('--test-auth')) {
+  if (!process.env.PREVIEW_TEST_PASSWORD || !process.env.PREVIEW_TEST_TOTP_SECRET)
+    throw new Error('Set PREVIEW_TEST_PASSWORD and PREVIEW_TEST_TOTP_SECRET for the local auth test.');
+  env.ADMIN_PASSWORD = process.env.PREVIEW_TEST_PASSWORD;
+  env.ADMIN_TOTP_SECRET = process.env.PREVIEW_TEST_TOTP_SECRET;
+}
 const db = new PGlite();
 await db.exec(await readFile(new URL('../schema.sql', import.meta.url), 'utf8'));
 const query = async (sql, values) => (await db.query(sql, values)).rows;
@@ -20,28 +31,35 @@ for (let days = 0; days < 90; days++) {
 const session = sessionHandler({ database: query, env });
 const dashboardPreview = process.argv.includes('--dashboard');
 const stats = statsHandler(query, () => '', () => new Date(), req => dashboardPreview || isAdminRequest(req, env));
-const files = { '/': 'index.html', '/index.html': 'index.html', '/dashboard.js': 'dashboard.js', '/metrics.js': 'metrics.js', '/dashboard.css': 'dashboard.css', '/site.css': 'site.css' };
+const config = configHandler(query);
+const control = controlHandler(query, req => dashboardPreview || isAdminRequest(req, env));
+const releases = releasesHandler(undefined, req => dashboardPreview || isAdminRequest(req, env));
+const staticRoot = fileURLToPath(new URL('../dist/', import.meta.url));
+const port = Number(process.env.PREVIEW_PORT || 43921);
 http.createServer(async (req, res) => {
   try {
     const path = new URL(req.url, 'http://localhost').pathname;
     if (dashboardPreview && path === '/api/admin-session' && req.method === 'GET') {
       res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ isAdmin: true })); return;
     }
-    if (path === '/api/admin-session' || path === '/api/stats') {
+    const handler = { '/api/admin-session': session, '/api/stats': stats, '/api/app-config': config, '/api/control-config': control, '/api/releases': releases }[path];
+    if (handler) {
       const chunks = []; let length = 0;
-      for await (const chunk of req) { length += chunk.length; if (length > 2048) { res.writeHead(413); res.end(); return; } chunks.push(chunk); }
+      for await (const chunk of req) { length += chunk.length; if (length > 65536) { res.writeHead(413); res.end(); return; } chunks.push(chunk); }
       req.body = Buffer.concat(chunks);
-      await (path === '/api/admin-session' ? session : stats)(req, res);
+      await handler(req, res);
       return;
     }
-    if (!files[path] || req.method !== 'GET') { res.writeHead(404); res.end(); return; }
+    const route = ['/', '/index.html', '/app-usage', '/app-usage/', '/app-controls', '/app-controls/'].includes(path);
+    const file = resolve(staticRoot, route ? 'index.html' : `.${path}`);
+    if (!file.startsWith(resolve(staticRoot) + sep) || req.method !== 'GET') { res.writeHead(404); res.end(); return; }
     res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Content-Type', path.endsWith('.js') ? 'text/javascript' : path.endsWith('.css') ? 'text/css' : 'text/html');
-    res.end(await readFile(new URL(`../public/${files[path]}`, import.meta.url)));
-  } catch { res.writeHead(500); res.end('Preview unavailable'); }
-}).listen(43921, '127.0.0.1', () => {
-  console.log('Synthetic dashboard preview: http://127.0.0.1:43921');
-  if (!dashboardPreview) {
+    res.setHeader('Content-Type', extname(file) === '.js' ? 'text/javascript' : extname(file) === '.css' ? 'text/css' : 'text/html');
+    res.end(await readFile(file));
+  } catch (error) { res.writeHead(error.code === 'ENOENT' ? 404 : 500); res.end('Preview unavailable'); }
+}).listen(port, '127.0.0.1', () => {
+  console.log(`Synthetic dashboard preview: http://127.0.0.1:${port}`);
+  if (!dashboardPreview && !process.argv.includes('--test-auth')) {
     console.log('Temporary local username:', env.ADMIN_USERNAME);
     console.log('Temporary local password:', env.ADMIN_PASSWORD);
     console.log('Temporary local authenticator setup key:', env.ADMIN_TOTP_SECRET);

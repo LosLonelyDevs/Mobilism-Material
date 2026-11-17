@@ -12,6 +12,38 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SearchRequestPolicyTest {
+    @Test fun remoteThresholdsApplyAndFallbackRestoresShippedSpacingAndCooldown() = runBlocking {
+        var time = 1_000L
+        var limits = ApiRequestLimits.Defaults.copy(searchSpacingMs = 10_000, searchFailureCooldownMs = 600_000)
+        val waits = mutableListOf<Long>()
+        val policy = SearchRequestPolicy({ time }, { time }, { limits }) { waits += it; time += it }
+        policy.request("one") { "one" }
+        policy.request("two") { "two" }
+        assertEquals(listOf(10_000L), waits)
+        limits = ApiRequestLimits.Defaults
+        policy.request("three") { "three" }
+        assertEquals(listOf(10_000L, 3_000L), waits)
+        limits = limits.copy(searchFailureCooldownMs = 600_000)
+        runCatching { policy.request("failure") { error("unavailable") } }
+        time += 60_000
+        assertTrue(runCatching { policy.request("four") { "four" } }.isFailure)
+        limits = ApiRequestLimits.Defaults
+        assertEquals("four", policy.request("four") { "four" })
+    }
+
+    @Test fun changedCacheThresholdDropsPreviouslyCachedResponses() = runBlocking {
+        var time = 1000L
+        var limits = ApiRequestLimits.Defaults
+        var calls = 0
+        val policy = SearchRequestPolicy({ time }, { time }, { limits }) { time += it }
+        policy.request("one") { calls++; "first" }
+        assertEquals("first", policy.request("one") { calls++; "second" })
+        limits = limits.copy(searchCacheTtlMs = 0)
+        assertEquals("second", policy.request("one") { calls++; "second" })
+        policy.request("one") { calls++; "third" }
+        assertEquals(3, calls)
+    }
+
     private class Clock {
         var time = 1_000L
         val waits = mutableListOf<Long>()

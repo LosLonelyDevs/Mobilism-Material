@@ -2,8 +2,29 @@ package org.mobilism.material.messages
 
 import org.junit.Assert.*
 import org.junit.Test
+import org.mobilism.material.data.ApiRequestLimits
 
 class MessagePollPolicyTest {
+    @Test fun expiredOverridesDoNotLeavePersistedRemotePollingDelays() {
+        val saved = mutableMapOf<String, MessagePollPolicy.Attempt>()
+        var limits = ApiRequestLimits.Defaults.copy(messagePollIntervalMs = 180_000,
+            messageFailureMaxCooldownMs = 240_000)
+        fun policy() = MessagePollPolicy(saved::get, { limits }) { key, attempt -> saved[key] = attempt }
+        val remote = policy()
+        assertTrue(remote.begin("Reader", 1_000))
+        remote.completed("Reader", 1_000)
+        assertFalse(remote.begin("Reader", 61_000))
+        limits = ApiRequestLimits.Defaults
+        assertTrue(policy().begin("Reader", 61_000))
+        limits = limits.copy(messagePollIntervalMs = 180_000, messageFailureMaxCooldownMs = 240_000)
+        val failures = policy()
+        failures.completed("Reader", 61_000, failed = true)
+        assertTrue(failures.begin("Reader", 241_000))
+        failures.completed("Reader", 241_000, failed = true)
+        assertFalse(failures.begin("Reader", 480_999))
+        assertTrue(failures.begin("Reader", 481_000))
+    }
+
     @Test fun attemptsSurviveRestartAndAccountsRemainIndependent() {
         val saved = mutableMapOf<String, MessagePollPolicy.Attempt>()
         fun policy() = MessagePollPolicy(saved::get) { key, attempt -> saved[key] = attempt }

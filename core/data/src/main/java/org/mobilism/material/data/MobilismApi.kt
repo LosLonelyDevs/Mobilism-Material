@@ -28,7 +28,8 @@ import org.json.JSONException
 import org.json.JSONObject
 
 internal class MobilismApi(private val context: Context, private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
-    client: OkHttpClient = OkHttpClient(), private val challengeRecovery: ChallengeRecovery = ChallengeRecovery.None) {
+    client: OkHttpClient = OkHttpClient(), private val challengeRecovery: ChallengeRecovery = ChallengeRecovery.None,
+    private val requestLimits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults }) {
     private val client = client.newBuilder()
         .apply { interceptors().add(0, DiagnosticInterceptor(diagnostics)) }
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -39,9 +40,9 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         .build()
     // Connection recovery can resend a request. Keep writes on the non-retrying client.
     private val readClient = this.client.newBuilder().retryOnConnectionFailure(true).build()
-    private val searches = SearchRequestPolicy()
-    private val reads = ReadRequestPolicy()
-    private val forumReads = ReadRequestPolicy()
+    private val searches = SearchRequestPolicy(limits = requestLimits)
+    private val reads = ReadRequestPolicy(limits = requestLimits)
+    private val forumReads = ReadRequestPolicy(limits = requestLimits)
     private val likePostIds = context.getSharedPreferences("release-post-ids", Context.MODE_PRIVATE)
     private val forumPostIds = ConcurrentHashMap<Long, Long>()
     private val forumCommentStarts = ConcurrentHashMap<Pair<Long, Int>, Int>()
@@ -136,7 +137,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
 
     suspend fun discussionCategories(area: DiscussionArea, token: String?, fresh: Boolean = false): List<DiscussionCategory> =
         DiscussionJson.categories(request(if (area == DiscussionArea.Community) "other/category" else "discussion/categories", token,
-            cacheMillis = 5 * 60_000, fresh = fresh), area)
+            cacheMillis = requestLimits().discussionCategoriesCacheTtlMs, fresh = fresh), area)
 
     suspend fun discussionTopics(category: DiscussionCategory, page: Int, query: String, token: String?, includePinned: Boolean = true,
         fresh: Boolean = false): DiscussionPage {
@@ -148,7 +149,8 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             "id" to if (category.id == 12L) "all" else category.id.toString(),
         )), category.kind, search = true)
         return DiscussionJson.page(request("${category.kind.path}/category/${category.apiId}/page/$page/limit/$PAGE_SIZE/orderby/topic_last_post_time/desc/${if (includePinned) 1 else 0}",
-            token, emptyRecordsAsArray = true, cacheMillis = if (page == 1) 60_000 else 0, fresh = fresh), category.kind)
+            token, emptyRecordsAsArray = true,
+            cacheMillis = if (page == 1) requestLimits().discussionFirstPageCacheTtlMs else 0, fresh = fresh), category.kind)
     }
 
     suspend fun discussionComments(topic: DiscussionTopic, page: Int, token: String?): CommentPage {
@@ -223,7 +225,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         try {
             // Forum reads never receive the API session token.
             val request = Request.Builder().url(url)
-            runCatching { android.webkit.WebSettings.getDefaultUserAgent(context) }.getOrNull()?.let { request.header("User-Agent", it) }
+            request.header("User-Agent", AppUserAgent.value(context))
             runCatching { android.webkit.CookieManager.getInstance().getCookie(url.toString()) }.getOrNull()
                 ?.takeIf { it.isNotBlank() }?.let { request.header("Cookie", it) }
             readClient.newCall(request.build()).await().use { response ->
@@ -291,8 +293,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             }.build()
             val builder = Request.Builder().url(url).header("Accept", "application/json")
             // Clearance belongs to the browser's origin and user agent, across all API requests.
-            runCatching { android.webkit.WebSettings.getDefaultUserAgent(context) }.getOrNull()
-                ?.let { builder.header("User-Agent", it) }
+            builder.header("User-Agent", AppUserAgent.value(context))
             runCatching { android.webkit.CookieManager.getInstance().getCookie(url.toString()) }.getOrNull()
                 ?.takeIf { it.isNotBlank() }?.let { builder.header("Cookie", it) }
             // This client is used only for the API origin, never images or download URLs.
@@ -317,7 +318,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                     diagnostics.record(DiagnosticEvent(DiagnosticSource.Forum, operation, DiagnosticPhase.Retrying,
                         httpStatus = result.code, failure = DiagnosticFailure.Server))
                     result.close()
-                    delay(500)
+                    delay(requestLimits().readRetryDelayMs)
                     result = transport.newCall(request).await()
                 }
                 result.use { response ->

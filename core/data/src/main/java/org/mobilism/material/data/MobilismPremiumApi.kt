@@ -13,7 +13,8 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser
 
-internal class MobilismPremiumApi(client: OkHttpClient) {
+internal class MobilismPremiumApi(client: OkHttpClient,
+    private val userAgent: String = AppUserAgent.format(null, "unknown", 0)) {
     private val client = client.newBuilder().followRedirects(false).followSslRedirects(false)
         .callTimeout(60, TimeUnit.SECONDS).readTimeout(45, TimeUnit.SECONDS).build()
     @Volatile private var lastHosts: List<SupportedHost>? = null
@@ -145,7 +146,7 @@ internal class MobilismPremiumApi(client: OkHttpClient) {
     }
 
     private fun request(request: Request): String = try {
-        client.newCall(request.newBuilder().header("User-Agent", "MobilismMaterial/0.1 (Android)").build())
+        client.newCall(request.newBuilder().header("User-Agent", userAgent).build())
             .execute().use { response ->
                 val source = response.body?.source() ?: throw invalidResponse()
                 source.request(MAX_BYTES + 1)

@@ -14,6 +14,30 @@ import org.mobilism.material.data.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MemberIdentityStoreTest {
+    @Test fun remoteLookupPacingAndFailureCooldownFallBackImmediately() = runTest {
+        var time = 1_000L
+        var calls = 0
+        var limits = ApiRequestLimits.Defaults.copy(memberLookupSpacingMs = 5_000,
+            memberFailureCooldownMs = 120_000)
+        val store = MemberIdentityStore({ reference ->
+            calls++
+            if (reference.username == "Fail") error("Unavailable")
+            profile().copy(username = reference.username!!)
+        }, { time }, { limits }) { time += it }
+        store.request("One")
+        store.request("Two")
+        assertEquals(6_000L, time)
+        store.request("Fail")
+        time += 60_000
+        store.request("Three")
+        assertEquals(3, calls)
+        limits = ApiRequestLimits.Defaults
+        store.request("Three")
+        assertEquals(4, calls)
+        store.request("Four")
+        assertEquals(72_000L, time)
+    }
+
     @Test fun repeatedFailuresPauseAllOptionalLookupsAndIncreaseTheCooldown() = runTest {
         var calls = 0
         val store = MemberIdentityStore({ calls++; error("Unavailable") }, { testScheduler.currentTime + 1 })

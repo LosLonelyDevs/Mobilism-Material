@@ -6,6 +6,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CustomCategorySearchPagerTest {
+    @Test fun remoteRequestBudgetAppliesAndFallbackRestoresDefault() = runBlocking {
+        var calls = 0
+        var limits = ApiRequestLimits.Defaults.copy(categorySearchRequestLimit = 2)
+        val pager = CustomCategorySearchPager(listOf(member(release(1))), ContentSection.Apps, FeedOrder.Latest,
+            matches = { false }, limits = { limits }) { _, _ ->
+            calls++
+            ReleasePage(emptyList(), true)
+        }
+        assertTrue(runCatching { pager.page(1) }.isFailure)
+        assertEquals(2, calls)
+        limits = ApiRequestLimits.Defaults
+        assertTrue(runCatching { pager.page(1) }.isFailure)
+        assertEquals(6, calls)
+    }
+
     private fun release(id: Long, name: String = "Alpha", version: String = "1.0", date: Long = id, views: Long = id) =
         Release(id, "$name v$version", "", null, date, 0, views, section = ContentSection.Apps)
     private fun member(vararg releases: Release) = CategorizedItem(releases.first().id.toString(), releases.toList(), setOf("apps"))

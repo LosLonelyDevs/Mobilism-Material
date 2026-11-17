@@ -23,9 +23,10 @@ import org.mobilism.material.messages.*
 import org.mobilism.material.data.AuthState
 
 class MobilismApplication : Application() {
-    val memberIdentities by lazy { org.mobilism.material.members.MemberIdentityStore(repository::profile) }
+    val memberIdentities by lazy { org.mobilism.material.members.MemberIdentityStore(repository::profile,
+        limits = { remoteControl.limits }) }
     val recentSearches by lazy { org.mobilism.material.settings.RecentSearchStore(this) }
-    val messageAlerts by lazy { MessageAlertStore(this) }
+    val messageAlerts by lazy { MessageAlertStore(this, limits = { remoteControl.limits }) }
     val messageNotifications by lazy { MessageNotifications(this) }
     val messageReads by lazy { org.mobilism.material.settings.MessageReadStore(this, messageNotifications::cancelRead) }
     val messageChecker by lazy { MessageNotificationChecker(repository,
@@ -43,14 +44,15 @@ class MobilismApplication : Application() {
         { true }, isVerbose = { developer.state.value.enabled && developer.state.value.verboseLogging }) }
     val customCategories by lazy { org.mobilism.material.data.CustomCategoryStore(this) }
     internal val connectionRecovery by lazy { org.mobilism.material.ui.ConnectionRecoveryController() }
+    internal val remoteControl by lazy { org.mobilism.material.remote.RemoteControlStore.create(this) }
     val repository by lazy { DefaultMobilismRepository(this, contentPreferences, diagnostics,
         customCategories = customCategories, customCategoriesEnabled = { developer.state.value.customCategoriesActive },
-        challengeRecovery = connectionRecovery) }
+        challengeRecovery = connectionRecovery, requestLimits = { remoteControl.limits }) }
     val appearance by lazy { AppearanceStore(this) }
     val releaseDisplay by lazy { org.mobilism.material.settings.ReleaseDisplayStore(this) }
     val debrid by lazy { DebridRepository(this, isEnabled = {
         developer.state.value.debridEnabled
-    }, diagnostics = diagnostics) }
+    }, diagnostics = diagnostics, requestLimits = { remoteControl.limits }) }
     val library by lazy { AppLibraryStore(this) }
     val followPreferences by lazy { FollowingPreferences(this) }
     val followNotifications by lazy { FollowingNotifications(this) }
@@ -71,6 +73,11 @@ class MobilismApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        scope.launch {
+            repository.auth.collect { auth ->
+                remoteControl.accountChanged((auth as? AuthState.SignedIn)?.username, known = auth != AuthState.Restoring)
+            }
+        }
         scope.launch {
             combine(repository.auth, messageAlerts.enabled) { auth, enabled -> auth to enabled }
                 .distinctUntilChanged().collect { (auth, enabled) ->

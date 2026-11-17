@@ -64,6 +64,7 @@ internal fun ForumPostVerification(topicId: Long, onVerified: (Long) -> Unit, on
                 AndroidView(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context ->
                     WebView(context).apply {
                         // Browser verification needs JavaScript. Navigation stays on this forum topic.
+                        settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(context)
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.allowFileAccess = false

@@ -14,13 +14,14 @@ class DebridException(message: String, val invalidatesAccount: Boolean = false,
     val sessionExpired: Boolean = false) : Exception(message)
 
 internal class DebridApi(client: OkHttpClient = OkHttpClient(),
-    private val diagnostics: DiagnosticLogger = DiagnosticLogger.None) {
+    private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
+    private val userAgent: String = AppUserAgent.format(null, "unknown", 0)) {
     private val client = client.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS)
         .callTimeout(45, TimeUnit.SECONDS)
         // MegaDebrid requires its token in the query. Never forward it through redirects.
         .followRedirects(false).followSslRedirects(false).build()
-    private val mobilism = MobilismPremiumApi(this.client)
+    private val mobilism = MobilismPremiumApi(this.client, userAgent)
 
     fun connectMobilism(username: String, password: String): String =
         mobilism.credentials(username, password).also(mobilism::validate)
@@ -131,7 +132,7 @@ internal class DebridApi(client: OkHttpClient = OkHttpClient(),
     private fun request(provider: DebridProvider, request: Request): JSONObject {
         try {
             return client.newCall(request.newBuilder()
-                .header("User-Agent", "MobilismMaterial/0.1 (Android)").build()).execute().use { response ->
+                .header("User-Agent", userAgent).build()).execute().use { response ->
                 if (response.code in 300..399) throw DebridException("The service redirected the request. Please try again later.")
                 val source = response.body?.source() ?: throw invalidResponse()
                 source.request(MAX_RESPONSE_BYTES + 1)

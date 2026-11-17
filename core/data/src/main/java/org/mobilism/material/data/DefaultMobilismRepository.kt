@@ -11,8 +11,9 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     private val customCategories: CustomCategoryStore? = null,
     private val customCategoriesEnabled: () -> Boolean = { false },
     challengeRecovery: ChallengeRecovery = ChallengeRecovery.None,
+    private val requestLimits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
 ) : MobilismRepository, MessagesRepository, DiscussionsRepository, HomeRepository {
-    private val api = MobilismApi(context.applicationContext, diagnostics, client, challengeRecovery)
+    private val api = MobilismApi(context.applicationContext, diagnostics, client, challengeRecovery, requestLimits)
     private val store = SessionStore(context.applicationContext)
     private val reactions = context.getSharedPreferences("release-reactions", Context.MODE_PRIVATE)
     private val authMutex = Mutex()
@@ -111,7 +112,7 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
                     pagerPage = 0
                     pagerResults.clear()
                     val customSearch = if (customIds.isEmpty()) null else CustomCategorySearchPager(
-                        query.customItems, section, order, matches = { local.matches(it, customIds) },
+                        query.customItems, section, order, matches = { local.matches(it, customIds) }, limits = requestLimits,
                     ) { name, searchPage ->
                         api.search(name, SearchScope.entries.first { it.section == section }, searchPage, token, hideAdult)
                     }

@@ -49,7 +49,7 @@ fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fro
     })
     val changelogStore = remember(app) { org.mobilism.material.updates.AppChangelogStore(app) }
     var changelog by remember(changelogStore) { mutableStateOf(changelogStore.pending()) }
-    AppUpdateHost(app.appUpdates, updater, changelog, onChangelogDismiss = {
+    AppUpdateHost(app.appUpdates, updater, app.remoteControl, changelog, onChangelogDismiss = {
         changelog?.let { changelogStore.markSeen(it.version) }
         changelog = null
     }) { onUpdates ->

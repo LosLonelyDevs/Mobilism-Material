@@ -55,6 +55,7 @@ class ConnectionRecoveryTest {
         assertEquals(listOf(VerificationSite.App), fixture.sites)
         assertEquals(2, fixture.requests.size)
         assertEquals(fixture.requests.first().url, fixture.requests.last().url)
+        assertTrue(fixture.requests.all { it.header("User-Agent")?.contains("MobilismMaterial/${BuildConfig.VERSION_NAME} (Android; build ${BuildConfig.VERSION_CODE})") == true })
     }
 
     @Test fun blockedSearchStopsWithoutAutomaticVerificationOrReplay() = runBlocking {

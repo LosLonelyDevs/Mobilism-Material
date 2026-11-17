@@ -69,6 +69,7 @@ internal fun ConnectionVerification(site: VerificationSite, onDismiss: () -> Uni
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     AndroidView(modifier = Modifier.fillMaxSize().clipToBounds(), factory = { viewContext -> WebView(viewContext).apply {
+                        settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(viewContext)
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.allowFileAccess = false

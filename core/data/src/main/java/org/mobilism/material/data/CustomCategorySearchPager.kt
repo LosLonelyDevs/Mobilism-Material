@@ -15,6 +15,7 @@ internal class CustomCategorySearchPager(
     private val order: FeedOrder,
     private val pageSize: Int = 20,
     private val matches: (Release) -> Boolean,
+    private val limits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
     private val load: suspend (query: String, page: Int) -> ReleasePage,
 ) {
     private data class Cursor(
@@ -33,7 +34,6 @@ internal class CustomCategorySearchPager(
     private var emitted = emptySet<Long>()
     private var lastDate: Long? = null
     private val pages = mutableMapOf<Int, ReleasePage>()
-    private val permits = Semaphore(4)
     private var requests = 0
     private val ranking = compareByDescending<Release> { if (order == FeedOrder.Top) it.views else it.publishedAt }
         .thenByDescending { it.publishedAt }.thenByDescending { it.id }
@@ -65,9 +65,11 @@ internal class CustomCategorySearchPager(
                 return ReleasePage(ready, active.isNotEmpty() || candidates.isNotEmpty()).also { pages[number] = it }
             }
             val searches = next.filterValues { !it.ended }
-            if (requests + searches.size > 6) throw ApiFailure(FailureKind.InvalidResponse,
+            val policy = limits()
+            if (requests + searches.size > policy.categorySearchRequestLimit) throw ApiFailure(FailureKind.InvalidResponse,
                 "This category needs too many searches. Use a smaller category or search for an app directly.")
             requests += searches.size
+            val permits = Semaphore(policy.categorySearchConcurrency)
             val responses = coroutineScope {
                 searches.map { (query, cursor) ->
                     async { query to permits.withPermit { load(query, cursor.page + 1) } }

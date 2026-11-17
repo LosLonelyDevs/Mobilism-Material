@@ -1,47 +1,9 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#16161e">
-  <meta name="robots" content="noindex,nofollow">
-  <title>Mobilism Material Usage Metrics</title>
-  <link rel="stylesheet" href="/dashboard.css">
-  <link rel="stylesheet" href="/site.css">
-  <script type="module" src="/dashboard.js"></script>
-</head>
-<body>
-  <main>
-    <div id="startup" class="startup" role="status">Opening dashboard…</div>
-    <section id="login" class="login" hidden aria-labelledby="login-title">
-      <form id="login-form" class="login-form">
-        <span class="brand-mark" aria-hidden="true">m</span>
-        <span class="eyebrow">MOBILISM MATERIAL USAGE METRICS</span>
-        <h1 id="login-title">Welcome back</h1>
-        <p id="login-subtitle">Sign in to view daily app activity.</p>
-        <span id="login-step" class="step-label">Step 1 of 2</span>
-        <div id="password-fields" class="fields">
-          <label>Username<input id="username" name="username" autocomplete="username" maxlength="64" required></label>
-          <label>Password<input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" required></label>
-        </div>
-        <div id="otp-fields" class="fields" hidden>
-          <label>Authenticator code<input id="code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="000000" disabled required></label>
-          <p class="field-hint">Enter the six-digit code from your authenticator app.</p>
-        </div>
-        <p id="login-error" class="login-error" role="alert" hidden></p>
-        <button id="login-submit" class="primary" type="submit">Continue</button>
-        <button id="start-over" class="text-button" type="button" hidden>Use a different account</button>
-        <p class="login-note">Private dashboard · Two-step verification</p>
-      </form>
-    </section>
-    <div id="dashboard" class="admin-dashboard" hidden>
-      <header class="site-header"><span class="site-brand"><span class="brand-mark" aria-hidden="true">m</span><span>Mobilism Material Usage Metrics</span></span><button id="sign-out" class="text-button">Sign out</button></header>
       <div class="admin-heading">
         <div><span class="admin-eyebrow">ADMIN · APP USAGE</span><h1>Daily activity</h1><p>A daily snapshot of active Mobilism installations.</p></div>
         <form id="filters" class="admin-toolbar"><label>UTC date<input id="day" type="date" required></label><button id="refresh" class="primary" type="submit">↻ Refresh</button></form>
       </div>
       <div id="dashboard-error" class="admin-notice" role="alert" hidden></div>
-      <p id="loading" class="admin-loading" role="status">Loading activity…</p>
+<p id="loading" class="admin-loading" role="status">Loading activity…</p>
       <div id="report" hidden>
         <p id="snapshot-date" class="admin-snapshot" aria-live="polite"></p>
         <div class="admin-stats">
@@ -77,7 +39,3 @@
         </details>
         <p class="admin-footnote">Anonymous, opt-in active installation counts. Reinstalls and multiple devices can count separately. These are not unique people. Dates use UTC; late reports can arrive for seven days.</p>
       </div>
-    </div>
-  </main>
-</body>
-</html>
