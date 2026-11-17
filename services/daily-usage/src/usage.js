@@ -1,4 +1,5 @@
 import { groupUsage, percentage } from '../public/metrics.js';
+import './usage.css';
 export function mountUsage(root, onExpired) {
 const $ = id => id === 'dashboard' ? root : root.querySelector('#' + id);
 const number = value => new Intl.NumberFormat().format(BigInt(value));

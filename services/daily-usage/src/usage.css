@@ -1,0 +1,41 @@
+.usage-page .admin-stats { grid-template-columns: 1.3fr repeat(2, minmax(0, 1fr)); }
+.usage-page .admin-chart-summary #chart-total { font-size: inherit; color: inherit; }
+.usage-page .admin-snapshot { color: var(--admin-muted); font-size: 13px; margin: 0 0 12px; }
+
+.usage-page .admin-breakdowns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 16px; }
+.usage-page .admin-breakdowns .admin-panel-heading { flex-wrap: wrap; gap: 6px 12px; }
+.usage-page .admin-share { padding: 12px 0; }
+.usage-page .admin-share-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
+.usage-page .admin-share-label { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
+.usage-page .admin-share-label strong { font-size: 14px; font-weight: 550; }
+.usage-page .admin-share-stats { display: grid; justify-items: end; gap: 5px; flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.usage-page .admin-share-stats > strong { color: var(--admin-primary); font-size: 17px; font-weight: 650; }
+.usage-page .admin-share-track { height: 7px; border-radius: 999px; background: var(--admin-surface-high); overflow: hidden; }
+.usage-page .admin-share-track > span { display: block; height: 100%; background: var(--admin-primary); border-radius: inherit; transition: width 300ms cubic-bezier(.2,.8,.2,1); }
+.usage-page #android-shares .admin-share-track > span { background: var(--md-sys-color-secondary); }
+.usage-page #device-shares .admin-share-track > span { background: var(--success); }
+.usage-page .admin-device-shares { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; }
+.usage-page #show-devices { margin-top: 12px; }
+
+.usage-page .admin-details > summary { cursor: pointer; min-height: 48px; display: flex; align-items: center; gap: 12px; color: var(--admin-primary); font-size: 14px; }
+.usage-page .admin-details > summary::before { content: '+'; font-size: 22px; }
+.usage-page .admin-details[open] > summary::before { content: '−'; }
+.usage-page .admin-details[open] > summary { margin-bottom: 16px; }
+.usage-page .admin-device-labels, .usage-page .admin-device-row { grid-template-columns: minmax(0, 1fr) minmax(150px, .3fr) 108px; }
+.usage-page .admin-device-row { border-radius: 8px; }
+.usage-page .admin-device-row:first-child { border-radius: 20px 20px 8px 8px; }
+.usage-page .admin-device-row:last-child { border-radius: 8px 8px 20px 20px; }
+.usage-page .admin-device-row:only-child { border-radius: 20px; }
+
+@media (max-width: 720px) {
+  .usage-page .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .usage-page .admin-breakdowns, .usage-page .admin-device-shares { grid-template-columns: minmax(0, 1fr); }
+  .usage-page .admin-breakdowns { gap: 0; }
+  .usage-page .admin-device-heading { flex-direction: column; align-items: stretch; }
+  .usage-page .admin-device-row { grid-template-columns: minmax(0, 1fr) auto; }
+}
+
+@media (max-width: 380px) {
+  .usage-page .admin-panel { padding: 18px 14px; }
+  .usage-page .admin-stat { padding: 16px; }
+}
