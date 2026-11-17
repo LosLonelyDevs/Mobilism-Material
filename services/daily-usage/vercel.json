@@ -6,7 +6,11 @@
     { "source": "/app-usage", "destination": "/index.html" },
     { "source": "/app-controls", "destination": "/index.html" },
     { "source": "/app-usage/", "destination": "/index.html" },
-    { "source": "/app-controls/", "destination": "/index.html" }
+    { "source": "/app-controls/", "destination": "/index.html" },
+    { "source": "/users", "destination": "/index.html" },
+    { "source": "/users/", "destination": "/index.html" },
+    { "source": "/account", "destination": "/index.html" },
+    { "source": "/account/", "destination": "/index.html" }
   ],
   "headers": [{ "source": "/(.*)", "headers": [
     { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" },

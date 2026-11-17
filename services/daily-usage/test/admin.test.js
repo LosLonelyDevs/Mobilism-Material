@@ -5,12 +5,14 @@ import { randomBytes } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import { createHandler } from '../api/admin-session.js';
 import { createHandler as statsHandler } from '../api/stats.js';
-import { CHALLENGE_COOKIE, SESSION_COOKIE, encodeBase32, isAdminRequest, totp } from '../lib/admin-auth.js';
+import { CHALLENGE_COOKIE, SESSION_COOKIE, encodeBase32, totp } from '../lib/admin-auth.js';
+import { sessionUser } from '../lib/access.js';
 
 const env = { ADMIN_USERNAME: 'test-admin', ADMIN_PASSWORD: randomBytes(32).toString('base64url'),
   ADMIN_TOTP_SECRET: encodeBase32(randomBytes(20)), ADMIN_SESSION_SECRET: randomBytes(48).toString('base64url'), VERCEL: '1' };
 let db, time, handler;
 const query = async (sql, values) => (await db.query(sql, values)).rows;
+const isAdminRequest = async (req, env, now) => !!await sessionUser(req, { database: query, env, now });
 const credentials = { step: 'password', username: env.ADMIN_USERNAME, password: env.ADMIN_PASSWORD };
 const cookies = response => [response.headers['Set-Cookie']].flat().filter(Boolean).map(value => value.split(';')[0]).join('; ');
 async function call(body, { cookie = '', method = 'POST', origin = 'https://usage.example', ip = '192.0.2.1', action = handler } = {}) {
@@ -21,7 +23,7 @@ async function call(body, { cookie = '', method = 'POST', origin = 'https://usag
 }
 before(async () => { db = new PGlite(); await db.exec(await readFile(new URL('../schema.sql', import.meta.url), 'utf8')); });
 beforeEach(async () => {
-  await db.exec('TRUNCATE admin_login_limits, admin_login_challenges, admin_totp_counters');
+  await db.exec('TRUNCATE admin_login_limits, admin_login_challenges, admin_totp_counters, dashboard_users, dashboard_sessions CASCADE');
   time = Date.UTC(2026, 10, 4, 12, 0, 0);
   handler = createHandler({ database: query, env, now: () => time });
 });
@@ -40,14 +42,14 @@ test('password alone grants no statistics access; only the second step creates a
   assert.ok(first.headers['Set-Cookie'].startsWith(`${CHALLENGE_COOKIE}=`));
   assert.match(first.headers['Set-Cookie'], /HttpOnly; SameSite=Strict; Max-Age=300; Secure/);
   const challenge = cookies(first);
-  assert.equal(isAdminRequest({ headers: { cookie: challenge } }, env, time), false);
+  assert.equal(await isAdminRequest({ headers: { cookie: challenge } }, env, time), false);
   const stats = statsHandler(query, () => '', () => new Date(time), req => isAdminRequest(req, env, time));
   assert.equal((await call(null, { method: 'GET', cookie: challenge, action: stats })).statusCode, 401);
   assert.equal((await call(null, { method: 'GET', cookie: challenge })).body.stage, 'otp');
   const second = await call({ step: 'otp', code: totp(env.ADMIN_TOTP_SECRET, time / 30000) }, { cookie: challenge });
   assert.equal(second.statusCode, 200);
   assert.equal(second.body.isAdmin, true);
-  assert.equal(isAdminRequest({ headers: { cookie: cookies(second) } }, env, time), true);
+  assert.equal(await isAdminRequest({ headers: { cookie: cookies(second) } }, env, time), true);
   assert.equal((await call(null, { method: 'GET', cookie: cookies(second), action: stats })).statusCode, 200);
 });
 
@@ -104,11 +106,12 @@ test('session expiry, credential rotation, forged cookies, CSRF, and logout are 
   const first = cookies(await call(credentials));
   const result = await call({ step: 'otp', code: totp(env.ADMIN_TOTP_SECRET, time / 30000) }, { cookie: first });
   const request = { headers: { cookie: cookies(result) } };
-  assert.equal(isAdminRequest(request, { ...env, ADMIN_PASSWORD: `${env.ADMIN_PASSWORD}rotated` }, time), false);
-  assert.equal(isAdminRequest(request, env, time + 12 * 60 * 60 * 1000), false);
-  assert.equal(isAdminRequest({ headers: { cookie: `${cookies(result)}x` } }, env, time), false);
+  assert.equal(await isAdminRequest(request, { ...env, ADMIN_PASSWORD: `${env.ADMIN_PASSWORD}rotated` }, time), false);
+  assert.equal(await isAdminRequest(request, env, time + 12 * 60 * 60 * 1000), false);
+  assert.equal(await isAdminRequest({ headers: { cookie: `${cookies(result)}x` } }, env, time), false);
   const logout = await call(null, { method: 'DELETE', cookie: cookies(result) });
   assert.ok(logout.headers['Set-Cookie'].some(value => value.startsWith(`${SESSION_COOKIE}=`) && value.includes('Max-Age=0')));
+  assert.equal(await isAdminRequest(request, env, time), false);
 });
 
 test('database failures fail closed and neither errors nor responses reveal secrets', async () => {

@@ -41,10 +41,6 @@ export function readToken(req, purpose, seconds, env, now) {
   return equal(signature, expected) ? { value, nonce, expires } : null;
 }
 
-export function isAdminRequest(req, env = process.env, now = Date.now()) {
-  return !!readToken(req, SESSION_COOKIE, SESSION_SECONDS, env, now);
-}
-
 export function cookie(req, name, value, seconds, env) {
   const secure = env.VERCEL || req.socket?.encrypted || req.headers?.['x-forwarded-proto'] === 'https';
   return `${name}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${seconds}${secure ? '; Secure' : ''}`;

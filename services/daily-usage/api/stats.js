@@ -1,10 +1,10 @@
 import { query } from '../lib/database.js';
 import { authorized, DAY, respond, utcDay, validDay } from '../lib/protocol.js';
-import { isAdminRequest } from '../lib/admin-auth.js';
+import { authorize, sessionUser } from '../lib/access.js';
 
-export function createHandler(database = query, token = () => process.env.STATS_TOKEN, now = () => new Date(), session = isAdminRequest) {
+export function createHandler(database = query, token = () => process.env.STATS_TOKEN, now = () => new Date(), session = req => sessionUser(req, { database })) {
   return async (req, res) => {
-    if (!authorized(req, token()) && !session(req)) return respond(res, 401, { error: 'Unauthorized' });
+    if (!authorized(req, token()) && !await authorize(req, res, 'app-usage', session)) return;
     if (req.method !== 'GET') {
       res.setHeader('Allow', 'GET');
       return respond(res, 405, { error: 'Use GET' });

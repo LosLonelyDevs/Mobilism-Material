@@ -1,0 +1,25 @@
+.users-page, .account-page { display: grid; gap: 24px; }
+.user-list, .account-form { display: grid; gap: 20px; min-width: 0; }
+.account-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.user-row, .user-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.user-row { justify-content: space-between; }
+.user-row > div { min-width: 0; overflow-wrap: anywhere; }
+.user-actions { justify-content: flex-end; }
+.owner-badge { font-size: 13px; color: var(--text-secondary); }
+.permissions { display: grid; gap: 16px; border: 1px solid var(--border); border-radius: 16px; padding: 16px; min-width: 0; }
+.permissions legend { padding: 0 6px; font-weight: 600; }
+.copy-value { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.copy-value input { font-family: monospace; }
+.copy-value [role='status'] { grid-column: 1 / -1; font-size: 13px; color: var(--text-secondary); }
+.header-inner { flex-wrap: wrap; gap: 12px; }
+.header-inner nav { flex-wrap: wrap; }
+@media (max-width: 800px) {
+  .account-grid { grid-template-columns: 1fr; }
+  .header-inner nav { width: 100%; order: 3; margin-left: 0; }
+  .header-inner .sign-out { margin-left: auto; }
+}
+@media (max-width: 640px) {
+  .header-inner .nav-link { flex: 0 1 auto; }
+  .header-inner nav { justify-content: flex-start; }
+  .user-actions { justify-content: flex-start; }
+}

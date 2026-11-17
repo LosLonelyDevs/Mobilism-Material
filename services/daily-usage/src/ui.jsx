@@ -33,6 +33,8 @@ const paths = {
   chart: 'M4 4v16h16M8 15v-4m5 4V7m5 8V4',
   controls: 'M4 7h7m4 0h5M4 17h3m4 0h9M11 4v6M7 14v6',
   home: 'm3 10 9-7 9 7v10h-6v-6H9v6H3Z',
+  users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8M16 3.13a4 4 0 0 1 0 7.75',
+  account: 'M20 21v-2a7 7 0 0 0-14 0v2M13 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8',
   refresh: 'M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 7M4 12l2 7a7 7 0 0 0 12-2',
   trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7m4-7v7',
   up: 'm6 14 6-6 6 6', down: 'm6 10 6 6 6-6',

@@ -10,7 +10,11 @@ import { createHandler as statsHandler } from '../api/stats.js';
 import { createHandler as configHandler } from '../api/app-config.js';
 import { createHandler as controlHandler } from '../api/control-config.js';
 import { createHandler as releasesHandler } from '../api/releases.js';
-import { encodeBase32, isAdminRequest } from '../lib/admin-auth.js';
+import { encodeBase32, makeToken, SESSION_COOKIE, SESSION_SECONDS } from '../lib/admin-auth.js';
+import { sessionUser } from '../lib/access.js';
+import { userStore, publicUser } from '../lib/user-store.js';
+import { createHandler as usersHandler } from '../api/users.js';
+import { createHandler as accountHandler } from '../api/account.js';
 
 const env = { ADMIN_USERNAME: 'preview', ADMIN_PASSWORD: randomBytes(32).toString('base64url'),
   ADMIN_TOTP_SECRET: encodeBase32(randomBytes(20)), ADMIN_SESSION_SECRET: randomBytes(48).toString('base64url') };
@@ -30,19 +34,28 @@ for (let days = 0; days < 90; days++) {
 }
 const session = sessionHandler({ database: query, env });
 const dashboardPreview = process.argv.includes('--dashboard');
-const stats = statsHandler(query, () => '', () => new Date(), req => dashboardPreview || isAdminRequest(req, env));
+const access = req => dashboardPreview || sessionUser(req, { database: query, env });
+const stats = statsHandler(query, () => '', () => new Date(), access);
 const config = configHandler(query);
-const control = controlHandler(query, req => dashboardPreview || isAdminRequest(req, env));
-const releases = releasesHandler(undefined, req => dashboardPreview || isAdminRequest(req, env));
+const control = controlHandler(query, access);
+const releases = releasesHandler(undefined, access);
+const users = usersHandler({ database: query, env }), account = accountHandler({ database: query, env });
+await userStore(query, env).ensureOwner();
+const previewOwner = await userStore(query, env).get('owner');
+const previewUser = publicUser(previewOwner);
+const previewToken = dashboardPreview ? makeToken(SESSION_COOKIE, SESSION_SECONDS, env, Date.now()) : null;
+if (previewToken) await userStore(query, env).issueSession(previewToken.split('.')[1], previewOwner, Date.now() + SESSION_SECONDS * 1000);
 const staticRoot = fileURLToPath(new URL('../dist/', import.meta.url));
 const port = Number(process.env.PREVIEW_PORT || 43921);
 http.createServer(async (req, res) => {
   try {
     const path = new URL(req.url, 'http://localhost').pathname;
+    if (dashboardPreview && path !== '/api/admin-session') req.headers.cookie = `${SESSION_COOKIE}=${previewToken}`;
     if (dashboardPreview && path === '/api/admin-session' && req.method === 'GET') {
-      res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ isAdmin: true })); return;
+      res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ authenticated: true, ...previewUser })); return;
     }
-    const handler = { '/api/admin-session': session, '/api/stats': stats, '/api/app-config': config, '/api/control-config': control, '/api/releases': releases }[path];
+    const handler = { '/api/admin-session': session, '/api/stats': stats, '/api/app-config': config, '/api/control-config': control, '/api/releases': releases,
+      '/api/users': users, '/api/account': account }[path];
     if (handler) {
       const chunks = []; let length = 0;
       for await (const chunk of req) { length += chunk.length; if (length > 65536) { res.writeHead(413); res.end(); return; } chunks.push(chunk); }
@@ -50,7 +63,7 @@ http.createServer(async (req, res) => {
       await handler(req, res);
       return;
     }
-    const route = ['/', '/index.html', '/app-usage', '/app-usage/', '/app-controls', '/app-controls/'].includes(path);
+    const route = ['/', '/index.html', '/app-usage', '/app-usage/', '/app-controls', '/app-controls/', '/users', '/users/', '/account', '/account/'].includes(path);
     const file = resolve(staticRoot, route ? 'index.html' : `.${path}`);
     if (!file.startsWith(resolve(staticRoot) + sep) || req.method !== 'GET') { res.writeHead(404); res.end(); return; }
     res.setHeader('Cache-Control', 'no-store');

@@ -40,3 +40,27 @@ CREATE TABLE IF NOT EXISTS app_control (
     config jsonb NOT NULL,
     updated_at timestamptz NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS dashboard_users (
+    id text PRIMARY KEY,
+    username varchar(64) NOT NULL,
+    password_hash text NOT NULL,
+    totp_secret text NOT NULL,
+    is_admin boolean NOT NULL DEFAULT false,
+    pages text[] NOT NULL DEFAULT '{}',
+    auth_version integer NOT NULL DEFAULT 1,
+    CHECK (pages <@ ARRAY['overview', 'app-usage', 'app-controls']::text[]),
+    CHECK (id <> 'owner' OR (is_admin AND pages @> ARRAY['overview', 'app-usage', 'app-controls']::text[]))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS dashboard_users_username ON dashboard_users (lower(username));
+
+CREATE TABLE IF NOT EXISTS dashboard_sessions (
+    nonce text PRIMARY KEY,
+    user_id text NOT NULL REFERENCES dashboard_users(id) ON DELETE CASCADE,
+    auth_version integer NOT NULL,
+    expires_at timestamptz NOT NULL
+);
+CREATE INDEX IF NOT EXISTS dashboard_sessions_user ON dashboard_sessions (user_id);
+
+ALTER TABLE admin_login_challenges ADD COLUMN IF NOT EXISTS user_id text REFERENCES dashboard_users(id) ON DELETE CASCADE;
+ALTER TABLE admin_login_challenges ADD COLUMN IF NOT EXISTS auth_version integer;

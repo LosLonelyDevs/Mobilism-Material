@@ -39,6 +39,8 @@ export function cleanReports(query) {
     DELETE FROM admin_login_limits WHERE started_at < CURRENT_TIMESTAMP - interval '1 day' RETURNING key
   ), challenges AS (
     DELETE FROM admin_login_challenges WHERE expires_at < CURRENT_TIMESTAMP RETURNING nonce
+  ), sessions AS (
+    DELETE FROM dashboard_sessions WHERE expires_at < CURRENT_TIMESTAMP RETURNING nonce
   ) SELECT (SELECT count(*)::int FROM receipts) AS receipts,
            (SELECT count(*)::int FROM aggregates) AS aggregates`);
 }

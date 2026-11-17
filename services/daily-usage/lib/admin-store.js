@@ -16,11 +16,13 @@ export function adminStore(query) {
       return Math.max(0, ...rows.map(row => Math.ceil((new Date(row.blocked_until).getTime() - now) / 1000)));
     },
     async reset(keys) { await query('DELETE FROM admin_login_limits WHERE key = ANY($1::text[])', [keys]); },
-    async create(nonce, client, expires) {
-      await query(`INSERT INTO admin_login_challenges (nonce, client, expires_at) VALUES ($1, $2, $3::timestamptz)`, [nonce, client, new Date(expires).toISOString()]);
+    async create(nonce, client, expires, user) {
+      await query(`INSERT INTO admin_login_challenges (nonce, client, expires_at, user_id, auth_version) VALUES ($1, $2, $3::timestamptz, $4, $5)`,
+        [nonce, client, new Date(expires).toISOString(), user.id, user.auth_version]);
     },
     async pending(nonce, client, now) {
-      return (await query('SELECT nonce FROM admin_login_challenges WHERE nonce = $1 AND client = $2 AND expires_at > $3::timestamptz AND attempts < 5', [nonce, client, new Date(now).toISOString()])).length > 0;
+      return (await query(`SELECT u.* FROM admin_login_challenges c JOIN dashboard_users u ON u.id = c.user_id AND u.auth_version = c.auth_version
+        WHERE c.nonce = $1 AND c.client = $2 AND c.expires_at > $3::timestamptz AND c.attempts < 5`, [nonce, client, new Date(now).toISOString()]))[0];
     },
     async attempt(nonce, client, now) {
       return (await query(`UPDATE admin_login_challenges SET attempts = attempts + 1 WHERE nonce = $1 AND client = $2
@@ -35,5 +37,9 @@ export function adminStore(query) {
         RETURNING step`, [nonce, client, account, step, new Date(now).toISOString()])).length > 0;
     },
     async remove(nonce) { await query('DELETE FROM admin_login_challenges WHERE nonce = $1', [nonce]); },
+    async useCode(account, step) {
+      return (await query(`INSERT INTO admin_totp_counters (account, step) VALUES ($1, $2)
+        ON CONFLICT (account) DO UPDATE SET step = EXCLUDED.step WHERE admin_totp_counters.step < EXCLUDED.step RETURNING step`, [account, step])).length > 0;
+    },
   };
 }

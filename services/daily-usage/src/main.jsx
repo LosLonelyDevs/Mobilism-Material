@@ -3,24 +3,27 @@ import { createRoot } from 'react-dom/client';
 import { api, today } from './api';
 import { Button, Card, Heading, HStack, Icon, InputField, Link, Notice, Skeleton, Text, TextPairing, VStack, Help } from './ui';
 import Controls from './controls';
+import Users from './users';
+import Account from './account';
+import { canAccess, navigation, PAGES } from '../public/access';
 import { mountUsage } from './usage';
 import usageMarkup from './usage.html?raw';
 import './app.css';
 
-const routes = [{ href: '/', label: 'Overview', icon: 'home' }, { href: '/app-usage', label: 'App usage', icon: 'chart' },
-  { href: '/app-controls', label: 'App controls', icon: 'controls' }];
+const routes = [...PAGES, { id: 'users', href: '/users', label: 'Users', icon: 'users' },
+  { id: 'account', href: '/account', label: 'My account', icon: 'account' }];
 const path = window.location.pathname.replace(/\/$/, '') || '/';
 const route = routes.find(item => item.href === path);
 document.title = `${route?.label || 'Not found'} · Mobilism Material`;
 
-function Login({ initialStage, onSignedIn, initialError = '' }) {
+function Login({ initialStage, onSignedIn, initialError = '', retryAfter = 0 }) {
   const [stage, setStage] = useState(initialStage || 'password');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError);
-  const [lockedUntil, setLockedUntil] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState(() => Date.now() + retryAfter * 1000);
   const [now, setNow] = useState(Date.now());
   const remaining = Math.max(0, Math.ceil((lockedUntil - now) / 1000));
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
@@ -30,7 +33,7 @@ function Login({ initialStage, onSignedIn, initialError = '' }) {
     try {
       const result = await api('/api/admin-session', { method: 'POST', body: stage === 'otp' ? { step: 'otp', code } : { step: 'password', username, password } });
       setPassword(''); setCode('');
-      if (result.isAdmin) onSignedIn(); else setStage(result.stage || 'otp');
+      if (result.authenticated) onSignedIn(result); else setStage(result.stage || 'otp');
     } catch (failure) {
       setError(failure.message); setPassword(''); setCode('');
       if (failure.stage) setStage(failure.stage);
@@ -55,32 +58,34 @@ function Login({ initialStage, onSignedIn, initialError = '' }) {
   </form></Card></main>;
 }
 
-function Overview() {
+function Overview({ user }) {
   const [usage, setUsage] = useState(null), [config, setConfig] = useState(null), [error, setError] = useState('');
+  const usageAllowed = canAccess(user, 'app-usage'), controlsAllowed = canAccess(user, 'app-controls');
   useEffect(() => {
     const abort = new AbortController(), day = today();
-    Promise.all([api(`/api/stats?from=${day}&to=${day}`, { signal: abort.signal }).then(setUsage),
-      api('/api/control-config', { signal: abort.signal }).then(setConfig)]).catch(e => { if (!abort.signal.aborted) setError(e.message); });
+    Promise.all([usageAllowed && api(`/api/stats?from=${day}&to=${day}`, { signal: abort.signal }).then(setUsage),
+      controlsAllowed && api('/api/control-config', { signal: abort.signal }).then(setConfig)]).catch(e => { if (!abort.signal.aborted) setError(e.message); });
     return () => abort.abort();
-  }, []);
+  }, [usageAllowed, controlsAllowed]);
   const count = usage?.daily.reduce((total, day) => total + BigInt(day.devices), 0n);
   const active = config?.notices.filter(n => n.enabled && (!n.startsAt || Date.parse(n.startsAt) <= Date.now()) && (!n.endsAt || Date.parse(n.endsAt) > Date.now())).length;
   return <div className="page overview-page"><header className="page-heading"><div><span className="eyebrow">ADMIN</span><Heading level={1}>Overview</Heading></div><span className="muted overview-date">{today()} · UTC</span></header>
     {error && <Notice variant="danger">{error}</Notice>}
     <div className="overview-grid">
-      <a href="/app-usage" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
+      {usageAllowed && <a href="/app-usage" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
         <div className="destination-top"><span className="destination-icon"><Icon name="chart" size={26} /></span><Icon name="arrow" /></div>
         <Heading level={2}>App usage</Heading><Text>Activity, versions, and devices.</Text>
         <div className="destination-metrics"><div><span className="metric-value">{count === undefined ? <Skeleton width={90} height={38} /> : new Intl.NumberFormat().format(count)}</span><span className="muted">Active today</span></div><div><span className="metric-value">{usage ? new Set(usage.breakdown.map(r => r.appVersion)).size : '…'}</span><span className="muted">App versions</span></div></div>
         <span className="destination-action">View app usage <Icon name="arrow" size={17} /></span>
-      </Card></a>
-      <a href="/app-controls" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
+      </Card></a>}
+      {controlsAllowed && <a href="/app-controls" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
         <div className="destination-top"><span className="destination-icon violet"><Icon name="controls" size={26} /></span><Icon name="arrow" /></div>
         <Heading level={2}>App controls</Heading><Text>Notices, updates, and API limits.</Text>
         <div className="destination-metrics"><div><span className="metric-value">{active ?? <Skeleton width={60} height={38} />}</span><span className="muted">Live notices</span></div><div><span className="metric-value">{config ? Object.keys(config.limits).length : '…'}</span><span className="muted">API overrides</span></div></div>
         <span className="destination-action">Manage app controls <Icon name="arrow" size={17} /></span>
-      </Card></a>
+      </Card></a>}
     </div>
+    {!usageAllowed && !controlsAllowed && <Card><Text>No app pages are assigned to your account.</Text><Link href="/account">Open My account</Link></Card>}
     <div className="overview-note"><Help label="About these metrics">Activity counts installations active on the current UTC date. A live notice can still target only selected accounts or builds.</Help><span>Today’s snapshot</span></div>
   </div>;
 }
@@ -105,14 +110,18 @@ function App() {
     catch (e) { setError(e.message); }
   }
   if (!auth) return <main className="loading-page"><Skeleton width={180} height={26} /><Text>Opening dashboard…</Text></main>;
-  if (!auth.isAdmin) return <Login initialStage={auth.stage} initialError={error} onSignedIn={() => { setError(''); setAuth({ isAdmin: true }); }} />;
+  const signedOut = message => { setError(message); setAuth({ authenticated: false }); };
+  if (!auth.authenticated) return <Login initialStage={auth.stage} initialError={error} retryAfter={auth.retryAfter} onSignedIn={result => { setError(''); setAuth(result); }} />;
+  const allowedRoutes = navigation(auth), allowed = route && canAccess(auth, route.id);
   return <><a className="skip-link" href="#main-content">Skip to content</a><header className="app-header"><div className="header-inner">
-    <Link href="/" style={{ textDecoration: 'none' }}><HStack gap={10}><span className="brand-mark" aria-hidden="true">m</span><span className="brand-name">Mobilism <strong>Material</strong></span></HStack></Link>
-    <nav aria-label="Admin navigation">{routes.map(item => <Link key={item.href} href={item.href} aria-current={path === item.href ? 'page' : undefined} className="nav-link"><Icon name={item.icon} size={18} /><span>{item.label}</span></Link>)}</nav>
+    <Link href={allowedRoutes[0].href} style={{ textDecoration: 'none' }}><HStack gap={10}><span className="brand-mark" aria-hidden="true">m</span><span className="brand-name">Mobilism <strong>Material</strong></span></HStack></Link>
+    <nav aria-label="Dashboard navigation">{allowedRoutes.map(item => <Link key={item.href} href={item.href} aria-current={path === item.href ? 'page' : undefined} className="nav-link"><Icon name={item.icon} size={18} /><span>{item.label}</span></Link>)}</nav>
     <Button onClick={signOut} size="sm" className="sign-out">Sign out</Button>
   </div></header><main id="main-content" className="main-content">
     {error && <Notice variant="danger">{error}</Notice>}
-    {path === '/' ? <Overview /> : path === '/app-usage' ? <Usage /> : path === '/app-controls' ? <Controls /> : <VStack gap={16}><Heading level={1}>Page not found</Heading><Link href="/">Back to overview</Link></VStack>}
+    {!allowed ? <VStack gap={16}><Heading level={1}>{route ? 'Access denied' : 'Page not found'}</Heading><Text>{route ? 'You do not have access to this page.' : 'This page does not exist.'}</Text><Link href={allowedRoutes[0].href}>Open an available page</Link></VStack>
+      : path === '/' ? <Overview user={auth} /> : path === '/app-usage' ? <Usage /> : path === '/app-controls' ? <Controls />
+        : path === '/users' ? <Users currentUser={auth} onSignedOut={signedOut} /> : <Account user={auth} onSignedOut={signedOut} />}
   </main></>;
 }
 

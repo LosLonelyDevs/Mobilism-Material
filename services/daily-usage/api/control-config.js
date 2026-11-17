@@ -1,12 +1,13 @@
 import { query } from '../lib/database.js';
 import { readConfig, saveConfig, publicConfig } from '../lib/app-config.js';
-import { isAdminRequest, sameOrigin } from '../lib/admin-auth.js';
+import { sameOrigin } from '../lib/admin-auth.js';
+import { authorize, sessionUser } from '../lib/access.js';
 import { respond } from '../lib/protocol.js';
 import { validateConfig } from '../public/config-schema.js';
 
-export function createHandler(database = query, session = isAdminRequest) {
+export function createHandler(database = query, session = req => sessionUser(req, { database })) {
   return async (req, res) => {
-    if (!session(req)) return respond(res, 401, { error: 'Sign in to manage app controls.' });
+    if (!await authorize(req, res, 'app-controls', session)) return;
     if (!['GET', 'PUT'].includes(req.method)) {
       res.setHeader('Allow', 'GET, PUT');
       return respond(res, 405, { error: 'Use GET or PUT' });
