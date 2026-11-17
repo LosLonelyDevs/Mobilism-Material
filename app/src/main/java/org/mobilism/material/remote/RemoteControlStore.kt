@@ -12,6 +12,11 @@ import org.mobilism.material.data.RemoteAppConfig
 import org.mobilism.material.data.RemoteConfigClient
 import org.mobilism.material.data.NoticeAudience
 import org.mobilism.material.data.NoticeContext
+import org.mobilism.material.data.DiagnosticLogger
+import org.mobilism.material.data.DiagnosticEvent
+import org.mobilism.material.data.DiagnosticSource
+import org.mobilism.material.data.DiagnosticOperation
+import org.mobilism.material.data.DiagnosticPhase
 
 internal class RemoteControlStore(
     private val fetch: suspend () -> RemoteAppConfig,
@@ -22,6 +27,8 @@ internal class RemoteControlStore(
     private val saveDismissed: (Set<String>) -> Unit = {},
     private val installedVersion: String = BuildConfig.VERSION_NAME,
     private val androidApi: Int = 0,
+    private val syncNotifications: (String?, List<AppNotice>) -> Unit = { _, _ -> },
+    private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
 ) {
     @Volatile private var config = RemoteAppConfig()
     @Volatile private var fetchedAt: Long? = null
@@ -30,6 +37,7 @@ internal class RemoteControlStore(
     private val audienceLock = Any()
     private var username: String? = null
     private var identityKnown = false
+    private var requestedNotice: Pair<String, String>? = null
     private val dismissed = readDismissed().toMutableSet()
     private val sessionDismissed = mutableSetOf<String>()
     private val foregroundDismissed = mutableSetOf<String>()
@@ -55,12 +63,27 @@ internal class RemoteControlStore(
         tick()
     }
 
+    fun openNotice(account: String, id: String) = synchronized(audienceLock) {
+        requestedNotice = account to id
+        tick()
+    }
+
     private fun dismissalKey(notice: AppNotice): String =
         "${username?.takeIf { identityKnown }?.let(NoticeAudience::usernameHash) ?: "guest"}:${notice.dismissalKey}"
 
     fun tick() = synchronized(audienceLock) {
         val context = NoticeContext(username, installedVersion, installedCode, androidApi, identityKnown)
-        mutable.value = currentConfig().notices.filter { it.applies(installedCode, wallTime()) && it.audience.matches(context) }
+        val matching = currentConfig().notices.filter { it.applies(installedCode, wallTime()) && it.audience.matches(context) }
+        syncNotifications(if (identityKnown) username?.let(NoticeAudience::usernameHash) ?: "guest" else null,
+            matching.takeIf { identityKnown }.orEmpty())
+        val requested = requestedNotice?.let { (account, id) ->
+            if (!identityKnown || !hasConfiguration) null
+            else if (account != (username?.let(NoticeAudience::usernameHash) ?: "guest")) {
+                requestedNotice = null
+                null
+            } else matching.firstOrNull { it.id == id }.also { if (it == null) requestedNotice = null }
+        }
+        mutable.value = matching.firstOrNull { it.required } ?: requested ?: matching
             .sortedByDescending { it.required }.firstOrNull { notice ->
                 notice.required || when (notice.frequency) {
                     "once" -> dismissalKey(notice) !in dismissed
@@ -72,6 +95,9 @@ internal class RemoteControlStore(
 
     fun dismiss(notice: AppNotice) = synchronized(audienceLock) {
         if (notice.required) return@synchronized
+        diagnostics.record(DiagnosticEvent(DiagnosticSource.App, DiagnosticOperation.NoticeDisplay,
+            DiagnosticPhase.Dismissed, noticeKey = notice.dismissalKey))
+        if (requestedNotice?.second == notice.id) requestedNotice = null
         when (notice.frequency) {
             "once" -> {
                 dismissed.add(dismissalKey(notice))
@@ -82,6 +108,11 @@ internal class RemoteControlStore(
             else -> foregroundDismissed.add(dismissalKey(notice))
         }
         tick()
+    }
+
+    fun rendered(notice: AppNotice) {
+        diagnostics.record(DiagnosticEvent(DiagnosticSource.App, DiagnosticOperation.NoticeDisplay,
+            DiagnosticPhase.Rendered, noticeKey = notice.dismissalKey))
     }
 
     suspend fun refresh(force: Boolean = false) {
@@ -108,11 +139,13 @@ internal class RemoteControlStore(
         const val REFRESH_MS = 5 * 60_000L
         const val MAX_AGE_MS = 15 * 60_000L
 
-        fun create(context: Context): RemoteControlStore {
+        fun create(context: Context, diagnostics: DiagnosticLogger = DiagnosticLogger.None): RemoteControlStore {
             val prefs = context.getSharedPreferences("remote-notices", Context.MODE_PRIVATE)
+            val notifications = RemoteNoticeNotifications(context, diagnostics)
             return RemoteControlStore(RemoteConfigClient(BuildConfig.DAILY_USAGE_ENDPOINT)::fetch,
                 readDismissed = { prefs.getStringSet("dismissed", emptySet()).orEmpty().toSet() },
-                saveDismissed = { prefs.edit().putStringSet("dismissed", it).apply() }, androidApi = android.os.Build.VERSION.SDK_INT)
+                saveDismissed = { prefs.edit().putStringSet("dismissed", it).apply() }, androidApi = android.os.Build.VERSION.SDK_INT,
+                syncNotifications = notifications::sync, diagnostics = diagnostics)
         }
     }
 }

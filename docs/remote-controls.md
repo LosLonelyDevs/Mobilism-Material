@@ -12,10 +12,11 @@ Existing update checks can also prompt for a newer published version when automa
 
 1. Sign in to the [admin overview](https://mobilism-material-usage.vercel.app/) with your password and authenticator.
 2. Open [App controls](https://mobilism-material-usage.vercel.app/app-controls), then **Add notice**. Usage reports are separate at `/app-usage`.
-3. Set the message, audience rules, and action. Add an optional schedule and enable the notice when ready.
-4. Use **Test this notice**, then choose **Publish changes**.
+3. Set the message, audience rules, and action. Schedule and **Device notification** are optional; device notifications default off.
+4. Use **Test this notice**, then choose **Create notice**. The form closes and the saved preview card appears, disabled.
+5. Review the card, then switch it to **Enabled**. Use its edit icon for changes; **Save notice** returns to the list.
 
-Changes stay in draft until published. Reload discards the draft. A stale editor cannot overwrite a newer publication.
+Only saved cards can enable or disable notices. Those switches save immediately, with confirmation when version targeting is missing. Form changes stay local until saved. Cancel leaves the saved notice unchanged. Reload discards drafts. A stale editor cannot overwrite a newer save. API limits have a separate save button; saving a notice does not publish pending limit changes.
 
 Schedule is a separate collapsible card. Both dates are optional and use your browser's local time; the service stores UTC. Blank dates mean immediate start and no scheduled end. All version targeting belongs in Audience.
 
@@ -26,6 +27,16 @@ Notice actions:
 - **Require an update:** Blocks normal navigation while the audience matches. Use an app-version cutoff to stop the notice after updating. Publish the target APK first. Android still controls installation approval.
 
 Required notices take priority. Other notices use their listed order. Repeat options are once, each process launch, or each foreground visit. Editing a notice makes it eligible to appear again; unrelated threshold changes do not. Required notices ignore dismissal settings.
+
+In-app notices hold dismissal for three seconds after rendering. Back, outside taps, and notice actions stay locked during the countdown. Required notices remain blocking afterward. Diagnostic logging records `NoticeDisplay/Rendered` after layout and a foreground frame, and `NoticeDisplay/Dismissed` when dismissed. Logs use a notice fingerprint, with no message text or username, and respect the existing logging setting.
+
+### Device notifications
+
+The optional toggle posts an Android notification on a matching app check. Checks run during foreground refreshes and through a background worker scheduled about every 15 minutes. Android battery management can delay them. This is polling, not instant push, and requires an APK containing this feature.
+
+Enabled state, audience, app version, and schedule apply to both delivery types. Each changed notice alerts once per account, with duplicate suppression across restarts. Notification permission and the **App notices** channel must be enabled. Tapping opens the matching in-app notice; revoked, expired, or mismatched notices cannot bypass targeting. Android controls notification-shade dismissal.
+
+Diagnostics record `DeviceNotification/Posted` only after Android accepts the notification. This does not claim the user opened the notification shade or read it.
 
 ## Audience rules
 

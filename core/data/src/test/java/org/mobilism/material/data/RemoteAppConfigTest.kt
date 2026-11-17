@@ -25,6 +25,14 @@ class RemoteAppConfigTest {
         "frequency":"once","enabled":true,"startsAt":null,"endsAt":null,"minVersionCode":1,
         "maxVersionCode":null,"requiredVersionCode":null,"linkText":null,"linkUrl":null,"audience":{"type":"everyone"}}""")
 
+    @Test fun deviceNotificationsAreOptInAndRejectMalformedFlags() {
+        assertFalse(AppNotice.parse(notice())!!.deviceNotification)
+        assertFalse(AppNotice.parse(notice().put("deviceNotification", false))!!.deviceNotification)
+        assertTrue(AppNotice.parse(notice().put("deviceNotification", true))!!.deviceNotification)
+        assertNull(AppNotice.parse(notice().put("deviceNotification", "true")))
+        assertNull(AppNotice.parse(notice().put("deviceNotification", JSONObject.NULL)))
+    }
+
     @Test fun missingInvalidAndOutOfRangeLimitsUseHardcodedValuesPerField() {
         assertEquals(ApiRequestLimits.Defaults, ApiRequestLimits.parse(null))
         val parsed = ApiRequestLimits.parse(JSONObject("""{"searchSpacingMs":10000,"searchCacheTtlMs":-1,

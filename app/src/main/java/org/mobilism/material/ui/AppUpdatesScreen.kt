@@ -201,7 +201,7 @@ internal fun AppUpdateHost(checker: AppUpdateChecker, updater: AppUpdateViewMode
             remoteControl.dismiss(current)
             showUpdates = true
             scope.launch { checker.check() }
-        }, onRefresh = { scope.launch { remoteControl.refresh(force = true) } })
+        }, onRefresh = { scope.launch { remoteControl.refresh(force = true) } }, onRendered = { remoteControl.rendered(current) })
     }
     else if (!required && changelog != null && !showUpdates) AppChangelogDialog(changelog, onChangelogDismiss)
     else if (!showUpdates && !installing.busy) {

@@ -74,6 +74,7 @@ data class AppNotice(
     val linkText: String?,
     val linkUrl: String?,
     val audience: NoticeAudience = NoticeAudience.Everyone,
+    val deviceNotification: Boolean = false,
 ) {
     val required: Boolean get() = mode == "required"
     fun applies(versionCode: Int, now: Long): Boolean = enabled &&
@@ -113,7 +114,8 @@ data class AppNotice(
             val label = if (url == null) null else text("linkText", 80)
             AppNotice(text("id", 80), text("title", 120), text("message", 2000), mode, frequency,
                 json.get("enabled") as Boolean, start, end, min, max, required, label, url,
-                NoticeAudience.parse(json.getJSONObject("audience")))
+                NoticeAudience.parse(json.getJSONObject("audience")),
+                if (json.has("deviceNotification")) json.get("deviceNotification") as Boolean else false)
         }.getOrNull()
     }
 }

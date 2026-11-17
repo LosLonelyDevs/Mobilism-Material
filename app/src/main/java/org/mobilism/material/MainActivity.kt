@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
         } ?: MessageNotifications.target(intent)
         enableEdgeToEdge()
         val app = application as MobilismApplication
+        if (savedInstanceState == null) openRemoteNotice(intent)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 app.setForeground(this@MainActivity, true)
@@ -113,6 +114,13 @@ class MainActivity : ComponentActivity() {
         fromNotification = intent.action != Intent.ACTION_VIEW
         notificationRelease = releaseFrom(intent).takeIf { it > 0 }
         notificationMessage = MessageNotifications.target(intent)
+        openRemoteNotice(intent)
+    }
+
+    private fun openRemoteNotice(intent: Intent) {
+        val uri = intent.data ?: return
+        if (uri.scheme != "mobilism-material" || uri.host != "notices" || uri.pathSegments.size != 2) return
+        (application as MobilismApplication).remoteControl.openNotice(uri.pathSegments[0], uri.pathSegments[1])
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

@@ -7,8 +7,8 @@ import okhttp3.Request
 import okhttp3.Response
 
 enum class DiagnosticSource { App, Forum, RealDebrid, MegaDebrid, MobilismPremium }
-enum class DiagnosticOperation { Startup, Settings, Export, Login, Categories, Releases, Search, Comments, Messages, Reaction, Account, Hosts, Resolve, SessionRenewal, Other }
-enum class DiagnosticPhase { Started, Completed, Failed, Retrying }
+enum class DiagnosticOperation { Startup, Settings, Export, Login, Categories, Releases, Search, Comments, Messages, Reaction, Account, Hosts, Resolve, SessionRenewal, NoticeDisplay, DeviceNotification, Other }
+enum class DiagnosticPhase { Started, Completed, Failed, Retrying, Rendered, Posted, Dismissed }
 enum class DiagnosticFailure { Timeout, Network, Cancelled, ProviderRejected, Unrestricting, Unexpected,
     Dns, Tls, Permission, Challenge, Server, InvalidResponse, SessionExpired, Credentials }
 
@@ -20,6 +20,7 @@ data class DiagnosticEvent(
     val httpStatus: Int? = null,
     val elapsedMillis: Long? = null,
     val failure: DiagnosticFailure? = null,
+    val noticeKey: String? = null,
 )
 
 fun interface DiagnosticLogger {

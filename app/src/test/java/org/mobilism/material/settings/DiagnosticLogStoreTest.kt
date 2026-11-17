@@ -9,6 +9,23 @@ import org.mobilism.material.data.*
 class DiagnosticLogStoreTest {
     @get:Rule val temporary = TemporaryFolder()
 
+    @Test fun noticeLogsDistinguishRenderedFromPostedAndOnlyWriteFingerprints() {
+        val logs = DiagnosticLogStore(temporary.newFolder(), { true })
+        val key = "a".repeat(64)
+        logs.record(DiagnosticEvent(DiagnosticSource.App, DiagnosticOperation.NoticeDisplay,
+            DiagnosticPhase.Rendered, noticeKey = key))
+        logs.record(DiagnosticEvent(DiagnosticSource.App, DiagnosticOperation.DeviceNotification,
+            DiagnosticPhase.Posted, noticeKey = key))
+        logs.record(DiagnosticEvent(DiagnosticSource.App, DiagnosticOperation.NoticeDisplay,
+            DiagnosticPhase.Dismissed, noticeKey = "private notice text"))
+        val lines = logs.snapshot().lines().filter(String::isNotBlank)
+        assertTrue(lines[0].contains("Rendered"))
+        assertTrue(lines[1].contains("Posted"))
+        assertTrue(lines.take(2).all { it.contains(key) })
+        assertFalse(lines[2].contains("noticeKey"))
+        assertFalse(logs.snapshot().contains("private notice text"))
+    }
+
     @Test fun basicLogsKeepFailuresRetriesAndOutcomesWithoutVerboseStarts() {
         val logs = DiagnosticLogStore(temporary.newFolder(), { true }, isVerbose = { false })
         for (phase in DiagnosticPhase.entries) logs.record(DiagnosticEvent(DiagnosticSource.MegaDebrid,

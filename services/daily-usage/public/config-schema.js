@@ -44,13 +44,14 @@ export function validateConfig(input) {
   const notices = input.notices.map(notice => {
     const fields = ['id', 'title', 'message', 'mode', 'frequency', 'enabled', 'startsAt', 'endsAt',
       'minVersionCode', 'maxVersionCode', 'requiredVersionCode', 'linkText', 'linkUrl', 'audience'];
-    if (!object(notice) || Object.keys(notice).some(key => !fields.includes(key)) ||
+    if (!object(notice) || Object.keys(notice).some(key => !fields.includes(key) && key !== 'deviceNotification') ||
         fields.some(key => !Object.hasOwn(notice, key))) fail('Invalid notice fields.');
     if (!text(notice.id, 80) || !/^[a-zA-Z0-9_-]+$/.test(notice.id) || ids.has(notice.id)) fail('Notice IDs must be unique.');
     ids.add(notice.id);
     if (!text(notice.title, 120) || !text(notice.message, 2000)) fail('Add a title (120 characters) and message (2000 characters).');
     if (!['notice', 'update', 'required'].includes(notice.mode) || !['once', 'launch', 'always'].includes(notice.frequency) ||
         typeof notice.enabled !== 'boolean') fail('Invalid notice behavior.');
+    if (notice.deviceNotification !== undefined && typeof notice.deviceNotification !== 'boolean') fail('Invalid device notification setting.');
     const date = value => value === null || (typeof value === 'string' && /^\d{4}-\d\d-\d\dT/.test(value) &&
       Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value);
     if (!date(notice.startsAt) || !date(notice.endsAt) || (notice.startsAt && notice.endsAt && notice.startsAt >= notice.endsAt))
@@ -66,7 +67,7 @@ export function validateConfig(input) {
       if (!text(notice.linkUrl, 2048) || url.protocol !== 'https:' || url.username || url.password || !text(notice.linkText, 80))
         fail('Use an HTTPS link without credentials and add its link text.');
     } else if (notice.linkText !== null) fail('Link text needs a URL.');
-    return { ...notice, audience: validateAudience(notice.audience) };
+    return { ...notice, deviceNotification: notice.deviceNotification ?? false, audience: validateAudience(notice.audience) };
   });
   return { schema: 2, revision: input.revision, limits, notices };
 }

@@ -44,7 +44,7 @@ class MobilismApplication : Application() {
         { true }, isVerbose = { developer.state.value.enabled && developer.state.value.verboseLogging }) }
     val customCategories by lazy { org.mobilism.material.data.CustomCategoryStore(this) }
     internal val connectionRecovery by lazy { org.mobilism.material.ui.ConnectionRecoveryController() }
-    internal val remoteControl by lazy { org.mobilism.material.remote.RemoteControlStore.create(this) }
+    internal val remoteControl by lazy { org.mobilism.material.remote.RemoteControlStore.create(this, diagnostics) }
     val repository by lazy { DefaultMobilismRepository(this, contentPreferences, diagnostics,
         customCategories = customCategories, customCategoriesEnabled = { developer.state.value.customCategoriesActive },
         challengeRecovery = connectionRecovery, requestLimits = { remoteControl.limits }) }
@@ -73,6 +73,7 @@ class MobilismApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        org.mobilism.material.remote.RemoteNoticeSchedule.start(this)
         scope.launch {
             repository.auth.collect { auth ->
                 remoteControl.accountChanged((auth as? AuthState.SignedIn)?.username, known = auth != AuthState.Restoring)

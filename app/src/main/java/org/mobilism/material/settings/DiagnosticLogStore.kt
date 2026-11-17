@@ -25,6 +25,8 @@ class DiagnosticLogStore(private val directory: File, private val isEnabled: () 
                 event.httpStatus?.let { append(",\"httpStatus\":").append(it) }
                 event.elapsedMillis?.let { append(",\"elapsedMillis\":").append(it) }
                 event.failure?.let { append(",\"failure\":\"").append(it.name).append("\"") }
+                event.noticeKey?.takeIf { it.matches(Regex("[a-f0-9]{64}")) }
+                    ?.let { append(",\"noticeKey\":\"").append(it).append("\"") }
                 append("}\n")
             }
             if (current.length() + line.toByteArray(Charsets.UTF_8).size > maxFileBytes) {

@@ -9,6 +9,56 @@ import org.mobilism.material.data.RemoteAppConfig
 import org.mobilism.material.data.NoticeAudience
 
 class RemoteControlStoreTest {
+    @Test fun fetchingDoesNotClaimTheNoticeWasRendered() = runBlocking {
+        val events = mutableListOf<org.mobilism.material.data.DiagnosticEvent>()
+        val target = notice()
+        val store = RemoteControlStore({ RemoteAppConfig(notices = listOf(target)) },
+            diagnostics = org.mobilism.material.data.DiagnosticLogger { events.add(it) })
+        store.refresh(); assertTrue(events.isEmpty())
+        store.rendered(target)
+        store.dismiss(target)
+        assertEquals(listOf(org.mobilism.material.data.DiagnosticPhase.Rendered,
+            org.mobilism.material.data.DiagnosticPhase.Dismissed), events.map { it.phase })
+        assertTrue(events.all { it.noticeKey == target.dismissalKey })
+    }
+
+    @Test fun deviceDeliveryUsesTheSameIdentityAudienceScheduleAndExpiryAsNotices() = runBlocking {
+        var time = 1000L
+        var wall = 1000L
+        val target = notice().copy(deviceNotification = true, startsAt = 2000L, endsAt = 4000L,
+            audience = NoticeAudience.Users(setOf(NoticeAudience.usernameHash("alice"))))
+        var offered = emptyList<AppNotice>()
+        var account: String? = null
+        val store = RemoteControlStore({ RemoteAppConfig(notices = listOf(target)) }, now = { time }, wallTime = { wall },
+            syncNotifications = { who, notices -> account = who; offered = notices })
+        store.refresh(); assertNull(account); assertTrue(offered.isEmpty())
+        store.accountChanged("alice"); assertTrue(offered.isEmpty())
+        wall = 2000; store.tick(); assertEquals(listOf(target), offered)
+        assertEquals(NoticeAudience.usernameHash("alice"), account)
+        store.dismiss(target); assertEquals(listOf(target), offered)
+        store.accountChanged("bob"); assertTrue(offered.isEmpty())
+        store.accountChanged("alice"); wall = 4000; store.tick(); assertTrue(offered.isEmpty())
+        wall = 2000; time += RemoteControlStore.MAX_AGE_MS; store.tick(); assertTrue(offered.isEmpty())
+    }
+
+    @Test fun notificationTapCanReopenDismissedNoticeButCannotBypassRulesOrRequiredUpdates() = runBlocking {
+        var config = RemoteAppConfig(notices = listOf(notice()))
+        var time = 1000L
+        val store = RemoteControlStore({ config }, installedCode = 21, now = { time })
+        val alice = NoticeAudience.usernameHash("alice")
+        store.openNotice(alice, "test")
+        store.refresh(); store.accountChanged("alice")
+        store.dismiss(notice()); assertNull(store.notice.value)
+        store.openNotice(alice, "test"); assertEquals("test", store.notice.value?.id)
+        store.dismiss(notice()); assertNull(store.notice.value)
+        store.openNotice(NoticeAudience.usernameHash("bob"), "test"); assertNull(store.notice.value)
+        config = RemoteAppConfig(notices = listOf(notice().copy(enabled = false)))
+        time += 15000; store.refresh(true); store.openNotice(alice, "test"); assertNull(store.notice.value)
+        config = RemoteAppConfig(notices = listOf(notice(), notice("required", "required")))
+        time += 15000; store.refresh(true); store.openNotice(alice, "test")
+        assertEquals("required", store.notice.value?.id)
+    }
+
     @Test fun targetedForceUpdateWaitsForIdentityAndClearsOnSignOutOrAccountSwitch() = runBlocking {
         val target = notice(mode = "required").copy(audience = NoticeAudience.Group(true, listOf(
             NoticeAudience.Users(setOf(NoticeAudience.usernameHash("alice"))), NoticeAudience.Versions(setOf("0.1.20")))))

@@ -27,6 +27,7 @@ export { default as VStack } from './ahfu/AHFUVStack';
 export { default as Box } from './ahfu/AHFUBox';
 
 const paths = {
+  edit: 'm15 5 4 4M4 20l4-1L20 7a2 2 0 0 0-4-4L4 15v5Z', back: 'M19 12H5m6-6-6 6 6 6',
   arrow: 'M5 12h14m-6-6 6 6-6 6', plus: 'M12 5v14M5 12h14',
   close: 'm6 6 12 12M6 18 18 6', info: 'M12 11v6M12 7h.01',
   chart: 'M4 4v16h16M8 15v-4m5 4V7m5 8V4',

@@ -28,6 +28,18 @@ test('empty database returns no overrides and no notices publicly', async () => 
   assert.deepEqual(result.body, defaultConfig());
   assert.equal(result.headers['Cache-Control'], 'no-store');
 });
+test('device notifications default off and opt-in survives admin and public round trips', async () => {
+  const config = { ...defaultConfig(), notices: [notice()] };
+  assert.equal(validateConfig(config).notices[0].deviceNotification, false);
+  assert.throws(() => validateConfig({ ...config, notices: [notice({ deviceNotification: 'true' })] }));
+  const saved = await call(adminHandler(query, () => true), { method: 'PUT', body: {
+    ...config, notices: [notice({ enabled: false, deviceNotification: true })],
+  } });
+  assert.equal(saved.statusCode, 200);
+  const published = (await call(publicHandler(query))).body.notices[0];
+  assert.equal(published.deviceNotification, true);
+  assert.equal(published.enabled, false);
+});
 test('legacy stored configuration migrates but old editors cannot erase targeting', async () => {
   const legacy = notice(); delete legacy.audience;
   await query('INSERT INTO app_control VALUES (1, 1, $1::jsonb, CURRENT_TIMESTAMP)',
