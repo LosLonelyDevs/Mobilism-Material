@@ -35,7 +35,8 @@ android {
         check(releaseNotes.isNotBlank()) { "Add CHANGELOG.md notes for $versionName" }
         buildConfigField("String", "ABOUT_DESCRIPTION", readme.trim().split(Regex("\\r?\\n\\s*\\r?\\n"))[1].buildConfigString())
         buildConfigField("String", "RELEASE_NOTES", releaseNotes.buildConfigString())
-        testInstrumentationRunner = "org.mobilism.material.ReadmeScreenshotRunner"
+        testInstrumentationRunner = if (providers.gradleProperty("liveVerificationProbe").orNull == "true")
+            "org.mobilism.material.LiveVerificationProbeRunner" else "org.mobilism.material.ReadmeScreenshotRunner"
     }
 
     signingConfigs {

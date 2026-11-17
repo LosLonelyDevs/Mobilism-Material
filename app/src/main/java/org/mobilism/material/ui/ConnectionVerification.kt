@@ -98,7 +98,17 @@ internal fun ConnectionVerification(site: VerificationSite, onDismiss: () -> Uni
 }
 
 internal fun acceptsConnectionVerificationUrl(uri: Uri, site: VerificationSite): Boolean {
+    return isConnectionVerificationPageUrl(uri, site) ||
+        (hasConnectionVerificationOrigin(uri, site) && uri.path.orEmpty().startsWith("/cdn-cgi/challenge-platform/"))
+}
+
+internal fun isConnectionVerificationPageUrl(uri: Uri, site: VerificationSite): Boolean =
+    hasConnectionVerificationOrigin(uri, site) && (uri.path == site.url.toUri().path ||
+        // The public forum root redirects here before a page can render.
+        (site == VerificationSite.Forum && uri.path == "/index.php"))
+
+private fun hasConnectionVerificationOrigin(uri: Uri, site: VerificationSite): Boolean {
     val target = site.url.toUri()
     return uri.scheme == "https" && uri.host == target.host && uri.userInfo == null &&
-        uri.port in listOf(-1, 443) && (uri.path == target.path || uri.path.orEmpty().startsWith("/cdn-cgi/challenge-platform/"))
+        uri.port in listOf(-1, 443)
 }

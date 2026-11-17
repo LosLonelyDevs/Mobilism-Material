@@ -207,6 +207,13 @@ class ConnectionVerificationTest {
         assertTrue(accepts("${VerificationSite.App.url}?__cf_chl_rt_tk=fixture"))
         assertTrue(accepts("https://app.mobilism.org/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1"))
         assertTrue(accepts(VerificationSite.Forum.url, VerificationSite.Forum))
+        assertTrue(accepts("https://forum.mobilism.org/index.php", VerificationSite.Forum))
+        assertTrue(isConnectionVerificationPageUrl(Uri.parse("https://forum.mobilism.org/index.php"), VerificationSite.Forum))
+        assertFalse(isConnectionVerificationPageUrl(Uri.parse("https://forum.mobilism.org/cdn-cgi/challenge-platform/check"), VerificationSite.Forum))
+        listOf("https://forum.mobilism.org/ucp.php?mode=login", "https://forum.mobilism.org/posting.php",
+            "https://forum.mobilism.org.evil.example/index.php", "http://forum.mobilism.org/index.php",
+            "https://user@forum.mobilism.org/index.php", "https://forum.mobilism.org:444/index.php")
+            .forEach { assertFalse(it, accepts(it, VerificationSite.Forum)) }
         listOf("https://app.mobilism.org/api-new/message/reply/send", "https://app.mobilism.org/api-new/auth/login",
             "https://forum.mobilism.org/", "https://app.mobilism.org.evil.example/api-new/release/category",
             "https://user@app.mobilism.org/api-new/release/category", "https://app.mobilism.org:444/api-new/release/category",

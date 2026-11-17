@@ -3,6 +3,7 @@ package org.mobilism.material.ui
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.WebView
@@ -52,7 +53,8 @@ class QuietConnectionRecoveryTest {
             override fun loadUrl(url: String) {
                 loaded += url
                 if (complete) CookieManager.getInstance().setCookie(url, "quiet_test_clearance=fixture; Path=/; Secure")
-                super.loadDataWithBaseURL(url, if (complete) success else "<html><body id='cf-chl-widget'>Check fixture</body></html>",
+                super.loadDataWithBaseURL(url, if (complete) success else
+                    "<html style='background:#008f5f'><body id='cf-chl-widget'>Check fixture</body></html>",
                     "text/html", "UTF-8", url)
             }
         }.also { browsers += it }
@@ -163,7 +165,15 @@ class QuietConnectionRecoveryTest {
         compose.onNodeWithText("Complete the browser check. Loading will resume automatically.").assertIsDisplayed()
         assertEquals(1, browsers.size)
         assertEquals(1, loaded.size)
-        capture("interactive-fallback")
+        val screenshot = captureBitmap("interactive-fallback")
+        compose.runOnIdle {
+            val view = browsers.single()
+            val location = IntArray(2)
+            view.getLocationOnScreen(location)
+            assertTrue(view.isAttachedToWindow && view.isShown && view.width > 0 && view.height > 0)
+            assertEquals("The moved WebView must paint its page, not a blank surface", Color.rgb(0, 143, 95),
+                screenshot.getPixel(location[0] + view.width / 2, location[1] + view.height / 2))
+        }
         compose.runOnIdle {
             browsers.single().loadDataWithBaseURL(VerificationSite.App.url, success, "text/html", "UTF-8", VerificationSite.App.url)
         }
@@ -173,6 +183,29 @@ class QuietConnectionRecoveryTest {
         compose.onNodeWithText("Loading resumed").assertIsDisplayed()
         compose.onNodeWithText("Verify connection").assertDoesNotExist()
         assertEquals(1, browsers.size)
+    }
+
+    @Test fun redirectedForumPageCompletesQuietVerification() {
+        val controller = ConnectionRecoveryController()
+        var recovered by mutableStateOf<Boolean?>(null)
+        val forumBrowser: (Context) -> WebView = { context ->
+            object : WebView(context) {
+                override fun loadUrl(url: String) {
+                    super.loadDataWithBaseURL("https://forum.mobilism.org/index.php",
+                        "<html><body><a href='viewforum.php?f=1'>Forum</a><a href='ucp.php?mode=login'>Login</a></body></html>",
+                        "text/html", "UTF-8", "https://forum.mobilism.org/index.php")
+                }
+            }
+        }
+        compose.setContent { MobilismTheme {
+            ConnectionRecoveryHost(controller, forumBrowser, noExpiry, quietTimeoutMillis = 60_000) {
+                LaunchedEffect(Unit) { recovered = controller.recover(VerificationSite.Forum) }
+                Text("Browsing")
+            }
+        } }
+        compose.waitUntil(10_000) { recovered != null }
+        assertEquals(true, recovered)
+        compose.onNodeWithText("Verify connection").assertDoesNotExist()
     }
 
     @Test fun backgroundingStopsQuietVerificationAndDoesNotOpenADialog() {
@@ -228,7 +261,9 @@ class QuietConnectionRecoveryTest {
         capture("live-quiet-verification")
     }
 
-    private fun capture(name: String) {
+    private fun capture(name: String) { captureBitmap(name) }
+
+    private fun captureBitmap(name: String): Bitmap {
         compose.waitForIdle()
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
         android.os.SystemClock.sleep(500)
@@ -236,5 +271,6 @@ class QuietConnectionRecoveryTest {
         val directory = File(compose.activity.getExternalFilesDir(null), "quiet-connection-recovery")
         check(directory.mkdirs() || directory.isDirectory)
         File(directory, "$name.png").outputStream().use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        return screenshot
     }
 }

@@ -100,7 +100,7 @@ internal fun ConnectionRecoveryHost(controller: ConnectionRecoveryController,
         fun readPage() {
             if (controller.attempt.value?.id != current.id) return
             val url = view.url?.toUri() ?: return
-            if (!acceptsConnectionVerificationUrl(url, site) || url.path != site.url.toUri().path) return
+            if (!isConnectionVerificationPageUrl(url, site)) return
             view.evaluateJavascript("(function(){var html=document.documentElement.outerHTML;return html.length<=2097152?html:null})()") { raw ->
                 if (controller.attempt.value?.id != current.id) return@evaluateJavascript
                 val html = runCatching { JSONTokener(raw).nextValue() as? String }.getOrNull() ?: return@evaluateJavascript
