@@ -1,4 +1,11 @@
 .usage-page .admin-stats { grid-template-columns: 1.3fr repeat(2, minmax(0, 1fr)); }
+.usage-page .admin-heading, .usage-page .admin-toolbar { flex-wrap: wrap; }
+.usage-page [hidden] { display: none !important; }
+.usage-page .admin-toolbar select { min-height: 48px; border: 1px solid var(--admin-outline); border-radius: 16px; padding: 10px; color: var(--admin-text); background: var(--admin-surface-high); font: inherit; font-size: 16px; }
+.usage-page .admin-chart { gap: min(8px, var(--bar-gap)); }
+.usage-page .admin-stat-total { display: grid; }
+.usage-page .admin-stat > span:last-child { align-self: end; font-size: 12px; }
+.usage-page #view-day { margin-top: 12px; }
 .usage-page .admin-chart-summary #chart-total { font-size: inherit; color: inherit; }
 .usage-page .admin-snapshot { color: var(--admin-muted); font-size: 13px; margin: 0 0 12px; }
 

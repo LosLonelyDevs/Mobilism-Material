@@ -1,11 +1,12 @@
-import { normalizeVersion } from '../public/audience.js';
+import { compareVersions, normalizeVersion } from '../public/audience.js';
+export { compareVersions };
 
 const repository = 'LosLonelyDevs/Mobilism-Material';
 const cacheMs = 10 * 60_000;
-export function compareVersions(a, b) {
-  const left = normalizeVersion(a).split('.').map(Number), right = normalizeVersion(b).split('.').map(Number);
-  for (let index = 0; index < 3; index++) if (left[index] !== right[index]) return left[index] - right[index];
-  return 0;
+export function latestStableVersion(catalog) {
+  const latest = catalog?.versions?.find(release => release.prerelease === false)?.version;
+  if (!latest || catalog.stale || catalog.unavailable?.some(version => compareVersions(version, latest) > 0)) return null;
+  return latest;
 }
 
 export function releaseVersion(release, source) {

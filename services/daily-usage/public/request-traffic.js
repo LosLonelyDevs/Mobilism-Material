@@ -38,7 +38,7 @@ export function validateRequestTraffic(value, reportDay) {
 export function groupRequestTraffic(rows, day) {
   const groups = new Map();
   for (const row of rows || []) {
-    if (row.day !== day) continue;
+    if (day !== undefined && row.day !== day) continue;
     const key = `${row.method} ${row.endpoint}`;
     const group = groups.get(key) || { endpoint: row.endpoint, method: row.method, counts: Array(6).fill(0n), durationMs: 0n };
     row.counts.forEach((count, index) => { group.counts[index] += BigInt(count); });

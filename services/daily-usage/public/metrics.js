@@ -1,6 +1,22 @@
+import { compareVersions } from './audience.js';
+
 export function percentage(count, total) {
   const value = BigInt(count), denominator = BigInt(total);
   return denominator > 0n ? Number((value * 1000n + denominator / 2n) / denominator) / 10 : 0;
+}
+
+export function releaseAdoption(versions, latestStable) {
+  if (!latestStable) return null;
+  let latest = 0n, older = 0n, other = 0n;
+  for (const group of versions) {
+    let comparison;
+    try { comparison = compareVersions(group.key, latestStable); }
+    catch { comparison = null; }
+    if (comparison === 0) latest += group.devices;
+    else if (comparison !== null && comparison < 0) older += group.devices;
+    else other += group.devices;
+  }
+  return { latest, older, other };
 }
 
 export function groupUsage(rows, dimension) {
