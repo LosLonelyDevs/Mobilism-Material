@@ -2,6 +2,8 @@
 
 Vercel functions for anonymous daily app usage, backed by Neon Postgres. `POST /api/ping` accepts reports. `GET /api/stats` returns protected daily counts and app/device breakdowns. The browser dashboard lives at [mobilism-material-usage.vercel.app](https://mobilism-material-usage.vercel.app/).
 
+Completed-day endpoint counters share that same report. App usage shows request totals, outcomes, and average response-header time for the selected UTC day. This panel stays hidden until the verified stable catalog contains v0.1.24 or later, then displays its minimum version. See [request traffic](../../docs/request-traffic.md) for batching, coverage, and limitations.
+
 Production runs at [mobilism-material-usage.vercel.app](https://mobilism-material-usage.vercel.app/api/ping), in the separate `mobilism-material-usage` Vercel project. Its dedicated `mobilism-material-usage-db` Neon database uses the free plan in `iad1`. The existing app projects are unchanged.
 
 The repository Actions variable `DAILY_USAGE_ENDPOINT` supplies future release builds. The root `.env` also saves that URL and the dashboard credentials. Server credentials are in Vercel and the ignored `services/daily-usage/.env`; never include either environment file in Git or deployment uploads. No app version was changed by deployment.
@@ -77,13 +79,15 @@ The default range is the last 30 UTC dates. Up to 365 dates are allowed. `daily`
 
 ## Data handling
 
-Reports contain only schema version, UTC date, random daily UUID, app version/code, Android API level, manufacturer, and model. There are no account details, message contents, browsing activity, advertising IDs, Android IDs, serial numbers, location, or permanent installation IDs. Unknown fields are rejected.
+Reports contain schema version, UTC date, random daily UUID, app version/code, Android API level, manufacturer, and model. The optional requestTraffic field adds completed-day counters by allowlisted endpoint group, method, outcome, and app version, plus summed response-header time. Each daily counter batch has a random retry ID. There are no account details, URLs, release IDs, search terms, message contents, request bodies, advertising IDs, Android IDs, serial numbers, location, or permanent installation IDs. Unknown fields are rejected.
 
 Daily UUIDs are stored separately from aggregate dimensions, for eight UTC dates including today. Aggregates are retained for 365 dates. Usage collection does not read or store IP addresses, user agents, or raw request bodies. Dashboard sign-in stores keyed hashes of client addresses and account identities for throttling. Dashboard accounts store usernames, password hashes, encrypted authenticator keys, roles, page grants, and credential versions. Raw addresses, passwords, and codes are not stored in the database or application logs. Vercel and network providers still receive network metadata; review their logging and retention settings before enabling production collection.
 
-Settings > Anonymous usage disables future reports and cancels queued work. A request already received by the endpoint may finish. Local daily receipts are retained through the retry window to avoid duplicates after re-enabling. Reports are not linked to accounts, so contributions cannot be selectively removed by account.
+Request retry IDs are stored separately from aggregate dimensions for 14 completed UTC dates, covering seven-day carryover plus seven-day delivery retries. Endpoint aggregates retain 365 UTC dates. Apply the full idempotent schema before deploying the request counters; it adds request_receipts and daily_requests without changing existing data.
 
-The public endpoint accepts only small, validated JSON payloads. Counts are not proof of authentic devices: a modified client can generate new IDs. Keep statistics tokens server-side and rotate them independently of app releases.
+Settings > Anonymous usage disables future reports, clears local traffic counters, removes traffic from queued payloads, and cancels queued work. A request already received by the endpoint may finish. Local daily usage receipts are retained through the retry window to avoid duplicates after re-enabling. Reports are not linked to accounts, so contributions cannot be selectively removed by account.
+
+The public endpoint accepts validated JSON up to 256 KiB, at most eight traffic batches and 128 endpoint/method rows per batch. Counts are not proof of authentic devices or requests: a modified client can generate new IDs. Keep statistics tokens server-side and rotate them independently of app releases.
 
 ## Verify
 

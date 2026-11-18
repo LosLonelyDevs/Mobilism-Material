@@ -36,3 +36,6 @@ validated remote limits with shipped defaults; the user's background schedule st
 App controls live in `services/daily-usage`. Keep Android defaults and dashboard
 validation aligned. Follow `docs/remote-controls.md` and `docs/api-limit-tuning.md`;
 deploying code must not silently change production notices or thresholds.
+Request totals piggyback on the existing daily usage report. Keep endpoint groups
+allowlisted, payloads bounded, daily batch IDs immutable, and uploads deduplicated.
+Preserve the usage opt-out and v0.1.24 dashboard gate. See `docs/request-traffic.md`.

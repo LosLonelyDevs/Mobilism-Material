@@ -87,7 +87,7 @@ test('page grants control navigation and API access, including direct endpoint r
   assert.equal(canAccess(signedIn.user, 'overview'), false);
   assert.equal(canAccess(signedIn.user, 'users'), false);
   assert.equal(canAccess(signedIn.user, 'app-controls'), false);
-  const stats = statsHandler(query, () => '', () => new Date(time), access);
+  const stats = statsHandler(query, () => '', () => new Date(time), access, async () => ({ versions: [] }));
   const controls = controlsHandler(query, access), releases = releasesHandler(async () => ({ releases: [] }), access);
   assert.equal((await call(stats, { method: 'GET', cookie })).statusCode, 200);
   assert.equal((await call(controls, { method: 'GET', cookie })).statusCode, 403);

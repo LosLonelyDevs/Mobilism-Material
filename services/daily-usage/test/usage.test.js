@@ -31,7 +31,7 @@ before(async () => {
   db = new PGlite();
   await db.exec(await readFile(new URL('../schema.sql', import.meta.url), 'utf8'));
 });
-beforeEach(async () => { await db.exec('TRUNCATE usage_receipts, daily_usage'); });
+beforeEach(async () => { await db.exec('TRUNCATE usage_receipts, daily_usage, request_receipts, daily_requests'); });
 after(async () => { await db.close(); });
 
 test('concurrent duplicate requests count one device and acknowledge every retry', async () => {
@@ -90,7 +90,7 @@ test('database failures return retryable responses without revealing credentials
 test('statistics require a separate strong token and include daily totals and dimensions', async () => {
   await recordReport(query, report());
   await recordReport(query, report({ model: 'Other phone', appVersion: '0.1.17', versionCode: 18 }));
-  const handler = statsHandler(query, () => token);
+  const handler = statsHandler(query, () => token, () => new Date(), () => false, async () => ({ versions: [] }));
   assert.equal((await call(handler, { method: 'GET' })).statusCode, 401);
   assert.equal((await call(statsHandler(query, () => ''), { method: 'GET', headers: { authorization: 'Bearer ' } })).statusCode, 401);
   const result = await call(handler, { method: 'GET', url: `/api/stats?from=${dateAgo(1)}&to=${today()}`,

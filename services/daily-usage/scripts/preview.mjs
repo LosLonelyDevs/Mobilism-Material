@@ -35,14 +35,21 @@ for (let days = 0; days < 90; days++) {
 const session = sessionHandler({ database: query, env });
 const dashboardPreview = process.argv.includes('--dashboard');
 const access = req => dashboardPreview || sessionUser(req, { database: query, env });
-const stats = statsHandler(query, () => '', () => new Date(), access);
 const config = configHandler(query);
 const control = controlHandler(query, access);
 const futureFollowing = process.argv.includes('--following-controls');
-const releases = releasesHandler(futureFollowing ? async () => ({
-  versions: [{ version: '0.1.24', versionCode: 25, prerelease: false }], comparisonsAvailable: true,
+const catalog = async () => ({
+  versions: [{ version: futureFollowing ? '0.1.24' : '0.1.23', versionCode: futureFollowing ? 25 : 24, prerelease: false }], comparisonsAvailable: true,
   unavailable: [], checkedAt: new Date().toISOString(),
-}) : undefined, access);
+});
+const releases = releasesHandler(catalog, access);
+const stats = statsHandler(query, () => '', () => new Date(), access, catalog);
+if (futureFollowing) {
+  const day = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  for (const endpoint of ['api/search', 'api/release', 'api/releases', 'forum/topic', 'images']) {
+    await query(`INSERT INTO daily_requests VALUES ($1, '0.1.24', 25, $2, 'GET', 120, 3, 2, 4, 1, 2, 23760)`, [day, endpoint]);
+  }
+}
 const users = usersHandler({ database: query, env }), account = accountHandler({ database: query, env });
 await userStore(query, env).ensureOwner();
 const previewOwner = await userStore(query, env).get('owner');

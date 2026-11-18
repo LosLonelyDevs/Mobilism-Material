@@ -29,9 +29,11 @@ import org.json.JSONObject
 
 internal class MobilismApi(private val context: Context, private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
     client: OkHttpClient = OkHttpClient(), private val challengeRecovery: ChallengeRecovery = ChallengeRecovery.None,
-    private val requestLimits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults }) {
+    private val requestLimits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
+    requestTraffic: RequestTrafficSink = RequestTrafficSink.None) {
     private val client = client.newBuilder()
         .apply { interceptors().add(0, DiagnosticInterceptor(diagnostics)) }
+        .addNetworkInterceptor(RequestTrafficInterceptor(requestTraffic))
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .callTimeout(45, TimeUnit.SECONDS)

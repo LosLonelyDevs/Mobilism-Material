@@ -30,6 +30,13 @@
           <div id="device-shares" class="admin-device-shares"></div>
           <button id="show-devices" class="text-button" aria-expanded="false" hidden>Show all devices</button>
         </section>
+        <section id="request-traffic" class="admin-panel" aria-labelledby="traffic-title" hidden>
+          <div class="admin-panel-heading"><h2 id="traffic-title">Endpoint requests</h2><span id="traffic-version"></span></div>
+          <p id="traffic-summary" class="admin-snapshot" aria-live="polite"></p>
+          <div class="admin-traffic-scroll" tabindex="0" role="region" aria-label="Endpoint request totals"><table class="admin-traffic-table"><thead><tr><th scope="col">Endpoint</th><th scope="col">Requests</th><th scope="col">Success</th><th scope="col">Redirects</th><th scope="col">Other 4xx</th><th scope="col">429</th><th scope="col">5xx</th><th scope="col">Network errors</th><th scope="col">Average time</th></tr></thead><tbody id="traffic-rows"></tbody></table></div>
+          <p id="traffic-empty" class="admin-zero-note" hidden>No completed-day request reports yet. Totals arrive when reporting installations next open the app.</p>
+          <p class="admin-footnote">Native Mobilism API, forum, and image attempts from reporting installations. Retries count; cache hits, WebViews, external hosts, and connection failures before an HTTP attempt do not. Times end at response headers and are capped at five minutes. UTC totals can arrive up to fourteen days late. These are not server-wide totals.</p>
+        </section>
         <details class="admin-panel admin-details">
           <summary>Device and app version details</summary>
           <div class="admin-panel-heading"><h2 id="devices-title">Devices & app versions</h2><span id="device-date"></span></div>
@@ -37,5 +44,5 @@
           <div id="devices"></div>
           <div id="empty" class="admin-empty" hidden><span aria-hidden="true">◌</span><h3>No activity on this date</h3><p>Choose another date or check back after apps report activity.</p></div>
         </details>
-        <p class="admin-footnote">Anonymous, opt-in active installation counts. Reinstalls and multiple devices can count separately. These are not unique people. Dates use UTC; late reports can arrive for seven days.</p>
+        <p class="admin-footnote">Anonymous, optional active installation counts. Reinstalls and multiple devices can count separately. These are not unique people. Dates use UTC; late reports can arrive for seven days.</p>
       </div>

@@ -101,3 +101,10 @@
 @media (prefers-reduced-motion: reduce) {
   .admin-dashboard *, .admin-dashboard *::before, .admin-dashboard *::after { animation: none !important; transition: none !important; }
 }
+
+.admin-traffic-scroll { max-width: 100%; overflow-x: auto; }
+.admin-traffic-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.admin-traffic-table th, .admin-traffic-table td { padding: 12px 10px; text-align: right; white-space: nowrap; }
+.admin-traffic-table th:first-child, .admin-traffic-table td:first-child { text-align: left; }
+.admin-traffic-table th { font-size: 12px; }
+.admin-traffic-table td { border-top: 1px solid var(--md-sys-color-outline-variant); font-size: 13px; }

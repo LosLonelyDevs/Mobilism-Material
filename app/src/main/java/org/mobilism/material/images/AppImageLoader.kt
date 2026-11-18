@@ -15,7 +15,9 @@ internal fun appImageLoader(context: Context): ImageLoader {
     val client = OkHttpClient.Builder().addInterceptor { chain ->
         val request = chain.request()
         chain.proceed(request.newBuilder().url(secureMobilismImageUrl(request.url)).build())
-    }.addNetworkInterceptor(headers).build()
+    }.addNetworkInterceptor(headers).addNetworkInterceptor(org.mobilism.material.data.RequestTrafficInterceptor(
+        (application as? org.mobilism.material.data.RequestTrafficProvider)?.requestTraffic
+            ?: org.mobilism.material.data.RequestTrafficSink.None, image = true)).build()
     return ImageLoader.Builder(application).components {
         add(OkHttpNetworkFetcherFactory(callFactory = { client }))
     }.build()

@@ -20,7 +20,9 @@ class DailyUsageWorker(context: Context, parameters: WorkerParameters) : Corouti
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val store = (applicationContext as MobilismApplication).dailyUsage
         if (!DailyUsageSchedule.configured || !store.enabled.value) return@withContext Result.success()
-        val body = inputData.getString("report") ?: return@withContext Result.failure()
+        val body = inputData.getString("day")?.let { value ->
+            runCatching { store.storedReport(LocalDate.parse(value)) }.getOrNull()
+        } ?: inputData.getString("report") ?: return@withContext Result.failure()
         try {
             val report = JSONObject(body)
             val day = LocalDate.parse(report.getString("day"))
@@ -61,9 +63,10 @@ object DailyUsageSchedule {
         val store = (context.applicationContext as MobilismApplication).dailyUsage
         if (!configured || !store.enabled.value) return@withContext
         val day = LocalDate.now(ZoneOffset.UTC)
-        val report = store.report(day) ?: return@withContext
+        store.report(day) ?: return@withContext
         val work = OneTimeWorkRequestBuilder<DailyUsageWorker>()
-            .setInputData(workDataOf("report" to report)).addTag(TAG)
+            // The durable report can exceed WorkManager's 10 KiB data limit.
+            .setInputData(workDataOf("day" to day.toString())).addTag(TAG)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
         WorkManager.getInstance(context).enqueueUniqueWork("$TAG-$day", ExistingWorkPolicy.KEEP, work)

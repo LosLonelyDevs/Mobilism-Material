@@ -43,7 +43,7 @@ test('password alone grants no statistics access; only the second step creates a
   assert.match(first.headers['Set-Cookie'], /HttpOnly; SameSite=Strict; Max-Age=300; Secure/);
   const challenge = cookies(first);
   assert.equal(await isAdminRequest({ headers: { cookie: challenge } }, env, time), false);
-  const stats = statsHandler(query, () => '', () => new Date(time), req => isAdminRequest(req, env, time));
+  const stats = statsHandler(query, () => '', () => new Date(time), req => isAdminRequest(req, env, time), async () => ({ versions: [] }));
   assert.equal((await call(null, { method: 'GET', cookie: challenge, action: stats })).statusCode, 401);
   assert.equal((await call(null, { method: 'GET', cookie: challenge })).body.stage, 'otp');
   const second = await call({ step: 'otp', code: totp(env.ADMIN_TOTP_SECRET, time / 30000) }, { cookie: challenge });

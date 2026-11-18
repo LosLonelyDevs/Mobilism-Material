@@ -1,4 +1,5 @@
 import { groupUsage, percentage } from '../public/metrics.js';
+import { groupRequestTraffic, requestTrafficMinimumVersion } from '../public/request-traffic.js';
 import './usage.css';
 export function mountUsage(root, onExpired) {
 const $ = id => id === 'dashboard' ? root : root.querySelector('#' + id);
@@ -98,6 +99,22 @@ function renderSnapshot() {
     return item;
   }));
   $('empty').hidden = rows.length > 0;
+  $('request-traffic').hidden = !data.trafficAvailable;
+  if (data.trafficAvailable) {
+    const groups = groupRequestTraffic(data.requestTraffic, selectedDay);
+    const requests = groups.reduce((sum, group) => sum + group.requests, 0n);
+    $('traffic-version').textContent = `Requires v${requestTrafficMinimumVersion} or later`;
+    $('traffic-summary').textContent = `${number(requests)} requests · ${dateLabel(selectedDay)} UTC`;
+    $('traffic-rows').replaceChildren(...groups.map(group => {
+      const row = document.createElement('tr');
+      const label = text('th', '', `${group.method} ${group.endpoint}`); label.scope = 'row';
+      row.append(label, text('td', '', number(group.requests)));
+      group.counts.forEach(count => row.append(text('td', '', number(count))));
+      row.append(text('td', '', `${number(group.requests ? group.durationMs / group.requests : 0n)} ms`));
+      return row;
+    }));
+    $('traffic-empty').hidden = groups.length > 0;
+  }
 }
 function selectDay() {
   if (!data) return;

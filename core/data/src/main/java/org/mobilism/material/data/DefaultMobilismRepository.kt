@@ -12,8 +12,9 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     private val customCategoriesEnabled: () -> Boolean = { false },
     challengeRecovery: ChallengeRecovery = ChallengeRecovery.None,
     private val requestLimits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
+    requestTraffic: RequestTrafficSink = RequestTrafficSink.None,
 ) : MobilismRepository, MessagesRepository, DiscussionsRepository, HomeRepository {
-    private val api = MobilismApi(context.applicationContext, diagnostics, client, challengeRecovery, requestLimits)
+    private val api = MobilismApi(context.applicationContext, diagnostics, client, challengeRecovery, requestLimits, requestTraffic)
     private val store = SessionStore(context.applicationContext)
     private val reactions = context.getSharedPreferences("release-reactions", Context.MODE_PRIVATE)
     private val authMutex = Mutex()

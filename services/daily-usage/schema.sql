@@ -15,6 +15,28 @@ CREATE TABLE IF NOT EXISTS daily_usage (
     PRIMARY KEY (day, app_version, version_code, android_api, manufacturer, model)
 );
 
+CREATE TABLE IF NOT EXISTS request_receipts (
+    day date NOT NULL,
+    ping_id uuid NOT NULL,
+    PRIMARY KEY (day, ping_id)
+);
+
+CREATE TABLE IF NOT EXISTS daily_requests (
+    day date NOT NULL,
+    app_version varchar(50) NOT NULL,
+    version_code integer NOT NULL CHECK (version_code > 0),
+    endpoint varchar(32) NOT NULL,
+    method varchar(7) NOT NULL,
+    successes bigint NOT NULL CHECK (successes >= 0),
+    redirects bigint NOT NULL CHECK (redirects >= 0),
+    client_errors bigint NOT NULL CHECK (client_errors >= 0),
+    rate_limited bigint NOT NULL CHECK (rate_limited >= 0),
+    server_errors bigint NOT NULL CHECK (server_errors >= 0),
+    network_errors bigint NOT NULL CHECK (network_errors >= 0),
+    duration_ms bigint NOT NULL CHECK (duration_ms >= 0),
+    PRIMARY KEY (day, app_version, version_code, endpoint, method)
+);
+
 CREATE TABLE IF NOT EXISTS admin_login_limits (
     key text PRIMARY KEY,
     failures integer NOT NULL,

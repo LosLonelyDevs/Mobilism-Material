@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { validateRequestTraffic } from '../public/request-traffic.js';
 
 export const DAY = 86_400_000;
 const keys = ['schema', 'day', 'pingId', 'appVersion', 'versionCode', 'androidApi', 'manufacturer', 'model'];
@@ -12,7 +13,7 @@ export function validDay(value) {
 
 export function validateReport(report, now = new Date()) {
   if (!report || Array.isArray(report) || typeof report !== 'object' ||
-      Object.keys(report).length !== keys.length || keys.some(key => !Object.hasOwn(report, key))) return false;
+      Object.keys(report).some(key => !keys.includes(key) && key !== 'requestTraffic') || keys.some(key => !Object.hasOwn(report, key))) return false;
   const text = (value, max) => typeof value === 'string' && value.length > 0 && value.length <= max &&
     !/[\u0000-\u001f\u007f]/.test(value);
   return report.schema === 1 && validDay(report.day) && report.day <= utcDay(now) &&
@@ -20,26 +21,26 @@ export function validateReport(report, now = new Date()) {
     typeof report.pingId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(report.pingId) &&
     text(report.appVersion, 50) && Number.isInteger(report.versionCode) && report.versionCode > 0 && report.versionCode <= 2147483647 &&
     Number.isInteger(report.androidApi) && report.androidApi >= 26 && report.androidApi <= 100 &&
-    text(report.manufacturer, 80) && text(report.model, 120);
+    text(report.manufacturer, 80) && text(report.model, 120) && validateRequestTraffic(report.requestTraffic, report.day);
 }
 
 export async function readReport(req) {
   if (!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) throw new Error('Expected JSON');
-  if (Number(req.headers['content-length']) > 2048) throw new Error('Too large');
+  if (Number(req.headers['content-length']) > 262144) throw new Error('Too large');
   let body = req.body;
   if (body === undefined) {
     const chunks = [];
     let size = 0;
     for await (const chunk of req) {
       size += Buffer.byteLength(chunk);
-      if (size > 2048) throw new Error('Too large');
+      if (size > 262144) throw new Error('Too large');
       chunks.push(Buffer.from(chunk));
     }
     body = Buffer.concat(chunks);
   }
   if (Buffer.isBuffer(body)) body = body.toString('utf8');
   if (typeof body !== 'string') body = JSON.stringify(body);
-  if (Buffer.byteLength(body) > 2048) throw new Error('Too large');
+  if (Buffer.byteLength(body) > 262144) throw new Error('Too large');
   return JSON.parse(body);
 }
 

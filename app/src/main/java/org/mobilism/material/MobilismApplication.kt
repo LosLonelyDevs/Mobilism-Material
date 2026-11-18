@@ -22,7 +22,11 @@ import org.mobilism.material.settings.DiagnosticLogStore
 import org.mobilism.material.messages.*
 import org.mobilism.material.data.AuthState
 
-class MobilismApplication : Application(), org.mobilism.material.data.UserAgentPolicyProvider, coil3.SingletonImageLoader.Factory {
+class MobilismApplication : Application(), org.mobilism.material.data.UserAgentPolicyProvider,
+    org.mobilism.material.data.RequestTrafficProvider, coil3.SingletonImageLoader.Factory {
+    override val requestTraffic = org.mobilism.material.data.RequestTrafficSink {
+        if (org.mobilism.material.usage.DailyUsageSchedule.configured) dailyUsage.recordTraffic(it)
+    }
     override fun newImageLoader(context: android.content.Context): coil3.ImageLoader =
         org.mobilism.material.images.appImageLoader(context)
 
@@ -51,7 +55,7 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
     internal val remoteControl by lazy { org.mobilism.material.remote.RemoteControlStore.create(this, diagnostics) }
     val repository by lazy { DefaultMobilismRepository(this, contentPreferences, diagnostics,
         customCategories = customCategories, customCategoriesEnabled = { developer.state.value.customCategoriesActive },
-        challengeRecovery = connectionRecovery, requestLimits = { remoteControl.limits }) }
+        challengeRecovery = connectionRecovery, requestLimits = { remoteControl.limits }, requestTraffic = requestTraffic) }
     val appearance by lazy { AppearanceStore(this) }
     val releaseDisplay by lazy { org.mobilism.material.settings.ReleaseDisplayStore(this) }
     val debrid by lazy { DebridRepository(this, isEnabled = {
