@@ -68,7 +68,8 @@ internal fun UserProfileScreen(reference: ProfileReference, load: suspend (Profi
         catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) {
             error = failure.forScreen()
-            canVerify = failure is ApiFailure && (failure.kind == FailureKind.Challenge || failure.httpStatus == 403)
+            canVerify = failure is ApiFailure && (failure.kind == FailureKind.Challenge ||
+                failure.kind == FailureKind.InvalidResponse || failure.httpStatus == 403)
         }
     }
     if (verify) ForumAccessVerification(reference.url, onRead = { html ->

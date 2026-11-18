@@ -31,8 +31,9 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
         org.mobilism.material.images.appImageLoader(context)
 
     override val userAgentPolicy get() = remoteControl.userAgentPolicy
-    val memberIdentities by lazy { org.mobilism.material.members.MemberIdentityStore(repository::profile,
-        limits = { remoteControl.limits }) }
+    val memberIdentities by lazy { org.mobilism.material.members.MemberIdentityStore(repository::profileForIdentity,
+        limits = { remoteControl.limits }, cache = org.mobilism.material.members.MemberIdentityCache(
+            getSharedPreferences("member-identities", MODE_PRIVATE))) }
     val recentSearches by lazy { org.mobilism.material.settings.RecentSearchStore(this) }
     val messageAlerts by lazy { MessageAlertStore(this, limits = { remoteControl.limits }) }
     val messageNotifications by lazy { MessageNotifications(this) }

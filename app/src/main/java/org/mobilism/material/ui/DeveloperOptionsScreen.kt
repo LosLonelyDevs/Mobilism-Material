@@ -28,7 +28,8 @@ import org.mobilism.material.settings.DeveloperPreferences
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeveloperOptionsScreen(state: DeveloperPreferences, onVerboseLogging: (Boolean) -> Unit,
-    onDisable: () -> Unit, onBack: () -> Unit, onCustomCategories: (Boolean) -> Unit = {}) {
+    onDisable: () -> Unit, onBack: () -> Unit, onCustomCategories: (Boolean) -> Unit = {},
+    onReleaseTextCleanup: (Boolean) -> Unit = {}, onMarkdownSyntax: (Boolean) -> Unit = {}) {
     Scaffold(topBar = {
         TopAppBar(title = { AppHeading("Developer options", HeadingLevel.Page) }, navigationIcon = {
             AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack)
@@ -47,6 +48,14 @@ fun DeveloperOptionsScreen(state: DeveloperPreferences, onVerboseLogging: (Boole
             item {
                 DeveloperToggle("Custom categories", "Organize releases with categories saved on this device",
                     state.customCategoriesEnabled, onCustomCategories)
+            }
+            item {
+                DeveloperToggle("Clean up release text", "Add spacing, headings, and lists to release sections",
+                    state.releaseTextCleanup, onReleaseTextCleanup)
+            }
+            item {
+                DeveloperToggle("Enable Markdown syntax", "Format Markdown in releases, forum posts, and comments",
+                    state.markdownSyntax, onMarkdownSyntax)
             }
         }
     }

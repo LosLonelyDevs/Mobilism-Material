@@ -32,7 +32,10 @@ internal class MobilismApi(private val context: Context, private val diagnostics
     private val requestLimits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
     requestTraffic: RequestTrafficSink = RequestTrafficSink.None) {
     private val client = client.newBuilder()
-        .apply { interceptors().add(0, DiagnosticInterceptor(diagnostics)) }
+        .apply {
+            interceptors().add(0, DiagnosticInterceptor(diagnostics))
+            interceptors().add(1, BrowserCookiesInterceptor())
+        }
         .addNetworkInterceptor(RequestTrafficInterceptor(requestTraffic))
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -208,7 +211,22 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         }
     }
 
-    suspend fun profile(reference: ProfileReference): UserProfile = ForumProfiles.parse(forumPage(reference.url.toHttpUrl()), reference)
+    suspend fun profile(reference: ProfileReference, allowInteraction: Boolean = true): UserProfile {
+        val url = reference.url.toHttpUrl()
+        var verified: UserProfile? = null
+        val html = forumReads.request(url.toString()) {
+            readForumPage(url) { challenge ->
+                if (!allowInteraction) throw challenge
+                challengeRecovery.retryProfile {
+                    withContext(Dispatchers.IO) {
+                        forumReads.checkAllowed()
+                        readForumPage(url).also { verified = ForumProfiles.parse(it, reference) }
+                    }
+                } ?: throw challenge
+            }
+        }
+        return verified ?: ForumProfiles.parse(html, reference)
+    }
 
     private suspend fun forumTopic(id: Long, commentsStart: Int? = null): String {
         val url = "https://forum.mobilism.org/viewtopic.php".toHttpUrl().newBuilder()
@@ -221,16 +239,20 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         return forumPage(url)
     }
 
-    private suspend fun forumPage(url: okhttp3.HttpUrl): String = forumReads.request(url.toString()) { performForumPage(url) }
+    private suspend fun forumPage(url: okhttp3.HttpUrl): String = forumReads.request(url.toString()) {
+        readForumPage(url) { challenge ->
+            if (!challengeRecovery.recover(VerificationSite.Forum)) throw challenge
+            forumReads.checkAllowed()
+            readForumPage(url)
+        }
+    }
 
-    private suspend fun performForumPage(url: okhttp3.HttpUrl, recovered: Boolean = false): String = withContext(Dispatchers.IO) {
+    private suspend fun readForumPage(url: okhttp3.HttpUrl, onChallenge: suspend (ApiFailure) -> String = { throw it }): String = withContext(Dispatchers.IO) {
         var userAgentChanged = false
         try {
             // Forum reads never receive the API session token.
             val request = Request.Builder().url(url)
             request.header("User-Agent", AppUserAgent.value(context))
-            runCatching { android.webkit.CookieManager.getInstance().getCookie(url.toString()) }.getOrNull()
-                ?.takeIf { it.isNotBlank() }?.let { request.header("Cookie", it) }
             readClient.newCall(request.build()).await().use { response ->
                 userAgentChanged = AppUserAgent.response(context, response.code)
                 val source = response.body?.source() ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum returned an empty response.")
@@ -248,9 +270,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                 html
             }
         } catch (failure: ApiFailure) {
-            if (!recovered && !userAgentChanged && failure.kind == FailureKind.Challenge && challengeRecovery.recover(VerificationSite.Forum)) {
-                return@withContext performForumPage(url, recovered = true)
-            }
+            if (!userAgentChanged && failure.kind == FailureKind.Challenge) return@withContext onChallenge(failure)
             throw failure
         } catch (failure: IOException) {
             throw NetworkFailures.forScreen(failure)
@@ -298,8 +318,6 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             val builder = Request.Builder().url(url).header("Accept", "application/json")
             // Clearance belongs to the browser's origin and user agent, across all API requests.
             builder.header("User-Agent", AppUserAgent.value(context))
-            runCatching { android.webkit.CookieManager.getInstance().getCookie(url.toString()) }.getOrNull()
-                ?.takeIf { it.isNotBlank() }?.let { builder.header("Cookie", it) }
             // This client is used only for the API origin, never images or download URLs.
             token?.let { builder.header("X-Auth-Token", it) }
             form?.let { fields ->

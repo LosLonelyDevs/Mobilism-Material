@@ -97,16 +97,18 @@ internal fun ConnectionRecoveryHost(controller: ConnectionRecoveryController,
         val current = attempt ?: return@LaunchedEffect
         val view = browser ?: run { controller.finish(current.id, false); return@LaunchedEffect }
         val site = current.site
+        var browserPageAccepted = false
         fun readPage() {
-            if (controller.attempt.value?.id != current.id) return
+            if (browserPageAccepted || controller.attempt.value?.id != current.id) return
             val url = view.url?.toUri() ?: return
             if (!isConnectionVerificationPageUrl(url, site)) return
             view.evaluateJavascript("(function(){var html=document.documentElement.outerHTML;return html.length<=2097152?html:null})()") { raw ->
-                if (controller.attempt.value?.id != current.id) return@evaluateJavascript
+                if (browserPageAccepted || controller.attempt.value?.id != current.id) return@evaluateJavascript
                 val html = runCatching { JSONTokener(raw).nextValue() as? String }.getOrNull() ?: return@evaluateJavascript
                 if (verificationPageReady(site, html)) {
+                    browserPageAccepted = true
                     CookieManager.getInstance().flush()
-                    controller.finish(current.id, true)
+                    controller.browserPageReady(current.id)
                 }
             }
         }

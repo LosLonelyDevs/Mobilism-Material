@@ -56,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -108,6 +109,7 @@ fun ReleaseScreen(
     descriptionExpanded: Boolean? = null, onDescriptionExpanded: ((Boolean) -> Unit)? = null,
 ) {
     val theme = LocalAppTheme.current
+    val cleanUpHeadings = LocalForumFormatting.current.cleanUpReleaseText
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
@@ -297,14 +299,18 @@ fun ReleaseScreen(
                             CollapsibleSection("${release.id}-${section.kind}", section.kind.title, icon, accent,
                                 expanded = descriptionExpanded.takeIf { section.kind == ReleaseSection.Description },
                                 onExpandedChange = onDescriptionExpanded.takeIf { section.kind == ReleaseSection.Description },
-                                headingStyle = MaterialTheme.typography.titleMedium) {
-                                ReleaseBody(section.html, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
+                                headingStyle = MaterialTheme.typography.titleMedium,
+                                headingColor = if (cleanUpHeadings) releaseHeadingColor(MaterialTheme.colorScheme.onSurface, accent)
+                                    else Color.Unspecified) {
+                                ReleaseBody(section.html, release.browserUrl ?: "https://forum.mobilism.org/", onRelease, cleanUp = true)
                             }
                         }
                     }
                     if (groups.isNotEmpty() || !content?.downloadNotesHtml.isNullOrBlank()) releaseDetailItem("downloads") {
                         CollapsibleSection("${release.id}-downloads", "Downloads", Icons.Outlined.Download, theme.success,
-                            headingStyle = MaterialTheme.typography.titleMedium) {
+                            headingStyle = MaterialTheme.typography.titleMedium,
+                            headingColor = if (cleanUpHeadings) releaseHeadingColor(MaterialTheme.colorScheme.onSurface, theme.success)
+                                else Color.Unspecified) {
                             content?.downloadNotesHtml?.takeIf { it.isNotBlank() }?.let {
                                 DownloadNotes(it, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
                             }
@@ -373,8 +379,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.releaseDetailItem(key
 internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Unit)? = null,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     linkColor: Color = MaterialTheme.colorScheme.primary,
-    textStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge) {
+    textStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge,
+    cleanUp: Boolean = false, allowMarkdown: Boolean = true) {
     val context = LocalContext.current
+    val options = LocalForumFormatting.current.let {
+        ForumFormattingOptions(cleanUp && it.cleanUpReleaseText, allowMarkdown && it.markdown)
+    }
     val currentOnRelease = androidx.compose.runtime.rememberUpdatedState(onRelease)
     val currentForumLinkHandler = androidx.compose.runtime.rememberUpdatedState(LocalForumLinkHandler.current)
     val currentDownloadHelpHandler = androidx.compose.runtime.rememberUpdatedState(LocalDownloadHelpHandler.current)
@@ -384,15 +394,19 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
     heldUrl?.let { ForumLinkActions(it, onDismiss = { heldUrl = null }) }
     val textColor = contentColor.toArgb()
     val linkArgb = linkColor.toArgb()
+    val headingArgb = releaseHeadingColor(contentColor, MaterialTheme.colorScheme.primary).toArgb()
+    val requirementsArgb = lerp(MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.secondary, 0.28f).toArgb()
     val textSize = textStyle.fontSize.value
+    val density = androidx.compose.ui.platform.LocalDensity.current
     val font = LocalAppFont.current
     val resources = LocalResources.current
     val typeface = remember(resources, font) {
         if (font == AppFont.Geist) resources.getFont(org.mobilism.material.designsystem.R.font.geist_regular)
         else Typeface.create("sans-serif", Typeface.NORMAL)
     }
-    val richText = remember(html, baseUrl, context) {
-        forumText(html, baseUrl).apply {
+    val richText = remember(html, baseUrl, context, options, linkArgb, textSize, density, headingArgb, requirementsArgb) {
+        forumText(html, baseUrl, options, density.density, linkArgb, with(density) { textStyle.fontSize.toPx() },
+            headingColor = headingArgb, requirementsColor = requirementsArgb).apply {
             getSpans(0, length, URLSpan::class.java).forEach { link ->
                 val start = getSpanStart(link)
                 val end = getSpanEnd(link)
@@ -431,3 +445,5 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
         },
     )
 }
+
+private fun releaseHeadingColor(body: Color, accent: Color): Color = lerp(body, accent, 0.38f)

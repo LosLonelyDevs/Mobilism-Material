@@ -4,14 +4,45 @@ import android.text.Html
 import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.style.URLSpan
+import android.text.style.BulletSpan
+import android.text.style.QuoteSpan
+import android.text.style.TypefaceSpan
+import android.text.style.LeadingMarginSpan
+import android.text.Spanned
 import android.text.util.Linkify
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
+import org.jsoup.safety.Cleaner
 import org.jsoup.safety.Safelist
 import org.mobilism.material.data.webUrlOrNull
 
-internal fun forumText(html: String, baseUrl: String): SpannableStringBuilder {
+internal fun forumText(html: String, baseUrl: String, options: ForumFormattingOptions = ForumFormattingOptions(),
+    density: Float = 1f, quoteColor: Int = android.graphics.Color.GRAY, textSizePx: Float = 16f * density,
+    headingColor: Int = quoteColor, requirementsColor: Int = quoteColor): SpannableStringBuilder {
     val allowed = Safelist.basic().addTags("tt").removeProtocols("a", "href", "ftp", "mailto")
-    val document = Jsoup.parseBodyFragment(ForumCodeBlocks.normalize(html, baseUrl), baseUrl)
+    if (options.markdown || options.cleanUpReleaseText) allowed.addTags("h1", "h2", "h3", "h4", "h5", "h6")
+    val normalized = ForumCodeBlocks.normalize(html, baseUrl)
+    val document = Jsoup.parseBodyFragment(ForumFormatting.format(normalized, baseUrl, options), baseUrl)
+    val enhanced = options.markdown || options.cleanUpReleaseText
+    if (enhanced) document.outputSettings().prettyPrint(false)
+    if (options.markdown) document.select("a[href]").filter { it.attr("href").isBlank() }.forEach { it.removeAttr("href") }
+    if (options.markdown || options.cleanUpReleaseText) document.select("ol").toList().asReversed().forEach { list ->
+        val start = list.attr("start").toIntOrNull() ?: 1
+        val depth = list.parents().count { it.normalName() == "ol" }
+        list.children().filter { it.normalName() == "li" }.forEachIndexed { index, item ->
+            val prefix = "\u2003".repeat(depth) + "${start.toLong() + index}. "
+            val first = item.childNodes().firstOrNull { it !is org.jsoup.nodes.TextNode || !it.isBlank }
+            if (first is org.jsoup.nodes.Element && first.normalName() == "p") first.prependText(prefix)
+            else {
+                val paragraph = org.jsoup.nodes.Element("p").text(prefix)
+                item.childNodes().toList().takeWhile { it !is org.jsoup.nodes.Element || !it.isBlock || it.normalName() == "br" }
+                    .forEach(paragraph::appendChild)
+                item.prependChild(paragraph)
+            }
+            item.tagName("div")
+        }
+        list.tagName("div")
+    }
     document.select("pre").forEach { block ->
         val text = block.wholeText()
         block.tagName("p").empty().appendElement("tt").apply {
@@ -22,13 +53,53 @@ internal fun forumText(html: String, baseUrl: String): SpannableStringBuilder {
         }
     }
     document.select("code").tagName("tt")
-    val cleaned = Jsoup.clean(document.body().html(), baseUrl, allowed)
-    return SpannableStringBuilder(Html.fromHtml(cleaned, Html.FROM_HTML_MODE_LEGACY)).apply {
-        Regex("\n(?:[ \\t\\u00a0]*\n){2,}").findAll(this).toList().asReversed().forEach {
-            replace(it.range.first, it.range.last + 1, "\n\n")
+    val cleaned = if (options.cleanUpReleaseText) {
+        val safe = Cleaner(allowed).clean(document)
+        safe.outputSettings().prettyPrint(false)
+        // Add theme colors after sanitization so only the app supplies presentation attributes.
+        safe.select("p, h1, h2, h3, h4, h5, h6").forEach { block ->
+            if (block.parents().any { it.normalName() in setOf("pre", "code", "tt", "blockquote") }) return@forEach
+            val requirements = requirementsLabel.containsMatchIn(block.text()) &&
+                !block.childNodes().all { it is Element && it.normalName() == "tt" }
+            if (requirements || block.normalName() != "p") {
+                val color = if (requirements) requirementsColor else headingColor
+                val font = Element("font").attr("color", "#%06x".format(java.util.Locale.ROOT, color and 0xffffff))
+                val inner = if (requirements) font.appendElement("small") else font
+                inner.appendChildren(block.childNodes().toList())
+                block.appendChild(font)
+            }
         }
-        while (isNotEmpty() && last().isWhitespace()) delete(length - 1, length)
-        while (isNotEmpty() && first().isWhitespace()) delete(0, 1)
+        safe.body().html()
+    } else if (enhanced) Jsoup.clean(document.body().html(), baseUrl, allowed, document.outputSettings())
+    else Jsoup.clean(document.body().html(), baseUrl, allowed)
+    val flags = if (enhanced) Html.FROM_HTML_SEPARATOR_LINE_BREAK_LIST_ITEM or Html.FROM_HTML_SEPARATOR_LINE_BREAK_LIST
+        else Html.FROM_HTML_MODE_LEGACY
+    return SpannableStringBuilder(Html.fromHtml(cleaned, flags)).apply {
+        Regex("\n(?:[ \\t\\u00a0]*\n){2,}").findAll(this).toList().asReversed().forEach {
+            if (!options.markdown || getSpans(it.range.first, it.range.last + 1, TypefaceSpan::class.java).isEmpty())
+                replace(it.range.first, it.range.last + 1, "\n\n")
+        }
+        fun literalAt(index: Int) = options.markdown && getSpans(index, index + 1, TypefaceSpan::class.java).isNotEmpty()
+        while (isNotEmpty() && last().isWhitespace() && !literalAt(length - 1)) delete(length - 1, length)
+        while (isNotEmpty() && first().isWhitespace() && !literalAt(0)) delete(0, 1)
+        if (enhanced) {
+            getSpans(0, length, BulletSpan::class.java)
+                .sortedWith(compareBy<BulletSpan> { getSpanStart(it) }.thenByDescending { getSpanEnd(it) }).forEach { span ->
+                setSpan(ForumBulletSpan(density), getSpanStart(span), getSpanEnd(span), getSpanFlags(span))
+                removeSpan(span)
+            }
+            getSpans(0, length, QuoteSpan::class.java).forEach { span ->
+                setSpan(ForumQuoteSpan(density, quoteColor), getSpanStart(span), getSpanEnd(span), getSpanFlags(span))
+                removeSpan(span)
+            }
+            Regex("""(?m)^[\u2003]*\d+\. +[^\n]+""").findAll(this).forEach { line ->
+                if (getSpans(line.range.first, line.range.last + 1, TypefaceSpan::class.java).isEmpty()) {
+                    val prefix = line.value.substringBefore(' ') + " "
+                    setSpan(LeadingMarginSpan.Standard(0, (prefix.length * textSizePx * 0.55f).toInt()),
+                        line.range.first, line.range.last + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+            }
+        }
         // Linkify removes existing URL spans. Detect bare URLs separately to preserve named anchors.
         val detected = SpannableString(toString())
         Linkify.addLinks(detected, Linkify.WEB_URLS)
@@ -42,6 +113,8 @@ internal fun forumText(html: String, baseUrl: String): SpannableStringBuilder {
         }
     }
 }
+
+private val requirementsLabel = Regex("""^(?:(?:system|android)\s+)?requirements?\s*:""", RegexOption.IGNORE_CASE)
 
 private fun trimUrlPunctuation(value: String): String {
     var url = value

@@ -14,6 +14,7 @@ if (dailyUsageEndpoint.isNotEmpty()) {
 }
 val readme = providers.fileContents(rootProject.layout.projectDirectory.file("README.md")).asText.get()
 val changelog = providers.fileContents(rootProject.layout.projectDirectory.file("CHANGELOG.md")).asText.get().replace("\r\n", "\n")
+val offlineFormattingPreview = providers.gradleProperty("offlineFormattingPreview").orNull == "true"
 
 fun String.buildConfigString() = "\"" + replace("\\", "\\\\").replace("\"", "\\\"")
     .replace("\r", "").replace("\n", "\\n") + "\""
@@ -48,9 +49,18 @@ android {
         }
     }
     buildTypes {
+        debug {
+            if (offlineFormattingPreview) {
+                applicationIdSuffix = ".formattingpreview"
+            }
+        }
         release {
             signingConfig = signingConfigs.findByName("release")
         }
+    }
+
+    if (offlineFormattingPreview && providers.gradleProperty("offlineFixtureRunner").orNull == "true") {
+        sourceSets.getByName("debug").manifest.srcFile("src/formattingPreview/AndroidManifest.xml")
     }
 
     buildFeatures { compose = true; buildConfig = true }
@@ -109,6 +119,7 @@ dependencies {
     implementation(libs.coil.network)
     implementation(libs.coil.gif)
     implementation(libs.jsoup)
+    implementation(libs.commonmark)
     implementation(libs.okhttp)
     debugImplementation(libs.compose.tooling)
     debugImplementation("androidx.compose.ui:ui-test-manifest")

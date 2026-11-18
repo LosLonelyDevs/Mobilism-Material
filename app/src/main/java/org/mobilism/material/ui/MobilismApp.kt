@@ -161,6 +161,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             openCategoryFeed = true
             if (nav.currentDestination?.route != "feed") nav.popBackStack("feed", false)
         },
+        LocalForumFormatting provides ForumFormattingOptions(developer.releaseTextCleanupActive, developer.markdownSyntaxActive),
         LocalDownloadHelpHandler provides { nav.navigate("download-help") { launchSingleTop = true } },
         LocalProfileHandler provides { reference ->
             nav.navigate("profile?user=${reference.id ?: 0}&name=${android.net.Uri.encode(reference.username.orEmpty())}") { launchSingleTop = true }
@@ -361,7 +362,9 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             if (developer.enabled) DeveloperOptionsScreen(developer,
                 onVerboseLogging = model.developer::setVerboseLogging,
                 onDisable = model.developer::disable, onBack = { nav.popBackStack() },
-                onCustomCategories = model.developer::setCustomCategoriesEnabled)
+                onCustomCategories = model.developer::setCustomCategoriesEnabled,
+                onReleaseTextCleanup = model.developer::setReleaseTextCleanup,
+                onMarkdownSyntax = model.developer::setMarkdownSyntax)
         }
         composable("categories/{section}") { entry ->
             LaunchedEffect(developer.customCategoriesActive) {

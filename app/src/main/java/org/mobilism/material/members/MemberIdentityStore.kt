@@ -2,11 +2,13 @@ package org.mobilism.material.members
 
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.mobilism.material.data.ApiFailure
 import org.mobilism.material.data.ApiRequestLimits
 import org.mobilism.material.data.AccountRole
@@ -19,6 +21,7 @@ class MemberIdentityStore(
     private val load: suspend (ProfileReference) -> UserProfile,
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
     private val limits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
+    private val cache: MemberIdentityCache? = null,
     private val wait: suspend (Long) -> Unit = { delay(it) },
 ) {
     private val lock = Any()
@@ -27,7 +30,7 @@ class MemberIdentityStore(
     private var lastRequest: Long? = null
     private var failedAt: Long? = null
     private var failures = 0
-    private var previousLimits = ApiRequestLimits.Defaults
+    private var previousLimits = limits()
     private val mutableIdentities = MutableStateFlow<Map<String, MemberIdentity>>(emptyMap())
     val identities = mutableIdentities.asStateFlow()
 
@@ -35,7 +38,8 @@ class MemberIdentityStore(
         val name = username.trim()
         val key = key(name)
         if (key.isEmpty()) return
-        if (!due(key)) return
+        if (fresh(key)) return
+        if (cache != null && withContext(Dispatchers.IO) { restore(key, cache) }) return
         requests.withLock {
             if (!due(key)) return@withLock
             val remaining = lastRequest?.let { it + limits().memberLookupSpacingMs - now() } ?: 0
@@ -77,20 +81,35 @@ class MemberIdentityStore(
         if (policy != previousLimits) {
             expires.clear()
             mutableIdentities.value = emptyMap()
+            cache?.clear()
             previousLimits = policy
         }
     }
 
-    private fun due(key: String) = synchronized(lock) {
+    private fun restore(key: String, cache: MemberIdentityCache): Boolean = synchronized(lock) {
+        if (fresh(key)) return@synchronized true
+        val entry = cache.read(key, limits().memberCacheTtlMs) ?: return@synchronized false
+        mutableIdentities.value = mutableIdentities.value + (key to entry.identity)
+        expires[key] = now() + entry.remainingMillis
+        trim()
+        true
+    }
+
+    private fun fresh(key: String) = synchronized(lock) {
         refreshLimits()
-        failedAt?.let { now() < it + failureCooldown() } != true && (expires[key] ?: 0) <= now()
+        (expires[key] ?: 0) > now()
+    }
+
+    private fun due(key: String) = synchronized(lock) {
+        !fresh(key) && failedAt?.let { now() < it + failureCooldown() } != true
     }
 
     fun remember(profile: UserProfile) = synchronized(lock) {
         refreshLimits()
         val key = key(profile.username)
-        mutableIdentities.value = mutableIdentities.value + (key to MemberIdentity(
-            profile.avatar, AccountRole.Administrator in profile.roles, profile.majorAndroidReleaser))
+        val identity = MemberIdentity(profile.avatar, AccountRole.Administrator in profile.roles, profile.majorAndroidReleaser)
+        mutableIdentities.value = mutableIdentities.value + (key to identity)
+        cache?.put(key, identity, limits().memberCacheTtlMs)
         expires.remove(key)
         expires[key] = now() + limits().memberCacheTtlMs
         failures = 0

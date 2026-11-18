@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Show release view counts across browsing and saved releases
+- Add release text cleanup and Markdown rendering in Developer options
 - various bug fixes and improvements
 
 ## 0.1.23

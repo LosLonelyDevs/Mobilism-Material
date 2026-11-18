@@ -11,6 +11,7 @@ coroutines = "1.10.2"
 okhttp = "4.12.0"
 coil = "3.6.0"
 jsoup = "1.21.2"
+commonmark = "0.32.0"
 work = "2.11.2"
 webkit = "1.18.0"
 
@@ -36,6 +37,7 @@ coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" 
 coil-network = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 coil-gif = { module = "io.coil-kt.coil3:coil-gif", version.ref = "coil" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
+commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

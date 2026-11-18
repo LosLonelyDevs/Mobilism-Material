@@ -32,7 +32,7 @@ internal fun DownloadNotes(html: String, baseUrl: String, onRelease: (Long) -> U
             if (part.help && openHelp != null) DownloadHelpAction {
                 onBeforeHelp()
                 openHelp()
-            } else ReleaseBody(part.html, baseUrl, onRelease)
+            } else ReleaseBody(part.html, baseUrl, onRelease, cleanUp = true)
         }
     }
 }

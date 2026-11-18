@@ -93,7 +93,7 @@ internal fun MessageBubble(message: PrivateMessage, username: String, onRead: ()
                             verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Box(Modifier.testTag("message-content-${message.id}")) {
                                 ReleaseBody(message.contentHtml, "https://forum.mobilism.org/", onRelease,
-                                    contentColor = foreground, linkColor = foreground)
+                                    contentColor = foreground, linkColor = foreground, allowMarkdown = false)
                             }
                             if (!message.read && message.to.equals(username, ignoreCase = true)) AppTextButton("Mark as read",
                                 onRead, enabled = !marking)
