@@ -132,12 +132,14 @@ class CustomCategoriesTest {
         store.assign(release, setOf(travel.id, favorites.id))
         var enabled by mutableStateOf(true)
         var compact by mutableStateOf(false)
+        var opened: FeedFilters? = null
         compose.setContent {
             val custom by store.state.collectAsState()
             MobilismTheme(reduceMotion = true) {
                 androidx.compose.runtime.CompositionLocalProvider(
                     LocalForumCategoryNames provides mapOf(20L to "Utilities"),
                     LocalReleaseAssignments provides custom.takeIf { enabled },
+                    LocalOpenReleaseCategory provides { _, filters -> opened = filters },
                 ) {
                     ReleaseCard(release, androidx.compose.ui.graphics.Color.Blue, compact = compact) {}
                 }
@@ -146,12 +148,17 @@ class CustomCategoriesTest {
         for (density in listOf(false, true)) {
             compose.runOnIdle { compact = density }
             compose.onNodeWithText("Utilities").assertIsDisplayed()
-            compose.onNodeWithText("Custom: Favorites, Travel").assertIsDisplayed()
+            val order = compose.onAllNodes(hasText("Favorites") or hasText("Travel") or hasText("Utilities"))
+                .fetchSemanticsNodes().flatMap { it.config[androidx.compose.ui.semantics.SemanticsProperties.Text] }.map { it.text }
+            assertEquals(listOf("Favorites", "Travel", "Utilities"), order)
+            compose.onNodeWithText("Favorites").performClick()
+            assertEquals(setOf(favorites.id), opened?.customCategoryIds)
         }
         compose.runOnIdle { store.assign(release, setOf(travel.id)) }
-        compose.onNodeWithText("Custom: Travel").assertIsDisplayed()
+        compose.onNodeWithText("Travel").assertIsDisplayed()
+        compose.onNodeWithText("Favorites").assertDoesNotExist()
         compose.runOnIdle { enabled = false }
-        compose.onNodeWithText("Custom: Travel").assertDoesNotExist()
+        compose.onNodeWithText("Travel").assertDoesNotExist()
         compose.onNodeWithText("Utilities").assertIsDisplayed()
     }
 

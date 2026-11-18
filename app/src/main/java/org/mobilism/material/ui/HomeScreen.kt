@@ -241,12 +241,13 @@ private fun LatestTile(release: Release, section: ContentSection, onRelease: (Lo
                 if (isNew) NewReleaseBadge(release.id, Modifier.align(Alignment.TopEnd).padding(4.dp))
             }
             Text(title.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
-                itemVerticalAlignment = Alignment.CenterVertically) {
+            ReleaseCategoryLine(release) {
                 if (section == ContentSection.Books && title.subtitle.isNotBlank()) Text(title.subtitle,
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 else UsernameLink(release.author, style = MaterialTheme.typography.labelMedium)
-                ReleaseCategoryLabels(release)
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
+                itemVerticalAlignment = Alignment.CenterVertically) {
                 ReleaseViewCount(release.views)
                 ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
             }
@@ -266,9 +267,7 @@ private fun PopularTile(release: Release, section: ContentSection, index: Int, o
                     .height(if (section == ContentSection.Books) 126.dp else 106.dp), section)
             }
             Text(title.name, style = MaterialTheme.typography.titleMediumEmphasized, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
-                itemVerticalAlignment = Alignment.CenterVertically) {
-                ReleaseCategoryLabels(release, color = tone.second)
+            ReleaseCategoryLine(release) {
                 ReleaseViewCount(release.views, textStyle = MaterialTheme.typography.labelMedium, color = tone.second)
             }
         }

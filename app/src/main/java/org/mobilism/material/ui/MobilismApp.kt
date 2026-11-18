@@ -122,6 +122,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     val forumNames = remember(catalog) { catalog.orEmpty().values.flatten().associate { it.id to it.name } }
     if (auth is AuthState.SignedIn) MessageNotificationPermissionPrompt(app)
     var homeForum by remember { mutableStateOf<Pair<DiscussionTopic?, DiscussionCategory>?>(null) }
+    var openCategoryFeed by rememberSaveable { mutableStateOf(false) }
     var openingTab by rememberSaveable {
         mutableStateOf<BrowseTab?>(when (model.landingPage.state.value.order) {
             FeedOrder.Latest -> BrowseTab.Latest
@@ -154,6 +155,12 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         LocalMemberIdentities provides app.memberIdentities,
         LocalForumCategoryNames provides forumNames,
         LocalReleaseAssignments provides localCategories.takeIf { categoryStore != null },
+        LocalOpenReleaseCategory provides { section, filters ->
+            model.selectSection(section)
+            model.applyFilters(filters)
+            openCategoryFeed = true
+            if (nav.currentDestination?.route != "feed") nav.popBackStack("feed", false)
+        },
         LocalDownloadHelpHandler provides { nav.navigate("download-help") { launchSingleTop = true } },
         LocalProfileHandler provides { reference ->
             nav.navigate("profile?user=${reference.id ?: 0}&name=${android.net.Uri.encode(reference.username.orEmpty())}") { launchSingleTop = true }
@@ -171,6 +178,12 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             })
             val homeState by home.state.collectAsStateWithLifecycle()
             var tab by rememberSaveable(feed.section) { mutableStateOf(openingTab ?: BrowseTab.Home) }
+            LaunchedEffect(openCategoryFeed) {
+                if (openCategoryFeed) {
+                    tab = if (feed.order == FeedOrder.Top) BrowseTab.Top else BrowseTab.Latest
+                    openCategoryFeed = false
+                }
+            }
             LaunchedEffect(tab, feed.section, hideAdult) {
                 if (tab != BrowseTab.Home && catalog == null) model.loadCategories()
             }

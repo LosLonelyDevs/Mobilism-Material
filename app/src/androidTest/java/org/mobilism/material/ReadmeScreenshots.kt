@@ -56,10 +56,9 @@ class ReadmeScreenshots {
 
     @Test fun apps() {
         val releases = listOf(
-            sample(1, "TizenTube v1.3.2 [Open Source]", "tizen-1"),
-            sample(2, "Windfinder Pro v3.40.0 [Paid]", "windfinder"),
-            sample(3, "Flud+ v2.2.2 build 100202352 [Paid] [Patched]", "flud"),
-            sample(4, "Aloha Browser v9.2.0 [Premium]", "aloha"),
+            sample(4, "Aloha Browser v9.2.0 [Premium]", "aloha").copy(categoryId = 1),
+            sample(6075324, "Pujie Watch Faces - Wear OS 4 v6.5.14 [Patched]", null).copy(categoryId = 1347),
+            sample(3, "Flud+ v2.2.2 build 100202352 [Paid] [Patched]", "flud").copy(categoryId = 1),
         )
         screen {
             FeedScreen(FeedState(items = releases, canLoadMore = false), AuthState.Guest,
@@ -71,15 +70,23 @@ class ReadmeScreenshots {
         capture("apps")
     }
 
-    @Test fun release() {
+    @Test fun twoImageGalleryOpensTheSecondImage() {
         releaseScreen()
         awaitImages(listOf(asset("tizen-1"), asset("tizen-2")))
-        capture("release")
         compose.onNode(hasScrollToIndexAction() and
             SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange))
             .performTouchInput { swipeLeft() }
         compose.onNodeWithContentDescription("Release image 2 of 2").performClick()
         compose.onNodeWithContentDescription("Close image viewer").assertExists()
+    }
+
+    @Test fun release() {
+        releaseScreen(browserPreview = true)
+        awaitImages(listOf(asset("aloha")))
+        val uploader = compose.onNodeWithText("Hunter2").fetchSemanticsNode().boundsInRoot
+        val chip = compose.onNodeWithText("Internet & Network").fetchSemanticsNode().boundsInRoot
+        assertTrue(chip.left > uploader.right && chip.center.y in uploader.top..uploader.bottom)
+        capture("release")
     }
 
     @Test fun downloads() {
@@ -268,12 +275,15 @@ class ReadmeScreenshots {
         }
     }
 
-    private fun releaseScreen(singleImage: Boolean = false, onDownloaded: (Boolean) -> Unit = {}) = screen {
+    private fun releaseScreen(singleImage: Boolean = false, browserPreview: Boolean = false, onDownloaded: (Boolean) -> Unit = {}) = screen {
+        val release = if (browserPreview) sample(4, "Aloha Browser v9.2.0 [Premium]", "aloha").copy(categoryId = 1)
+            else sample(1, "TizenTube v1.3.2 [Open Source]", "tizen-1")
         ReleaseScreen(
-            state = ReleaseState(release = sample(1, "TizenTube v1.3.2 [Open Source]", "tizen-1").copy(
-                images = if (singleImage) listOf(asset("tizen-1")) else listOf(asset("tizen-1"), asset("tizen-2")),
+            state = ReleaseState(release = release.copy(
+                images = if (browserPreview) listOf(asset("aloha")) else if (singleImage) listOf(asset("tizen-1"))
+                    else listOf(asset("tizen-1"), asset("tizen-2")),
                 contentHtml = """
-                    <p>A YouTube client for Android TV, with playback controls and a simple layout.</p>
+                    <p>${if (browserPreview) "A web browser for Android." else "A YouTube client for Android TV, with playback controls and a simple layout."}</p>
                     <p>What's New:</p><p>Playback fixes and navigation improvements.</p>
                     <p>Mod Info:</p><p>Sample release details for the README.</p>
                     <p>Download Instructions:</p><p>arm64-v8a</p>
@@ -292,7 +302,12 @@ class ReadmeScreenshots {
     }
 
     private fun screen(content: @Composable () -> Unit) {
-        compose.setContent { MobilismTheme(reduceMotion = true, content = content) }
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalForumCategoryNames provides mapOf(1L to "Internet & Network", 1347L to "Wear"),
+                content = content,
+            )
+        } }
     }
 
     private fun awaitImages(images: List<String>) {
@@ -317,7 +332,7 @@ class ReadmeScreenshots {
     private val verticalList = hasScrollToIndexAction() and
         SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)
 
-    private fun sample(id: Long, title: String, image: String) = Release(
-        id, title, "Sample release", asset(image), 1792497600, 8, 2048, section = ContentSection.Apps,
+    private fun sample(id: Long, title: String, image: String?) = Release(
+        id, title, "Hunter2", image?.let(::asset), 1792497600, 8, 2048, section = ContentSection.Apps,
     )
 }

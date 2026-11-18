@@ -327,20 +327,18 @@ internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = fal
                     title.subtitle, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (compact) 1 else 3, overflow = TextOverflow.Ellipsis,
                 )
+                ReleaseCategoryLine(release, showLeadingWhenEmpty = !compact) {
+                    UsernameLink(release.author, style = MaterialTheme.typography.bodySmall)
+                }
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-                    if (!compact) UsernameLink(release.author, style = MaterialTheme.typography.bodySmall)
-                    ReleaseCategoryLabels(release)
-                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-                        if (!compact) Row(Modifier.clearAndSetSemantics { contentDescription = "${release.replies} replies" },
-                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
-                            Text(release.replies.toString(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
-                        }
-                        ReleaseViewCount(release.views, numberOnly = true)
-                        ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
+                    if (!compact) Row(Modifier.clearAndSetSemantics { contentDescription = "${release.replies} replies" },
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
+                        Text(release.replies.toString(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
                     }
+                    ReleaseViewCount(release.views, numberOnly = true)
+                    ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
                 }
             }
         }
