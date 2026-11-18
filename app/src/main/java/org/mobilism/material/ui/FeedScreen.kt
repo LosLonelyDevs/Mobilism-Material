@@ -26,7 +26,6 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.MailOutline
-import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.ViewHeadline
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
@@ -306,7 +305,6 @@ fun FeedScreen(
 @Composable
 internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = false, isNew: Boolean = false, onClick: () -> Unit) {
     val title = remember(release.title, release.section) { ReleaseTitles.parse(release.title, release.section) }
-    val theme = LocalAppTheme.current
     ExpressiveCard(onClick, Modifier.fillMaxWidth().testTag("release-${release.id}"), colors = CardDefaults.cardColors(
         containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, accent, 0.06f),
     )) {
@@ -334,10 +332,7 @@ internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = fal
                         Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
                         Text("${release.replies} replies", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
                     }
-                    if (!compact) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(Icons.Outlined.Visibility, null, Modifier.size(14.dp), tint = theme.featured)
-                        Text("${release.views} views", style = MaterialTheme.typography.labelSmall, color = theme.featured)
-                    }
+                    ReleaseViewCount(release.views)
                     ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
                 }
             }

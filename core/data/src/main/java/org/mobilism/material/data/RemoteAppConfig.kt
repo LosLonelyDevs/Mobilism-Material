@@ -24,6 +24,9 @@ data class ApiRequestLimits(
     val memberFailureCooldownMs: Long = 60_000,
     val memberFailureMaxCooldownMs: Long = 15 * 60_000,
     val debridRefreshIntervalMs: Long = 15 * 60_000,
+    val followBatchSize: Int = 5,
+    val followAppIntervalMs: Long = 6 * 3_600_000,
+    val followAttemptIntervalMs: Long = 15 * 60_000,
 ) {
     companion object {
         val Defaults = ApiRequestLimits()
@@ -54,6 +57,9 @@ data class ApiRequestLimits(
                 value("memberFailureCooldownMs", Defaults.memberFailureCooldownMs, 60_000L..3_600_000L),
                 value("memberFailureMaxCooldownMs", Defaults.memberFailureMaxCooldownMs, 60_000L..3_600_000L),
                 value("debridRefreshIntervalMs", Defaults.debridRefreshIntervalMs, 60_000L..3_600_000L),
+                value("followBatchSize", Defaults.followBatchSize.toLong(), 1L..20L).toInt(),
+                value("followAppIntervalMs", Defaults.followAppIntervalMs, 3_600_000L..604_800_000L),
+                value("followAttemptIntervalMs", Defaults.followAttemptIntervalMs, 900_000L..86_400_000L),
             )
         }
     }

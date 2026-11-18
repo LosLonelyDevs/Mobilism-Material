@@ -27,6 +27,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 import org.mobilism.material.data.*
 import org.mobilism.material.designsystem.*
 import org.mobilism.material.following.*
@@ -37,6 +38,7 @@ fun FollowingScreen(
     entries: List<LibraryEntry>, installed: List<InstalledVersion>, check: FollowCheckState, error: ScreenError?,
     preferences: FollowPreferences, settings: FollowingPreferences, notifications: FollowingNotifications, store: AppLibraryStore,
     onRefresh: () -> Unit, onCheck: () -> Unit, onLink: (Long, String?) -> Unit, onRelease: (Long) -> Unit, onBack: () -> Unit,
+    limits: ApiRequestLimits = ApiRequestLimits.Defaults,
 ) {
     val context = LocalContext.current
     val theme = LocalAppTheme.current
@@ -117,7 +119,8 @@ fun FollowingScreen(
                                 Icon(Icons.Outlined.Refresh, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
                                 Text(if (check.busy) "Checking ${check.done} of ${check.total}…" else "Check now")
                             }
-                            Text("Checks up to five apps, starting with those checked longest ago. Each app waits six hours between checks; batches wait at least 15 minutes.",
+                            Text("Checks up to ${limits.followBatchSize} ${if (limits.followBatchSize == 1) "app" else "apps"}, starting with those checked longest ago. " +
+                                "Each app waits ${limits.followAppIntervalMs.milliseconds} between checks; batches wait at least ${limits.followAttemptIntervalMs.milliseconds}.",
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (check.busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large))
                             if (!check.busy && check.total > 0) Text("Checked ${check.done} of ${check.total}" +
@@ -159,7 +162,10 @@ private fun FollowingCard(entry: LibraryEntry, installed: InstalledVersion?, onR
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
             Text("Latest found: " + (latest?.version?.let { "v$it" } ?: "Version not detected") +
                 (latest?.build?.let { " (build $it)" } ?: ""), style = MaterialTheme.typography.bodyMedium)
-            ReleasePostDate((result.latest ?: entry.release).publishedAt)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ReleaseViewCount((result.latest ?: entry.release).views)
+                ReleasePostDate((result.latest ?: entry.release).publishedAt)
+            }
             if (installed == null) Text("Tracking the followed release: " + (title.version?.let { "v$it" } ?: "Unknown version"),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (!result.comparable) Text("This version couldn't be compared automatically.", style = MaterialTheme.typography.bodySmall)

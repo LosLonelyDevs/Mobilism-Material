@@ -37,7 +37,8 @@ class SearchTrafficTest {
                     .body((if (login) """{"access_token":"fixture-account"}""" else """{"releases":[]}""").toResponseBody()).build()
             }.build())
         val library = AppLibraryStore(context)
-        fun checker() = FollowingChecker(library, repository, InstalledApps(context), FollowingPreferences(context), FollowingNotifications(context))
+        fun checker(limits: ApiRequestLimits = ApiRequestLimits.Defaults) = FollowingChecker(library, repository,
+            InstalledApps(context), FollowingPreferences(context), FollowingNotifications(context), limits = { limits })
         fun followApps() {
             ('A'..'L').forEachIndexed { index, letter ->
                 library.watch(Release(index + 1L, "Fixture $letter v1.0", "", null, 1, 0, 0, section = ContentSection.Apps), true)
@@ -81,5 +82,20 @@ class SearchTrafficTest {
         assertTrue(fixture.library.state.value.all { it.checkedAt == null })
         fixture.checker().check()
         assertEquals(1, fixture.calls)
+    }
+
+    @Test fun followingRemoteBatchAndCooldownSurviveCheckerRecreationAndDefaultFallback() = runBlocking {
+        val fixture = Fixture()
+        fixture.followApps()
+        val limits = ApiRequestLimits.Defaults.copy(followBatchSize = 2, followAttemptIntervalMs = 3_600_000)
+        assertEquals(2, fixture.checker(limits).check().done)
+        assertEquals(2, fixture.calls)
+        assertEquals(12, fixture.library.state.value.count { it.watched })
+        val preferences = fixture.context.getSharedPreferences("following-settings", Context.MODE_PRIVATE)
+        preferences.edit().putLong("last-check-attempt", System.currentTimeMillis() - 30 * 60_000).commit()
+        fixture.checker(limits).check()
+        assertEquals(2, fixture.calls)
+        assertEquals(5, fixture.checker().check().done)
+        assertEquals(7, fixture.calls)
     }
 }

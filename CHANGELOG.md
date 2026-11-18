@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Show release view counts across browsing and saved releases
+- various bug fixes and improvements
+
 ## 0.1.23
 
 - Fix images that failed to load

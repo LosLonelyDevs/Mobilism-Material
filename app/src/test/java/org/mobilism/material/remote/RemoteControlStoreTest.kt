@@ -105,18 +105,23 @@ class RemoteControlStoreTest {
     @Test fun startupFailuresAndExpiredValuesAlwaysUseHardcodedDefaults() = runBlocking {
         var time = 1000L
         var fail = false
-        val remote = ApiRequestLimits.Defaults.copy(searchSpacingMs = 10000)
+        val remote = ApiRequestLimits.Defaults.copy(searchSpacingMs = 10000, followBatchSize = 8,
+            followAppIntervalMs = 3_600_000, followAttemptIntervalMs = 1_800_000)
         val store = RemoteControlStore({ if (fail) error("offline") else RemoteAppConfig(remote, listOf(notice())) },
             installedCode = 21, now = { time })
         assertEquals(ApiRequestLimits.Defaults, store.limits)
+        assertEquals(ApiRequestLimits.Defaults, store.limitsState.value)
         store.refresh()
         assertEquals(remote, store.limits)
+        assertEquals(remote, store.limitsState.value)
         time += RemoteControlStore.MAX_AGE_MS
         assertEquals(ApiRequestLimits.Defaults, store.limits)
         store.tick(); assertNull(store.notice.value)
+        assertEquals(ApiRequestLimits.Defaults, store.limitsState.value)
         store.refresh(); assertEquals(remote, store.limits)
         time += RemoteControlStore.REFRESH_MS; fail = true; store.refresh()
         assertEquals(ApiRequestLimits.Defaults, store.limits); assertNull(store.notice.value)
+        assertEquals(ApiRequestLimits.Defaults, store.limitsState.value)
     }
 
     @Test fun requiredUpdatesTakePriorityIgnoreDismissalAndCanBeRevoked() = runBlocking {

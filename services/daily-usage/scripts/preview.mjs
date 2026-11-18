@@ -38,7 +38,11 @@ const access = req => dashboardPreview || sessionUser(req, { database: query, en
 const stats = statsHandler(query, () => '', () => new Date(), access);
 const config = configHandler(query);
 const control = controlHandler(query, access);
-const releases = releasesHandler(undefined, access);
+const futureFollowing = process.argv.includes('--following-controls');
+const releases = releasesHandler(futureFollowing ? async () => ({
+  versions: [{ version: '0.1.24', versionCode: 25, prerelease: false }], comparisonsAvailable: true,
+  unavailable: [], checkedAt: new Date().toISOString(),
+}) : undefined, access);
 const users = usersHandler({ database: query, env }), account = accountHandler({ database: query, env });
 await userStore(query, env).ensureOwner();
 const previewOwner = await userStore(query, env).get('owner');

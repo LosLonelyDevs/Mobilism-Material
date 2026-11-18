@@ -26,3 +26,13 @@ Keep the About description, sourced from README's second paragraph, within 25
 words and use a neutral perspective.
 Keep the saved landing page separate from current browsing. Fresh installs open
 Apps > Home; preserve an existing saved section until a landing page is chosen.
+
+## Request volume and app controls
+Preserve request pacing, bounded pagination, caches, failure cooldowns, and server
+`Retry-After`. Reuse release metadata already loaded; never fetch each row's details
+just to display view counts. Following defaults to five due apps per batch.
+There is no five-app follow cap. Batch size, per-app interval, and attempt spacing use
+validated remote limits with shipped defaults; the user's background schedule stays separate.
+App controls live in `services/daily-usage`. Keep Android defaults and dashboard
+validation aligned. Follow `docs/remote-controls.md` and `docs/api-limit-tuning.md`;
+deploying code must not silently change production notices or thresholds.

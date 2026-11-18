@@ -14,6 +14,7 @@ data class FollowCheckState(val busy: Boolean = false, val done: Int = 0, val to
 class FollowingChecker(
     private val library: AppLibraryStore, private val repository: MobilismRepository,
     private val device: InstalledApps, private val preferences: FollowingPreferences, private val notifications: FollowingNotifications,
+    private val limits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
 ) {
     private val mutex = Mutex()
     private val mutableState = MutableStateFlow(FollowCheckState())
@@ -39,8 +40,9 @@ class FollowingChecker(
 
     private suspend fun checkDue(): FollowCheckState {
         val now = System.currentTimeMillis()
-        val watches = FollowCheckPolicy.due(library.state.value, now)
-        if (watches.isEmpty() || !preferences.beginCheck(now)) return mutableState.value
+        val policy = limits()
+        val watches = FollowCheckPolicy.due(library.state.value, now, policy)
+        if (watches.isEmpty() || !preferences.beginCheck(now, policy)) return mutableState.value
         mutableState.value = FollowCheckState(busy = true, total = watches.size)
         try {
             if (repository.auth.value == AuthState.Restoring) repository.restoreSession()

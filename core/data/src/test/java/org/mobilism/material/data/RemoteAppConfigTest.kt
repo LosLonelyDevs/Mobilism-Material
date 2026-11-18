@@ -5,6 +5,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class RemoteAppConfigTest {
+    @Test fun followingLimitsAcceptBoundsAndFallBackIndividuallyWithoutAProtocolBump() {
+        val bounds = listOf("followBatchSize" to (1L..20L), "followAppIntervalMs" to (3_600_000L..604_800_000L),
+            "followAttemptIntervalMs" to (900_000L..86_400_000L))
+        fun actual(limits: ApiRequestLimits, key: String) = when (key) {
+            "followBatchSize" -> limits.followBatchSize.toLong()
+            "followAppIntervalMs" -> limits.followAppIntervalMs
+            else -> limits.followAttemptIntervalMs
+        }
+        for ((key, range) in bounds) {
+            for (value in listOf(range.first, range.last)) {
+                assertEquals(value, actual(ApiRequestLimits.parse(JSONObject().put(key, value)), key))
+            }
+            for (value in listOf(range.first - 1, range.last + 1, 1.5, "5", JSONObject.NULL)) {
+                assertEquals(actual(ApiRequestLimits.Defaults, key), actual(ApiRequestLimits.parse(JSONObject().put(key, value)), key))
+            }
+        }
+        val parsed = RemoteAppConfig.parse("""{"schema":2,"limits":{"followBatchSize":8,"followAppIntervalMs":3600000,
+            "followAttemptIntervalMs":1800000},"notices":[]}""")
+        assertEquals(ApiRequestLimits.Defaults.copy(followBatchSize = 8, followAppIntervalMs = 3_600_000,
+            followAttemptIntervalMs = 1_800_000), parsed.limits)
+    }
+
     @Test fun upstreamPolicyOverridesAreParsedAndInvalidValuesKeepShippedDefaults() {
         val valid = JSONObject("""{"readSpacingMs":2000,"readConcurrency":1,"readFailureCooldownMs":120000,
             "discussionCategoriesCacheTtlMs":0,"messagePollIntervalMs":180000,"memberLookupSpacingMs":5000,

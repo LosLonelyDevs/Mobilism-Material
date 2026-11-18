@@ -9,6 +9,7 @@ import android.widget.TextView
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -260,12 +261,15 @@ fun ReleaseScreen(
                          ReleaseTitleHeader(release.title, release.section)
                     }
                     releaseDetailItem {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            UsernameLink(release.author, Modifier.weight(1f))
-                            Text("${release.replies} replies", style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            ReleasePostDate(release.publishedAt)
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            UsernameLink(release.author)
+                            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("${release.replies} replies", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                ReleaseViewCount(release.views, textStyle = MaterialTheme.typography.bodySmall)
+                                ReleasePostDate(release.publishedAt)
+                            }
                         }
                     }
                     if (groups.isNotEmpty()) releaseDetailItem("quick-downloads") {

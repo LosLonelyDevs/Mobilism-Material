@@ -43,6 +43,8 @@ internal class RemoteControlStore(
     private val foregroundDismissed = mutableSetOf<String>()
     private val mutable = MutableStateFlow<AppNotice?>(null)
     val notice = mutable.asStateFlow()
+    private val mutableLimits = MutableStateFlow(ApiRequestLimits.Defaults)
+    val limitsState = mutableLimits.asStateFlow()
     val userAgentPolicy = org.mobilism.material.data.UserAgentPolicy(installedVersion) { currentConfig().userAgentRules }
 
     // No disk cache of remote values: a cold start or failed refresh uses shipped defaults.
@@ -73,6 +75,7 @@ internal class RemoteControlStore(
         "${username?.takeIf { identityKnown }?.let(NoticeAudience::usernameHash) ?: "guest"}:${notice.dismissalKey}"
 
     fun tick() = synchronized(audienceLock) {
+        mutableLimits.value = limits
         // Clear response-triggered overrides on config failure, even between API requests.
         userAgentPolicy.prefix()
         val context = NoticeContext(username, installedVersion, installedCode, androidApi, identityKnown)

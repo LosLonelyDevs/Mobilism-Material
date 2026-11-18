@@ -111,6 +111,7 @@ fun LibraryScreen(
                                     title.subtitle.takeIf { it.isNotBlank() }?.let {
                                         Text(it, style = MaterialTheme.typography.bodySmall)
                                     }
+                                    ReleaseViewCount(entry.release.views)
                                     ReleasePostDate(entry.release.publishedAt)
                                 }
                                 AppIconButton(Icons.Outlined.DeleteOutline, "Remove ${title.name} from downloaded", {

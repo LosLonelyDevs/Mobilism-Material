@@ -12,6 +12,7 @@ class FollowingViewModel(private val app: MobilismApplication) : AndroidViewMode
     val installed = app.following.installed
     val check = app.following.state
     val preferences = app.followPreferences
+    val limits = app.remoteControl.limitsState
     private val mutableError = MutableStateFlow<ScreenError?>(null)
     val error = mutableError.asStateFlow()
 

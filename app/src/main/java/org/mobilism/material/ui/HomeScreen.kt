@@ -208,6 +208,7 @@ private fun HomeHero(releases: List<Release>, section: ContentSection, onRelease
                     if (section == ContentSection.Books && title.subtitle.isNotBlank()) Text(title.subtitle,
                         style = MaterialTheme.typography.labelMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, color = tone.second)
                     else UsernameLink(release.author, style = MaterialTheme.typography.labelMedium, maxLines = 2, color = tone.second)
+                    ReleaseViewCount(release.views, color = tone.second)
                 }
             }
         }
@@ -242,6 +243,7 @@ private fun LatestTile(release: Release, section: ContentSection, onRelease: (Lo
             if (section == ContentSection.Books && title.subtitle.isNotBlank()) Text(title.subtitle,
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             else UsernameLink(release.author, style = MaterialTheme.typography.labelMedium)
+            ReleaseViewCount(release.views)
             ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
         }
     }
@@ -259,7 +261,7 @@ private fun PopularTile(release: Release, section: ContentSection, index: Int, o
                     .height(if (section == ContentSection.Books) 126.dp else 106.dp), section)
             }
             Text(title.name, style = MaterialTheme.typography.titleMediumEmphasized, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
-            Text("${release.views} views", style = MaterialTheme.typography.labelMedium, color = tone.second)
+            ReleaseViewCount(release.views, textStyle = MaterialTheme.typography.labelMedium, color = tone.second)
         }
     }
 }

@@ -3,6 +3,7 @@ package org.mobilism.material.following
 import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.mobilism.material.data.ApiRequestLimits
 
 data class FollowPreferences(val backgroundChecks: Boolean = true, val notifications: Boolean = false, val intervalHours: Long = 6)
 
@@ -12,9 +13,9 @@ class FollowingPreferences(context: Context) {
         preferences.getBoolean("notifications", false), preferences.getLong("hours", 6).takeIf { it in intervals } ?: 6))
     val state = mutableState.asStateFlow()
 
-    internal fun beginCheck(now: Long): Boolean {
+    internal fun beginCheck(now: Long, limits: ApiRequestLimits): Boolean {
         val previous = preferences.getLong("last-check-attempt", 0)
-        if (previous > 0 && now - previous < FollowCheckPolicy.ATTEMPT_INTERVAL_MS) return false
+        if (!FollowCheckPolicy.canAttempt(previous, now, limits)) return false
         preferences.edit().putLong("last-check-attempt", now).apply()
         return true
     }

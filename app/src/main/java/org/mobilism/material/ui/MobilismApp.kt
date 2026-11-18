@@ -268,9 +268,10 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             val check by followingModel.check.collectAsStateWithLifecycle()
             val error by followingModel.error.collectAsStateWithLifecycle()
             val preferences by followingModel.preferences.state.collectAsStateWithLifecycle()
+            val limits by followingModel.limits.collectAsStateWithLifecycle()
             FollowingScreen(library, installed, check, error, preferences, followingModel.preferences,
                 app.followNotifications, model.library, followingModel::refresh, followingModel::checkNow, followingModel::link,
-                onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() })
+                onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() }, limits = limits)
         }
         composable("discussions") { entry ->
             val discussions: DiscussionsViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {

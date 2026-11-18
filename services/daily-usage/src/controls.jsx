@@ -7,6 +7,7 @@ import UserAgentControls from './user-agent-controls';
 import { collectUsernames } from '../public/audience.js';
 import { defaultConfig, limitFields, validateConfig } from '../public/config-schema.js';
 import { noticeForEditor, noticesWithoutVersionTargeting } from '../public/notice-editor.js';
+import { followingControlsAvailable, followingMinimumVersion } from '../public/limit-availability.js';
 
 const freshNotice = () => ({ id: `notice-${crypto.randomUUID()}`, title: '', message: '', mode: 'notice', frequency: 'once', enabled: false,
   startsAt: null, endsAt: null, minVersionCode: 1, maxVersionCode: null, requiredVersionCode: null, linkText: null, linkUrl: null, deviceNotification: false, audience: { type: 'everyone' } });
@@ -17,8 +18,10 @@ const groups = [
   { name: 'Messages', hint: 'Foreground and background checks share these limits. Android background work runs no more often than every 15 minutes.', keys: ['messagePollIntervalMs', 'messageFailureMaxCooldownMs'] },
   { name: 'Member profiles', hint: 'Optional avatar and profile lookups. Failed requests back off exponentially.', keys: ['memberLookupSpacingMs', 'memberCacheTtlMs', 'memberMissingCacheTtlMs', 'memberFailureCooldownMs', 'memberFailureMaxCooldownMs'] },
   { name: 'Debrid services', hint: 'Minimum interval between automatic account and host refreshes.', keys: ['debridRefreshIntervalMs'] },
+  { name: 'Following', minimumVersion: followingMinimumVersion, hint: 'Controls update-check batches, not how many apps someone can follow. Applies to manual and background checks. The user’s background schedule stays separate; search pacing and server Retry-After still apply.', keys: ['followBatchSize', 'followAppIntervalMs', 'followAttemptIntervalMs'] },
 ];
 const labels = { searchSpacingMs: 'Request spacing', searchCacheTtlMs: 'Cache lifetime', searchFailureCooldownMs: 'Failure cooldown', categorySearchRequestLimit: 'Requests per category', categorySearchConcurrency: 'Concurrent categories', readRetryDelayMs: 'Retry delay', readSpacingMs: 'Request spacing', readConcurrency: 'Concurrent reads', readFailureCooldownMs: 'Initial cooldown', readFailureMaxCooldownMs: 'Maximum cooldown', discussionCategoriesCacheTtlMs: 'Category cache', discussionFirstPageCacheTtlMs: 'First-page cache', messagePollIntervalMs: 'Check interval', messageFailureMaxCooldownMs: 'Maximum cooldown', memberLookupSpacingMs: 'Lookup spacing', memberCacheTtlMs: 'Profile cache', memberMissingCacheTtlMs: 'Missing profile cache', memberFailureCooldownMs: 'Initial cooldown', memberFailureMaxCooldownMs: 'Maximum cooldown', debridRefreshIntervalMs: 'Refresh interval' };
+const followingLabels = { followBatchSize: 'Apps per batch', followAppIntervalMs: 'Minimum interval per app', followAttemptIntervalMs: 'Minimum batch interval' };
 function localDate(value) { if (!value) return ''; const date = new Date(value); return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); }
 function utcDate(value) { return value ? new Date(value).toISOString() : null; }
 
@@ -102,9 +105,9 @@ export default function Controls() {
       <div hidden={tab !== 'api' || apiTab !== 'headers'}><UserAgentControls key={workspaceKey} rules={published.userAgentRules} catalog={catalog} busy={busy} onDirtyChange={setHeadersDirty} onSave={(userAgentRules, onSaved) => publish({ ...published, userAgentRules }, onSaved, true)} /></div>
       <div hidden={tab !== 'api' || apiTab !== 'limits'}>
         <div className="workspace-heading"><HStack gap={6}><TextPairing title="API limits" /><Help label="About API limits">Leave a field blank to use its shipped default. Durations are milliseconds. Exponential cooldowns never cap below the initial interval. Server Retry-After is always respected.</Help></HStack><Button onClick={() => setDraft(old => ({ ...old, limits: {} }))} disabled={!Object.keys(draft.limits).length}>Use app defaults</Button></div>
-        <div className="limits-grid">{groups.map(group => <Card key={group.name} title={group.name} headerEnd={<Help label={`About ${group.name}`}>{group.hint}</Help>} style={{ borderRadius: 20 }}><div className="limit-fields">{group.keys.map(key => {
+        <div className="limits-grid">{groups.filter(group => !group.minimumVersion || followingControlsAvailable(catalog)).map(group => <Card key={group.name} title={group.name} headerEnd={<Help label={`About ${group.name}`}>{group.hint}</Help>} style={{ borderRadius: 20 }}>{group.minimumVersion && <p>Requires v{group.minimumVersion} or later.</p>}<div className="limit-fields">{group.keys.map(key => {
           const [, , fallback, min, max] = limitFields.find(f => f[0] === key);
-          return <InputField key={key} label={`${labels[key]}${key.endsWith('Ms') ? ' (ms)' : ''}`} help={`Default: ${fallback.toLocaleString()}. Range: ${min.toLocaleString()} to ${max.toLocaleString()}. Blank uses the default.`} type="number" min={min} max={max} step={1} placeholder={fallback.toLocaleString()} value={draft.limits[key] ?? ''} onChange={event => { const value = event.target.value; setDraft(old => { const limits = { ...old.limits }; if (value === '') delete limits[key]; else limits[key] = Number(value); return { ...old, limits }; }); }} />;
+          return <InputField key={key} label={`${followingLabels[key] || labels[key]}${key.endsWith('Ms') ? ' (ms)' : ''}`} help={`Default: ${fallback.toLocaleString()}. Range: ${min.toLocaleString()} to ${max.toLocaleString()}. Blank uses the default.`} type="number" min={min} max={max} step={1} placeholder={fallback.toLocaleString()} value={draft.limits[key] ?? ''} onChange={event => { const value = event.target.value; setDraft(old => { const limits = { ...old.limits }; if (value === '') delete limits[key]; else limits[key] = Number(value); return { ...old, limits }; }); }} />;
         })}</div></Card>)}</div>
       </div>
     </fieldset>}

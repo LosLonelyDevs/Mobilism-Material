@@ -103,10 +103,47 @@ Links appear after the message with the configured link text. They open in the u
 | Initial failed member lookup cooldown | 60,000 ms | 60,000 to 3,600,000 ms |
 | Maximum failed member lookup cooldown | 900,000 ms | 60,000 to 3,600,000 ms |
 | Minimum debrid refresh interval | 900,000 ms | 60,000 to 3,600,000 ms |
+| Following apps per batch | 5 | 1 to 20 |
+| Minimum interval per followed app | 21,600,000 ms (6 hours) | 3,600,000 to 604,800,000 ms (1 hour to 7 days) |
+| Minimum following batch interval | 900,000 ms (15 minutes) | 900,000 to 86,400,000 ms (15 minutes to 24 hours) |
 
 Open **API controls > Limits** to edit thresholds. Blank fields remove the override. **Use app defaults** clears all threshold overrides in the draft; **Save API limits** applies them. Server `Retry-After` delays remain authoritative even when local limits change.
 
 For a starting profile that reduces request volume, see [API limit tuning](api-limit-tuning.md).
+
+### Following limits
+
+Users can follow more than five apps. **API controls > Limits > Following** sets
+apps per batch (`followBatchSize`), the minimum interval per app
+(`followAppIntervalMs`), and the minimum interval between attempts
+(`followAttemptIntervalMs`). Defaults stay at five apps, six hours, and 15 minutes.
+These limits apply to both manual and background checks, oldest checks first.
+The app displays the effective limits. Changing limits does not reset check history.
+
+Background checks still run at the user's chosen 6, 12, or 24-hour interval,
+subject to Android scheduling. Remote cooldowns can prevent requests during a
+scheduled pass; they do not shorten or replace that schedule. The worker refreshes
+configuration through the existing throttled store before checking. Each app search
+reads only page one, and the batch stops after the first error. Shared search
+spacing, caching, failure cooldowns, and server `Retry-After` still apply.
+
+Larger follow lists take multiple batches. With the defaults, 20 followed apps
+and six-hour background checks take about 24 hours per steady rotation, before
+Android delays. This is a request budget, not a promise of six-hour coverage.
+
+The dashboard can ship before the next app release. The Following section stays
+hidden until the verified release catalog contains a stable v0.1.24 or newer.
+Once available, it displays **Requires v0.1.24 or later.** Drafts, prereleases,
+and unverified releases do not reveal it. The catalog caches for ten minutes;
+reload the dashboard after a release to refresh its catalog.
+
+The fields are optional in schema 2; existing APKs ignore them. Only v0.1.24 and
+later use these overrides. Deploying the service does not publish overrides or
+change the app version. Missing, invalid, failed, or expired configuration uses
+defaults. If the next supporting release changes, update `followingMinimumVersion`
+before publishing it.
+
+### Configuration behavior
 
 Failure cooldowns double after repeated failures, up to the configured maximum. The effective maximum is never below the initial cooldown. Message checks use their normal interval as the initial cooldown. Background message work keeps Android's 15-minute minimum scheduling interval; the policy also applies to foreground checks. These controls preserve the request deduplication and refresh behavior introduced in 0.1.21.
 

@@ -55,6 +55,20 @@ test('device notifications default off and opt-in survives admin and public roun
   assert.equal(published.deviceNotification, true);
   assert.equal(published.enabled, false);
 });
+test('following overrides publish and reset without changing notices or protocol', async () => {
+  const handler = adminHandler(query, () => true);
+  const limits = { followBatchSize: 8, followAppIntervalMs: 3600000, followAttemptIntervalMs: 1800000 };
+  const saved = await call(handler, { method: 'PUT', body: { ...defaultConfig(), limits, notices: [notice()] } });
+  assert.equal(saved.statusCode, 200);
+  const published = (await call(publicHandler(query))).body;
+  assert.equal(published.schema, 2);
+  assert.deepEqual(published.limits, limits);
+  assert.equal(published.notices[0].id, 'test-notice');
+  const reset = await call(handler, { method: 'PUT', body: { ...saved.body, limits: {} } });
+  assert.equal(reset.statusCode, 200);
+  assert.deepEqual((await call(publicHandler(query))).body.limits, {});
+  assert.deepEqual(reset.body.notices, saved.body.notices);
+});
 test('legacy stored configuration migrates but old editors cannot erase targeting', async () => {
   const legacy = notice(); delete legacy.audience;
   await query('INSERT INTO app_control VALUES (1, 1, $1::jsonb, CURRENT_TIMESTAMP)',

@@ -22,6 +22,9 @@ export const limitFields = [
   ['memberFailureCooldownMs', 'Initial failed member lookup cooldown (ms)', 60000, 60000, 3600000],
   ['memberFailureMaxCooldownMs', 'Maximum failed member lookup cooldown (ms)', 900000, 60000, 3600000],
   ['debridRefreshIntervalMs', 'Minimum debrid refresh interval (ms)', 900000, 60000, 3600000],
+  ['followBatchSize', 'Following apps per batch', 5, 1, 20],
+  ['followAppIntervalMs', 'Minimum interval per followed app (ms)', 21600000, 3600000, 604800000],
+  ['followAttemptIntervalMs', 'Minimum following batch interval (ms)', 900000, 900000, 86400000],
 ];
 
 export function defaultConfig() { return { schema: 2, revision: 0, limits: {}, notices: [], userAgentRules: [] }; }
