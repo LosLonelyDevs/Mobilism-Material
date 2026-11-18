@@ -5,6 +5,7 @@ import { Button, Card, Heading, HStack, Icon, InputField, Link, Notice, Skeleton
 import Controls from './controls';
 import Users from './users';
 import Account from './account';
+import VersionShare from './version-share';
 import { canAccess, navigation, PAGES } from '../public/access';
 import { mountUsage } from './usage';
 import usageMarkup from './usage.html?raw';
@@ -58,35 +59,52 @@ function Login({ initialStage, onSignedIn, initialError = '', retryAfter = 0 }) 
   </form></Card></main>;
 }
 
-function Overview({ user }) {
-  const [usage, setUsage] = useState(null), [config, setConfig] = useState(null), [error, setError] = useState('');
-  const usageAllowed = canAccess(user, 'app-usage'), controlsAllowed = canAccess(user, 'app-controls');
+function useOverviewSnapshot(url) {
+  const [result, setResult] = useState(null);
   useEffect(() => {
-    const abort = new AbortController(), day = today();
-    Promise.all([usageAllowed && api(`/api/stats?from=${day}&to=${day}`, { signal: abort.signal }).then(setUsage),
-      controlsAllowed && api('/api/control-config', { signal: abort.signal }).then(setConfig)]).catch(e => { if (!abort.signal.aborted) setError(e.message); });
+    if (!url) return;
+    const abort = new AbortController();
+    api(url, { signal: abort.signal }).then(data => {
+      if (!abort.signal.aborted) setResult({ url, data });
+    }).catch(error => {
+      if (!abort.signal.aborted) setResult({ url, error });
+    });
     return () => abort.abort();
-  }, [usageAllowed, controlsAllowed]);
+  }, [url]);
+  return result?.url === url ? result : null;
+}
+
+function Overview({ user }) {
+  const [day] = useState(today);
+  const usageAllowed = canAccess(user, 'app-usage'), controlsAllowed = canAccess(user, 'app-controls');
+  const stats = useOverviewSnapshot(usageAllowed ? `/api/stats?from=${day}&to=${day}` : null);
+  const settings = useOverviewSnapshot(controlsAllowed ? '/api/control-config' : null);
+  const showUsage = usageAllowed && stats?.error?.status !== 403;
+  const showControls = controlsAllowed && settings?.error?.status !== 403;
+  const usage = stats?.data, config = settings?.data;
   const count = usage?.daily.reduce((total, day) => total + BigInt(day.devices), 0n);
   const active = config?.notices.filter(n => n.enabled && (!n.startsAt || Date.parse(n.startsAt) <= Date.now()) && (!n.endsAt || Date.parse(n.endsAt) > Date.now())).length;
-  return <div className="page overview-page"><header className="page-heading"><div><span className="eyebrow">ADMIN</span><Heading level={1}>Overview</Heading></div><span className="muted overview-date">{today()} · UTC</span></header>
-    {error && <Notice variant="danger">{error}</Notice>}
+  return <div className="page overview-page"><header className="page-heading"><div><span className="eyebrow">ADMIN</span><Heading level={1}>Overview</Heading></div><span className="muted overview-date">{day} · UTC</span></header>
     <div className="overview-grid">
-      {usageAllowed && <a href="/app-usage" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
+      {showUsage && <a href="/app-usage" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
         <div className="destination-top"><span className="destination-icon"><Icon name="chart" size={26} /></span><Icon name="arrow" /></div>
         <Heading level={2}>App usage</Heading><Text>Activity, versions, and devices.</Text>
-        <div className="destination-metrics"><div><span className="metric-value">{count === undefined ? <Skeleton width={90} height={38} /> : new Intl.NumberFormat().format(count)}</span><span className="muted">Active today</span></div><div><span className="metric-value">{usage ? new Set(usage.breakdown.map(r => r.appVersion)).size : '…'}</span><span className="muted">App versions</span></div></div>
+        {stats?.error ? <Notice variant="danger">{stats.error.message}</Notice> : <>
+          <div className="destination-metrics"><div><span className="metric-value">{count === undefined ? <Skeleton width={90} height={38} /> : new Intl.NumberFormat().format(count)}</span><span className="muted">Active today</span></div><div><span className="metric-value">{usage ? new Set(usage.breakdown.map(r => r.appVersion)).size : '…'}</span><span className="muted">App versions</span></div></div>
+          {usage && <VersionShare rows={usage.breakdown} />}
+        </>}
         <span className="destination-action">View app usage <Icon name="arrow" size={17} /></span>
       </Card></a>}
-      {controlsAllowed && <a href="/app-controls" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
+      {showControls && <a href="/app-controls" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
         <div className="destination-top"><span className="destination-icon violet"><Icon name="controls" size={26} /></span><Icon name="arrow" /></div>
         <Heading level={2}>App controls</Heading><Text>Notices, updates, and API limits.</Text>
-        <div className="destination-metrics"><div><span className="metric-value">{active ?? <Skeleton width={60} height={38} />}</span><span className="muted">Live notices</span></div><div><span className="metric-value">{config ? Object.keys(config.limits).length : '…'}</span><span className="muted">API overrides</span></div></div>
+        {settings?.error ? <Notice variant="danger">{settings.error.message}</Notice> :
+          <div className="destination-metrics"><div><span className="metric-value">{active ?? <Skeleton width={60} height={38} />}</span><span className="muted">Live notices</span></div><div><span className="metric-value">{config ? Object.keys(config.limits).length : '…'}</span><span className="muted">API overrides</span></div></div>}
         <span className="destination-action">Manage app controls <Icon name="arrow" size={17} /></span>
       </Card></a>}
     </div>
-    {!usageAllowed && !controlsAllowed && <Card><Text>No app pages are assigned to your account.</Text><Link href="/account">Open My account</Link></Card>}
-    <div className="overview-note"><Help label="About these metrics">Activity counts installations active on the current UTC date. A live notice can still target only selected accounts or builds.</Help><span>Today’s snapshot</span></div>
+    {!showUsage && !showControls ? <Card><Text>No app pages are assigned to your account.</Text><Link href="/account">Open My account</Link></Card> :
+      <div className="overview-note"><Help label="About these metrics">{[showUsage && 'Activity counts installations active on the current UTC date.', showControls && 'A live notice can still target only selected accounts or builds.'].filter(Boolean).join(' ')}</Help><span>Today’s snapshot</span></div>}
   </div>;
 }
 
@@ -115,8 +133,9 @@ function App() {
   const allowedRoutes = navigation(auth), allowed = route && canAccess(auth, route.id);
   return <><a className="skip-link" href="#main-content">Skip to content</a><header className="app-header"><div className="header-inner">
     <Link href={allowedRoutes[0].href} style={{ textDecoration: 'none' }}><HStack gap={10}><span className="brand-mark" aria-hidden="true">m</span><span className="brand-name">Mobilism <strong>Material</strong></span></HStack></Link>
-    <nav aria-label="Dashboard navigation">{allowedRoutes.map(item => <Link key={item.href} href={item.href} aria-current={path === item.href ? 'page' : undefined} className="nav-link"><Icon name={item.icon} size={18} /><span>{item.label}</span></Link>)}</nav>
-    <Button onClick={signOut} size="sm" className="sign-out">Sign out</Button>
+    <nav aria-label="Dashboard navigation">{allowedRoutes.filter(item => item.id !== 'account').map(item => <Link key={item.href} href={item.href} aria-current={path === item.href ? 'page' : undefined} className="nav-link"><Icon name={item.icon} size={18} /><span>{item.label}</span></Link>)}</nav>
+    <div className="account-actions"><Link href="/account" aria-current={path === '/account' ? 'page' : undefined} className="nav-link">My Account</Link>
+      <Button onClick={signOut} size="sm" className="sign-out">Sign out</Button></div>
   </div></header><main id="main-content" className="main-content">
     {error && <Notice variant="danger">{error}</Notice>}
     {!allowed ? <VStack gap={16}><Heading level={1}>{route ? 'Access denied' : 'Page not found'}</Heading><Text>{route ? 'You do not have access to this page.' : 'This page does not exist.'}</Text><Link href={allowedRoutes[0].href}>Open an available page</Link></VStack>

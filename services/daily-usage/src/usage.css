@@ -1,7 +1,25 @@
 .usage-page .admin-stats { grid-template-columns: 1.3fr repeat(2, minmax(0, 1fr)); }
-.usage-page .admin-heading, .usage-page .admin-toolbar { flex-wrap: wrap; }
+.usage-page .admin-heading { flex-wrap: wrap; }
 .usage-page [hidden] { display: none !important; }
-.usage-page .admin-toolbar select { min-height: 48px; border: 1px solid var(--admin-outline); border-radius: 16px; padding: 10px; color: var(--admin-text); background: var(--admin-surface-high); font: inherit; font-size: 16px; }
+.usage-period { display: grid; gap: 6px; }
+.usage-period > span { font-size: 12px; color: var(--admin-muted); }
+.usage-page #choose-dates { min-height: 46px; padding: 10px 16px; font-weight: 600; }
+.date-calendar { box-sizing: border-box; width: min(374px, calc(100% - 24px)); max-height: calc(100dvh - 24px); padding: 22px; border: 1px solid var(--admin-outline); border-radius: 24px; background: var(--admin-surface); color: var(--admin-text); box-shadow: var(--elevation-3); }
+.date-calendar::backdrop { background: rgb(6 9 20 / .68); }
+.date-calendar h2 { margin: 0; font-size: 20px; }
+.date-calendar p { color: var(--admin-muted); font-size: 13px; line-height: 1.5; }
+.calendar-nav, .calendar-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.calendar-nav { margin: 18px 0 12px; }
+.usage-page .calendar-nav button { width: 40px; height: 40px; padding: 0; font-size: 22px; }
+.calendar-week, .calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; }
+.calendar-week { color: var(--admin-muted); font-size: 12px; margin-bottom: 6px; }
+.usage-page .calendar-days button { min-width: 0; min-height: 40px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--admin-text); font-variant-numeric: tabular-nums; }
+.usage-page .calendar-days button[aria-pressed=true] { background: var(--admin-container); border-radius: 0; }
+.usage-page .calendar-days button.endpoint { background: var(--admin-primary); color: var(--primary-foreground); border-radius: 12px; font-weight: 700; }
+.usage-page .calendar-days button[aria-current=date] { text-decoration: underline; text-underline-offset: 4px; }
+.usage-page .calendar-days button:not(:disabled):hover { box-shadow: inset 0 0 0 1px var(--admin-primary); }
+.date-calendar button:disabled { opacity: .35; cursor: default; }
+.calendar-actions { justify-content: flex-end; margin-top: 16px; }
 .usage-page .admin-chart { gap: min(8px, var(--bar-gap)); }
 .usage-page .admin-stat-total { display: grid; }
 .usage-page .admin-stat > span:last-child { align-self: end; font-size: 12px; }

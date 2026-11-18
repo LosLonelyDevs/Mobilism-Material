@@ -12,7 +12,9 @@ The repository Actions variable `DAILY_USAGE_ENDPOINT` supplies future release b
 
 The landing page shows an overview with links to **App usage** at `/app-usage` and **App controls** at `/app-controls`. App Controls uses AHFU components for notices, audience rules, schedules, and API thresholds. See [Remote app controls](../../docs/remote-controls.md) and [component notes](../../docs/dashboard-components.md). Apply `schema.sql` before deploying this feature.
 
-Select a UTC day, a 14/30/90-day period, or a custom range within the last 365 days. A day shows reporting clients. A range shows the sum of daily reports. The busiest day's client count is the minimum possible number of distinct installations in the range. The total reports give the maximum. Daily IDs cannot link an installation across days.
+The Overview’s App usage card shows today’s client share by app version. Each card uses its destination’s page permission.
+
+In App usage, open Report dates and choose a day. Choose a second day for an inclusive range, then select Apply. Dates use UTC and cover the last 365 days. A day shows reporting clients. A range shows the sum of daily reports. The busiest day's client count is the minimum possible number of distinct installations in the range. The total reports give the maximum. Daily IDs cannot link an installation across days.
 
 Version shares use all reports in the selection. Each report records the version seen on the installation’s first activity that day. The dashboard compares it with the current verified stable release. App versions combine builds, and device details retain individual build numbers. In a range, use the chart slider and **View this day’s breakdown** to see one day’s clients.
 

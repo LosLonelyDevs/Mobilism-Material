@@ -44,6 +44,9 @@ input::-webkit-calendar-picker-indicator { opacity: .85; }
 .brand-name { font-size: 15px; white-space: nowrap; letter-spacing: -.02em; }
 .brand-name strong { font-weight: 650; }
 .header-inner nav { display: flex; gap: 6px; margin-left: auto; }
+.header-inner nav:empty { display: none; }
+.account-actions { display: flex; align-items: center; gap: 16px; margin-left: auto; white-space: nowrap; }
+.header-inner nav:not(:empty) + .account-actions { margin-left: 0; }
 .header-inner .nav-link { display: flex !important; align-items: center; gap: 8px; padding: 12px 15px; border-radius: 14px; min-height: 46px; color: var(--text-secondary) !important; text-decoration: none !important; font-size: 14px; }
 .header-inner .nav-link[aria-current='page'] { color: var(--primary) !important; background: var(--primary-bg); }
 .header-inner .nav-link:hover { background: var(--surface-alt); }
@@ -58,7 +61,7 @@ input::-webkit-calendar-picker-indicator { opacity: .85; }
 .destination-card:hover { transform: translateY(-3px); }
 .destination-card > div { transition: border-color 180ms ease, box-shadow 180ms ease; }
 .destination-card:hover > div { border-color: var(--primary) !important; box-shadow: var(--elevation-3) !important; }
-.destination-card > div > div { padding: 28px !important; }
+.destination-card > div > div { display: flex; flex-direction: column; height: 100%; padding: 28px !important; }
 .destination-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; color: var(--text-muted); }
 .destination-icon { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 18px; background: var(--primary-bg); color: var(--primary); }
 .destination-icon.violet { background: #382e50; color: #c7abff; }
@@ -66,7 +69,17 @@ input::-webkit-calendar-picker-indicator { opacity: .85; }
 .destination-metrics { display: flex; gap: 48px; padding: 30px 0; }
 .destination-metrics > div { display: grid; gap: 6px; }
 .metric-value { display: block; min-height: 42px; font-size: 34px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
-.destination-action { display: flex; align-items: center; gap: 9px; color: var(--primary); font-size: 14px; font-weight: 600; border-top: 1px solid var(--border); padding-top: 20px; }
+.version-share { margin: 0 0 24px; }
+.version-share figcaption { margin-bottom: 12px; font-size: 14px; font-weight: 600; }
+.version-share-body { display: flex; align-items: center; gap: 18px; }
+.version-share-pie { width: 84px; aspect-ratio: 1; flex: none; border-radius: 50%; }
+.version-share-legend { flex: 1; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.version-share-legend li { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto auto; align-items: baseline; gap: 8px; padding: 3px 0; font-size: 13px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.version-share-dot { width: 8px; height: 8px; align-self: center; border-radius: 50%; }
+.version-share-count, .version-share-empty { color: var(--text-muted); }
+.version-share-legend strong { text-align: right; }
+.version-share-empty { font-size: 13px; margin: 0 0 20px; }
+.destination-action { display: flex; align-items: center; gap: 9px; margin-top: auto; color: var(--primary); font-size: 14px; font-weight: 600; border-top: 1px solid var(--border); padding-top: 20px; }
 .overview-note { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 16px; color: var(--text-muted); font-size: 12px; }
 .controls-topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 1px solid var(--border); margin-bottom: 26px; }
 .controls-topbar > div:first-child { flex: 1; }
@@ -160,7 +173,7 @@ input::-webkit-calendar-picker-indicator { opacity: .85; }
   .brand-name { display: inline; }
   .header-inner nav { width: 100%; order: 3; justify-content: space-between; gap: 4px; margin-left: 0; }
   .header-inner .nav-link { flex: 1; justify-content: center; font-size: 12px !important; padding: 12px 6px; gap: 6px; white-space: nowrap; }
-  .sign-out { margin-left: auto; }
+  .header-inner nav:not(:empty) + .account-actions { margin-left: auto; }
   .main-content { padding: 28px 16px 48px; }
   .page-heading { margin-bottom: 24px; align-items: flex-end; }
   .overview-date { display: none; }

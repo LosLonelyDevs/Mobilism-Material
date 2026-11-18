@@ -1,12 +1,22 @@
       <div class="admin-heading">
         <div><h1>Usage</h1><p>Active Mobilism clients and the versions they report.</p></div>
-        <form id="filters" class="admin-toolbar">
-          <label>Period<select id="period"><option value="day">Single day</option><option value="14">14 days</option><option value="30">30 days</option><option value="90">90 days</option><option value="custom">Custom range</option></select></label>
-          <label id="start-field" hidden>From (UTC)<input id="from" type="date" required disabled></label>
-          <label><span id="end-label">Date (UTC)</span><input id="day" type="date" required></label>
-          <button id="refresh" class="primary" type="submit">Apply</button>
-        </form>
+        <div class="usage-period"><span id="period-label">Report dates (UTC)</span>
+          <button id="choose-dates" type="button" aria-haspopup="dialog" aria-controls="date-calendar" aria-labelledby="period-label choose-dates"></button>
+        </div>
       </div>
+      <dialog id="date-calendar" class="date-calendar" aria-labelledby="calendar-title" aria-describedby="calendar-hint">
+        <h2 id="calendar-title">Report dates</h2>
+        <p id="calendar-hint">Choose one day, or two dates for a range.</p>
+        <div class="calendar-nav">
+          <button id="prev-month" type="button" aria-label="Previous month">‹</button>
+          <strong id="calendar-month" aria-live="polite"></strong>
+          <button id="next-month" type="button" aria-label="Next month">›</button>
+        </div>
+        <div class="calendar-week" aria-hidden="true"><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span></div>
+        <div id="calendar-days" class="calendar-days" role="group" aria-labelledby="calendar-month"></div>
+        <p id="calendar-selection" aria-live="polite"></p>
+        <div class="calendar-actions"><button id="cancel-dates" type="button">Cancel</button><button id="apply-dates" type="button" class="primary">Apply</button></div>
+      </dialog>
       <div id="dashboard-error" class="admin-notice" role="alert" hidden></div>
 <p id="loading" class="admin-loading" role="status">Loading activity…</p>
       <div id="report" hidden>
