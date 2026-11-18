@@ -124,6 +124,37 @@ class CustomCategoriesTest {
         compose.runOnIdle { assertEquals(setOf(favorites.id), store.state.value.memberships(release())) }
     }
 
+    @Test fun releaseCardsShowForumAndAssignedCategoriesInBothDensities() {
+        val store = CustomCategoryStore(context())
+        val release = release().copy(categoryId = 20)
+        val favorites = store.create(ContentSection.Apps, "Favorites")
+        val travel = store.create(ContentSection.Apps, "Travel")
+        store.assign(release, setOf(travel.id, favorites.id))
+        var enabled by mutableStateOf(true)
+        var compact by mutableStateOf(false)
+        compose.setContent {
+            val custom by store.state.collectAsState()
+            MobilismTheme(reduceMotion = true) {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    LocalForumCategoryNames provides mapOf(20L to "Utilities"),
+                    LocalReleaseAssignments provides custom.takeIf { enabled },
+                ) {
+                    ReleaseCard(release, androidx.compose.ui.graphics.Color.Blue, compact = compact) {}
+                }
+            }
+        }
+        for (density in listOf(false, true)) {
+            compose.runOnIdle { compact = density }
+            compose.onNodeWithText("Utilities").assertIsDisplayed()
+            compose.onNodeWithText("Custom: Favorites, Travel").assertIsDisplayed()
+        }
+        compose.runOnIdle { store.assign(release, setOf(travel.id)) }
+        compose.onNodeWithText("Custom: Travel").assertIsDisplayed()
+        compose.runOnIdle { enabled = false }
+        compose.onNodeWithText("Custom: Travel").assertDoesNotExist()
+        compose.onNodeWithText("Utilities").assertIsDisplayed()
+    }
+
     @Test fun homeUsesNativeCategoryTilesWithSeparateCategoriesForEverySection() {
         val store = CustomCategoryStore(context())
         val categories = ContentSection.entries.associateWith { store.create(it, "Sports") }

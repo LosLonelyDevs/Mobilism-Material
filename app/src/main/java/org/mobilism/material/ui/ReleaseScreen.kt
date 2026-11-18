@@ -263,6 +263,7 @@ fun ReleaseScreen(
                     releaseDetailItem {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             UsernameLink(release.author)
+                            ReleaseCategoryLabels(release, expanded = true)
                             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text("${release.replies} replies", style = MaterialTheme.typography.bodySmall,

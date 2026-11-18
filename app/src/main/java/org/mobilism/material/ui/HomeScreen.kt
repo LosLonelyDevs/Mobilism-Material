@@ -244,6 +244,7 @@ private fun LatestTile(release: Release, section: ContentSection, onRelease: (Lo
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             else UsernameLink(release.author, style = MaterialTheme.typography.labelMedium)
             ReleaseViewCount(release.views)
+            ReleaseCategoryLabels(release)
             ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
         }
     }
@@ -262,6 +263,7 @@ private fun PopularTile(release: Release, section: ContentSection, index: Int, o
             }
             Text(title.name, style = MaterialTheme.typography.titleMediumEmphasized, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
             ReleaseViewCount(release.views, textStyle = MaterialTheme.typography.labelMedium, color = tone.second)
+            ReleaseCategoryLabels(release, color = tone.second)
         }
     }
 }

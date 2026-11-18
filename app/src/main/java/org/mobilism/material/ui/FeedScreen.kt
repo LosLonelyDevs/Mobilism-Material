@@ -326,6 +326,7 @@ internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = fal
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (compact) 1 else 3, overflow = TextOverflow.Ellipsis,
                 )
                 if (!compact) UsernameLink(release.author, style = MaterialTheme.typography.bodySmall)
+                ReleaseCategoryLabels(release)
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (!compact) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {

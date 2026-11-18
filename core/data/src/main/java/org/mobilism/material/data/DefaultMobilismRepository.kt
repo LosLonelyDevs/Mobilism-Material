@@ -19,7 +19,8 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     private val reactions = context.getSharedPreferences("release-reactions", Context.MODE_PRIVATE)
     private val authMutex = Mutex()
     private val categoryMutex = Mutex()
-    private val categoryCache = mutableMapOf<Boolean, Map<ContentSection, List<ReleaseCategory>>>()
+    private val categoryCache = MutableStateFlow(emptyMap<Boolean, Map<ContentSection, List<ReleaseCategory>>>())
+    val categoryCatalogs = categoryCache.asStateFlow()
     private val pagerMutex = Mutex()
     private data class Query(val section: ContentSection, val order: FeedOrder, val categories: Set<Long>, val hideAdult: Boolean,
         val customIds: Set<String> = emptySet(), val customItems: List<CategorizedItem> = emptyList())
@@ -67,7 +68,9 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     }
 
     private suspend fun catalog(hideAdult: Boolean, token: String?) = categoryMutex.withLock {
-        categoryCache[hideAdult] ?: api.categories(token, hideAdult).also { categoryCache[hideAdult] = it }
+        categoryCache.value[hideAdult] ?: api.categories(token, hideAdult).also { catalog ->
+            categoryCache.value = categoryCache.value + (hideAdult to catalog)
+        }
     }
 
     private suspend fun excludedCategories(hideAdult: Boolean): Set<Long> {

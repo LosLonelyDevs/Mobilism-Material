@@ -116,6 +116,10 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     val library by model.library.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val app = context.applicationContext as MobilismApplication
+    val catalogs by app.repository.categoryCatalogs.collectAsStateWithLifecycle()
+    val hideAdult by model.contentPreferences.hideAdult.collectAsStateWithLifecycle()
+    val catalog = catalogs[hideAdult]
+    val forumNames = remember(catalog) { catalog.orEmpty().values.flatten().associate { it.id to it.name } }
     if (auth is AuthState.SignedIn) MessageNotificationPermissionPrompt(app)
     var homeForum by remember { mutableStateOf<Pair<DiscussionTopic?, DiscussionCategory>?>(null) }
     var openingTab by rememberSaveable {
@@ -148,6 +152,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     }
     androidx.compose.runtime.CompositionLocalProvider(
         LocalMemberIdentities provides app.memberIdentities,
+        LocalForumCategoryNames provides forumNames,
+        LocalReleaseAssignments provides localCategories.takeIf { categoryStore != null },
         LocalDownloadHelpHandler provides { nav.navigate("download-help") { launchSingleTop = true } },
         LocalProfileHandler provides { reference ->
             nav.navigate("profile?user=${reference.id ?: 0}&name=${android.net.Uri.encode(reference.username.orEmpty())}") { launchSingleTop = true }
@@ -165,6 +171,9 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             })
             val homeState by home.state.collectAsStateWithLifecycle()
             var tab by rememberSaveable(feed.section) { mutableStateOf(openingTab ?: BrowseTab.Home) }
+            LaunchedEffect(tab, feed.section, hideAdult) {
+                if (tab != BrowseTab.Home && catalog == null) model.loadCategories()
+            }
             LaunchedEffect(Unit) { openingTab = null }
             DisposableEffect(tab, feed.section, feed.order, feed.filters) {
                 home.selectSection(feed.section)
@@ -380,6 +389,9 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             })
             val state by detail.state.collectAsStateWithLifecycle()
             val descriptionExpanded by app.releaseDisplay.descriptionExpanded.collectAsStateWithLifecycle()
+            LaunchedEffect(state.release?.categoryId, hideAdult) {
+                if (state.release?.categoryId != null && catalog == null) model.loadCategories()
+            }
             var assigningCategories by rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(state.release, developer.customCategoriesActive) {
                 if (developer.customCategoriesActive) state.release?.let(model.customCategories::observe)
