@@ -27,9 +27,11 @@ if (process.argv.includes('--test-auth')) {
 const db = new PGlite();
 await db.exec(await readFile(new URL('../schema.sql', import.meta.url), 'utf8'));
 const query = async (sql, values) => (await db.query(sql, values)).rows;
+const futureFollowing = process.argv.includes('--following-controls');
+const stable = { version: futureFollowing ? '0.1.24' : '0.1.23', versionCode: futureFollowing ? 25 : 24, prerelease: false };
 for (let days = 0; days < 90; days++) {
   const day = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-  await query(`INSERT INTO daily_usage VALUES ($1, '0.1.18', 19, 36, 'Google', 'Pixel 9 Pro', $2)`, [day, 12 + days % 13]);
+  await query(`INSERT INTO daily_usage VALUES ($1, $2, $3, 36, 'Google', 'Pixel 9 Pro', $4)`, [day, stable.version, stable.versionCode, 12 + days % 13]);
   await query(`INSERT INTO daily_usage VALUES ($1, '0.1.17', 18, 35, 'Samsung', 'Galaxy S25 Ultra', $2)`, [day, 5 + days % 7]);
 }
 const session = sessionHandler({ database: query, env });
@@ -37,9 +39,8 @@ const dashboardPreview = process.argv.includes('--dashboard');
 const access = req => dashboardPreview || sessionUser(req, { database: query, env });
 const config = configHandler(query);
 const control = controlHandler(query, access);
-const futureFollowing = process.argv.includes('--following-controls');
 const catalog = async () => ({
-  versions: [{ version: futureFollowing ? '0.1.24' : '0.1.23', versionCode: futureFollowing ? 25 : 24, prerelease: false }], comparisonsAvailable: true,
+  versions: [stable], comparisonsAvailable: true,
   unavailable: [], checkedAt: new Date().toISOString(),
 });
 const releases = releasesHandler(catalog, access);

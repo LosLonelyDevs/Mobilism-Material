@@ -2,7 +2,7 @@
 
 Vercel functions for anonymous daily app usage, backed by Neon Postgres. `POST /api/ping` accepts reports. `GET /api/stats` returns protected daily counts and app/device breakdowns. The browser dashboard lives at [mobilism-material-usage.vercel.app](https://mobilism-material-usage.vercel.app/).
 
-Completed-day endpoint counters share that same report. App usage shows request totals, outcomes, and average response-header time for the selected UTC day. This panel stays hidden until the verified stable catalog contains v0.1.24 or later, then displays its minimum version. See [request traffic](../../docs/request-traffic.md) for batching, coverage, and limitations.
+Completed-day endpoint counters share that same report. App usage shows request totals, outcomes, and average response-header time for the selected UTC day or range. This panel stays hidden until the verified stable catalog contains v0.1.24 or later, then displays its minimum version. See [request traffic](../../docs/request-traffic.md) for batching, coverage, and limitations.
 
 Production runs at [mobilism-material-usage.vercel.app](https://mobilism-material-usage.vercel.app/api/ping), in the separate `mobilism-material-usage` Vercel project. Its dedicated `mobilism-material-usage-db` Neon database uses the free plan in `iad1`. The existing app projects are unchanged.
 
@@ -12,9 +12,9 @@ The repository Actions variable `DAILY_USAGE_ENDPOINT` supplies future release b
 
 The landing page shows an overview with links to **App usage** at `/app-usage` and **App controls** at `/app-controls`. App Controls uses AHFU components for notices, audience rules, schedules, and API thresholds. See [Remote app controls](../../docs/remote-controls.md) and [component notes](../../docs/dashboard-components.md). Apply `schema.sql` before deploying this feature.
 
-The dashboard adapts GAYERFyTV's login, activity chart, and responsive layout to Mobilism's Android reports. It works at phone width, with date selection, 14/30/90-day trends, and device/version breakdowns.
+Select a UTC day, a 14/30/90-day period, or a custom range within the last 365 days. A day shows reporting clients. A range shows the sum of daily reports. The busiest day's client count is the minimum possible number of distinct installations in the range. The total reports give the maximum. Daily IDs cannot link an installation across days.
 
-Version, device model, manufacturer, and Android distributions show counts and percentages for the selected UTC day. Use the chart slider to inspect another day. App versions combine build numbers; details retain individual builds. Percentages describe reporting installations, not unique people across the date range.
+Version shares use all reports in the selection. Each report records the version seen on the installation’s first activity that day. The dashboard compares it with the current verified stable release. App versions combine builds, and device details retain individual build numbers. In a range, use the chart slider and **View this day’s breakdown** to see one day’s clients.
 
 1. Read `ADMIN_USERNAME` and `ADMIN_PASSWORD` from the ignored root `.env`.
 2. Add `ADMIN_TOTP_SECRET` to an authenticator app as a Base32 setup key: time-based, SHA-1, six digits, 30 seconds. Suggested label: Mobilism usage.
@@ -68,6 +68,8 @@ curl --fail --silent --show-error \
 ```
 
 The default range is the last 30 UTC dates. Up to 365 dates are allowed. `daily` includes zero-count dates; `breakdown` groups by app version/code, Android API level, manufacturer, and model. Counts are decimal strings so large integers remain exact. Dates can gain late reports for seven days.
+
+Add `group=period` to aggregate device details and endpoint totals across the selected dates. The daily trend still includes one count per day. `latestStable` is the current verified stable version or null when unavailable.
 
 ## What a report means
 

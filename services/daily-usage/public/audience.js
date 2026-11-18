@@ -12,6 +12,12 @@ export function normalizeVersion(value) {
   return version.split('.').map(Number).join('.');
 }
 
+export function compareVersions(a, b) {
+  const left = normalizeVersion(a).split('.').map(Number), right = normalizeVersion(b).split('.').map(Number);
+  for (let index = 0; index < 3; index++) if (left[index] !== right[index]) return left[index] - right[index];
+  return 0;
+}
+
 export function validateAudience(audience) {
   let count = 0;
   function visit(item, depth) {

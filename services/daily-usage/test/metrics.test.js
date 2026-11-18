@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupUsage, percentage } from '../public/metrics.js';
+import { groupUsage, percentage, releaseAdoption } from '../public/metrics.js';
 
 const row = overrides => ({ appVersion: '0.1.19', versionCode: 20, manufacturer: 'Google', model: 'Pixel', androidApi: 36, devices: '1', ...overrides });
 
@@ -31,4 +31,15 @@ test('empty dates and large counts remain valid', () => {
   assert.deepEqual(groupUsage([], 'versions'), []);
   assert.equal(percentage(0, 0), 0);
   assert.equal(percentage('90071992547409930', '180143985094819860'), 50);
+});
+
+test('adoption uses all reports and separates newer and unrecognized versions from older releases', () => {
+  const rows = [
+    row({ devices: '10' }), row({ appVersion: '0.1.9', devices: '4' }),
+    row({ appVersion: 'dev' }), row({ appVersion: '0.2.0' }),
+  ];
+  const groups = groupUsage(rows, 'versions');
+  assert.equal(groups[0].share, 62.5);
+  assert.deepEqual(releaseAdoption(groups, '0.1.19'), { latest: 10n, older: 4n, other: 2n });
+  assert.equal(releaseAdoption(groups, null), null);
 });

@@ -1,12 +1,13 @@
-import { groupUsage, percentage } from '../public/metrics.js';
+import { groupUsage, percentage, releaseAdoption } from '../public/metrics.js';
 import { groupRequestTraffic, requestTrafficMinimumVersion } from '../public/request-traffic.js';
 import './usage.css';
 export function mountUsage(root, onExpired) {
 const $ = id => id === 'dashboard' ? root : root.querySelector('#' + id);
 const number = value => new Intl.NumberFormat().format(BigInt(value));
-const dateLabel = day => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(day + 'T00:00:00Z'));
+const dateLabel = day => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(day + 'T00:00:00Z'));
 const today = () => new Date().toISOString().slice(0, 10);
-let days = 14, data = null, controller, selectedDay;
+const daysBefore = (day, count) => new Date(Date.parse(day) - count * 86400000).toISOString().slice(0, 10);
+let data = null, controller, selectedDay, rangeView = false;
 let deviceGroup = 'models', showAllDevices = false;
 const shareLabel = value => new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value) + '%';
 function text(tag, className, value) {
@@ -16,29 +17,44 @@ function text(tag, className, value) {
   return node;
 }
 function notice(id, message = '') { $(id).textContent = message; $(id).hidden = !message; }
-$('day').value = $('day').max = today();
+$('day').value = today();
+$('from').value = daysBefore(today(), 13);
+function updateFilters() {
+  const custom = $('period').value === 'custom';
+  $('start-field').hidden = $('from').disabled = !custom;
+  $('end-label').textContent = $('period').value === 'day' ? 'Date (UTC)' : 'Through (UTC)';
+  const earliest = daysBefore(today(), 364);
+  $('day').min = $('from').min = earliest;
+  $('day').max = today();
+  $('from').max = $('day').value || today();
+}
+updateFilters();
 $('filters').addEventListener('submit', event => { event.preventDefault(); loadReport(); });
-$('day').addEventListener('change', () => { if ($('day').validity.valid) loadReport(); });
-$('ranges').addEventListener('click', event => {
-  const button = event.target.closest('button[data-days]');
-  if (!button || Number(button.dataset.days) === days) return;
-  days = Number(button.dataset.days);
-  for (const item of $('ranges').children) item.setAttribute('aria-pressed', String(item === button));
-  loadReport();
+$('day').addEventListener('input', updateFilters);
+$('day').addEventListener('change', () => { if ($('period').value !== 'custom' && $('filters').checkValidity()) loadReport(); });
+$('period').addEventListener('change', () => {
+  updateFilters();
+  if ($('period').value !== 'custom' && $('filters').checkValidity()) loadReport();
 });
 async function loadReport() {
+  updateFilters();
+  if (!$('filters').reportValidity()) return;
   controller?.abort();
   const request = new AbortController(); controller = request;
   $('loading').hidden = false; $('report').hidden = true; $('refresh').disabled = true; $('dashboard').setAttribute('aria-busy', 'true'); notice('dashboard-error');
-  const to = $('day').value || today();
-  const from = new Date(new Date(`${to}T00:00:00Z`).getTime() - (days - 1) * 86400000).toISOString().slice(0, 10);
+  const period = $('period').value, to = $('day').value;
+  const start = period === 'custom' ? $('from').value : daysBefore(to, period === 'day' ? 13 : Number(period) - 1);
+  const from = start < $('day').min ? $('day').min : start;
+  const aggregate = period !== 'day' && from !== to;
   try {
-    const response = await fetch(`/api/stats?from=${from}&to=${to}`, { credentials: 'same-origin', cache: 'no-store', signal: request.signal });
+    const response = await fetch(`/api/stats?from=${from}&to=${to}${aggregate ? '&group=period' : ''}`, { credentials: 'same-origin', cache: 'no-store', signal: request.signal });
     if (response.status === 401) { data = null; request.abort(); onExpired(); return; }
     if (!response.ok) throw new Error('Activity is unavailable. Try refreshing.');
     const report = await response.json();
     if (request.signal.aborted) return;
-    data = report; renderReport(); $('report').hidden = false;
+    data = report;
+    rangeView = aggregate;
+    renderReport(); $('report').hidden = false;
   } catch (error) { if (!request.signal.aborted) notice('dashboard-error', error.message); }
   finally { if (!request.signal.aborted) { $('loading').hidden = true; $('refresh').disabled = false; $('dashboard').setAttribute('aria-busy', 'false'); } }
 }
@@ -46,6 +62,7 @@ function renderReport() {
   const peak = data.daily.reduce((max, day) => BigInt(day.devices) > max ? BigInt(day.devices) : max, 0n);
   $('peak').textContent = number(peak); $('zero-note').hidden = peak !== 0n;
   $('chart').style.gridTemplateColumns = `repeat(${data.daily.length}, minmax(0, 1fr))`;
+  $('chart').style.setProperty('--bar-gap', `${18 / data.daily.length}%`);
   $('chart').replaceChildren(...data.daily.map(day => {
     const column = text('div', 'admin-chart-column', '');
     const track = text('div', 'admin-chart-track', '');
@@ -55,7 +72,14 @@ function renderReport() {
   }));
   $('range-start').textContent = dateLabel(data.from); $('range-end').textContent = dateLabel(data.to);
   $('chart-slider').max = data.daily.length - 1; $('chart-slider').value = data.daily.length - 1;
+  $('view-day').hidden = !rangeView;
+  $('chart-slider').disabled = data.daily.length === 1;
   selectDay();
+  if (rangeView) renderSnapshot();
+}
+function countLabel(count) {
+  const unit = rangeView ? 'report' : 'client';
+  return `${number(count)} ${unit}${count === 1n ? '' : 's'}`;
 }
 function renderShares(id, groups) {
   $(id).replaceChildren(...groups.map(group => {
@@ -65,25 +89,43 @@ function renderShares(id, groups) {
     label.append(text('strong', '', group.label));
     if (group.detail) label.append(text('span', 'admin-device-meta', group.detail));
     const stats = text('div', 'admin-share-stats', '');
-    stats.append(text('strong', '', shareLabel(group.share)), text('span', 'admin-device-meta', `${number(group.devices)} ${group.devices === 1n ? 'install' : 'installs'}`));
+    stats.append(text('strong', '', shareLabel(group.share)), text('span', 'admin-device-meta', countLabel(group.devices)));
     heading.append(label, stats);
     const meter = text('div', 'admin-share-track', '');
     meter.setAttribute('aria-hidden', 'true');
     const fill = text('span', '', ''); fill.style.width = `${group.share}%`; meter.append(fill);
     item.append(heading, meter); return item;
   }));
-  if (!groups.length) $(id).append(text('p', 'admin-zero-note', 'No reports for this date.'));
+  if (!groups.length) $(id).append(text('p', 'admin-zero-note', 'No reports for this period.'));
 }
 function renderSnapshot() {
   if (!data || !selectedDay) return;
-  const rows = data.breakdown.filter(row => row.day === selectedDay).sort((a, b) => BigInt(a.devices) === BigInt(b.devices) ? 0 : BigInt(a.devices) > BigInt(b.devices) ? -1 : 1);
+  const from = rangeView ? data.from : selectedDay, to = rangeView ? data.to : selectedDay;
+  const periodLabel = rangeView ? `${dateLabel(from)} to ${dateLabel(to)}` : dateLabel(selectedDay);
+  const rows = data.breakdown.filter(row => rangeView || row.day === selectedDay)
+    .sort((a, b) => BigInt(a.devices) === BigInt(b.devices) ? 0 : BigInt(a.devices) > BigInt(b.devices) ? -1 : 1);
   const total = rows.reduce((sum, row) => sum + BigInt(row.devices), 0n);
   const versions = groupUsage(rows, 'versions'), models = groupUsage(rows, 'models');
   $('total').textContent = number(total);
-  $('versions').textContent = number(versions.length);
-  $('models').textContent = number(models.length);
-  $('snapshot-date').textContent = `Snapshot for ${dateLabel(selectedDay)} · UTC`;
-  $('device-date').textContent = dateLabel(selectedDay);
+  $('total-label').textContent = rangeView ? 'Daily reports in range' : 'Reporting clients';
+  if (rangeView) {
+    const peak = data.daily.reduce((max, row) => BigInt(row.devices) > max ? BigInt(row.devices) : max, 0n);
+    const bounds = peak === total ? number(total) : `${number(peak)} to ${number(total)}`;
+    $('client-count-note').textContent = `${bounds} possible distinct ${total === 1n ? 'client' : 'clients'}. Anonymous IDs change daily.`;
+  } else {
+    $('client-count-note').textContent = 'Each installation reports its version on first activity that day.';
+  }
+  const adoption = releaseAdoption(versions, data.latestStable);
+  for (const key of ['latest', 'older']) {
+    $(key + '-share').textContent = adoption && total > 0n ? shareLabel(percentage(adoption[key], total)) : 'N/A';
+    const version = key === 'latest' ? `on v${data.latestStable}` : `below v${data.latestStable}`;
+    $(key + '-count').textContent = adoption ? `${countLabel(adoption[key])} ${version}` : 'Latest stable release unavailable.';
+  }
+  const other = adoption?.other ? ` · ${countLabel(adoption.other)} on newer or unrecognized versions` : '';
+  $('snapshot-date').textContent = `${periodLabel} · UTC${other}`;
+  $('device-date').textContent = periodLabel;
+  $('detail-unit').textContent = rangeView ? 'Reports' : 'Clients';
+  for (const node of root.querySelectorAll('.share-basis')) node.textContent = rangeView ? 'Share of reports' : 'Share of reporting clients';
   renderShares('version-shares', versions);
   renderShares('android-shares', groupUsage(rows, 'android'));
   const devices = deviceGroup === 'models' ? models : groupUsage(rows, 'brands');
@@ -101,10 +143,10 @@ function renderSnapshot() {
   $('empty').hidden = rows.length > 0;
   $('request-traffic').hidden = !data.trafficAvailable;
   if (data.trafficAvailable) {
-    const groups = groupRequestTraffic(data.requestTraffic, selectedDay);
+    const groups = groupRequestTraffic(data.requestTraffic, rangeView ? undefined : selectedDay);
     const requests = groups.reduce((sum, group) => sum + group.requests, 0n);
     $('traffic-version').textContent = `Requires v${requestTrafficMinimumVersion} or later`;
-    $('traffic-summary').textContent = `${number(requests)} requests · ${dateLabel(selectedDay)} UTC`;
+    $('traffic-summary').textContent = `${number(requests)} requests · ${periodLabel} UTC`;
     $('traffic-rows').replaceChildren(...groups.map(group => {
       const row = document.createElement('tr');
       const label = text('th', '', `${group.method} ${group.endpoint}`); label.scope = 'row';
@@ -120,12 +162,20 @@ function selectDay() {
   if (!data) return;
   const selected = Number($('chart-slider').value), point = data.daily[selected];
   $('chart-total').textContent = number(point.devices); $('chart-day').textContent = dateLabel(point.day);
-  $('chart-slider').setAttribute('aria-valuetext', `${dateLabel(point.day)}: ${number(point.devices)} active installs`);
+  $('chart-slider').setAttribute('aria-valuetext', `${dateLabel(point.day)}, ${number(point.devices)} reporting clients`);
   [...$('chart').children].forEach((node, index) => node.classList.toggle('is-current', index === selected));
   selectedDay = point.day;
-  renderSnapshot();
+  if (!rangeView) renderSnapshot();
 }
-$('chart-slider').addEventListener('input', selectDay);
+$('chart-slider').addEventListener('input', () => {
+  selectDay();
+  if (!rangeView && $('period').value === 'day') $('day').value = selectedDay;
+});
+$('view-day').addEventListener('click', () => {
+  $('period').value = 'day';
+  $('day').value = selectedDay;
+  loadReport();
+});
 $('device-groups').addEventListener('click', event => {
   const button = event.target.closest('button[data-group]');
   if (!button || button.dataset.group === deviceGroup) return;

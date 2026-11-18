@@ -1,9 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compareVersions, createReleaseCatalog, releaseVersion } from '../lib/releases.js';
+import { compareVersions, createReleaseCatalog, latestStableVersion, releaseVersion } from '../lib/releases.js';
 import { createHandler } from '../api/releases.js';
 
 const release = (version, prerelease = false) => ({ tag_name: `v${version}`, prerelease, draft: false });
+test('latest stable uses the verified release catalog and handles incomplete results', () => {
+  const versions = [{ version: '0.2.0', prerelease: true }, { version: '0.1.20', prerelease: false }];
+  assert.equal(latestStableVersion({ versions, unavailable: ['0.1.9'] }), '0.1.20');
+  assert.equal(latestStableVersion({ versions, unavailable: ['0.1.21'] }), null);
+  assert.equal(latestStableVersion({ versions, stale: true }), null);
+  assert.equal(latestStableVersion(null), null);
+});
 const source = (version, code) => `android {\n versionCode = ${code}\n versionName = "${version}"\n}`;
 test('release versions sort numerically and use verified Android metadata', () => {
   assert.ok(compareVersions('0.1.10', '0.1.9') > 0);
