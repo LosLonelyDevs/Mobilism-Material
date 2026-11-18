@@ -261,16 +261,14 @@ fun ReleaseScreen(
                          ReleaseTitleHeader(release.title, release.section)
                     }
                     releaseDetailItem {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                             UsernameLink(release.author)
                             ReleaseCategoryLabels(release, expanded = true)
-                            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("${release.replies} replies", style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                ReleaseViewCount(release.views, textStyle = MaterialTheme.typography.bodySmall)
-                                ReleasePostDate(release.publishedAt)
-                            }
+                            Text("${release.replies} replies", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            ReleaseViewCount(release.views, textStyle = MaterialTheme.typography.bodySmall)
+                            ReleasePostDate(release.publishedAt)
                         }
                     }
                     if (groups.isNotEmpty()) releaseDetailItem("quick-downloads") {

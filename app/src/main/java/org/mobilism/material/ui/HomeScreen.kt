@@ -12,6 +12,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -240,12 +241,15 @@ private fun LatestTile(release: Release, section: ContentSection, onRelease: (Lo
                 if (isNew) NewReleaseBadge(release.id, Modifier.align(Alignment.TopEnd).padding(4.dp))
             }
             Text(title.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
-            if (section == ContentSection.Books && title.subtitle.isNotBlank()) Text(title.subtitle,
-                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            else UsernameLink(release.author, style = MaterialTheme.typography.labelMedium)
-            ReleaseViewCount(release.views)
-            ReleaseCategoryLabels(release)
-            ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
+                itemVerticalAlignment = Alignment.CenterVertically) {
+                if (section == ContentSection.Books && title.subtitle.isNotBlank()) Text(title.subtitle,
+                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                else UsernameLink(release.author, style = MaterialTheme.typography.labelMedium)
+                ReleaseCategoryLabels(release)
+                ReleaseViewCount(release.views)
+                ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
+            }
         }
     }
 }
@@ -262,8 +266,11 @@ private fun PopularTile(release: Release, section: ContentSection, index: Int, o
                     .height(if (section == ContentSection.Books) 126.dp else 106.dp), section)
             }
             Text(title.name, style = MaterialTheme.typography.titleMediumEmphasized, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
-            ReleaseViewCount(release.views, textStyle = MaterialTheme.typography.labelMedium, color = tone.second)
-            ReleaseCategoryLabels(release, color = tone.second)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
+                itemVerticalAlignment = Alignment.CenterVertically) {
+                ReleaseCategoryLabels(release, color = tone.second)
+                ReleaseViewCount(release.views, textStyle = MaterialTheme.typography.labelMedium, color = tone.second)
+            }
         }
     }
 }
