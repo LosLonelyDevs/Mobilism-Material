@@ -62,8 +62,12 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
     private var deliveryJob: Job? = null
     private var deliveryGeneration = 0
     private var pendingReply: MessageReplyAttempt? = null
+    private val deletedMessages = mutableSetOf<Long>()
+    val actions = MailboxActions(repository, savedState, viewModelScope, ::showSent, ::finishDeletion)
 
     init {
+        if (savedState.remove<Long>("pm-delete-attempt") != null)
+            mutableState.update { it.copy(notice = "Deletion was interrupted. Check your mailbox before trying again.") }
         loadMailbox()
         if (state.value.conversationId != null) {
             restoreDraft()
@@ -91,7 +95,7 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
                 ensureActive()
                 if (folder == MessageFolder.Inbox) readHistory.remember(result.items.filter { it.read }.map { it.messageId })
                 val previous = if (refresh) emptyList() else snapshot.items
-                val items = (previous + result.items).associateBy { it.messageId }.values.map {
+                val items = (previous + result.items).filterNot { it.messageId in deletedMessages }.associateBy { it.messageId }.values.map {
                     if (folder == MessageFolder.Inbox && it.messageId in readHistory) it.copy(read = true) else it
                 }
                 updateMailbox(folder) { MailboxState(items, page, canLoadMore = result.canLoadMore &&
@@ -108,7 +112,8 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
 
     fun openConversation(conversationId: Long, messageId: Long) {
         if (conversationId <= 0 || messageId <= 0) return
-        if (state.value.sending) return
+        if (state.value.sending || actions.state.value.busy) return
+        actions.close()
         conversationJob?.cancel()
         deliveryGeneration++
         deliveryJob?.cancel()
@@ -122,7 +127,7 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
     }
 
     fun closeConversation() {
-        if (state.value.sending) return
+        if (state.value.sending || actions.state.value.busy) return
         clearReadErrors()
         conversationJob?.cancel()
         deliveryGeneration++
@@ -143,8 +148,9 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
         mutableState.update { it.copy(loading = true, error = null) }
         conversationJob = viewModelScope.launch {
             try {
-                val messages = repository.conversation(id)
+                val messages = repository.conversation(id).filterNot { it.messageId in deletedMessages }
                 ensureActive()
+                actions.conversationLoaded(messages)
                 if (messages.isEmpty()) throw ApiFailure(FailureKind.InvalidResponse, "This conversation is no longer available.")
                 // Viewing a message clears its local badge even if the server read receipt fails.
                 val incomingIds = messages.filter { it.to.equals(username, ignoreCase = true) }.map { it.id }
@@ -438,10 +444,37 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
         val key = "message-pending-$id"
         listOf("", "-conversation", "-sender", "-recipient", "-subject", "-text", "-started", "-known", "-fresh", "-sent")
             .forEach { savedState.remove<Any>(key + it) }
-        pendingReply = null
+        if (pendingReply?.targetId == id) pendingReply = null
     }
 
     fun noticeShown() { mutableState.update { it.copy(notice = null) } }
+
+    private fun showSent(sent: Boolean) {
+        savedState["message-folder"] = MessageFolder.Sent.name
+        mutableState.update { it.copy(folder = MessageFolder.Sent, notice = if (sent) "Message sent" else null) }
+        loadMailbox(refresh = true, folder = MessageFolder.Sent)
+    }
+
+    private fun finishDeletion(id: Long) {
+        deletedMessages += id
+        savedState.remove<String>("message-draft-$id")
+        clearAttempt(id)
+        val remaining = state.value.conversation.filterNot { it.messageId == id }
+        if (remaining.isEmpty()) closeConversation()
+        else {
+            mutableState.update { it.copy(conversation = remaining) }
+            if (state.value.messageId == id) {
+                val next = remaining.last().messageId
+                savedState["message-id"] = next
+                mutableState.update { it.copy(messageId = next) }
+                restoreDraft()
+            }
+        }
+        mutableState.update { state -> state.copy(notice = "Message deleted", mailboxes = state.mailboxes.mapValues { (_, box) ->
+            box.copy(items = box.items.filterNot { it.messageId == id })
+        }) }
+        loadMailbox(refresh = true)
+    }
 
     private fun restoreDraft() {
         val id = state.value.messageId ?: return

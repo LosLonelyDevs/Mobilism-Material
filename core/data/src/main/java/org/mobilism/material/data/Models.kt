@@ -91,7 +91,7 @@ enum class VerificationSite(val url: String) {
 }
 
 class ApiFailure(val kind: FailureKind, override val message: String, val httpStatus: Int? = null,
-    val verificationSite: VerificationSite = VerificationSite.App) : Exception(message)
+    val verificationSite: VerificationSite = VerificationSite.App, val blockedBeforeRequest: Boolean = false) : Exception(message)
 
 interface MobilismRepository {
     val auth: kotlinx.coroutines.flow.StateFlow<AuthState>

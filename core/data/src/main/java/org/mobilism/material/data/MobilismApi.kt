@@ -37,6 +37,11 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             interceptors().add(1, BrowserCookiesInterceptor())
         }
         .addNetworkInterceptor(RequestTrafficInterceptor(requestTraffic))
+        .addNetworkInterceptor { chain ->
+            val once = chain.request().tag(MessageDeletion::class.java)
+            if (once != null && !once.started.compareAndSet(false, true)) throw IOException("Message action already attempted")
+            chain.proceed(chain.request())
+        }
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .callTimeout(45, TimeUnit.SECONDS)
@@ -201,6 +206,22 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         ), emptySuccess = true))
     }
 
+    suspend fun sendMessage(recipient: String, subject: String, body: String, account: Session) {
+        require(recipient.isNotBlank() && subject.isNotBlank() && body.isNotBlank() && body.length <= PrivateMessages.MAX_LENGTH)
+        reads.checkAllowed()
+        PrivateMessages.confirm(request("message/send", account.accessToken, form = mapOf(
+            "to" to recipient.trim(), "from" to account.username, "subject" to subject.trim(), "content" to body.trim(),
+        ), retryRead = false, emptySuccess = true))
+    }
+
+    private class MessageDeletion { val started = java.util.concurrent.atomic.AtomicBoolean() }
+
+    suspend fun deleteMessage(messageId: Long, token: String) {
+        require(messageId > 0)
+        reads.checkAllowed()
+        PrivateMessages.confirm(request("message/delete/$messageId", token, retryRead = false, emptySuccess = true))
+    }
+
     suspend fun search(query: String, scope: SearchScope, page: Int, token: String?, hideAdult: Boolean = false): ReleasePage {
         require(query.isNotBlank() && page > 0)
         return SearchJson.page(request("search", token, form = mapOf(
@@ -316,6 +337,9 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                 if (hideAdult) addQueryParameter("no_adult", "1")
             }.build()
             val builder = Request.Builder().url(url).header("Accept", "application/json")
+            // This legacy GET changes the mailbox. Skip caches and prevent HTTP follow-up replays.
+            if (path.startsWith("message/delete/")) builder.header("Cache-Control", "no-cache, no-store")
+                .tag(MessageDeletion::class.java, MessageDeletion())
             // Clearance belongs to the browser's origin and user agent, across all API requests.
             builder.header("User-Agent", AppUserAgent.value(context))
             // This client is used only for the API origin, never images or download URLs.
@@ -356,7 +380,8 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                     val text = source.readUtf8()
                     val challenged = NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", text)
                         ?.kind == FailureKind.Challenge
-                    if (readOnly || path == "search") reads.response(response.code, response.header("Retry-After"), challenged)
+                    if (readOnly || path == "search" || path == "message/send" || path.startsWith("message/delete/"))
+                        reads.response(response.code, response.header("Retry-After"), challenged)
                     NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", text)?.let { throw it }
                     val json = try {
                         if (emptySuccess && response.isSuccessful && (text.isBlank() || text.trim() == "null")) JSONObject()

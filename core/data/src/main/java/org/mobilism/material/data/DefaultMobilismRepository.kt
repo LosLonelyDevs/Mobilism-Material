@@ -227,6 +227,12 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         api.replyToMessage(message, text, it)
     }
 
+    override suspend fun sendMessage(recipient: String, subject: String, body: String) = withMessageSession {
+        api.sendMessage(recipient, subject, body, it)
+    }
+
+    override suspend fun deleteMessage(messageId: Long) = withMessageSession { api.deleteMessage(messageId, it.accessToken) }
+
     private suspend fun <T> withMessageSession(block: suspend (Session) -> T): T = withSession { token ->
         val account = session?.takeIf { it.accessToken == token }
             ?: throw ApiFailure(FailureKind.Credentials, "Sign in to read and reply to messages.")

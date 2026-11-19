@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -60,12 +61,15 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
     onBack: () -> Unit, onSignIn: () -> Unit, onRefreshConversation: () -> Unit,
     onReply: () -> Unit, onEdit: (String) -> Unit, onSend: () -> Unit, onCloseReply: () -> Unit,
     onNoticeShown: () -> Unit, onRelease: (Long) -> Unit = {},
-    onCheckReply: () -> Unit = {}, onRetryReply: () -> Unit = {}, onNewReply: () -> Unit = {}) {
+    onCheckReply: () -> Unit = {}, onRetryReply: () -> Unit = {}, onNewReply: () -> Unit = {},
+    actions: MailboxActions? = null) {
     val snackbar = remember { SnackbarHostState() }
     val inboxScroll = rememberLazyListState()
     val sentScroll = rememberLazyListState()
     val detail = state.conversationId != null
-    BackHandler(detail) { if (!state.sending) onBack() }
+    val actionState = actions?.state?.collectAsStateWithLifecycle()?.value
+    BackHandler(detail) { if (!state.sending && actionState?.busy != true) onBack() }
+    if (actionState != null && actions != null) MailboxActionDialogs(actionState, actions, onRefreshConversation, onSignIn)
     LaunchedEffect(state.notice) { state.notice?.let { snackbar.showSnackbar(it); onNoticeShown() } }
     if (state.replying) MessageReplyComposer(state, username, onEdit, onSend, onCloseReply,
         onCheck = onCheckReply, onRetry = onRetryReply, onNew = onNewReply, onSignIn = onSignIn)
@@ -75,7 +79,9 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
             title = { AppHeading(if (detail) "Conversation" else "Messages", HeadingLevel.Page,
                 style = MaterialTheme.typography.titleLarge) },
             navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack, enabled = !state.sending) },
-            actions = { AppIconButton(Icons.Outlined.Refresh, "Refresh messages",
+            actions = {
+                if (!detail && actions != null) AppTextButton("New message", actions::compose)
+                AppIconButton(Icons.Outlined.Refresh, "Refresh messages",
                 if (detail) onRefreshConversation else onRefresh,
                 enabled = !state.sending && !state.checkingReply && !(if (detail) state.loading else state.mailbox.busy)) },
         ) },
@@ -99,7 +105,9 @@ fun MessagesScreen(state: MessagesState, username: String, onFolder: (MessageFol
                         state.readError?.let { item { ErrorPanel(it, onRetry = onRefreshConversation) } }
                         items(state.conversation, key = { it.id }) { message ->
                             MessageBubble(message, username, onRead = { onRead(message.id) },
-                                marking = message.id in state.marking, onRelease = onRelease)
+                                marking = message.id in state.marking, onRelease = onRelease,
+                                onDelete = actions?.takeUnless { state.loading || state.sending || state.checkingReply }
+                                    ?.let { { it.selectForDeletion(message) } })
                         }
                         if (state.replyTarget != null) item("reply") {
                             ExpressiveButton(if (state.sendUnconfirmed) onNewReply else onReply,

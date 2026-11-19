@@ -102,7 +102,7 @@ internal class ReadRequestPolicy(
 
     fun checkAllowed() = synchronized(lock) {
         if (now() < blockedUntil()) throw ApiFailure(FailureKind.Server,
-            "Mobilism is temporarily busy. Wait a moment before trying again.", blockedStatus)
+            "Mobilism is temporarily busy. Wait a moment before trying again.", blockedStatus, blockedBeforeRequest = true)
     }
 
     fun response(status: Int, retryAfter: String?, challenged: Boolean = false) = synchronized(lock) {

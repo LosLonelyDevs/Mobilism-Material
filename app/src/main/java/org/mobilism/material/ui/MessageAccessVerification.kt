@@ -27,7 +27,7 @@ internal fun MessageAccessVerification(onDismiss: () -> Unit, onContinue: () -> 
         Surface(Modifier.fillMaxSize()) {
             Column(Modifier.statusBarsPadding().navigationBarsPadding()) {
                 Text("Verify message access", Modifier.padding(16.dp), style = MaterialTheme.typography.titleLarge)
-                Text("Complete the browser check, then tap Continue. This only checks access; it won't send your reply.",
+                Text("Complete the browser check, then tap Continue to return to messages.",
                     Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodyMedium)
                 Row {
                     TextButton(onClick = onDismiss) { Text("Cancel") }

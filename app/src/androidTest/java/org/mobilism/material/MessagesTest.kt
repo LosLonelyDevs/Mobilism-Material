@@ -30,6 +30,44 @@ import org.mobilism.material.ui.*
 class MessagesTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun composeAndDeleteUseOneRequestPerConfirmedAction() = runBlocking {
+        val fixture = Fixture()
+        val model = openMailbox(fixture)
+        compose.onNodeWithText("New message").performClick()
+        compose.onNodeWithTag("new-message-send").assertIsNotEnabled()
+        compose.onNodeWithTag("new-message-to").performTextInput("CaseUser")
+        compose.onNodeWithTag("new-message-subject").performTextInput("Question")
+        compose.onNodeWithTag("new-message-body").performTextInput("Hello & thanks")
+        InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5_000)
+        compose.onNodeWithTag("new-message-send").performScrollTo().performClick()
+        compose.waitUntil(10_000) { model.state.value.folder == MessageFolder.Sent && model.state.value.mailbox.page == 1 }
+        compose.onNodeWithText("To CaseUser").assertIsDisplayed()
+        val post = fixture.requests.single { it.url.encodedPath.endsWith("/message/send") }
+        assertEquals("POST", post.method)
+        assertEquals("sample-session", post.header("X-Auth-Token"))
+        val expected = FormBody.Builder().add("to", "CaseUser").add("from", "Reader").add("subject", "Question")
+            .add("content", "Hello & thanks").build()
+        assertEquals(okio.Buffer().also(expected::writeTo).readUtf8(), okio.Buffer().also(post.body!!::writeTo).readUtf8())
+        assertTrue(post.body!!.isOneShot())
+        compose.onNodeWithText("Inbox").performClick()
+        compose.onNodeWithText("Question").performClick()
+        compose.waitUntil(10_000) { model.state.value.conversation.isNotEmpty() }
+        compose.onNodeWithTag("delete-message-42").performScrollTo().performClick()
+        compose.onNodeWithText("Cancel").performClick()
+        assertTrue(fixture.requests.none { "/message/delete/" in it.url.encodedPath })
+        compose.onNodeWithTag("delete-message-42").performScrollTo().performClick()
+        compose.onNodeWithText("Delete", substring = false).performClick()
+        compose.waitUntil(10_000) { model.state.value.conversationId == null && model.state.value.mailbox.items.isEmpty() }
+        val deletion = fixture.requests.single { "/message/delete/" in it.url.encodedPath }
+        assertEquals("/api-new/message/delete/42", deletion.url.encodedPath)
+        assertEquals("GET", deletion.method)
+        assertEquals("sample-session", deletion.header("X-Auth-Token"))
+        assertTrue(deletion.cacheControl.noStore)
+        assertFalse(fixture.events.toString().contains("CaseUser"))
+        assertFalse(fixture.events.toString().contains("Hello & thanks"))
+        fixture.repository.signOut()
+    }
+
     @Test fun authenticatedMailboxReadAndReplyUseLegacyContractAfterSessionRestore() = runBlocking {
         val fixture = Fixture()
         fixture.repository.signIn("Reader", "sample-password")
@@ -57,6 +95,28 @@ class MessagesTest {
         assertFalse(fixture.events.toString().contains("Thanks"))
         assertFalse(fixture.events.toString().contains("sample-session"))
         restored.signOut()
+    }
+
+    @Test fun newMessageAndDeleteRespectCooldownWithoutReplayingWrites() = runBlocking {
+        for (sending in listOf(true, false)) {
+            val fixture = Fixture()
+            val repo = fixture.repository
+            repo.signIn("Reader", "sample-password")
+            fixture.actionStatus = 503
+            fixture.requests.clear()
+            suspend fun act() {
+                if (sending) repo.sendMessage("CaseUser", "Question", "Hello") else repo.deleteMessage(42)
+            }
+            assertTrue(runCatching { act() }.isFailure)
+            assertEquals(1, fixture.requests.size)
+            val blocked = runCatching { act() }.exceptionOrNull() as ApiFailure
+            assertTrue(blocked.blockedBeforeRequest)
+            assertEquals(1, fixture.requests.size)
+            repo.signOut()
+            fixture.requests.clear()
+            assertTrue(runCatching { act() }.isFailure)
+            assertTrue(fixture.requests.isEmpty())
+        }
     }
 
     @Test fun writeFailuresAreNotRetriedAndCannotReportSuccess() = runBlocking {
@@ -118,7 +178,8 @@ class MessagesTest {
         compose.waitUntil(10_000) { !model.state.value.replying && model.state.value.draft.isEmpty() }
         assertFalse(model.state.value.sendUnconfirmed)
         assertNull(model.state.value.sendError)
-        compose.onNodeWithText("Reply", substring = false).performScrollTo().performClick()
+        compose.waitUntil(10_000) { !model.state.value.loading }
+        compose.onNodeWithText("Reply", substring = false).performScrollTo().assertIsEnabled().performClick()
         compose.onNodeWithTag("message-draft").performTextInput("A second reply")
         fixture.actionBody = ""
         compose.onNodeWithTag("send-message").performScrollTo().performClick()
@@ -266,8 +327,8 @@ class MessagesTest {
         val fixture = Fixture().apply { actionBody = "{"; deliverOnSend = true; sparseReply = true }
         val model = openComposer(fixture)
         compose.onNodeWithTag("send-message").performScrollTo().performClick()
-        compose.waitUntil(15_000) { !model.state.value.replying && model.state.value.draft.isEmpty() }
-        compose.onNodeWithText("Reply", substring = false).performScrollTo().performClick()
+        compose.waitUntil(15_000) { !model.state.value.replying && model.state.value.draft.isEmpty() && !model.state.value.loading }
+        compose.onNodeWithText("Reply", substring = false).performScrollTo().assertIsEnabled().performClick()
         compose.onNodeWithTag("message-draft").performTextInput("A follow-up")
         compose.onNodeWithTag("send-message").performScrollTo().assertIsEnabled()
         compose.onNodeWithTag("check-message-delivery").assertDoesNotExist()
@@ -324,7 +385,7 @@ class MessagesTest {
         }
     }
 
-    private suspend fun openComposer(fixture: Fixture): MessagesViewModel {
+    private suspend fun openMailbox(fixture: Fixture): MessagesViewModel {
         fixture.repository.signIn("Reader", "sample-password")
         lateinit var model: MessagesViewModel
         compose.runOnUiThread { model = MessagesViewModel(fixture.repository, "Reader", SavedStateHandle()) }
@@ -335,9 +396,15 @@ class MessagesTest {
                 onBack = model::closeConversation, onSignIn = {}, onRefreshConversation = model::loadConversation,
                 onReply = model::openReply, onEdit = model::editReply, onSend = model::sendReply,
                 onCloseReply = model::closeReply, onNoticeShown = model::noticeShown,
-                onCheckReply = model::checkReplyDelivery, onRetryReply = model::retryReply, onNewReply = model::newReply)
+                onCheckReply = model::checkReplyDelivery, onRetryReply = model::retryReply, onNewReply = model::newReply,
+                actions = model.actions)
         } }
         compose.waitUntil(10_000) { model.state.value.mailbox.items.isNotEmpty() }
+        return model
+    }
+
+    private suspend fun openComposer(fixture: Fixture): MessagesViewModel {
+        val model = openMailbox(fixture)
         compose.onNodeWithText("Question").performClick()
         compose.waitUntil(10_000) { model.state.value.conversation.isNotEmpty() }
         compose.onNodeWithText("Reply", substring = false).performScrollTo().performClick()
@@ -366,6 +433,8 @@ class MessagesTest {
         @Volatile var actionBody = """{"status":"success"}"""
         @Volatile var readBody = """{"status":"success"}"""
         @Volatile var deliverOnSend = false
+        @Volatile var newMessageSent = false
+        @Volatile var messageDeleted = false
         @Volatile var delivered = false
         @Volatile var sparseReply = false
         @Volatile var blockReads = false
@@ -392,6 +461,16 @@ class MessagesTest {
                     actionBody
                 }
                 path.endsWith("/read") -> { status = actionStatus; readBody }
+                path == "message/send" -> {
+                    status = actionStatus
+                    if (status == 200 && actionBody.contains("success")) newMessageSent = true
+                    actionBody
+                }
+                path == "message/delete/42" -> {
+                    status = actionStatus
+                    if (status == 200 && actionBody.contains("success")) messageDeleted = true
+                    actionBody
+                }
                 path == "message/10/orderby/times/asc" -> {
                     val reply = if (delivered) """,{"id":43,"subject":"${if (sparseReply) "" else "Re: Question"}","from_user":"Reader","to_user":"${if (sparseReply) "" else "Author"}","content":"A private reply","times":${System.currentTimeMillis() / 1000},"readed":1}""" else ""
                     """{"response":[{"id":42,"subject":"Question","from_user":"Author","to_user":"Reader","content":"Hello https://example.org","times":1700000000,"readed":0}$reply]}"""
@@ -399,7 +478,11 @@ class MessagesTest {
                 path.startsWith("message/to/") || path.startsWith("message/from/") -> {
                     status = listStatus
                     val sent = path.startsWith("message/from/")
-                    listBody ?: """{"response":[{"id":10,"msg_id":42,"subject":"Question","from_user":"${if (sent) "Reader" else "Author"}","to_user":"${if (sent) "Author" else "Reader"}","preview":"$preview","times":1700000000,"readed":0}]}"""
+                    listBody ?: when {
+                        sent && newMessageSent -> """{"response":[{"id":11,"msg_id":80,"subject":"Question","from_user":"Reader","to_user":"CaseUser","preview":"Hello &amp; thanks","readed":1}]}"""
+                        messageDeleted -> """{"response":[]}"""
+                        else -> """{"response":[{"id":10,"msg_id":42,"subject":"Question","from_user":"${if (sent) "Reader" else "Author"}","to_user":"${if (sent) "Author" else "Reader"}","preview":"$preview","times":1700000000,"readed":0}]}"""
+                    }
                 }
                 else -> error("Unexpected fixture path")
             }

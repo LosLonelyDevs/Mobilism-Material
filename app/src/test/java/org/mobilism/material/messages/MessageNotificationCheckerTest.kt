@@ -66,6 +66,8 @@ class MessageNotificationCheckerTest {
         override suspend fun conversation(id: Long): List<PrivateMessage> = error("Notification checks must not mark conversations read")
         override suspend fun markMessageRead(id: Long): Unit = error("Notification checks must not send read receipts")
         override suspend fun replyToMessage(message: PrivateMessage, text: String): Unit = error("Notification checks must not send messages")
+        override suspend fun sendMessage(recipient: String, subject: String, body: String): Unit = error("Unexpected send")
+        override suspend fun deleteMessage(messageId: Long): Unit = error("Unexpected deletion")
     }
 
     @Test fun onlyUnreadIncomingMessagesAlertOnceAcrossRepeatedChecks() = runTest {

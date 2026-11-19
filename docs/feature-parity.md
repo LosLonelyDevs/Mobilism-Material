@@ -7,7 +7,7 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 - Login, guest entry, account registration/password recovery screens, sign-out, and encrypted session storage.
 - Favourite starting section, Apps/Games/Books Home tabs, Latest/Top feeds, category multiselect, inclusive post-date filters, and pagination. Home includes featured releases, latest/popular collections, category shortcuts, reviews, and recent discussions.
 - Release details, formatted text with clickable URLs, parsed title metadata, collapsible description/changelog/mod/download sections, and paginated comments with signed-in posting and targeted replies.
-- Inbox and Sent tabs, conversation history, mark as read, and private message replies. Existing saved sessions need a fresh sign-in to store the account ID. Message deletion, new conversations, and notifications remain pending.
+- Inbox and Sent support new conversations, replies, read receipts, and individual message deletion. [Incoming message alerts](message-alerts.md) use scheduled checks.
 - Discussions for Apps, Games, Books, and Community, including Announcements, Contests, Chitchat, Services, and Suggestions & Feedback. Browse categories, search topics, read original posts, page through comments, and post comments or quoted replies with per-topic drafts.
 - Full-screen images, zoom/paging, architecture groups, preferred hosts, host links, clipboard actions, and browser opening.
 - Material 3 Expressive components and motion, Frappé/Geist defaults, 13 themes including AMOLED Black, appearance preferences, and reduced motion. Theme import is hidden for now.
@@ -28,7 +28,6 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 | Version tracker | Full version history, broader matching for ambiguous/unversioned releases, large-library performance | `UI/VersionTracker/` |
 | Downloads | Built-in RAR and 7z extraction. These archives save intact. Interrupted file transfers can be restarted from the release link. | `logic/download/`, `UI/Release/DownloadsActivity.java` |
 | Premium | Mobilism Premium trial/plans/payment flows | `UI/AMember/`, premium/payment API endpoints |
-| Messages | New conversations, deletion, unread notifications | `UI/Messages/`, message API endpoints |
 | Settings and utilities | Notification preferences/sounds, content filters, cache controls, old listing options, download/extraction options, QR scanner, About, app-update flow | `res/xml/pref_general.xml`, `UI/QRCodeScanner/`, `UI/Settings/AboutActivity.java`, `logic/updater/` |
 
 ## Complete Compose and migration work
@@ -43,7 +42,7 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 
 1. Finish Apps: batch/library actions, release history, and broader matching coverage.
 2. Mobilism Premium trial/plans/payment flows.
-3. Remaining forum and private message actions, and notifications.
+3. Remaining forum actions.
 4. Remaining settings/utilities, pure-Compose rich text, migration, and final parity testing.
 
 Following checks inspect up to three Apps search pages per app. A failed check preserves prior results; a missing match does not prove there is no newer version. Android controls background timing. Notifications need permission and are sent once per version. Without an installed match, checks use the followed release as the baseline. The library stays local and does not sync with the forum account.

@@ -38,11 +38,14 @@ internal fun UsernameLink(name: String, modifier: Modifier = Modifier, label: St
     maxLines: Int = 1, fontWeight: FontWeight? = null, showAvatar: Boolean = true, onOpen: () -> Unit = {}) {
     val open = LocalProfileHandler.current
     val identity = memberIdentity(name)
-    Row(modifier.minimumInteractiveComponentSize().clip(MaterialTheme.shapes.small)
-        .clickable(enabled = open != null && name.isNotBlank(), role = Role.Button, onClickLabel = "View $name profile") {
+    val profileLink = if (open != null && name.isNotBlank()) {
+        Modifier.clickable(role = Role.Button, onClickLabel = "View $name profile") {
             onOpen()
-            open?.invoke(ProfileReference(username = name))
-        }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            open(ProfileReference(username = name))
+        }
+    } else Modifier
+    Row(modifier.minimumInteractiveComponentSize().clip(MaterialTheme.shapes.small).then(profileLink),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (showAvatar && !identity?.avatar.isNullOrBlank()) {
             MessageAvatar(name, identity.avatar, Modifier.size(24.dp))
         }

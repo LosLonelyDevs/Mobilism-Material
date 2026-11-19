@@ -1,5 +1,9 @@
 package org.mobilism.material.ui
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
+import org.mobilism.material.designsystem.AppIconButton
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -52,7 +56,7 @@ import java.util.TimeZone
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun MessageBubble(message: PrivateMessage, username: String, onRead: () -> Unit,
-    marking: Boolean, onRelease: (Long) -> Unit) {
+    marking: Boolean, onRelease: (Long) -> Unit, onDelete: (() -> Unit)? = null) {
     val outgoing = message.from.equals(username, ignoreCase = true)
     var expanded by rememberSaveable(message.id) { mutableStateOf(true) }
     val toggle = { expanded = !expanded }
@@ -101,6 +105,8 @@ internal fun MessageBubble(message: PrivateMessage, username: String, onRead: ()
                                 Box(Modifier.weight(1f)) {
                                     MessageTimestamp(message.publishedAt, Modifier.testTag("message-time-${message.id}"))
                                 }
+                                if (onDelete != null) AppIconButton(Icons.Outlined.Delete, "Delete message", onDelete,
+                                    Modifier.testTag("delete-message-${message.messageId}"))
                                 CommentCollapseButton(true, toggle, label = "Collapse message")
                             }
                         }

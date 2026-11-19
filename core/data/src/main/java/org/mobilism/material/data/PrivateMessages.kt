@@ -23,6 +23,8 @@ interface MessagesRepository {
     suspend fun conversation(id: Long): List<PrivateMessage>
     suspend fun markMessageRead(id: Long)
     suspend fun replyToMessage(message: PrivateMessage, text: String)
+    suspend fun sendMessage(recipient: String, subject: String, body: String)
+    suspend fun deleteMessage(messageId: Long)
 }
 
 object PrivateMessages {

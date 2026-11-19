@@ -316,14 +316,15 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         }
         composable("messages") { entry ->
             if (auth is AuthState.SignedIn) {
-                val messages: MessagesViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
+                val messages: MessagesViewModel = viewModel(key = "messages-${auth.username}", viewModelStoreOwner = entry, factory = viewModelFactory {
                     initializer { MessagesViewModel(app.repository, auth.username, createSavedStateHandle(),
                         readHistory = app.messageReads.forAccount(auth.username)) }
                 })
                 val state by messages.state.collectAsStateWithLifecycle()
-                LaunchedEffect(notificationMessage, state.sending) {
+                val actionState by messages.actions.state.collectAsStateWithLifecycle()
+                LaunchedEffect(notificationMessage, state.sending, actionState.busy) {
                     notificationMessage?.takeIf {
-                        !state.sending && it.accountKey == org.mobilism.material.messages.MessageAlertStore.accountKey(auth.username)
+                        !state.sending && !actionState.busy && it.accountKey == org.mobilism.material.messages.MessageAlertStore.accountKey(auth.username)
                     }?.let {
                         messages.openConversation(it.conversationId, it.messageId)
                         onNotificationHandled()
@@ -337,7 +338,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                     onReply = messages::openReply, onEdit = messages::editReply, onSend = messages::sendReply,
                     onCloseReply = messages::closeReply, onNoticeShown = messages::noticeShown,
                     onCheckReply = messages::checkReplyDelivery, onRetryReply = messages::retryReply,
-                    onNewReply = messages::newReply,
+                    onNewReply = messages::newReply, actions = messages.actions,
                     onRelease = { nav.navigate("release/$it") })
             }
         }

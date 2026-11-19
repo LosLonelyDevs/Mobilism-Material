@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Compose and delete private messages
 - Save release files to a chosen folder with optional ZIP extraction
 - Show release view counts across browsing and saved releases
 - Add release text cleanup and Markdown rendering in Developer options
