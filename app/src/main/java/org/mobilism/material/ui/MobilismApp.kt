@@ -152,6 +152,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         }
     }
     androidx.compose.runtime.CompositionLocalProvider(
+        LocalCommentGateway provides app.repository.commentGateway,
         LocalMemberIdentities provides app.memberIdentities,
         LocalForumCategoryNames provides forumNames,
         LocalReleaseAssignments provides localCategories.takeIf { categoryStore != null },

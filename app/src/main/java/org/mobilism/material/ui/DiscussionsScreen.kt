@@ -69,9 +69,11 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
     var managedCommentId by rememberSaveable(state.topic?.key) { mutableStateOf<Long?>(null) }
     var commentAction by rememberSaveable(state.topic?.key) { mutableStateOf(ForumCommentAction.Edit.name) }
     if (auth is AuthState.SignedIn) state.topic?.let { topic -> managedCommentId?.let { postId ->
-        ForumCommentEditor(ForumCommentTarget(topic.id, postId, ForumCommentAction.valueOf(commentAction)), auth.username) {
+        val comment = state.comments.items.firstOrNull { it.id == postId && canManageComment(it, auth) }
+        if (comment != null) ForumCommentEditor(ForumCommentTarget(topic.id, postId, ForumCommentAction.valueOf(commentAction)),
+            auth.username, comment.contentHtml) { refresh ->
             managedCommentId = null
-            model.refreshManagedComment(postId)
+            if (refresh) model.refreshManagedComment(postId)
         }
     } }
     val busy = when { state.topic != null -> state.comments.busy; state.category != null -> state.topics.busy; else -> state.loading }

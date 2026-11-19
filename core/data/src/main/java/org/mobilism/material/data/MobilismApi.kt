@@ -53,6 +53,8 @@ internal class MobilismApi(private val context: Context, private val diagnostics
     private val searches = SearchRequestPolicy(limits = requestLimits)
     private val reads = ReadRequestPolicy(limits = requestLimits)
     private val forumReads = ReadRequestPolicy(limits = requestLimits)
+    fun commentGateway(account: () -> Session?): ForumCommentGateway =
+        NativeForumComments(context, this.client, forumReads, account)
     private val likePostIds = context.getSharedPreferences("release-post-ids", Context.MODE_PRIVATE)
     private val forumPostIds = ConcurrentHashMap<Long, Long>()
     private val forumCommentStarts = ConcurrentHashMap<Pair<Long, Int>, Int>()
@@ -446,7 +448,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
     }
 }
 
-private suspend fun Call.await(): Response = suspendCancellableCoroutine { continuation ->
+internal suspend fun Call.await(): Response = suspendCancellableCoroutine { continuation ->
     continuation.invokeOnCancellation { cancel() }
     enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {

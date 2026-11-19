@@ -1,20 +1,13 @@
 package org.mobilism.material.ui
 
-import android.view.View
-import android.view.ViewGroup
-import android.view.inspector.WindowInspector
-import android.webkit.WebView
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.filters.SdkSuppress
-import java.io.ByteArrayInputStream
-import java.util.concurrent.atomic.AtomicReference
+import androidx.compose.runtime.CompositionLocalProvider
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -26,19 +19,23 @@ import org.mobilism.material.settings.DownloadPreferences
 class CommentManagementTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    @Test fun ownReleaseCommentOffersEditAndRefreshesAfterClosingTheForm() {
+    @Test fun ownReleaseCommentSavesThroughNativeEditorAndRefreshesOnce() = runBlocking {
+        val fixture = CommentForumFixture()
+        fixture.signIn()
         var refreshes = 0
-        compose.setContent { MobilismTheme(reduceMotion = true) {
+        compose.setContent { CompositionLocalProvider(LocalCommentGateway provides fixture.gateway) { MobilismTheme(reduceMotion = true) {
             ReleaseScreen(releaseState(), DebridState(), DownloadPreferences(), onBack = {}, onRetry = {},
                 onMoreComments = {}, watched = false, downloaded = false, onWatch = {}, onDownloaded = {},
                 onLike = {}, onActionMessageShown = {}, auth = AuthState.SignedIn("Reader"),
                 onRefreshComments = { refreshes++ })
-        } }
+        } } }
         openCommentOptions()
         compose.onNodeWithText("Edit comment").performClick()
         compose.onNodeWithTag("forum-comment-editor").assertExists()
-        assertEquals("https://forum.mobilism.org/posting.php?mode=edit&p=123", captureFormRequest())
-        compose.onNodeWithText("Close").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("edit-comment-text").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("edit-comment-text").performTextReplacement("An edited comment")
+        compose.onNodeWithText("Save changes").performClick()
+        compose.waitUntil(10_000) { refreshes == 1 }
         compose.onNodeWithTag("forum-comment-editor").assertDoesNotExist()
         assertEquals(1, refreshes)
     }
@@ -56,23 +53,30 @@ class CommentManagementTest {
         compose.onNodeWithContentDescription("Comment options").assertDoesNotExist()
     }
 
-    @Test fun discussionDeleteOpensTheConfirmationFormAndRefreshesOnClose() {
+    @Test fun discussionDeleteOnlyRefreshesAfterConfirmedSubmission() = runBlocking {
+        val fixture = CommentForumFixture()
+        fixture.signIn()
         val repository = Repository()
         lateinit var model: DiscussionsViewModel
         compose.runOnUiThread { model = DiscussionsViewModel(repository, "Reader", SavedStateHandle(), initialTopic = topic) }
-        compose.setContent { MobilismTheme(reduceMotion = true) {
-            DiscussionsScreen(model, AuthState.SignedIn("Reader"), {}, { _, _ -> })
+        compose.setContent { CompositionLocalProvider(LocalCommentGateway provides fixture.gateway) {
+            MobilismTheme(reduceMotion = true) { DiscussionsScreen(model, AuthState.SignedIn("Reader"), {}, { _, _ -> }) }
         } }
         compose.waitUntil { !model.state.value.comments.busy && model.state.value.comments.items.isNotEmpty() }
         openCommentOptions()
         compose.onNodeWithText("Delete comment").performClick()
         compose.onNodeWithTag("forum-comment-editor").assertExists()
-        assertEquals("https://forum.mobilism.org/posting.php?mode=delete&p=123", captureFormRequest())
         assertEquals(0, repository.posts)
         val reads = repository.reads
-        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithText("Cancel").performClick()
+        assertEquals(reads, repository.reads)
+        assertTrue(fixture.writes.isEmpty())
+        openCommentOptions()
+        compose.onNodeWithText("Delete comment").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Delete", substring = false).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Delete", substring = false).performClick()
         compose.waitUntil { repository.reads > reads && !model.state.value.comments.busy }
-        assertEquals(listOf(comment), model.state.value.comments.items)
+        assertEquals(1, fixture.writes.size)
     }
 
     @Test fun commentMenuStaysAvailableWhenCollapsedAndDisablesDuringPosting() {
@@ -95,34 +99,6 @@ class CommentManagementTest {
         compose.onNodeWithContentDescription("Comment options").performClick()
     }
 
-    private fun captureFormRequest(): String {
-        val requested = AtomicReference<String>()
-        compose.runOnIdle {
-            val view = browser()
-            view.stopLoading()
-            val client = view.webViewClient
-            view.webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) =
-                    client.shouldOverrideUrlLoading(view, request)
-                override fun onPageFinished(view: WebView, url: String) = client.onPageFinished(view, url)
-                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
-                    if (request.isForMainFrame) requested.set(request.url.toString())
-                    return WebResourceResponse("text/html", "UTF-8", ByteArrayInputStream("<html>Comment form</html>".toByteArray()))
-                }
-            }
-        }
-        compose.onNodeWithText("Open comment form").performClick()
-        compose.waitUntil(10_000) { requested.get() != null }
-        return requested.get()
-    }
-
-    private fun browser(): WebView = WindowInspector.getGlobalWindowViews()
-        .asSequence().flatMap(::descendants).filterIsInstance<WebView>().single()
-
-    private fun descendants(view: View): Sequence<View> = sequence {
-        yield(view)
-        if (view is ViewGroup) for (index in 0 until view.childCount) yieldAll(descendants(view.getChildAt(index)))
-    }
 
     private class Repository : DiscussionsRepository {
         var reads = 0

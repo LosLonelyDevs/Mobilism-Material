@@ -31,6 +31,7 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     private val mutableAuth = MutableStateFlow<AuthState>(AuthState.Restoring)
     override val auth = mutableAuth.asStateFlow()
     @Volatile private var session: Session? = null
+    val commentGateway = api.commentGateway { session }
 
     override suspend fun restoreSession() = authMutex.withLock {
         try {

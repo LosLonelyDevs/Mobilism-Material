@@ -120,10 +120,11 @@ fun ReleaseScreen(
     var managedCommentId by rememberSaveable(release?.id) { mutableStateOf<Long?>(null) }
     var commentAction by rememberSaveable(release?.id) { mutableStateOf(ForumCommentAction.Edit.name) }
     if (release != null && auth is AuthState.SignedIn) managedCommentId?.let { postId ->
-        ForumCommentEditor(ForumCommentTarget(release.id, postId, ForumCommentAction.valueOf(commentAction)), auth.username) {
+        val comment = state.comments.items.firstOrNull { it.id == postId && canManageComment(it, auth) }
+        if (comment != null) ForumCommentEditor(ForumCommentTarget(release.id, postId, ForumCommentAction.valueOf(commentAction)),
+            auth.username, comment.contentHtml) { refresh ->
             managedCommentId = null
-            onRefreshComments()
-            onRetry()
+            if (refresh) onRefreshComments()
         }
     }
     val downloadRequests = remember(release?.id) { DownloadRequestTracker() }

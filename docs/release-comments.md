@@ -1,8 +1,10 @@
 # Release comments
 
-Signed-in users can post a comment or reply to an existing comment on an Apps, Games, or Books release. Threads sort by the latest activity anywhere in their reply chain. Replies appear once beneath their parent, oldest first. Editing, deletion, and attachments remain pending.
+Signed-in users can post, reply, and manage their own comments. Threads sort by the latest activity anywhere in their reply chain. Replies appear once beneath their parent, oldest first. Attachments remain pending.
 
 ## Flow
+
+- Open a comment’s options to edit its original forum text or confirm deletion. Both actions use native controls in releases and discussions. If the forum asks you to sign in, enter your forum password in the app. A browser check appears as an inline error with a retry button and an optional external link.
 
 - The Comments section has Write a comment and Refresh actions. Guests get Sign in to comment and return to the release after signing in.
 - Each comment has Reply. The composer shows the quoted author and text; Remove reply keeps the draft and turns it into a normal comment. Reply targets survive closing the sheet and saved-state restoration.

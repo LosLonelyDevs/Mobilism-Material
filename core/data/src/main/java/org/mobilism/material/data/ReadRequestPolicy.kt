@@ -53,16 +53,7 @@ internal class ReadRequestPolicy(
             request(key, cacheMillis, fresh, load)
         }
         try {
-            val body = withReadPermit {
-                starts.withLock {
-                    checkAllowed()
-                    val remaining = lastStart?.let { it + limits().readSpacingMs - now() } ?: 0
-                    if (remaining > 0) wait(remaining)
-                    checkAllowed()
-                    lastStart = now()
-                }
-                load()
-            }
+            val body = pacedRead(load)
             synchronized(lock) {
                 if (cacheMillis > 0 && body.length <= 256_000 && limits() == requestPolicy) {
                     cache[key] = Cached(body, now() + cacheMillis)
@@ -76,6 +67,17 @@ internal class ReadRequestPolicy(
             result.completeExceptionally(failure)
             throw failure
         } finally { synchronized(lock) { if (pending[key] === result) pending.remove(key) } }
+    }
+
+    suspend fun <T> pacedRead(load: suspend () -> T): T = withReadPermit {
+        starts.withLock {
+            checkAllowed()
+            val remaining = lastStart?.let { it + limits().readSpacingMs - now() } ?: 0
+            if (remaining > 0) wait(remaining)
+            checkAllowed()
+            lastStart = now()
+        }
+        load()
     }
 
     private suspend fun <T> withReadPermit(load: suspend () -> T): T {

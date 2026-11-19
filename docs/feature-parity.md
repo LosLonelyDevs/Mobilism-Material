@@ -8,6 +8,7 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 - Favourite starting section, Apps/Games/Books Home tabs, Latest/Top feeds, category multiselect, inclusive post-date filters, and pagination. Home includes featured releases, latest/popular collections, category shortcuts, reviews, and recent discussions.
 - Release details, formatted text with clickable URLs, parsed title metadata, collapsible description/changelog/mod/download sections, and paginated comments with signed-in posting and targeted replies.
 - Inbox and Sent support new conversations, replies, read receipts, and individual message deletion. [Incoming message alerts](message-alerts.md) use scheduled checks.
+- Native editing and deletion of your own release and discussion comments use the forum's posting permissions.
 - Discussions for Apps, Games, Books, and Community, including Announcements, Contests, Chitchat, Services, and Suggestions & Feedback. Browse categories, search topics, read original posts, page through comments, and post comments or quoted replies with per-topic drafts.
 - Full-screen images, zoom/paging, architecture groups, preferred hosts, host links, clipboard actions, and browser opening.
 - Material 3 Expressive components and motion, Frappé/Geist defaults, 13 themes including AMOLED Black, appearance preferences, and reduced motion. Theme import is hidden for now.
@@ -22,8 +23,8 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 | Area | Missing behavior | Main legacy reference |
 | --- | --- | --- |
 | Search and discovery | Legacy advanced search filters and remaining feed filters | `UI/Main/SearchActivity.java`, `logic/network/MobilismService.java` |
-| Release interaction | Comment editing/deletion, previous-version history, library actions beyond Apps | `UI/Release/ReleaseActivtiy.java`, `UI/Discussion/CommentActivity.java`, `res/menu/menu_releases.xml` |
-| Forum sections | Native topic creation, comment editing/deletion, and unread-topic tracking | `res/menu/activity_main_drawer.xml`, `UI/Discussion/` |
+| Release interaction | Previous-version history, library actions beyond Apps | `UI/Release/ReleaseActivtiy.java`, `UI/Discussion/CommentActivity.java`, `res/menu/menu_releases.xml` |
+| Forum sections | Native topic creation and unread-topic tracking | `res/menu/activity_main_drawer.xml`, `UI/Discussion/` |
 | My Applications | Full non-launcher discovery, batch actions, save/copy/export, legacy data import | `UI/MyApplications/`, installed/downloaded/favorites action menus |
 | Version tracker | Full version history, broader matching for ambiguous/unversioned releases, large-library performance | `UI/VersionTracker/` |
 | Downloads | Built-in RAR and 7z extraction. These archives save intact. Interrupted file transfers can be restarted from the release link. | `logic/download/`, `UI/Release/DownloadsActivity.java` |
