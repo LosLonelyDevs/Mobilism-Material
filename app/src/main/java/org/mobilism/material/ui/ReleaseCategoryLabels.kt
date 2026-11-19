@@ -2,20 +2,30 @@ package org.mobilism.material.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.SuggestionChipDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.util.Locale
 import org.mobilism.material.data.Alphabetical
 import org.mobilism.material.data.ContentSection
@@ -30,8 +40,8 @@ internal val LocalOpenReleaseCategory = compositionLocalOf<((ContentSection, Fee
 private data class NamedCategory(val name: String, val filters: FeedFilters)
 
 @Composable
-internal fun ReleaseCategoryLine(release: Release, expanded: Boolean = false, showLeadingWhenEmpty: Boolean = true,
-    leading: @Composable () -> Unit) {
+internal fun ReleaseMetadataFooter(release: Release, expanded: Boolean = false, spacing: Dp = 8.dp,
+    singleRow: Boolean = false, metadata: @Composable () -> Unit) {
     val forum = LocalForumCategoryNames.current[release.categoryId]
     val assignments = LocalReleaseAssignments.current
     val categories = remember(release, forum, assignments) {
@@ -50,35 +60,50 @@ internal fun ReleaseCategoryLine(release: Release, expanded: Boolean = false, sh
         }
         Alphabetical.sorted(names.values) { it.name }
     }
-    if (categories.isEmpty()) {
-        if (showLeadingWhenEmpty) leading()
-        return
-    }
     val open = LocalOpenReleaseCategory.current
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f)) { leading() }
-        FlowRow(Modifier.weight(1.75f), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {
-            for (category in categories) {
-                val scheme = MaterialTheme.colorScheme
-                val (container, foreground) = when (Math.floorMod(category.name.lowercase(Locale.ROOT).hashCode(), 5)) {
-                    0 -> scheme.primaryContainer to scheme.onPrimaryContainer
-                    1 -> scheme.secondaryContainer to scheme.onSecondaryContainer
-                    2 -> scheme.tertiaryContainer to scheme.onTertiaryContainer
-                    3 -> scheme.primaryFixedDim to scheme.onPrimaryFixed
-                    else -> scheme.tertiaryFixedDim to scheme.onTertiaryFixed
-                }
-                SuggestionChip(
-                    onClick = { release.section?.let { open?.invoke(it, category.filters) } },
-                    enabled = open != null && release.section != null,
-                    label = { Text(category.name, style = MaterialTheme.typography.labelSmall,
-                        maxLines = if (expanded) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis) },
-                    shape = MaterialTheme.shapes.large,
-                    colors = SuggestionChipDefaults.suggestionChipColors(containerColor = container, labelColor = foreground,
-                        disabledContainerColor = container, disabledLabelColor = foreground),
-                    border = null,
-                )
+    val chips: @Composable () -> Unit = {
+        for (category in categories) {
+            val scheme = MaterialTheme.colorScheme
+            val (container, foreground) = when (Math.floorMod(category.name.lowercase(Locale.ROOT).hashCode(), 5)) {
+                0 -> scheme.primaryContainer to scheme.onPrimaryContainer
+                1 -> scheme.secondaryContainer to scheme.onSecondaryContainer
+                2 -> scheme.tertiaryContainer to scheme.onTertiaryContainer
+                3 -> scheme.primaryFixedDim to scheme.onPrimaryFixed
+                else -> scheme.tertiaryFixedDim to scheme.onTertiaryFixed
             }
+            Surface(
+                onClick = { release.section?.let { open?.invoke(it, category.filters) } },
+                enabled = open != null && release.section != null,
+                modifier = Modifier.semantics { role = Role.Button },
+                shape = MaterialTheme.shapes.large,
+                color = container, contentColor = foreground,
+            ) {
+                Box(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
+                    val style = MaterialTheme.typography.labelSmall
+                    Text(category.name, style = style, fontSize = (style.fontSize.value - 1).sp,
+                        maxLines = if (singleRow) 1 else if (expanded) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+    if (singleRow) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val metadataWidth = if (categories.isEmpty()) maxWidth else maxWidth * 0.66f
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(spacing)) {
+                Row(Modifier.widthIn(max = metadataWidth).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(spacing), verticalAlignment = Alignment.CenterVertically) { metadata() }
+                if (categories.isNotEmpty()) Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) { chips() }
+                }
+            }
+        }
+    } else {
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spacing),
+            verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+            metadata()
+            if (categories.isNotEmpty()) FlowRow(Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) { chips() }
         }
     }
 }

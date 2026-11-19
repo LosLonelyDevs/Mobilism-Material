@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.luminance
 
 // Semantic colors come from the supplied palette files. Containers keep each palette's accents.
 private fun paletteTheme(
-    id: String, name: String, dark: Boolean,
+    id: String, name: String, dark: Boolean, originalPoster: Color,
     background: Color, surface: Color, surfaceAlt: Color, text: Color, subtext: Color, outline: Color,
     primary: Color, onPrimary: Color, success: Color, onSuccess: Color,
     warning: Color, onWarning: Color, error: Color, onError: Color, info: Color, onInfo: Color,
@@ -51,10 +51,10 @@ private fun paletteTheme(
     )
     return ThemeDefinition(id, name, dark, colors, successTone, foreground(onSuccess, successTone),
         reading = tertiaryTone, onReading = tertiaryText, featured = secondaryTone, onFeatured = secondaryText,
-        personalization = primaryTone, onPersonalization = primaryText)
+        personalization = primaryTone, onPersonalization = primaryText, originalPoster = readable(originalPoster))
 }
 
-private fun contrast(first: Color, second: Color): Float {
+internal fun contrast(first: Color, second: Color): Float {
     val a = first.luminance()
     val b = second.luminance()
     return (maxOf(a, b) + 0.05f) / (minOf(a, b) + 0.05f)
@@ -62,6 +62,7 @@ private fun contrast(first: Color, second: Color): Float {
 
 val AmoledBlack = paletteTheme(
     id = "amoled-black", name = "AMOLED Black", dark = true,
+    originalPoster = Color(0xFFE1ACFF),
     background = Color.Black, surface = Color.Black, surfaceAlt = Color(0xFF121212),
     text = Color(0xFFF2F2F2), subtext = Color(0xFFBDBDBD), outline = Color(0xFF757575),
     primary = Color(0xFFA8C7FA), onPrimary = Color.Black,
@@ -73,6 +74,7 @@ val AmoledBlack = paletteTheme(
 
 val AtomOneLight = paletteTheme(
     id = "atom-one-light", name = "Atom One Light", dark = false,
+    originalPoster = Color(0xFFA626A4),
     background = Color(0xFFFAFAFA),
     surface = Color(0xFFF0F0F1),
     surfaceAlt = Color(0xFFE5E5E6),
@@ -93,6 +95,7 @@ val AtomOneLight = paletteTheme(
 
 val AtomOneDark = paletteTheme(
     id = "atom-one-dark", name = "Atom One Dark", dark = true,
+    originalPoster = Color(0xFFC678DD),
     background = Color(0xFF21252B),
     surface = Color(0xFF282C34),
     surfaceAlt = Color(0xFF2F343F),
@@ -113,6 +116,7 @@ val AtomOneDark = paletteTheme(
 
 val TokyoDay = paletteTheme(
     id = "tokyo-day", name = "Tokyo Day", dark = false,
+    originalPoster = Color(0xFF965027),
     background = Color(0xFFE1E2E7),
     surface = Color(0xFFEDEDF2),
     surfaceAlt = Color(0xFFD8DBE6),
@@ -134,10 +138,12 @@ val TokyoDay = paletteTheme(
 val TokyoNight = ThemeDefinition(
     id = "tokyo-night", name = "Tokyo Night", isDark = true,
     colors = GayerfyTokyoNightColors,
+    originalPoster = Color(0xFFFF9E64),
 )
 
 val Alucard = paletteTheme(
     id = "alucard", name = "Alucard", dark = false,
+    originalPoster = Color(0xFFA3144D),
     background = Color(0xFFFFFBEB),
     surface = Color(0xFFFFFFFA),
     surfaceAlt = Color(0xFFF3EDD6),
@@ -158,6 +164,7 @@ val Alucard = paletteTheme(
 
 val Dracula = paletteTheme(
     id = "dracula", name = "Dracula", dark = true,
+    originalPoster = Color(0xFFFF79C6),
     background = Color(0xFF21222C),
     surface = Color(0xFF282A36),
     surfaceAlt = Color(0xFF343746),
@@ -178,6 +185,7 @@ val Dracula = paletteTheme(
 
 val CatppuccinLatte = paletteTheme(
     id = "catppuccin-latte", name = "Catppuccin Latte", dark = false,
+    originalPoster = Color(0xFFDD7878),
     background = Color(0xFFEFF1F5),
     surface = Color(0xFFE6E9EF),
     surfaceAlt = Color(0xFFDCE0E8),
@@ -198,6 +206,7 @@ val CatppuccinLatte = paletteTheme(
 
 val RosePineDawn = paletteTheme(
     id = "rose-pine-dawn", name = "Rosé Pine Dawn", dark = false,
+    originalPoster = Color(0xFFD7827E),
     background = Color(0xFFFAF4ED),
     surface = Color(0xFFFFFAF3),
     surfaceAlt = Color(0xFFF2E9E1),
@@ -218,6 +227,7 @@ val RosePineDawn = paletteTheme(
 
 val RosePine = paletteTheme(
     id = "rose-pine", name = "Rosé Pine", dark = true,
+    originalPoster = Color(0xFFEBBCBA),
     background = Color(0xFF191724),
     surface = Color(0xFF1F1D2E),
     surfaceAlt = Color(0xFF26233A),
@@ -238,6 +248,7 @@ val RosePine = paletteTheme(
 
 val SolarizedLight = paletteTheme(
     id = "solarized-light", name = "Solarized Light", dark = false,
+    originalPoster = Color(0xFFD33682),
     background = Color(0xFFFDF6E3),
     surface = Color(0xFFF7F0DB),
     surfaceAlt = Color(0xFFEEE8D5),
@@ -258,6 +269,7 @@ val SolarizedLight = paletteTheme(
 
 val SolarizedDark = paletteTheme(
     id = "solarized-dark", name = "Solarized Dark", dark = true,
+    originalPoster = Color(0xFFD33682),
     background = Color(0xFF002B36),
     surface = Color(0xFF073642),
     surfaceAlt = Color(0xFF0E4A59),

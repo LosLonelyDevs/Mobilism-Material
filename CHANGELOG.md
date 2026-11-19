@@ -3,9 +3,10 @@
 ## Unreleased
 
 - Compose and delete private messages
-- Save release files to a chosen folder with optional ZIP extraction
-- Show release view counts across browsing and saved releases
-- Add release text cleanup and Markdown rendering in Developer options
+- Choose download folders and optionally extract ZIPs
+- Show view counts in feeds and saved releases
+- Enable text cleanup and Markdown in Developer options
+- Name active filters and highlight original posters
 - various bug fixes and improvements
 
 ## 0.1.23

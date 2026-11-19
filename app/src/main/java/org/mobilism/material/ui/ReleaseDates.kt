@@ -1,6 +1,7 @@
 package org.mobilism.material.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -13,12 +14,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.util.Locale
+import org.mobilism.material.data.Alphabetical
 import org.mobilism.material.data.FeedFilters
+import org.mobilism.material.data.ReleaseCategory
 import org.mobilism.material.designsystem.*
 
 @Composable
@@ -37,27 +42,39 @@ fun ReleasePostDate(timestamp: Long, modifier: Modifier = Modifier, textStyle: T
 }
 
 @Composable
-fun ActiveFilterSummary(filters: FeedFilters, onEdit: () -> Unit, onClear: () -> Unit, showSearchSort: Boolean = false) {
+fun ActiveFilterSummary(filters: FeedFilters, onEdit: () -> Unit, onClear: () -> Unit,
+    availableCategories: List<ReleaseCategory> = emptyList(), showSearchSort: Boolean = false) {
     if (!filters.isActive && !showSearchSort) return
     val formatter = dateFormatter()
+    val forum = LocalForumCategoryNames.current
+    val custom = LocalReleaseAssignments.current?.categories.orEmpty()
     val labels = buildList {
         if (showSearchSort) add(filters.searchSort.label)
-        val categoryCount = filters.categoryIds.size + filters.customCategoryIds.size
-        if (categoryCount > 0) add(if (categoryCount == 1) "1 category" else "$categoryCount categories")
+        val selectedCustom = custom.filter { it.id in filters.customCategoryIds }
+        val names = filters.categoryIds.map { id ->
+            forum[id] ?: availableCategories.firstOrNull { it.id == id }?.name ?: "Category #$id"
+        } + selectedCustom.map { it.name }
+        addAll(Alphabetical.sorted(names.distinctBy { it.lowercase(Locale.ROOT) }) { it })
+        val missing = filters.customCategoryIds.size - selectedCustom.size
+        if (missing > 0) add(if (missing == 1) "Custom category" else "$missing custom categories")
         org.mobilism.material.data.BookFormat.entries.filter { it in filters.bookFormats }.forEach { add(it.label) }
         filters.postedFrom?.let { add("From ${it.format(formatter)}") }
         filters.postedThrough?.let { add("Through ${it.format(formatter)}") }
     }
-    FlowRow(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-        verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        labels.forEach { label ->
-            ExpressiveButton(onEdit, compact = true, minHeight = 40.dp,
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                colors = ButtonDefaults.filledTonalButtonColors()) { Text(label) }
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically) {
+            val style = MaterialTheme.typography.labelLarge
+            labels.forEach { label ->
+                ExpressiveButton(onEdit, modifier = Modifier.padding(horizontal = 4.dp), compact = true, minHeight = 40.dp,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors()) {
+                    Text(label, style = style, fontSize = (style.fontSize.value - 1).sp, maxLines = 1, softWrap = false)
+                }
+            }
         }
-        if (filters.isActive || (showSearchSort && filters.searchSort != org.mobilism.material.data.SearchSort.Newest))
-            AppIconButton(Icons.Outlined.Close, "Clear filters", onClear)
+        AppIconButton(Icons.Outlined.Close, "Clear filters", onClear)
     }
 }
 

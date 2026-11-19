@@ -7,6 +7,7 @@ val CatppuccinFrappe = ThemeDefinition(
     name = "Catppuccin Frappé",
     isDark = true,
     colors = GayerfyFrappeColors,
+    originalPoster = Color(0xFFEEBEBE),
     success = Color(0xFFA6D189),
     onSuccess = Color(0xFF232634),
 )

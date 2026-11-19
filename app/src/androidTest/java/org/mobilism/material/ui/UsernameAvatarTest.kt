@@ -82,12 +82,12 @@ class UsernameAvatarTest {
         val calls = AtomicInteger()
         val identities = MemberIdentityStore({ reference ->
             calls.incrementAndGet()
-            profile(reference, file.absolutePath)
+            profile(reference, file.absolutePath).copy(rank = "Major Android Releaser")
         })
         try {
             compose.setContent { MobilismTheme(reduceMotion = true) {
                 CompositionLocalProvider(LocalMemberIdentities provides identities) {
-                    ReleaseCommentCard(ReleaseComment(1, "Author", null, 0, "<p>Comment</p>"),
+                    ReleaseCommentCard(ReleaseComment(1, "Author", null, 1700000000, "<p>Comment</p>"),
                         "https://forum.mobilism.org/viewtopic.php?t=1", onImage = { _, _ -> })
                 }
             } }
@@ -96,6 +96,9 @@ class UsernameAvatarTest {
                     .fetchSemanticsNodes().isNotEmpty()
             }
             compose.onAllNodesWithContentDescription("Author profile picture", useUnmergedTree = true).assertCountEquals(1)
+            val badge = compose.onNodeWithTag("major-android-releaser-badge-Author", useUnmergedTree = true).getUnclippedBoundsInRoot()
+            val time = compose.onNodeWithContentDescription("2023", substring = true, useUnmergedTree = true).getUnclippedBoundsInRoot()
+            assertTrue(time.left >= badge.right && time.left - badge.right <= 8.dp)
             compose.runOnIdle { assertEquals(1, calls.get()) }
         } finally { scope.cancel(); file.delete() }
     }

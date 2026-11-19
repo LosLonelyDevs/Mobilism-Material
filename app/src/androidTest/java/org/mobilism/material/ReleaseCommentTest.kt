@@ -12,8 +12,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,6 +47,7 @@ import org.junit.runner.RunWith
 import org.hamcrest.Matchers.containsString
 import org.mobilism.material.data.*
 import org.mobilism.material.designsystem.MobilismTheme
+import org.mobilism.material.designsystem.ThemeCatalog
 import org.mobilism.material.settings.DownloadPreferences
 import org.mobilism.material.ui.*
 
@@ -52,13 +56,14 @@ class ReleaseCommentTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     @Test fun repliesFollowTheirParentAndCollapsingHidesTheWholeThread() {
-        val parent = ReleaseComment(1, "Parent", null, 1700000001, "Original comment")
-        val reply = ReleaseComment(2, "Reply", null, 1700000002, "First reply",
+        val now = java.time.ZonedDateTime.now()
+        val parent = ReleaseComment(1, "Parent", null, now.minusDays(16).toEpochSecond(), "Original comment")
+        val reply = ReleaseComment(2, "Reply", null, now.minusDays(5).toEpochSecond(), "First reply",
             quotes = listOf(CommentQuote(parent.author, parent.contentHtml)))
-        val unrelated = ReleaseComment(3, "Another thread", null, 1700000003, "Independent comment")
-        val nested = ReleaseComment(4, "Nested reply", null, 1700000004, "Second reply",
+        val unrelated = ReleaseComment(3, "Another thread", null, now.minusDays(2).toEpochSecond(), "Independent comment")
+        val nested = ReleaseComment(4, "Nested reply", null, now.minusHours(2).toEpochSecond(), "Second reply",
             quotes = listOf(CommentQuote(reply.author, reply.contentHtml)))
-        val release = Release(42, "Sample app", "Author", null, 1700000000, 4, 0)
+        val release = Release(42, "Sample app", "PARENT", null, 1700000000, 4, 0)
         val state = ReleaseState(release = release, busy = false,
             comments = CommentsState(listOf(nested, unrelated, reply, parent), canLoadMore = false))
         compose.setContent { MobilismTheme(reduceMotion = true) {
@@ -80,6 +85,8 @@ class ReleaseCommentTest {
         assertTrue(nestedBounds.left > replyBounds.left)
         compose.onAllNodesWithTag("comment-2").assertCountEquals(1)
         compose.onAllNodesWithTag("comment-4").assertCountEquals(1)
+        compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Original poster"),
+            useUnmergedTree = true).assertCountEquals(1)
         onView(withText(containsString("Original comment"))).check(matches(isDisplayed()))
         onView(withText(containsString("First reply"))).check(matches(isDisplayed()))
         compose.onNodeWithText("Show quote").assertDoesNotExist()
@@ -99,15 +106,34 @@ class ReleaseCommentTest {
         """, quotes = listOf(CommentQuote("Parent", "<p>Hello there</p>")))
         compose.setContent { MobilismTheme(reduceMotion = true) {
             Surface(Modifier.safeDrawingPadding()) {
-                ReleaseCommentCard(comment, "https://forum.mobilism.org/", onImage = { _, _ -> })
+                ReleaseCommentCard(comment, "https://forum.mobilism.org/", originalPoster = " reader ", onImage = { _, _ -> })
             }
         } }
         compose.onAllNodesWithText("Replying to Parent").assertCountEquals(1)
+        val initial = compose.onNodeWithText("R", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val author = compose.onNodeWithText("Reader", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals(author.center.y, initial.center.y, 1f)
+        val time = compose.onNodeWithContentDescription("2023", substring = true, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue(time.left >= author.right && time.left - author.right <= 6 * compose.activity.resources.displayMetrics.density)
+        assertEquals(author.center.y, time.center.y, 1f)
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithText("Reader", useUnmergedTree = true).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertEquals(ThemeCatalog.default.originalPoster, layouts.single().layoutInput.style.color)
         compose.onAllNodesWithText("Hello there", substring = true).assertCountEquals(1)
         compose.onNodeWithText("Show quote").performClick()
         onView(withText(containsString("Hello there"))).check(matches(isDisplayed()))
         onView(withText(containsString("My answer"))).check(matches(isDisplayed()))
         capture("deduplicated-quote")
+    }
+
+    @Test fun originalPosterAccentIsDistinctAndReadableInEveryBuiltInTheme() {
+        for (theme in ThemeCatalog.builtIn) {
+            val accent = theme.originalPoster
+            assertFalse(theme.name, accent in listOf(theme.colors.primary, theme.colors.secondary, theme.colors.tertiary))
+            val a = accent.luminance()
+            val b = theme.colors.surfaceContainerLow.luminance()
+            assertTrue(theme.name, (maxOf(a, b) + 0.05f) / (minOf(a, b) + 0.05f) >= 4.5f)
+        }
     }
 
     @Test fun commentsCollapseIndependentlyAndRestoreQuotedReplies() {

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -65,6 +66,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
@@ -271,12 +273,13 @@ fun FeedScreen(
                         ) {
                         if (selectedTab == BrowseTab.Home && homeContent != null) homeContent(openFilters)
                         else Column {
-                            ActiveFilterSummary(state.filters, openFilters, { onFilters(FeedFilters()) })
+                            ActiveFilterSummary(state.filters, openFilters, { onFilters(FeedFilters()) }, categories.items)
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                                 LazyColumn(
                                     state = listState,
                                     modifier = Modifier.widthIn(max = 840.dp).fillMaxSize().testTag("feed-list"),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp,
+                                        top = if (state.filters.isActive) 8.dp else 16.dp, bottom = 16.dp),
                                     verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 12.dp),
                                 ) {
                                     items(state.items, key = { it.id }, contentType = { "release" }) { release ->
@@ -307,39 +310,40 @@ fun FeedScreen(
 @Composable
 internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = false, isNew: Boolean = false, onClick: () -> Unit) {
     val title = remember(release.title, release.section) { ReleaseTitles.parse(release.title, release.section) }
+    val thumbnailSize = if (compact) 56.dp else 96.dp
+    val titleLines = if (compact) 2 else 3
+    val titleStyle = MaterialTheme.typography.titleMedium
+    val subtitleStyle = MaterialTheme.typography.bodySmall
+    val textHeight = with(LocalDensity.current) { titleStyle.lineHeight.toDp() * titleLines + subtitleStyle.lineHeight.toDp() + 4.dp }
     ExpressiveCard(onClick, Modifier.fillMaxWidth().testTag("release-${release.id}"), colors = CardDefaults.cardColors(
         containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, accent, 0.06f),
     )) {
-        Row(Modifier.padding(if (compact) 12.dp else 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(
-                model = release.thumbnail, contentDescription = null,
-                placeholder = painterResource(R.drawable.ic_mobilism), error = painterResource(R.drawable.ic_mobilism),
-                modifier = Modifier.size(if (compact) 56.dp else 96.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop,
-            )
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    AppHeading(title.name, HeadingLevel.Subsection, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                        maxLines = if (compact) 2 else 3, overflow = TextOverflow.Ellipsis)
-                    if (isNew) NewReleaseBadge(release.id)
-                }
-                if (title.subtitle.isNotBlank()) Text(
-                    title.subtitle, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (compact) 1 else 3, overflow = TextOverflow.Ellipsis,
+        Column(Modifier.padding(if (compact) 12.dp else 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth().height(maxOf(thumbnailSize, textHeight)), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AsyncImage(
+                    model = release.thumbnail, contentDescription = null,
+                    placeholder = painterResource(R.drawable.ic_mobilism), error = painterResource(R.drawable.ic_mobilism),
+                    modifier = Modifier.size(thumbnailSize).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop,
                 )
-                ReleaseCategoryLine(release, showLeadingWhenEmpty = !compact) {
-                    UsernameLink(release.author, style = MaterialTheme.typography.bodySmall)
-                }
-                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-                    if (!compact) Row(Modifier.clearAndSetSemantics { contentDescription = "${release.replies} replies" },
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
-                        Text(release.replies.toString(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        AppHeading(title.name, HeadingLevel.Subsection, Modifier.weight(1f), style = titleStyle,
+                            maxLines = titleLines, overflow = TextOverflow.Ellipsis)
+                        if (isNew) NewReleaseBadge(release.id)
                     }
-                    ReleaseViewCount(release.views, numberOnly = true)
-                    ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
+                    if (title.subtitle.isNotBlank()) Text(title.subtitle, style = subtitleStyle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (compact) 1 else 3, overflow = TextOverflow.Ellipsis)
                 }
+            }
+            if (!compact) UsernameLink(release.author, style = MaterialTheme.typography.bodySmall)
+            ReleaseMetadataFooter(release, singleRow = true) {
+                ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
+                if (!compact) Row(Modifier.clearAndSetSemantics { contentDescription = "${release.replies} replies" },
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
+                    Text(release.replies.toString(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                }
+                ReleaseViewCount(release.views, numberOnly = true)
             }
         }
     }

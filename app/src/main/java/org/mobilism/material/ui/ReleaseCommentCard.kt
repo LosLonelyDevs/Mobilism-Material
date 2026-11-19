@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.MoreVert
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.LocalReducedMotion
+import org.mobilism.material.designsystem.LocalAppTheme
 import org.mobilism.material.designsystem.focusOutline
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,8 +54,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.mobilism.material.data.ReleaseComment
-import java.text.DateFormat
-import java.util.Date
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -63,7 +62,7 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
     collapsed: Boolean? = null, onToggleThread: (() -> Unit)? = null,
     threadContent: CommentContent? = null, earlierComment: Boolean = false,
     onEdit: (() -> Unit)? = null, onDelete: (() -> Unit)? = null,
-    actionsEnabled: Boolean = true,
+    actionsEnabled: Boolean = true, originalPoster: String? = null,
     onImage: (List<String>, Int) -> Unit) {
     var localExpanded by rememberSaveable(baseUrl, comment.id) { mutableStateOf(true) }
     var menu by remember(comment.id) { mutableStateOf(false) }
@@ -73,6 +72,8 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
     val content = threadContent ?: remember(comment.contentHtml, comment.quotes) { CommentContent.parse(comment) }
     val interaction = remember { MutableInteractionSource() }
     val reduced = LocalReducedMotion.current
+    val isOriginalPoster = !earlierComment && !originalPoster.isNullOrBlank() &&
+        originalPoster.trim().equals(comment.author.trim(), ignoreCase = true)
     Surface(Modifier.fillMaxWidth().testTag("comment-${comment.id}"), shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Column {
@@ -83,14 +84,13 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
                 .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MessageAvatar(comment.author, comment.avatar, Modifier.size(28.dp))
-                Column(Modifier.weight(1f)) {
-                    UsernameLink(comment.author, style = MaterialTheme.typography.titleSmall, showAvatar = false)
-                    if (earlierComment) Text("Earlier comment", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (comment.publishedAt > 0) {
-                        val date = remember(comment.publishedAt) { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(comment.publishedAt * 1000)) }
-                        Text(date, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    UsernameLink(comment.author, style = MaterialTheme.typography.titleSmall, showAvatar = false,
+                        color = if (isOriginalPoster) LocalAppTheme.current.originalPoster else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f, fill = false).then(
+                            if (isOriginalPoster) Modifier.semantics { stateDescription = "Original poster" } else Modifier))
+                    if (comment.publishedAt > 0) CommentTimestamp(comment.publishedAt)
                 }
                 if (onEdit != null || onDelete != null) Box {
                     AppIconButton(Icons.Outlined.MoreVert, "Comment options", { menu = true }, enabled = actionsEnabled)
@@ -104,6 +104,8 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
                 }
                 if (!expanded) CommentCollapseButton(false, toggle)
             }
+            if (earlierComment) Text("Earlier comment", Modifier.padding(start = 48.dp, end = 12.dp),
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             AnimatedVisibility(expanded,
                 enter = if (reduced) EnterTransition.None else expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
                 exit = if (reduced) ExitTransition.None else shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec())) {

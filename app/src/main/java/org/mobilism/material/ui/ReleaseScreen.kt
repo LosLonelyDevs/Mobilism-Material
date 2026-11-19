@@ -9,7 +9,6 @@ import android.widget.TextView
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -276,15 +275,14 @@ fun ReleaseScreen(
                          ReleaseTitleHeader(release.title, release.section)
                     }
                     releaseDetailItem {
-                        ReleaseCategoryLine(release, expanded = true) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             UsernameLink(release.author)
-                        }
-                        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-                            Text("${release.replies} replies", style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            ReleaseViewCount(release.views, textStyle = MaterialTheme.typography.bodySmall)
-                            ReleasePostDate(release.publishedAt)
+                            ReleaseMetadataFooter(release, expanded = true, spacing = 12.dp) {
+                                ReleasePostDate(release.publishedAt)
+                                Text("${release.replies} replies", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                ReleaseViewCount(release.views, textStyle = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
                     if (groups.isNotEmpty()) releaseDetailItem("quick-downloads") {
@@ -358,6 +356,7 @@ fun ReleaseScreen(
                             ReleaseCommentCard(comment, release.browserUrl ?: "https://forum.mobilism.org/", onRelease = onRelease,
                             onReply = if (row.placeholder) null else ({ if (auth is AuthState.SignedIn) onReplyToComment(comment) else onSignIn() }),
                             replyEnabled = !state.composer.posting, threadContent = row.content, earlierComment = row.placeholder,
+                            originalPoster = release.author,
                             onEdit = if (canManage) ({ commentAction = ForumCommentAction.Edit.name; managedCommentId = comment.id }) else null,
                             onDelete = if (canManage) ({ commentAction = ForumCommentAction.Delete.name; managedCommentId = comment.id }) else null,
                             actionsEnabled = !state.composer.posting,

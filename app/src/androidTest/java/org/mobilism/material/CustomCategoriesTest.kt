@@ -4,11 +4,20 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -44,9 +53,10 @@ class CustomCategoriesTest {
 
     private fun release() = Release(1, "Example v1.0", "Author", null, 1_793_188_800, 0, 10, section = ContentSection.Apps)
 
-    private fun capture(name: String) {
+    private fun capture(name: String, node: SemanticsNodeInteraction? = null) {
         compose.waitForIdle()
-        val screenshot = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+        val screenshot = node?.captureToImage()?.asAndroidBitmap()
+            ?: checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
         val directory = File(compose.activity.getExternalFilesDir(null), "custom-categories")
         check(directory.mkdirs() || directory.isDirectory)
         File(directory, "$name.png").outputStream().use {
@@ -147,19 +157,80 @@ class CustomCategoriesTest {
         }
         for (density in listOf(false, true)) {
             compose.runOnIdle { compact = density }
-            compose.onNodeWithText("Utilities").assertIsDisplayed()
+            compose.onNodeWithText("Utilities").performScrollTo().assertIsDisplayed()
             val order = compose.onAllNodes(hasText("Favorites") or hasText("Travel") or hasText("Utilities"))
                 .fetchSemanticsNodes().flatMap { it.config[androidx.compose.ui.semantics.SemanticsProperties.Text] }.map { it.text }
             assertEquals(listOf("Favorites", "Travel", "Utilities"), order)
-            compose.onNodeWithText("Favorites").performClick()
+            compose.onNodeWithText("Favorites").performScrollTo().performClick()
             assertEquals(setOf(favorites.id), opened?.customCategoryIds)
         }
+        val allCategories = compose.onNodeWithTag("release-1").getUnclippedBoundsInRoot()
         compose.runOnIdle { store.assign(release, setOf(travel.id)) }
         compose.onNodeWithText("Travel").assertIsDisplayed()
         compose.onNodeWithText("Favorites").assertDoesNotExist()
         compose.runOnIdle { enabled = false }
         compose.onNodeWithText("Travel").assertDoesNotExist()
         compose.onNodeWithText("Utilities").assertIsDisplayed()
+        assertEquals(allCategories, compose.onNodeWithTag("release-1").getUnclippedBoundsInRoot())
+    }
+
+    @Test fun cardsKeepTheirHeightAndPlaceCategoriesAfterDateAndViews() {
+        val sample = release().copy(title = "Photo Studio PRO: photo editor v2.15.1.5535 [Paid]", categoryId = 20, views = 139)
+        val unassigned = sample.copy(id = 2, title = "A long release name that spans several lines v2.0", categoryId = null, views = 37)
+        var compact by mutableStateOf(true)
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            CompositionLocalProvider(LocalForumCategoryNames provides mapOf(20L to "Photography")) {
+                Column(Modifier.requiredWidth(360.dp).testTag("card-comparison"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ReleaseCard(sample, androidx.compose.material3.MaterialTheme.colorScheme.primary, compact = compact) {}
+                    ReleaseCard(unassigned, androidx.compose.material3.MaterialTheme.colorScheme.primary, compact = compact) {}
+                }
+            }
+        } }
+        for (isCompact in listOf(true, false)) {
+            compose.runOnIdle { compact = isCompact }
+            val date = compose.onNode(hasText("2026", substring = true) and hasAnyAncestor(hasTestTag("release-1")),
+                useUnmergedTree = true).getUnclippedBoundsInRoot()
+            val views = compose.onNodeWithContentDescription("139 views", useUnmergedTree = true).getUnclippedBoundsInRoot()
+            val chip = compose.onNodeWithText("Photography").getUnclippedBoundsInRoot()
+            val card = compose.onNodeWithTag("release-1").getUnclippedBoundsInRoot()
+            assertTrue(date.right <= views.left && views.right <= chip.left)
+            assertTrue(date.top < chip.bottom && chip.top < date.bottom)
+            val inset = if (isCompact) 12.dp else 16.dp
+            assertEquals((card.right - inset).value, chip.right.value, 1f)
+            val other = compose.onNodeWithTag("release-2").getUnclippedBoundsInRoot()
+            assertEquals((card.bottom - card.top).value, (other.bottom - other.top).value, 1f)
+            if (isCompact) capture("compact-category-footer", compose.onNodeWithTag("card-comparison"))
+        }
+    }
+
+    @Test fun activeFiltersScrollOnOneLineWithMarginsAndFixedClearButton() {
+        val store = CustomCategoryStore(context())
+        val travel = store.create(ContentSection.Apps, "Travel")
+        var filters by mutableStateOf(FeedFilters(categoryIds = setOf(20, 30), customCategoryIds = setOf(travel.id),
+            postedThrough = java.time.LocalDate.of(2026, 11, 19)))
+        var edits = 0
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            CompositionLocalProvider(LocalForumCategoryNames provides mapOf(20L to "Photography"),
+                LocalReleaseAssignments provides store.state.value) {
+                androidx.compose.material3.Surface(Modifier.width(280.dp).testTag("filter-strip")) {
+                    ActiveFilterSummary(filters, { edits++ }, { filters = FeedFilters() }, listOf(ReleaseCategory(30, "Art")))
+                }
+            }
+        } }
+        val clear = compose.onNodeWithContentDescription("Clear filters")
+        val fixed = clear.assertIsDisplayed().getUnclippedBoundsInRoot()
+        val first = compose.onNodeWithText("Art").assertIsDisplayed().getUnclippedBoundsInRoot()
+        val photo = compose.onNodeWithText("Photography")
+        assertTrue(photo.getUnclippedBoundsInRoot().left - first.right >= 8.dp)
+        capture("active-filter-strip", compose.onNodeWithTag("filter-strip"))
+        photo.performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithText("Travel").performScrollTo().assertIsDisplayed()
+        val last = compose.onNode(hasText("Through ", substring = true)).performScrollTo().assertIsDisplayed().getUnclippedBoundsInRoot()
+        assertEquals(first.top.value, last.top.value, 1f)
+        assertTrue(last.right <= fixed.left)
+        assertEquals(fixed, clear.getUnclippedBoundsInRoot())
+        compose.runOnIdle { assertEquals(1, edits) }
+        clear.performClick().assertDoesNotExist()
     }
 
     @Test fun homeUsesNativeCategoryTilesWithSeparateCategoriesForEverySection() {

@@ -311,7 +311,7 @@ private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit,
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 AppHeading("Original post", HeadingLevel.Subsection, style = MaterialTheme.typography.titleSmall)
-                ReleaseCommentCard(topic.originalPost, topic.browserUrl, onImage = onImage)
+                ReleaseCommentCard(topic.originalPost, topic.browserUrl, originalPoster = topic.author, onImage = onImage)
             }
         }
         item { AppHeading("Comments · latest activity first", HeadingLevel.Section, style = MaterialTheme.typography.titleMedium) }
@@ -321,6 +321,7 @@ private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit,
             CommentThreadRow(row.depth) {
                 ReleaseCommentCard(comment, topic.browserUrl, onReply = if (row.placeholder) null else ({ onReply(comment) }),
                     replyEnabled = !state.composer.posting, threadContent = row.content, earlierComment = row.placeholder,
+                    originalPoster = topic.author,
                     onEdit = if (canManage) ({ onManage(comment, ForumCommentAction.Edit) }) else null,
                     onDelete = if (canManage) ({ onManage(comment, ForumCommentAction.Delete) }) else null,
                     actionsEnabled = !state.composer.posting,

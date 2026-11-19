@@ -124,9 +124,11 @@ fun SearchScreen(
                     ExpressiveButton(submit, compact = true, enabled = state.query.isNotBlank()) { Text("Search") }
                     AppIconButton(Icons.Outlined.FilterList, "Release filters", openFilters)
                 }
-                ActiveFilterSummary(state.filters, openFilters, { onFilters(FeedFilters()) })
+                val sorted = state.filters.searchSort != org.mobilism.material.data.SearchSort.Newest
+                ActiveFilterSummary(state.filters, openFilters, { onFilters(FeedFilters()) }, categories.items, showSearchSort = sorted)
                 LazyColumn(state = list, modifier = Modifier.weight(1f).testTag("search-results"),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp,
+                        top = if (state.filters.isActive || sorted) 8.dp else 16.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(state.items, key = { it.id }) { release ->
                         ReleaseCard(release, MaterialTheme.colorScheme.primary) { onRelease(release.id) }

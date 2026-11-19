@@ -5,6 +5,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import org.json.JSONObject
 import java.util.Locale
 
@@ -23,7 +24,14 @@ data class ThemeDefinition(
     val onFeatured: Color = colors.onSecondary,
     val personalization: Color = colors.primary,
     val onPersonalization: Color = colors.onPrimary,
+    val originalPoster: Color = originalPosterTone(colors),
 )
+
+private fun originalPosterTone(colors: ColorScheme): Color {
+    val accent = lerp(colors.tertiary, colors.error, 0.5f)
+    return (0..20).map { lerp(accent, colors.onSurface, it / 20f) }
+        .firstOrNull { contrast(it, colors.surfaceContainerLow) >= 4.5f } ?: colors.onSurface
+}
 
 data class ThemePair(val name: String, val light: ThemeDefinition, val dark: ThemeDefinition)
 

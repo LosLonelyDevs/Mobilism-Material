@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.minus
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
@@ -77,8 +78,8 @@ fun ExpressiveButton(
     enabled: Boolean = true,
     colors: ButtonColors = ButtonDefaults.buttonColors(),
     compact: Boolean = false,
-    minHeight: androidx.compose.ui.unit.Dp = if (compact) 48.dp else 56.dp,
-    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    minHeight: androidx.compose.ui.unit.Dp = if (compact) 48.dp else 54.dp,
+    contentPadding: PaddingValues = if (compact) ButtonDefaults.ContentPadding else ButtonDefaults.ContentPadding - PaddingValues(1.dp),
     content: @Composable RowScope.() -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
