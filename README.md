@@ -50,7 +50,7 @@ Screenshots use sample data. CI refreshes them on version bumps and screenshot t
 - Material You wallpaper colors on Android 12+, 13 preset themes including AMOLED Black, bundled and custom fonts, and reduced motion.
 - [In-app updates](docs/app-updates.md) with automatic checks, verified downloads, Android installation, and release notes. Open Updates from Settings.
 
-Downloads open in your browser. Green buttons resolve through a verified Premium account first. Native downloads and several legacy features are still pending. [Remaining work](docs/feature-parity.md).
+Downloads open in your browser by default. In Settings > Downloads, turn on Internal downloader and choose a folder to save direct files and resolved Premium links. APKs save as received. Optional ZIP extraction puts the files in that same folder. File-host webpages still open in your browser.
 
 Older saved logins need one fresh sign-in for Inbox access.
 

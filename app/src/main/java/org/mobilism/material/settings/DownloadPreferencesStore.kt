@@ -17,12 +17,18 @@ data class DownloadPreferences(
     val preferredHosts: Set<String> = emptySet(),
     val hosts: List<SupportedHost> = emptyList(),
     val autoWatchDownloads: Boolean = true,
+    val internalDownloads: Boolean = false,
+    val downloadFolder: String? = null,
+    val extractZips: Boolean = true,
 )
 
 class DownloadPreferencesStore(context: Context) {
     private val preferences = context.getSharedPreferences("material-downloads", Context.MODE_PRIVATE)
     private val mutableState = MutableStateFlow(DownloadPreferences(
         autoWatchDownloads = preferences.getBoolean("auto-watch-downloads", true),
+        internalDownloads = preferences.getBoolean("internal-downloads", false),
+        downloadFolder = preferences.getString("download-folder", null),
+        extractZips = preferences.getBoolean("extract-zips", true),
         architecture = CpuArchitecture.entries.firstOrNull { it.name == preferences.getString("architecture", null) },
         preferredHosts = preferences.getStringSet("preferred-hosts", emptySet()).orEmpty().toSet(),
         hosts = preferences.getStringSet("host-catalog", emptySet()).orEmpty().mapNotNull { value ->
@@ -31,6 +37,21 @@ class DownloadPreferencesStore(context: Context) {
         }.let { org.mobilism.material.data.Alphabetical.sorted(it) { host -> host.name } },
     ))
     val state = mutableState.asStateFlow()
+
+    fun useInternal(folder: String) {
+        preferences.edit().putString("download-folder", folder).putBoolean("internal-downloads", true).apply()
+        mutableState.update { it.copy(internalDownloads = true, downloadFolder = folder) }
+    }
+
+    fun useBrowser() {
+        preferences.edit().putBoolean("internal-downloads", false).apply()
+        mutableState.update { it.copy(internalDownloads = false) }
+    }
+
+    fun extractZips(enabled: Boolean) {
+        preferences.edit().putBoolean("extract-zips", enabled).apply()
+        mutableState.update { it.copy(extractZips = enabled) }
+    }
 
     fun autoWatchDownloads(enabled: Boolean) {
         preferences.edit().putBoolean("auto-watch-downloads", enabled).apply()

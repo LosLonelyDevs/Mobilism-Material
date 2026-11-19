@@ -151,11 +151,23 @@ fun ReleaseScreen(
     }
     val groups = remember(content, preferences, debrid) { DownloadGroups.group(content?.downloads.orEmpty(), preferences, debrid) }
     val downloadOpened = { if (release?.section == ContentSection.Apps) onDownloaded(true) }
-    if (downloadsOpen && release != null) ReleaseDownloadsSheet(
-        release.id, ReleaseTitles.parse(release.title, release.section).name, groups, content?.downloadNotesHtml.orEmpty(),
-        release.browserUrl ?: "https://forum.mobilism.org/", debrid, downloadRequests,
-        onResolveDownload, downloadOpened,
-        onRelease = onRelease, onDismiss = { downloadsOpen = false })
+    val downloadSheetState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    var showTransfers by rememberSaveable { mutableStateOf(false) }
+    if (showTransfers) ReleaseTransfersDialog { showTransfers = false }
+    val downloadFile: (suspend (String, suspend () -> String) -> Unit)? =
+        if (preferences.internalDownloads && release != null) { original, direct ->
+            val folder = preferences.downloadFolder ?: throw org.mobilism.material.downloads.DownloadProblem(
+                "Choose a folder in Downloads settings.")
+            org.mobilism.material.downloads.ReleaseDownloads.enqueue(context.applicationContext, original, release.title,
+                folder, preferences.extractZips, direct)
+            showTransfers = true
+        } else null
+    if (downloadsOpen && release != null && !showTransfers) downloadSheetState.SaveableStateProvider(release.id) {
+        ReleaseDownloadsSheet(release.id, ReleaseTitles.parse(release.title, release.section).name,
+            groups, content?.downloadNotesHtml.orEmpty(), release.browserUrl ?: "https://forum.mobilism.org/",
+            debrid, downloadRequests, onResolveDownload, downloadOpened,
+            onRelease = onRelease, onDismiss = { downloadsOpen = false }, downloadFile = downloadFile)
+    }
     val canRefresh = !state.busy && !state.likeBusy && !state.composer.posting
     val refresh = { if (canRefresh) onRefresh() }
     gallery?.let { (urls, index) -> ReleaseImageViewer(urls, index, onDismiss = { gallery = null }) }
@@ -317,7 +329,8 @@ fun ReleaseScreen(
                             groups.forEach { group ->
                                 ReleaseDownloadGroup(release.id, group, release.browserUrl ?: "https://forum.mobilism.org/",
                                     debrid, downloadRequests, onResolveDownload, downloadOpened,
-                                    onCopied = { snackbar.showSnackbar("Link copied") }, onRelease = onRelease)
+                                    onCopied = { snackbar.showSnackbar("Link copied") }, onRelease = onRelease,
+                                    downloadFile = downloadFile)
                             }
                         }
                     }

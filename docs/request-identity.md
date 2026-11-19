@@ -11,6 +11,7 @@ The installed package supplies `versionName` and `versionCode` through `AppUserA
 | Premium/debrid providers and external metadata | App version/build | No |
 | GitHub update checks | App version/build | No |
 | GitHub APK downloads, including redirects | App version/build | No |
+| Release files from direct and resolved links | App version/build, without forum cookies or account headers | No |
 | Remote configuration | App version/build | No |
 | Usage reporting | Existing usage prefix plus app version/build | No |
 

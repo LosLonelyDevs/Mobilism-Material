@@ -20,7 +20,7 @@ The migration identity `cum.ahfu.mobi.material` permits a separate install when 
 | Appearance | Frappé default, fonts, reduced motion, theme support; import hidden |
 | Debrid settings | Encrypted keys, cached provider host lists, supported-host colors |
 | Download preferences | Preferred architecture, collapsed alternatives, favorite hosts sorted first |
-| Premium / unrestricted / native downloads | Not ported; original links open in a browser |
+| Premium / unrestricted / native downloads | Verified accounts resolve supported links. Use the external browser or save direct files in a selected folder with optional ZIP extraction. |
 | Release search | Native search, section filter, artwork, infinite scrolling, empty/error states and retry |
 | My Applications | Installed launcher apps, Apps search, downloaded marks, delete/Undo |
 | Following | Installed-version matching and manual linking, scheduled checks, optional update notifications, release navigation |
@@ -42,7 +42,7 @@ HTTP redirects are not followed by the authenticated API client. Artwork uses a 
 
 1. Expand integration coverage for guest restrictions, session expiry, and paginated feeds.
 2. Finish Apps installed-version matching, library batch actions, release history, and background update tracking, then discussion/comment navigation.
-3. Port download state, premium/debrid accounts, background work, notifications, and file handling behind interfaces independent of Compose.
+3. Verify Premium download flows with each supported provider.
 4. Port remaining account features and saved data, then decide on package/signing migration after feature parity.
 
 For each slice, keep the current navigation and actions, replace its UI with shared components, and move business rules into the data/domain layer. Do not replace unported features with fabricated content.

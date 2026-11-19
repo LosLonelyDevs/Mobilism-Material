@@ -77,12 +77,13 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
     }
     LaunchedEffect(Unit) { loadHosts() }
     Scaffold(topBar = {
-        TopAppBar(title = { AppHeading("Download preferences", HeadingLevel.Page) }, navigationIcon = {
+        TopAppBar(title = { AppHeading("Downloads", HeadingLevel.Page) }, navigationIcon = {
             AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack)
         })
     }) { insets ->
         LazyColumn(Modifier.padding(insets), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            item("release-transfers") { ReleaseTransferSettings(state, store) }
             item {
                 CollapsibleSection("download-tracking", "Download tracking", Icons.Outlined.Visibility, theme.success,
                     headingColor = colors.primary, headingStyle = MaterialTheme.typography.titleSmall) {
@@ -93,7 +94,7 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
                         Text("Auto-watch downloaded apps", Modifier.weight(1f))
                         Switch(state.autoWatchDownloads, onCheckedChange = null)
                     }
-                    SettingsSubtitle("Opening file hosts marks releases downloaded without confirming completion.")
+                    SettingsSubtitle("Starting downloads or opening hosts marks releases downloaded.")
                 }
             }
             item {

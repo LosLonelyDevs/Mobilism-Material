@@ -120,7 +120,7 @@ internal class ReadRequestPolicy(
     }
 }
 
-internal fun retryAfterMillis(value: String?, wallTime: Long): Long {
+fun retryAfterMillis(value: String?, wallTime: Long): Long {
     val seconds = value?.trim()?.toLongOrNull()?.takeIf { it >= 0 }
     return if (seconds != null) seconds.coerceAtMost(Long.MAX_VALUE / 1_000) * 1_000 else
         runCatching { ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli() - wallTime }

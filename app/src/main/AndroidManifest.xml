@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <queries>
         <intent>
@@ -21,6 +23,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MobilismMaterial"
         android:usesCleartextTraffic="false">
+        <service android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync" />
         <!-- Android reuses provider instances by component class, so each authority needs its own class. -->
         <provider
             android:name=".settings.DiagnosticFileProvider"

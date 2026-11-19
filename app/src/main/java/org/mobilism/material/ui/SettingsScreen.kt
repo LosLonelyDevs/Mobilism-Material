@@ -117,7 +117,7 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             item("landing-page") { LandingPageSetting(landingPage, onLandingPage) }
             item("content") { ContentVisibilitySetting(hideAdult, onHideAdult) }
             item("downloads-section") { SettingsSectionLabel("Downloads") }
-            item("downloads") { SettingsNavigationRow("Download preferences", "CPU architecture and favorite hosts.",
+            item("downloads") { SettingsNavigationRow("Downloads", "Download method, folder, architecture, and preferred hosts.",
                 Icons.Outlined.Download, onDownloads) }
             if (developer.debridEnabled) item("premium") {
                 SettingsNavigationRow("Premium", "Manage verified Premium accounts.", Icons.Outlined.WorkspacePremium,
