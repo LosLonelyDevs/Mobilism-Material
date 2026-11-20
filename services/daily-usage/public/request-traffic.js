@@ -4,6 +4,8 @@ export const requestEndpoints = ['api/login', 'api/register', 'api/restore', 'ap
   'forum/topic', 'forum/list', 'forum/profile', 'forum/search', 'forum/other', 'images'];
 export const requestMethods = ['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'OPTIONS', 'OTHER'];
 export const requestOutcomeLabels = ['Success', 'Redirects', 'Client errors', '429', 'Server errors', 'Network errors'];
+export const cacheLabels = { FollowingBackground: 'Followed apps · background', FollowingManual: 'Followed apps · manual', MemberIdentity: 'Member avatars and badges',
+  Search: 'Search results', Read: 'Forum API reads' };
 
 export function validateRequestTraffic(value, reportDay) {
   if (value === undefined) return true;
@@ -15,12 +17,20 @@ export function validateRequestTraffic(value, reportDay) {
   const earliest = new Date(Date.parse(reportDay) - 7 * 86400000).toISOString().slice(0, 10);
   const ids = new Set();
   return value.every(bucket => {
-    if (!exact(bucket, ['day', 'id', 'appVersion', 'versionCode', 'metrics']) || !day(bucket.day) ||
+    const keys = ['day', 'id', 'appVersion', 'versionCode', 'metrics'];
+    if (bucket && Object.hasOwn(bucket, 'caches')) {
+      keys.push('caches');
+      const caches = bucket.caches;
+      if (!caches || typeof caches !== 'object' || Array.isArray(caches) || !Object.keys(caches).length ||
+          !Object.entries(caches).every(([name, counts]) => Object.hasOwn(cacheLabels, name) && exact(counts, ['hits', 'misses']) &&
+            [counts.hits, counts.misses].every(n => Number.isInteger(n) && n >= 0 && n <= 1000000) && counts.hits + counts.misses > 0)) return false;
+    }
+    if (!exact(bucket, keys) || !day(bucket.day) ||
         bucket.day < earliest || bucket.day >= reportDay || typeof bucket.id !== 'string' ||
         !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(bucket.id) || ids.has(bucket.id.toLowerCase()) ||
         typeof bucket.appVersion !== 'string' || !/^\d+\.\d+\.\d+$/.test(bucket.appVersion) || bucket.appVersion.length > 50 ||
         !Number.isInteger(bucket.versionCode) || bucket.versionCode < 1 || bucket.versionCode > 2147483647 ||
-        !Array.isArray(bucket.metrics) || bucket.metrics.length < 1 || bucket.metrics.length > 128) return false;
+        !Array.isArray(bucket.metrics) || (!bucket.metrics.length && !bucket.caches) || bucket.metrics.length > 128) return false;
     ids.add(bucket.id.toLowerCase());
     const rows = new Set();
     return bucket.metrics.every(metric => {

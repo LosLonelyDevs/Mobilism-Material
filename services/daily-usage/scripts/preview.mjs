@@ -50,6 +50,8 @@ if (futureFollowing) {
   for (const endpoint of ['api/search', 'api/release', 'api/releases', 'forum/topic', 'images']) {
     await query(`INSERT INTO daily_requests VALUES ($1, '0.1.24', 25, $2, 'GET', 120, 3, 2, 4, 1, 2, 23760)`, [day, endpoint]);
   }
+  await query(`INSERT INTO daily_cache_usage VALUES ($1, '0.1.24', 25, 'FollowingBackground', 90, 10),
+    ($1, '0.1.24', 25, 'FollowingManual', 6, 4)`, [day]);
 }
 const users = usersHandler({ database: query, env }), account = accountHandler({ database: query, env });
 await userStore(query, env).ensureOwner();

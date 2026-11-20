@@ -6,6 +6,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { cleanReports, recordReport } from '../lib/database.js';
 import { DAY, readReport, utcDay, validateReport } from '../lib/protocol.js';
 import { createHandler as statsHandler } from '../api/stats.js';
+import { createHandler as pingHandler } from '../api/ping.js';
 import { groupRequestTraffic, requestEndpoints, requestMethods, validateRequestTraffic } from '../public/request-traffic.js';
 
 let db;
@@ -16,8 +17,31 @@ const bucket = () => ({ day: dateAgo(1), id: randomUUID(), appVersion: '0.1.24',
 const report = (traffic = [bucket()]) => ({ schema: 1, day: dateAgo(0), pingId: randomUUID(), appVersion: '0.1.24',
   versionCode: 25, androidApi: 36, manufacturer: 'Google', model: 'Pixel', requestTraffic: traffic });
 before(async () => { db = new PGlite(); await db.exec(await readFile(new URL('../schema.sql', import.meta.url), 'utf8')); });
-beforeEach(async () => { await db.exec('TRUNCATE usage_receipts, daily_usage, request_receipts, daily_requests'); });
+beforeEach(async () => { await db.exec('TRUNCATE usage_receipts, daily_usage, request_receipts, daily_requests, daily_cache_usage'); });
 after(async () => { await db.close(); });
+
+test('cache-only days share a receipt across retries and report weighted totals', async () => {
+  const b = { ...bucket(), metrics: [], caches: { FollowingBackground: { hits: 3, misses: 2 } } };
+  assert.equal(validateReport(report([b])), true);
+  for (const caches of [{}, { privateName: { hits: 1, misses: 0 } }, { FollowingBackground: { hits: -1, misses: 1 } },
+    { FollowingManual: { hits: 0, misses: 0 } }, { FollowingManual: { hits: 1, misses: 0, query: 'private' } }]) {
+    assert.equal(validateReport(report([{ ...b, caches }])), false);
+  }
+  const ingest = pingHandler(query);
+  await Promise.all([report([b]), report([b])].map(async body => {
+    const receipt = { setHeader() {}, end(text) { this.body = JSON.parse(text); } };
+    await ingest({ method: 'POST', headers: { 'content-type': 'application/json' }, body }, receipt);
+    assert.equal(receipt.statusCode, 200);
+    assert.equal(receipt.body.accepted, true);
+  }));
+  await recordReport(query, report([{ ...b, id: randomUUID(), day: dateAgo(2), caches: { FollowingBackground: { hits: 0, misses: 5 } } }]));
+  const handler = statsHandler(query, () => '', () => new Date(), () => true,
+    async () => ({ versions: [{ version: '0.1.24', prerelease: false, versionCode: 25 }] }));
+  const res = { setHeader() {}, end(body) { this.body = JSON.parse(body); } };
+  await handler({ method: 'GET', url: `/api/stats?group=period&from=${dateAgo(2)}&to=${dateAgo(0)}`, headers: {} }, res);
+  assert.deepEqual(res.body.cacheUsage, [{ cache: 'FollowingBackground', hits: '3', misses: '7' }]);
+  assert.deepEqual(res.body.requestTraffic, []);
+});
 
 test('old clients remain valid and traffic rejects private or unbounded input', async () => {
   const old = report(); delete old.requestTraffic;

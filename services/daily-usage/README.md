@@ -99,6 +99,8 @@ Settings > Anonymous usage disables future reports, clears local traffic counter
 
 The public endpoint accepts validated JSON up to 256 KiB, at most eight traffic batches and 128 endpoint/method rows per batch. Counts are not proof of authentic devices or requests: a modified client can generate new IDs. Keep statistics tokens server-side and rotate them independently of app releases.
 
+Cache hits and misses use the same daily batch IDs as endpoint totals. Apply the `daily_cache_usage` table in `schema.sql` before deploying ingestion. App usage sums hits and misses across the selected dates and versions before calculating the rate. See [cache counting rules](../../docs/request-traffic.md#coverage-and-limits).
+
 ## Verify
 
 Run `npm run build`, then `node scripts/preview.mjs` for a local-only preview with synthetic data and temporary credentials printed in its console. It never connects to production. `--dashboard` skips local sign-in; `--test-auth` uses fixed synthetic credentials for login checks. Both flags exist only in the excluded preview script. `PREVIEW_PORT` overrides the local port. Run `npm run typecheck` and `npm test` before deploying.

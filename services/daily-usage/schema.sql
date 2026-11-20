@@ -37,6 +37,16 @@ CREATE TABLE IF NOT EXISTS daily_requests (
     PRIMARY KEY (day, app_version, version_code, endpoint, method)
 );
 
+CREATE TABLE IF NOT EXISTS daily_cache_usage (
+    day date NOT NULL,
+    app_version varchar(50) NOT NULL,
+    version_code integer NOT NULL CHECK (version_code > 0),
+    cache varchar(24) NOT NULL CHECK (cache IN ('FollowingBackground', 'FollowingManual', 'MemberIdentity', 'Search', 'Read')),
+    hits bigint NOT NULL CHECK (hits >= 0),
+    misses bigint NOT NULL CHECK (misses >= 0),
+    PRIMARY KEY (day, app_version, version_code, cache)
+);
+
 CREATE TABLE IF NOT EXISTS admin_login_limits (
     key text PRIMARY KEY,
     failures integer NOT NULL,

@@ -1,5 +1,5 @@
 import { groupUsage, percentage, releaseAdoption } from '../public/metrics.js';
-import { groupRequestTraffic, requestTrafficMinimumVersion } from '../public/request-traffic.js';
+import { cacheLabels, groupRequestTraffic, requestTrafficMinimumVersion } from '../public/request-traffic.js';
 import { mountUsageCalendar, offsetDay } from './usage-calendar';
 import './usage.css';
 export function mountUsage(root, onExpired) {
@@ -122,7 +122,18 @@ function renderSnapshot() {
   }));
   $('empty').hidden = rows.length > 0;
   $('request-traffic').hidden = !data.trafficAvailable;
+  $('cache-usage').hidden = !data.trafficAvailable;
   if (data.trafficAvailable) {
+    const caches = (data.cacheUsage || []).filter(entry => rangeView || entry.day === selectedDay);
+    $('cache-rows').replaceChildren(...caches.map(entry => {
+      const row = document.createElement('tr');
+      const label = text('th', '', cacheLabels[entry.cache]); label.scope = 'row';
+      const hits = BigInt(entry.hits), misses = BigInt(entry.misses);
+      row.append(label, text('td', '', number(hits)), text('td', '', number(misses)),
+        text('td', '', shareLabel(percentage(hits, hits + misses))));
+      return row;
+    }));
+    $('cache-empty').hidden = caches.length > 0;
     const groups = groupRequestTraffic(data.requestTraffic, rangeView ? undefined : selectedDay);
     const requests = groups.reduce((sum, group) => sum + group.requests, 0n);
     $('traffic-version').textContent = `Requires v${requestTrafficMinimumVersion} or later`;

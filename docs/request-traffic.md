@@ -14,6 +14,14 @@ Usage and traffic receipts and aggregates update in one atomic SQL statement. Co
 
 ## Coverage and limits
 
+Daily batches also carry cache hits and misses. App usage shows the hit rate for each cache as total hits divided by total lookups in the selected dates.
+
+- **Followed apps on Vercel** counts a hit when a usable snapshot contains a compatible release at or above the followed app's baseline. A miss means the app was compared and had no match. Older snapshots, unavailable service, disabled checks, and apps beyond the match limit contribute neither. A cache hit can confirm the installed version is current.
+- **Member avatars and badges** counts a lookup as a hit when memory or disk supplies member metadata, including an avatar with badges still unknown.
+- **Search results** and **Forum API reads** count lookups of cached responses. Forced refreshes and reads without caching are excluded from read-cache totals.
+
+Export **Settings > Diagnostic logs** and search for `FollowingCheck` to see the snapshot outcome, usable items, matched and missed apps, and actual fallback search attempts. The `background` flag distinguishes scheduled checks from Check now. `CacheContribution` records feed submissions. Verbose logging also includes individual member, search, and read cache outcomes. Anonymous reports contain counts only.
+
 These are anonymous reporting-client counts, not server-wide traffic or real-time logs. Current-day totals arrive on a later foreground daily report. Inactive clients, opt-outs, offline delivery, capped buckets, storage failure, and incorrect clocks can omit data. The service cannot authenticate individual request counts from a public client.
 
 WebViews, external image hosts, third-party download/debrid services, APK downloads, remote configuration, and the usage endpoint itself are excluded. DNS, TLS, and connection failures before an HTTP attempt reaches OkHttp's network interceptor are excluded. Network failures after headers while reading a body remain classified by the received HTTP status.

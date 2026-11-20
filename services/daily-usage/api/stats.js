@@ -52,7 +52,10 @@ export function createHandler(database = query, token = () => process.env.STATS_
       const releases = await catalog().catch(() => null);
       const trafficAvailable = supportsMinimumVersion(releases, requestTrafficMinimumVersion);
       const requestTraffic = trafficAvailable ? await database(period ? requestsByPeriod : requestsByDay, [from, to]) : [];
-      return respond(res, 200, { from, to, daily, breakdown, latestStable: latestStableVersion(releases), trafficAvailable, requestTraffic });
+      const cacheUsage = trafficAvailable ? await database(`SELECT ${period ? '' : 'day::text,'} cache,
+        sum(hits)::text AS hits, sum(misses)::text AS misses FROM daily_cache_usage WHERE day BETWEEN $1::date AND $2::date
+        GROUP BY ${period ? 'cache' : 'day, cache'} ORDER BY cache`, [from, to]) : [];
+      return respond(res, 200, { from, to, daily, breakdown, latestStable: latestStableVersion(releases), trafficAvailable, requestTraffic, cacheUsage });
     } catch { return respond(res, 503, { error: 'Statistics unavailable' }); }
   };
 }
