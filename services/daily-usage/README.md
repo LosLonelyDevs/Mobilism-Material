@@ -8,6 +8,12 @@ Production runs at [mobilism-material-usage.vercel.app](https://mobilism-materia
 
 The repository Actions variable `DAILY_USAGE_ENDPOINT` supplies future release builds. The root `.env` also saves that URL and the dashboard credentials. Server credentials are in Vercel and the ignored `services/daily-usage/.env`; never include either environment file in Git or deployment uploads. No app version was changed by deployment.
 
+## Shared Latest Apps cache
+
+`POST /api/latest-apps` accepts up to 20 public release summaries from an Apps > Latest page the client already loaded. Contributions respect the app's usage-sharing opt-out. Neon keeps the 200 most recently posted unique app names, with the release title, version, topic ID, posting time, and uploader. An older page cannot move a newer entry backwards.
+
+`GET /api/latest-apps` returns one shared snapshot. Followed names stay on the device. The service never calls Mobilism. Apply `schema.sql` before deploying the endpoint. Only an unfiltered first page refreshes the snapshot timestamp. Clients fall back to the ordinary search budget if that timestamp is over six hours old.
+
 ## Dashboard sign-in
 
 The landing page shows an overview with links to **App usage** at `/app-usage` and **App controls** at `/app-controls`. App Controls uses AHFU components for notices, audience rules, schedules, and API thresholds. See [Remote app controls](../../docs/remote-controls.md) and [component notes](../../docs/dashboard-components.md). Apply `schema.sql` before deploying this feature.

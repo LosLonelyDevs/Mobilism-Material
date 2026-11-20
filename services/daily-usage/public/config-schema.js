@@ -25,6 +25,8 @@ export const limitFields = [
   ['followBatchSize', 'Following apps per batch', 5, 1, 20],
   ['followAppIntervalMs', 'Minimum interval per followed app (ms)', 21600000, 3600000, 604800000],
   ['followAttemptIntervalMs', 'Minimum following batch interval (ms)', 900000, 900000, 86400000],
+  ['followCacheIntervalMinutes', 'Shared-cache background interval (minutes)', 60, 15, 1440],
+  ['followCacheBatchSize', 'Shared-cache matches per check (0 disables)', 200, 0, 200],
 ];
 
 export function defaultConfig() { return { schema: 2, revision: 0, limits: {}, notices: [], userAgentRules: [] }; }

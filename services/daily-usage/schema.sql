@@ -86,3 +86,10 @@ CREATE INDEX IF NOT EXISTS dashboard_sessions_user ON dashboard_sessions (user_i
 
 ALTER TABLE admin_login_challenges ADD COLUMN IF NOT EXISTS user_id text REFERENCES dashboard_users(id) ON DELETE CASCADE;
 ALTER TABLE admin_login_challenges ADD COLUMN IF NOT EXISTS auth_version integer;
+
+CREATE TABLE IF NOT EXISTS latest_apps_cache (
+    singleton boolean PRIMARY KEY CHECK (singleton),
+    items jsonb NOT NULL CHECK (jsonb_typeof(items) = 'array' AND jsonb_array_length(items) <= 200),
+    observed_at bigint NOT NULL DEFAULT 0
+);
+INSERT INTO latest_apps_cache(singleton, items) VALUES (true, '[]') ON CONFLICT DO NOTHING;

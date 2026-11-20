@@ -27,6 +27,8 @@ data class ApiRequestLimits(
     val followBatchSize: Int = 5,
     val followAppIntervalMs: Long = 6 * 3_600_000,
     val followAttemptIntervalMs: Long = 15 * 60_000,
+    val followCacheIntervalMinutes: Int = 60,
+    val followCacheBatchSize: Int = 200,
 ) {
     companion object {
         val Defaults = ApiRequestLimits()
@@ -60,6 +62,8 @@ data class ApiRequestLimits(
                 value("followBatchSize", Defaults.followBatchSize.toLong(), 1L..20L).toInt(),
                 value("followAppIntervalMs", Defaults.followAppIntervalMs, 3_600_000L..604_800_000L),
                 value("followAttemptIntervalMs", Defaults.followAttemptIntervalMs, 900_000L..86_400_000L),
+                value("followCacheIntervalMinutes", Defaults.followCacheIntervalMinutes.toLong(), 15L..1_440L).toInt(),
+                value("followCacheBatchSize", Defaults.followCacheBatchSize.toLong(), 0L..200L).toInt(),
             )
         }
     }
