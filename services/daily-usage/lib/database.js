@@ -78,6 +78,10 @@ export function cleanReports(query) {
     DELETE FROM daily_requests WHERE day < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 364 RETURNING day
   ), cache_usage AS (
     DELETE FROM daily_cache_usage WHERE day < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 364
+  ), follow_usage AS (
+    DELETE FROM daily_followed_apps WHERE day < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 364
+  ), lookup_receipts AS (
+    DELETE FROM follow_lookup_receipts WHERE day < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 1
   ), login_limits AS (
     DELETE FROM admin_login_limits WHERE started_at < CURRENT_TIMESTAMP - interval '1 day' RETURNING key
   ), challenges AS (

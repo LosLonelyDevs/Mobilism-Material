@@ -29,6 +29,8 @@ data class ApiRequestLimits(
     val followAttemptIntervalMs: Long = 15 * 60_000,
     val followCacheIntervalMinutes: Int = 60,
     val followCacheBatchSize: Int = 200,
+    val followCacheManualCooldownMs: Long = 5 * 60_000,
+    val followPullToRefreshEnabled: Boolean = false,
 ) {
     companion object {
         val Defaults = ApiRequestLimits()
@@ -63,7 +65,9 @@ data class ApiRequestLimits(
                 value("followAppIntervalMs", Defaults.followAppIntervalMs, 3_600_000L..604_800_000L),
                 value("followAttemptIntervalMs", Defaults.followAttemptIntervalMs, 900_000L..86_400_000L),
                 value("followCacheIntervalMinutes", Defaults.followCacheIntervalMinutes.toLong(), 15L..1_440L).toInt(),
-                value("followCacheBatchSize", Defaults.followCacheBatchSize.toLong(), 0L..200L).toInt(),
+                value("followCacheBatchSize", Defaults.followCacheBatchSize.toLong(), 0L..512L).toInt(),
+                value("followCacheManualCooldownMs", Defaults.followCacheManualCooldownMs, 60_000L..3_600_000L),
+                json?.opt("followPullToRefreshEnabled") as? Boolean ?: Defaults.followPullToRefreshEnabled,
             )
         }
     }

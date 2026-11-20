@@ -47,6 +47,21 @@ CREATE TABLE IF NOT EXISTS daily_cache_usage (
     PRIMARY KEY (day, app_version, version_code, cache)
 );
 
+CREATE TABLE IF NOT EXISTS daily_followed_apps (
+    day date NOT NULL,
+    app_key varchar(200) NOT NULL,
+    name varchar(200) NOT NULL,
+    followers bigint NOT NULL CHECK (followers >= 0),
+    misses bigint NOT NULL CHECK (misses >= 0),
+    PRIMARY KEY (day, app_key)
+);
+
+CREATE TABLE IF NOT EXISTS follow_lookup_receipts (
+    day date NOT NULL,
+    receipt uuid NOT NULL,
+    PRIMARY KEY (day, receipt)
+);
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT FROM pg_constraint WHERE conrelid = 'daily_cache_usage'::regclass
@@ -109,7 +124,10 @@ ALTER TABLE admin_login_challenges ADD COLUMN IF NOT EXISTS auth_version integer
 
 CREATE TABLE IF NOT EXISTS latest_apps_cache (
     singleton boolean PRIMARY KEY CHECK (singleton),
-    items jsonb NOT NULL CHECK (jsonb_typeof(items) = 'array' AND jsonb_array_length(items) <= 200),
+    items jsonb NOT NULL,
     observed_at bigint NOT NULL DEFAULT 0
 );
+ALTER TABLE latest_apps_cache
+    DROP CONSTRAINT IF EXISTS latest_apps_cache_items_check,
+    ADD CONSTRAINT latest_apps_cache_items_check CHECK (jsonb_typeof(items) = 'array' AND jsonb_array_length(items) <= 500);
 INSERT INTO latest_apps_cache(singleton, items) VALUES (true, '[]') ON CONFLICT DO NOTHING;

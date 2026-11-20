@@ -59,6 +59,14 @@
           <p id="cache-empty" class="admin-zero-note">No cache lookups reported for this period.</p>
           <p class="admin-footnote">Following counts each app compared with a usable Vercel snapshot. Unavailable snapshots and skipped apps are excluded.</p>
         </section>
+        <section id="follow-rankings" class="admin-panel" aria-labelledby="follow-title" hidden>
+          <div class="admin-panel-heading"><h2 id="follow-title">Followed apps</h2></div>
+          <table class="admin-traffic-table"><thead><tr><th scope="col">Most followed</th><th scope="col" id="follow-unit">Reporting devices</th></tr></thead><tbody id="most-followed"></tbody></table>
+          <p id="follow-empty" class="admin-zero-note">No followed apps reported for this period.</p>
+          <table class="admin-traffic-table"><thead><tr><th scope="col">Most cache misses</th><th scope="col">Misses</th></tr></thead><tbody id="most-missed"></tbody></table>
+          <p id="miss-empty" class="admin-zero-note">No app-level misses reported for this period.</p>
+          <p class="admin-footnote">Each device counts once per requested app per UTC day. A miss is a requested app name absent from a fresh cache.</p>
+        </section>
         <details class="admin-panel admin-details">
           <summary>Device and app version details</summary>
           <div class="admin-panel-heading"><h2 id="devices-title">Devices & app versions</h2><span id="device-date"></span></div>

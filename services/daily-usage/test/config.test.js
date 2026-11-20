@@ -132,10 +132,17 @@ test('all API overrides reject invalid bounds and accept shipped defaults', () =
 test('upstream policy thresholds round-trip through the protected editor and public endpoint', async () => {
   const limits = Object.fromEntries(limitFields.map(([key, , fallback]) => [key, fallback]));
   Object.assign(limits, { readSpacingMs: 2000, readConcurrency: 1, messagePollIntervalMs: 180000,
-    memberLookupSpacingMs: 5000, debridRefreshIntervalMs: 60000 });
+    memberLookupSpacingMs: 5000, debridRefreshIntervalMs: 60000, followPullToRefreshEnabled: true });
   const saved = await call(adminHandler(query, () => true), { method: 'PUT', body: { ...defaultConfig(), limits } });
   assert.equal(saved.statusCode, 200);
   assert.deepEqual((await call(publicHandler(query))).body.limits, limits);
+});
+test('the Following gesture defaults off and accepts only a real boolean override', () => {
+  assert.equal(defaultConfig().limits.followPullToRefreshEnabled ?? false, false);
+  for (const value of [false, true]) assert.equal(validateConfig({ ...defaultConfig(),
+    limits: { followPullToRefreshEnabled: value } }).limits.followPullToRefreshEnabled, value);
+  for (const value of [1, 'true', null]) assert.throws(() => validateConfig({ ...defaultConfig(),
+    limits: { followPullToRefreshEnabled: value } }));
 });
 test('notices reject unsafe links, broken targeting, schedules, and missing update targets', () => {
   for (const bad of [

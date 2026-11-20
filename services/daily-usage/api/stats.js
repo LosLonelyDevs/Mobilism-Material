@@ -55,7 +55,15 @@ export function createHandler(database = query, token = () => process.env.STATS_
       const cacheUsage = trafficAvailable ? await database(`SELECT ${period ? '' : 'day::text,'} cache,
         sum(hits)::text AS hits, sum(misses)::text AS misses FROM daily_cache_usage WHERE day BETWEEN $1::date AND $2::date
         GROUP BY ${period ? 'cache' : 'day, cache'} ORDER BY cache`, [from, to]) : [];
-      return respond(res, 200, { from, to, daily, breakdown, latestStable: latestStableVersion(releases), trafficAvailable, requestTraffic, cacheUsage });
+      const followRankings = trafficAvailable ? await database(`WITH totals AS (
+        SELECT ${period ? 'NULL::date AS day' : 'day'}, app_key, min(name) AS name, sum(followers) AS followers, sum(misses) AS misses
+        FROM daily_followed_apps WHERE day BETWEEN $1::date AND $2::date GROUP BY ${period ? '' : 'day,'} app_key
+      ), ranked AS (
+        SELECT *, row_number() OVER (PARTITION BY day ORDER BY followers DESC, app_key) AS follow_rank,
+          row_number() OVER (PARTITION BY day ORDER BY misses DESC, app_key) AS miss_rank FROM totals
+      ) SELECT day::text, name, followers::text, misses::text, follow_rank::int AS "followRank", miss_rank::int AS "missRank"
+        FROM ranked WHERE (follow_rank <= 10 AND followers > 0) OR (miss_rank <= 10 AND misses > 0)`, [from, to]) : [];
+      return respond(res, 200, { from, to, daily, breakdown, latestStable: latestStableVersion(releases), trafficAvailable, requestTraffic, cacheUsage, followRankings });
     } catch { return respond(res, 503, { error: 'Statistics unavailable' }); }
   };
 }

@@ -52,6 +52,8 @@ if (futureFollowing) {
   }
   await query(`INSERT INTO daily_cache_usage VALUES ($1, '0.1.24', 25, 'FollowingBackground', 90, 10),
     ($1, '0.1.24', 25, 'FollowingManual', 6, 4)`, [day]);
+  await query(`INSERT INTO daily_followed_apps VALUES ($1, 'calendar', 'Calendar', 12, 0),
+    ($1, 'photo editor', 'Photo Editor', 8, 5)`, [day]);
 }
 const users = usersHandler({ database: query, env }), account = accountHandler({ database: query, env });
 await userStore(query, env).ensureOwner();

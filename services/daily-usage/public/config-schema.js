@@ -26,7 +26,8 @@ export const limitFields = [
   ['followAppIntervalMs', 'Minimum interval per followed app (ms)', 21600000, 3600000, 604800000],
   ['followAttemptIntervalMs', 'Minimum following batch interval (ms)', 900000, 900000, 86400000],
   ['followCacheIntervalMinutes', 'Shared-cache background interval (minutes)', 60, 15, 1440],
-  ['followCacheBatchSize', 'Shared-cache matches per check (0 disables)', 200, 0, 200],
+  ['followCacheBatchSize', 'Apps per background cache request (0 disables cache)', 200, 0, 512],
+  ['followCacheManualCooldownMs', 'Manual cache check cooldown (ms)', 300000, 60000, 3600000],
 ];
 
 export function defaultConfig() { return { schema: 2, revision: 0, limits: {}, notices: [], userAgentRules: [] }; }
@@ -41,6 +42,11 @@ export function validateConfig(input) {
   if (Object.keys(input).some(key => !['schema', 'revision', 'limits', 'notices', 'userAgentRules'].includes(key))) fail('Unknown configuration field.');
   const limits = {};
   for (const key of Object.keys(input.limits)) {
+    if (key === 'followPullToRefreshEnabled') {
+      if (typeof input.limits[key] !== 'boolean') fail('Pull to refresh must be on or off.');
+      limits[key] = input.limits[key];
+      continue;
+    }
     const field = limitFields.find(field => field[0] === key);
     if (!field) fail('Unknown API threshold.');
     if (!integer(input.limits[key], field[3], field[4])) fail(`${field[1]} must be between ${field[3]} and ${field[4]}.`);

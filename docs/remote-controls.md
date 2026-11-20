@@ -107,7 +107,9 @@ Links appear after the message with the configured link text. They open in the u
 | Minimum interval per followed app | 21,600,000 ms (6 hours) | 3,600,000 to 604,800,000 ms (1 hour to 7 days) |
 | Minimum following batch interval | 900,000 ms (15 minutes) | 900,000 to 86,400,000 ms (15 minutes to 24 hours) |
 | Shared-cache background interval | 60 minutes | 15 to 1,440 minutes |
-| Shared-cache matches per check | 200 | 0 to 200 |
+| Vercel apps per background request | 200 | 0 to 512 |
+| Manual Vercel check cooldown | 5 minutes | 1 to 60 minutes |
+| Pull to refresh on Following | Off | Off or on |
 
 Open **API controls > Limits** to edit thresholds. Blank fields remove the override. **Use app defaults** clears all threshold overrides in the draft; **Save API limits** applies them. Server `Retry-After` delays remain authoritative even when local limits change.
 
@@ -122,10 +124,12 @@ apps per batch (`followBatchSize`), the minimum interval per app
 These limits apply to both manual and background checks, oldest checks first.
 The app displays the effective limits. Changing limits does not reset check history.
 
-**Following shared cache** controls the automatic background interval and the
-number of matches per check. Set matches to zero to disable reads and contributions.
-Existing user-selected schedules are preserved. A user can pick a slower interval
-or turn background checks off. Android may delay scheduled work.
+**Following on Vercel** controls the automatic interval, apps per background request,
+manual cooldown, and pull-to-refresh gesture. The gesture defaults off. Save the
+switch to enable it on compatible clients. Check now and pull share one cooldown
+and check the whole watchlist in one request. Background checks rotate through
+larger lists. A batch size of zero disables cache reads and contributions.
+Users can select a slower schedule or turn background checks off.
 
 Each check compares followed apps against one shared snapshot. If there is no
 usable match or Vercel is unavailable, the existing direct-search budget applies.
@@ -137,6 +141,7 @@ five direct searches every six hours take about a day to cover the list.
 
 The dashboard can ship before the next app release. The Following section stays
 hidden until the verified release catalog contains a stable v0.1.24 or newer.
+Vercel lookup controls can be prepared ahead of that release.
 Once available, it displays **Requires v0.1.24 or later.** Drafts, prereleases,
 and unverified releases do not reveal it. The catalog caches for ten minutes;
 reload the dashboard after a release to refresh its catalog.

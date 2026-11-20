@@ -10,9 +10,13 @@ The repository Actions variable `DAILY_USAGE_ENDPOINT` supplies future release b
 
 ## Shared Latest Apps cache
 
-`POST /api/latest-apps` accepts up to 20 public release summaries from an Apps > Latest page the client already loaded. Contributions respect the app's usage-sharing opt-out. Neon keeps the 200 most recently posted unique app names, with the release title, version, topic ID, posting time, and uploader. An older page cannot move a newer entry backwards.
+`POST /api/latest-apps` accepts up to 20 public release summaries from an Apps > Latest page the client already loaded. Contributions respect the app's usage-sharing opt-out. Neon keeps the 500 most recently posted unique app names, with the release title, version, topic ID, posting time, and uploader. An older page cannot move a newer entry backwards.
 
-`GET /api/latest-apps` returns one shared snapshot. Followed names stay on the device. The service never calls Mobilism. Apply `schema.sql` before deploying the endpoint. Only an unfiltered first page refreshes the snapshot timestamp. Clients fall back to the ordinary search budget if that timestamp is over six hours old.
+`POST /api/latest-apps` also accepts a Following lookup. One request returns matching public release records for up to 512 distinct app names. Larger manual lists use one shared `GET` snapshot and match locally. The service never calls Mobilism. Android uses its normal search budget when it cannot confirm a version. A snapshot older than six hours is stale.
+
+App usage ranks each app by installations that requested it per UTC day and by lookups for names absent from a fresh cache. Visibility filters can hide a result without counting it as missing. Each installation generates a separate receipt per app and day. Receipts expire separately from the daily totals and contain no account or app name. Only named lookups contribute. Apply `schema.sql` before deploying.
+
+An entry expires 24 hours after its last sighting. It can disappear sooner when two comparable first-page reads at least ten minutes apart both show its old neighbors with the topic missing between them. Scrolling off the page is insufficient. A later sighting restores it. Expiry and removal use existing feed reads.
 
 ## Dashboard sign-in
 
