@@ -172,7 +172,7 @@ class ReleaseCommentsViewModelTest {
         assertEquals("Server content", model.state.value.comments.items.single().contentHtml)
         model.loadComments()
         advanceUntilIdle()
-        assertEquals(listOf(1, 1, 2), repo.pages)
+        assertEquals(listOf(1, 2), repo.pages)
         assertFalse(model.state.value.comments.canLoadMore)
     }
 
@@ -195,6 +195,9 @@ class ReleaseCommentsViewModelTest {
             pendingPageTwo = CompletableDeferred()
         }
         val model = ReleaseViewModel(42, repo, SavedStateHandle())
+        advanceUntilIdle()
+        assertTrue(repo.pages.isEmpty())
+        model.loadComments()
         advanceUntilIdle()
         model.loadComments()
         runCurrent()
@@ -256,6 +259,8 @@ class ReleaseCommentsViewModelTest {
         advanceUntilIdle()
         model.editComment("Unfinished reply")
         model.replyToComment(original)
+        model.loadComments()
+        advanceUntilIdle()
         repo.pendingPageTwo = CompletableDeferred()
         model.loadComments()
         runCurrent()
@@ -295,7 +300,7 @@ class ReleaseCommentsViewModelTest {
             replyTargets += replyTo
             return result.await()
         }
-        override suspend fun comments(id: Long, page: Int): CommentPage {
+        override suspend fun comments(id: Long, page: Int, fresh: Boolean): CommentPage {
             pages += page
             commentFailure?.let { throw it }
             if (page == 2) pendingPageTwo?.let { return it.await() }
@@ -317,7 +322,7 @@ class ReleaseCommentsViewModelTest {
         override suspend fun register(username: String, email: String, password: String) = Unit
         override suspend fun restorePassword(email: String) = Unit
         override suspend fun categories(section: ContentSection) = emptyList<ReleaseCategory>()
-        override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters): ReleasePage = error("Unused")
+        override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters, fresh: Boolean): ReleasePage = error("Unused")
         override suspend fun search(query: String, scope: SearchScope, page: Int, filters: FeedFilters): ReleasePage = error("Unused")
     }
 }

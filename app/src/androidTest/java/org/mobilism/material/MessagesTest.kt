@@ -204,7 +204,7 @@ class MessagesTest {
         fixture.listStatus = 401
         fixture.listBody = """{"status":"error","error":{"text":"Session expired"}}"""
         assertEquals(FailureKind.Session,
-            (runCatching { fixture.repository.messages(MessageFolder.Inbox, 1) }.exceptionOrNull() as ApiFailure).kind)
+            (runCatching { fixture.repository.messages(MessageFolder.Inbox, 1, fresh = true) }.exceptionOrNull() as ApiFailure).kind)
         assertEquals(AuthState.SignedOut, fixture.repository.auth.value)
         fixture.requests.clear()
         assertTrue(runCatching { fixture.repository.markMessageRead(42) }.isFailure)

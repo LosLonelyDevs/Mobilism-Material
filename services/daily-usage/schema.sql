@@ -41,11 +41,21 @@ CREATE TABLE IF NOT EXISTS daily_cache_usage (
     day date NOT NULL,
     app_version varchar(50) NOT NULL,
     version_code integer NOT NULL CHECK (version_code > 0),
-    cache varchar(24) NOT NULL CHECK (cache IN ('FollowingBackground', 'FollowingManual', 'MemberIdentity', 'Search', 'Read')),
+    cache varchar(24) NOT NULL,
     hits bigint NOT NULL CHECK (hits >= 0),
     misses bigint NOT NULL CHECK (misses >= 0),
     PRIMARY KEY (day, app_version, version_code, cache)
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_constraint WHERE conrelid = 'daily_cache_usage'::regclass
+        AND conname = 'daily_cache_usage_cache_names_v2') THEN
+        ALTER TABLE daily_cache_usage DROP CONSTRAINT IF EXISTS daily_cache_usage_cache_check,
+            ADD CONSTRAINT daily_cache_usage_cache_names_v2 CHECK (cache IN ('FollowingBackground',
+                'FollowingManual', 'MemberIdentity', 'Search', 'Read', 'ReleaseFeed', 'Inbox', 'Images', 'ReleaseComments'));
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS admin_login_limits (
     key text PRIMARY KEY,

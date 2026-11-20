@@ -19,7 +19,7 @@ data class PrivateMessage(
 data class MessagePage(val items: List<PrivateMessage>, val canLoadMore: Boolean)
 
 interface MessagesRepository {
-    suspend fun messages(folder: MessageFolder, page: Int): MessagePage
+    suspend fun messages(folder: MessageFolder, page: Int, fresh: Boolean = false): MessagePage
     suspend fun conversation(id: Long): List<PrivateMessage>
     suspend fun markMessageRead(id: Long)
     suspend fun replyToMessage(message: PrivateMessage, text: String)

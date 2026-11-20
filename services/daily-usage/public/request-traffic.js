@@ -5,7 +5,8 @@ export const requestEndpoints = ['api/login', 'api/register', 'api/restore', 'ap
 export const requestMethods = ['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'OPTIONS', 'OTHER'];
 export const requestOutcomeLabels = ['Success', 'Redirects', 'Client errors', '429', 'Server errors', 'Network errors'];
 export const cacheLabels = { FollowingBackground: 'Followed apps · background', FollowingManual: 'Followed apps · manual', MemberIdentity: 'Member avatars and badges',
-  Search: 'Search results', Read: 'Forum API reads' };
+  Search: 'Search results', Read: 'Forum API reads', ReleaseFeed: 'Release lists', Inbox: 'Inbox',
+  Images: 'Mobilism images', ReleaseComments: 'Release comments' };
 
 export function validateRequestTraffic(value, reportDay) {
   if (value === undefined) return true;

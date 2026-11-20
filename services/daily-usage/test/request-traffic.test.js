@@ -20,6 +20,17 @@ before(async () => { db = new PGlite(); await db.exec(await readFile(new URL('..
 beforeEach(async () => { await db.exec('TRUNCATE usage_receipts, daily_usage, request_receipts, daily_requests, daily_cache_usage'); });
 after(async () => { await db.close(); });
 
+test('device cache counts survive ingestion for all four cache groups', async () => {
+  const names = ['ReleaseFeed', 'Inbox', 'Images', 'ReleaseComments'];
+  const caches = Object.fromEntries(names.map(key => [key, { hits: 3, misses: 1 }]));
+  const body = report([{ ...bucket(), metrics: [], caches }]);
+  assert.equal(validateReport(body), true);
+  await recordReport(query, body);
+  const rows = await query('SELECT cache, hits, misses FROM daily_cache_usage ORDER BY cache');
+  assert.deepEqual(rows.map(row => row.cache), names.sort());
+  assert.ok(rows.every(row => Number(row.hits) === 3 && Number(row.misses) === 1));
+});
+
 test('cache-only days share a receipt across retries and report weighted totals', async () => {
   const b = { ...bucket(), metrics: [], caches: { FollowingBackground: { hits: 3, misses: 2 } } };
   assert.equal(validateReport(report([b])), true);

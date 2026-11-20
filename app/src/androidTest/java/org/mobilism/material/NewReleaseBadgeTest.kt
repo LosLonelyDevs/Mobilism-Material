@@ -98,7 +98,7 @@ class NewReleaseBadgeTest {
     @Test fun homeLoaderRendersNewBadgesWithoutAcknowledgingAnOffscreenShelf() {
         val session = NewReleaseSession(context)
         val repository = object : HomeRepository {
-            override suspend fun homeReleases(section: ContentSection, order: FeedOrder) =
+            override suspend fun homeReleases(section: ContentSection, order: FeedOrder, fresh: Boolean) =
                 if (order == FeedOrder.Latest) releases(12, 10) else emptyList()
             override suspend fun homeCategories(section: ContentSection) = emptyList<ReleaseCategory>()
             override suspend fun homeReviews(section: ContentSection): HomeTopics? = null

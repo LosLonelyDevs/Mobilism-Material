@@ -24,7 +24,7 @@ data class DiagnosticEvent(
     val cache: CacheDiagnostic? = null,
 )
 
-enum class AppCache { Following, MemberIdentity, Search, Read }
+enum class AppCache { Following, MemberIdentity, Search, Read, ReleaseFeed, Inbox, Images, ReleaseComments }
 enum class CacheOutcome { Available, MemoryHit, DiskHit, Miss, Stale, Unconfigured, Disabled, Failed, Published, Empty }
 
 data class CacheDiagnostic(val name: AppCache, val outcome: CacheOutcome, val hits: Int = 0, val misses: Int = 0,

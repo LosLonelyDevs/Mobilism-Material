@@ -28,7 +28,7 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
         if (org.mobilism.material.usage.DailyUsageSchedule.configured) dailyUsage.recordTraffic(it)
     }
     override fun newImageLoader(context: android.content.Context): coil3.ImageLoader =
-        org.mobilism.material.images.appImageLoader(context)
+        org.mobilism.material.images.appImageLoader(context, diagnostics = appLogger)
 
     override val userAgentPolicy get() = remoteControl.userAgentPolicy
     val memberIdentities by lazy { org.mobilism.material.members.MemberIdentityStore(repository::profile,

@@ -31,7 +31,7 @@ class CommentForm internal constructor(
 class UnconfirmedCommentChange : Exception("The forum did not confirm the change. Check the comment before trying again.")
 
 internal class NativeForumComments(private val context: Context, private val client: OkHttpClient,
-    private val policy: ReadRequestPolicy, private val account: () -> Session?) : ForumCommentGateway {
+    private val policy: ReadRequestPolicy, private val account: () -> Session?, private val changed: (Long) -> Unit) : ForumCommentGateway {
     private class Page(val document: Document, val redirect: HttpUrl?)
     private var forumSession: Session? = null
     private var forumClient: OkHttpClient? = null
@@ -93,7 +93,7 @@ internal class NativeForumComments(private val context: Context, private val cli
         val destination = page.redirect
         if (destination?.encodedPath == "/viewtopic.php") {
             val selected = form.target.postId.toString()
-            if (!edit || destination.queryParameter("p") == selected || destination.fragment == "p$selected") return
+            if (!edit || destination.queryParameter("p") == selected || destination.fragment == "p$selected") return changed(form.target.topicId)
             throw UnconfirmedCommentChange()
         }
         val doc = page.document
@@ -105,6 +105,7 @@ internal class NativeForumComments(private val context: Context, private val cli
         val acknowledgements = if (edit) listOf("post has been edited", "message has been edited", "message has been submitted successfully")
             else listOf("post has been deleted", "message has been deleted")
         if (notice.none { text -> acknowledgements.any { text.contains(it, ignoreCase = true) } }) throw UnconfirmedCommentChange()
+        changed(form.target.topicId)
     }
 
     private suspend fun request(target: ForumCommentTarget, username: String, url: HttpUrl,

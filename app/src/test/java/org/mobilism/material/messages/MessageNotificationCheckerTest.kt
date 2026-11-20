@@ -57,7 +57,7 @@ class MessageNotificationCheckerTest {
             { histories.getOrPut(it) { MessageReadHistory() } }, { read },
             { account, message -> if (acceptsPosts) { posts += account to message.messageId; true } else false },
             { _, ids -> cancelled += ids }, now = { time })
-        override suspend fun messages(folder: MessageFolder, page: Int): MessagePage {
+        override suspend fun messages(folder: MessageFolder, page: Int, fresh: Boolean): MessagePage {
             assertEquals(MessageFolder.Inbox, folder)
             loads++
             afterLoad()

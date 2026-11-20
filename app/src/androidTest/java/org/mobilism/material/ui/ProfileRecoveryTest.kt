@@ -157,6 +157,34 @@ class ProfileRecoveryTest {
         } finally { loader.shutdown() }
     }
 
+    @Test fun equivalentForumImagesShareMemoryAndDiskBeforeNetworkFetch() = runBlocking {
+        val path = "forum.mobilism.org/images/fixture-${java.util.UUID.randomUUID()}.png"
+        val fetches = AtomicInteger()
+        val outcomes = mutableListOf<org.mobilism.material.data.CacheOutcome>()
+        val logger = org.mobilism.material.data.DiagnosticLogger { event -> event.cache?.outcome?.let(outcomes::add) }
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            assertEquals("https://$path", chain.request().url.toString())
+            fetches.incrementAndGet()
+            val bytes = java.io.ByteArrayOutputStream()
+            val bitmap = android.graphics.Bitmap.createBitmap(16, 16, android.graphics.Bitmap.Config.ARGB_8888)
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, bytes)
+            bitmap.recycle()
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).message("Fixture").code(200)
+                .header("Content-Type", "image/png").body(bytes.toByteArray().toResponseBody()).build()
+        }.build()
+        val loader = org.mobilism.material.images.appImageLoader(context, client, logger)
+        try {
+            suspend fun load(scheme: String) = loader.execute(coil3.request.ImageRequest.Builder(context)
+                .data("$scheme://$path").size(16, 16).build()) as coil3.request.SuccessResult
+            assertEquals(coil3.decode.DataSource.NETWORK, load("http").dataSource)
+            assertEquals(coil3.decode.DataSource.MEMORY_CACHE, load("https").dataSource)
+            loader.memoryCache?.clear()
+            assertEquals(coil3.decode.DataSource.DISK, load("https").dataSource)
+            assertEquals(1, fetches.get())
+            assertEquals(listOf("Miss", "MemoryHit", "DiskHit"), outcomes.map { it.name })
+        } finally { loader.shutdown() }
+    }
+
     @Test fun restoringAnIdentityDoesNotExtendItsExpiry() = runBlocking {
         var wallTime = 10_000L
         val ttl = ApiRequestLimits.Defaults.memberCacheTtlMs

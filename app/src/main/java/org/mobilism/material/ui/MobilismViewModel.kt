@@ -303,7 +303,7 @@ class MobilismViewModel(
         feedJob = viewModelScope.launch {
             mutableFeed.update { it.copy(busy = true, refreshing = refresh, error = null) }
             try {
-                val result = repository.releases(snapshot.section, snapshot.order, page, snapshot.filters)
+                val result = repository.releases(snapshot.section, snapshot.order, page, snapshot.filters, fresh = refresh)
                 coroutineContext.ensureActive()
                 val existing = if (refresh) emptyList() else snapshot.items
                 val combined = (existing + result.items).distinctBy { it.id }
@@ -401,6 +401,7 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
         if (repository.auth.value !is AuthState.SignedIn) return
         savedState["comment-open"] = true
         mutableState.update { it.copy(composer = it.composer.copy(open = true)) }
+        if (state.value.comments.page == 0 && state.value.comments.error == null) loadComments()
     }
 
     fun closeComposer() {
@@ -478,8 +479,9 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
     fun refresh() {
         val snapshot = mutableState.value
         if (snapshot.busy || job?.isActive == true || snapshot.likeBusy || snapshot.composer.posting) return
+        val commentsStarted = snapshot.comments.page > 0 || snapshot.comments.busy || snapshot.comments.error != null
         load()
-        refreshComments()
+        if (commentsStarted) refreshComments()
     }
 
     fun refreshComments() {
@@ -487,7 +489,7 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
         commentsJob?.cancel()
         commentsJob = null
         mutableState.update { it.copy(comments = CommentsState()) }
-        loadComments()
+        loadComments(fresh = true)
     }
 
     fun load() {
@@ -498,20 +500,23 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
             try {
                 val release = repository.release(id)
                 mutableState.update { it.copy(release = release, busy = false) }
-                if (mutableState.value.comments.page == 0) loadComments()
+                if (mutableState.value.composer.open && mutableState.value.comments.page == 0) loadComments()
             }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { mutableState.update { it.copy(busy = false, error = error.forScreen()) } }
         }
     }
 
-    fun loadComments() {
+    fun loadComments() = loadComments(fresh = false)
+
+    private fun loadComments(fresh: Boolean) {
         val snapshot = mutableState.value.comments
         if (commentsJob?.isActive == true || !snapshot.canLoadMore) return
         commentsJob = viewModelScope.launch {
             mutableState.update { it.copy(comments = snapshot.copy(busy = true, error = null)) }
             try {
-                val result = repository.comments(id, snapshot.page + 1)
+                val result = repository.comments(id, snapshot.page + 1, fresh)
+                coroutineContext.ensureActive()
                 val items = if (snapshot.page == 0) (result.items + snapshot.items).distinctBy { it.id }.sortedByDescending { it.publishedAt }
                     else (snapshot.items + result.items).distinctBy { it.id }
                 mutableState.update { it.copy(comments = CommentsState(

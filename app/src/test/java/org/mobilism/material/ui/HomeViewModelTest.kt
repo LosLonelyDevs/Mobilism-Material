@@ -123,7 +123,7 @@ class HomeViewModelTest {
         val calls = mutableListOf<String>()
         var failPopular = false
         var slowApps = false
-        override suspend fun homeReleases(section: ContentSection, order: FeedOrder): List<Release> {
+        override suspend fun homeReleases(section: ContentSection, order: FeedOrder, fresh: Boolean): List<Release> {
             calls += "$section-$order"
             if (slowApps && section == ContentSection.Apps) withContext(NonCancellable) {
                 delay(100)

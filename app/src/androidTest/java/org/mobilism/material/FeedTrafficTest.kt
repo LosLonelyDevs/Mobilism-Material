@@ -87,7 +87,7 @@ class FeedTrafficTest {
         val cancelled = CompletableDeferred<Unit>()
         val calls = mutableListOf<ContentSection>()
         val repository = object : MobilismRepository by fixture.repository {
-            override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters): ReleasePage {
+            override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters, fresh: Boolean): ReleasePage {
                 calls += section
                 if (section == ContentSection.Apps) {
                     started.complete(Unit)

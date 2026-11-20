@@ -102,10 +102,10 @@ interface MobilismRepository {
     suspend fun register(username: String, email: String, password: String)
     suspend fun restorePassword(email: String)
     suspend fun categories(section: ContentSection): List<ReleaseCategory>
-    suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters = FeedFilters()): ReleasePage
+    suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters = FeedFilters(), fresh: Boolean = false): ReleasePage
     suspend fun release(id: Long): Release
     suspend fun toggleLike(release: Release): Boolean
-    suspend fun comments(id: Long, page: Int): CommentPage
+    suspend fun comments(id: Long, page: Int, fresh: Boolean = false): CommentPage
     suspend fun postComment(id: Long, text: String, replyTo: Long? = null): Long
     suspend fun search(query: String, scope: SearchScope, page: Int, filters: FeedFilters = FeedFilters()): ReleasePage
 }

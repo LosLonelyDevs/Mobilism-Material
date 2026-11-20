@@ -24,11 +24,12 @@ internal fun CommentSortMenu(sort: CommentSort, total: Long, onSelect: (CommentS
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box {
             TextButton(onClick = { expanded = true }, contentPadding = PaddingValues(horizontal = 6.dp),
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
                 modifier = Modifier.testTag("comment-sort").semantics { stateDescription = direction }) {
                 Text(sort.field.name, style = MaterialTheme.typography.labelSmall)
                 Icon(arrow, null, Modifier.size(16.dp))
             }
-            DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenu(expanded, onDismissRequest = { expanded = false }, shape = MaterialTheme.shapes.extraLarge) {
                 CommentSortField.entries.forEach { field ->
                     DropdownMenuItem(text = { Text(field.name) }, onClick = {
                         expanded = false

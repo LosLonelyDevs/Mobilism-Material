@@ -912,7 +912,7 @@ class MessagesViewModelTest {
         var conversationError: Exception? = null
         var mailboxError: Exception? = null
         var pendingConversation: CompletableDeferred<List<PrivateMessage>>? = null
-        override suspend fun messages(folder: MessageFolder, page: Int): MessagePage {
+        override suspend fun messages(folder: MessageFolder, page: Int, fresh: Boolean): MessagePage {
             pages += folder to page
             mailboxError?.let { throw it }
             return MessagePage(if (folder == MessageFolder.Inbox) inboxPages[page] ?: inboxItems else sentItems, true)

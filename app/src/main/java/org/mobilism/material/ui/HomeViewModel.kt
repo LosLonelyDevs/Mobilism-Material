@@ -80,11 +80,14 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
         }
     }
 
-    private fun loadMissing() = HomeCollection.entries.filter { !loaded(it) && jobs[it]?.isActive != true }.forEach(::retry)
+    private fun loadMissing() = HomeCollection.entries.filter { !loaded(it) && jobs[it]?.isActive != true }
+        .forEach { load(it, fresh = false) }
 
     fun refresh() = HomeCollection.entries.forEach(::retry)
 
-    fun retry(collection: HomeCollection) {
+    fun retry(collection: HomeCollection) = load(collection, fresh = true)
+
+    private fun load(collection: HomeCollection, fresh: Boolean) {
         jobs.remove(collection)?.cancel()
         val section = state.value.section
         mark(collection, busy = true)
@@ -93,7 +96,7 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
                 when (collection) {
                     HomeCollection.Latest, HomeCollection.Popular -> {
                         val order = if (collection == HomeCollection.Latest) FeedOrder.Latest else FeedOrder.Top
-                        val items = repository.homeReleases(section, order).distinctBy { it.id }
+                        val items = repository.homeReleases(section, order, fresh).distinctBy { it.id }
                         ensureActive()
                         if (collection == HomeCollection.Latest) latestLoadedAt[section] = now()
                         val newReleaseIds = if (collection == HomeCollection.Latest) observeNewReleases(section, items) else emptySet()

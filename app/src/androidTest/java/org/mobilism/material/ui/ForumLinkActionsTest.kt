@@ -97,7 +97,7 @@ class ForumLinkActionsTest {
                 return Release(id, if (id == source) "Current build" else "Previous build", "Uploader", null,
                     1_793_188_800L, 0, 0, contentHtml = "<p><a href='$url'>$url</a></p>")
             }
-            override suspend fun comments(id: Long, page: Int): CommentPage {
+            override suspend fun comments(id: Long, page: Int, fresh: Boolean): CommentPage {
                 commentPages += id to page
                 return CommentPage(emptyList(), false)
             }

@@ -19,6 +19,9 @@ Daily batches also carry cache hits and misses. App usage shows the hit rate for
 - **Followed apps on Vercel** counts a hit when a usable snapshot contains a compatible release at or above the followed app's baseline. A miss means the app was compared and had no match. Older snapshots, unavailable service, disabled checks, and apps beyond the match limit contribute neither. A cache hit can confirm the installed version is current.
 - **Member avatars and badges** counts a lookup as a hit when memory or disk supplies member metadata, including an avatar with badges still unknown.
 - **Search results** and **Forum API reads** count lookups of cached responses. Forced refreshes and reads without caching are excluded from read-cache totals.
+- **Release lists** count saved source pages reused by Home and Latest/Top. Latest expires after five minutes and Top after 15. Local filters run again on the saved data.
+- **Inbox** and **Release comments** count first pages reused in memory within 60 seconds. Private message bodies stay out of persistent cache storage.
+- **Mobilism images** counts successful loads from memory or disk as hits and successful network loads as misses. Diagnostic logs distinguish memory and disk.
 
 Export **Settings > Diagnostic logs** and search for `FollowingCheck` to see the snapshot outcome, usable items, matched and missed apps, and actual fallback search attempts. The `background` flag distinguishes scheduled checks from Check now. `CacheContribution` records feed submissions. Verbose logging also includes individual member, search, and read cache outcomes. Anonymous reports contain counts only.
 

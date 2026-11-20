@@ -13,6 +13,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Callback
@@ -51,11 +52,13 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         .build()
     // Connection recovery can resend a request. Keep writes on the non-retrying client.
     private val readClient = this.client.newBuilder().retryOnConnectionFailure(true).build()
+    private val feedPages = FeedPageStore(context.getSharedPreferences("release-feed-pages", Context.MODE_PRIVATE))
+    private val feedLocks = Array(8) { kotlinx.coroutines.sync.Mutex() }
     private val searches = SearchRequestPolicy(limits = requestLimits, diagnostics = diagnostics)
     private val reads = ReadRequestPolicy(limits = requestLimits, diagnostics = diagnostics)
     private val forumReads = ReadRequestPolicy(limits = requestLimits)
-    fun commentGateway(account: () -> Session?): ForumCommentGateway =
-        NativeForumComments(context, this.client, forumReads, account)
+    fun commentGateway(account: () -> Session?, changed: (Long) -> Unit): ForumCommentGateway =
+        NativeForumComments(context, this.client, forumReads, account, changed)
     private val likePostIds = context.getSharedPreferences("release-post-ids", Context.MODE_PRIVATE)
     private val forumPostIds = ConcurrentHashMap<Long, Long>()
     private val forumCommentStarts = ConcurrentHashMap<Pair<Long, Int>, Int>()
@@ -75,16 +78,34 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         return ContentSection.entries.associateWith { CategoryJson.parse(response, it) }
     }
 
-    suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, token: String?, categoryId: Long? = null, hideAdult: Boolean = false): ReleasePage {
+    suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, token: String?, categoryId: Long? = null,
+        hideAdult: Boolean = false): ReleasePage {
         require(page > 0)
         require(categoryId == null || categoryId > 0)
         val category = categoryId?.toString() ?: "all"
         val path = "release/${section.apiPath}/category/$category/page/$page/limit/$PAGE_SIZE/orderby/${order.apiValue}/desc/0"
-        val response = request(path, token, emptyRecordsAsArray = true, hideAdult = hideAdult).getJSONArray("response")
-        return ReleaseJson.page(response).let { result ->
-            result.copy(items = result.items.map { it.copy(section = it.section ?: section) }).also { pageResult ->
-                if (section == ContentSection.Apps && order == FeedOrder.Latest)
-                    onLatestApps(LatestAppsPage(pageResult.items, page == 1 && categoryId == null, hideAdult))
+        fun parse(array: org.json.JSONArray): ReleasePage = ReleaseJson.page(array).let { result ->
+            result.copy(items = result.items.map { it.copy(section = it.section ?: section) })
+        }
+        suspend fun fetch(key: String?): ReleasePage {
+            val array = request(path, token, emptyRecordsAsArray = true, hideAdult = hideAdult).getJSONArray("response")
+            val result = parse(array)
+            if (key != null) feedPages.save(key, array.toString())
+            if (section == ContentSection.Apps && order == FeedOrder.Latest)
+                onLatestApps(LatestAppsPage(result.items, page == 1 && categoryId == null, hideAdult))
+            return result
+        }
+        val firstPage = kotlin.coroutines.coroutineContext[FirstFeedPage] ?: return fetch(null)
+        val key = requestKey(listOf(path, token, hideAdult).toString())
+        val ttl = if (order == FeedOrder.Latest) 5 * 60_000L else 15 * 60_000L
+        return withContext(Dispatchers.IO) {
+            feedLocks[Math.floorMod(key.hashCode(), feedLocks.size)].withLock {
+                if (!firstPage.fresh) {
+                    val cached = feedPages.read(key, ttl)?.let { runCatching { parse(org.json.JSONArray(it)) }.getOrNull() }
+                    diagnostics.cacheLookup(AppCache.ReleaseFeed, if (cached != null) CacheOutcome.DiskHit else CacheOutcome.Miss)
+                    if (cached != null) return@withLock cached
+                }
+                fetch(key)
             }
         }
     }
@@ -304,14 +325,16 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         }
     }
 
+    private fun requestKey(identity: String) = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(identity.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
     private suspend fun request(path: String, token: String? = null, form: Map<String, String>? = null,
         emptyRecordsAsArray: Boolean = false, hideAdult: Boolean = false, retryRead: Boolean = true,
         emptySuccess: Boolean = false, recovered: Boolean = false, cacheMillis: Long = 0, fresh: Boolean = false): JSONObject {
         if (path != "search" && (form != null || !retryRead))
             return performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead, emptySuccess, recovered)
         val identity = listOf(path, token, hideAdult.toString(), form?.toSortedMap().toString()).toString()
-        val key = java.security.MessageDigest.getInstance("SHA-256").digest(identity.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
+        val key = requestKey(identity)
         if (path != "search") return JSONObject(reads.request(key, cacheMillis, fresh) {
             performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead, emptySuccess, recovered).toString()
         })

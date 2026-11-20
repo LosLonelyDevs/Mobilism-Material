@@ -91,7 +91,7 @@ class MessagesViewModel(private val repository: MessagesRepository, private val 
         mailboxJobs[folder] = viewModelScope.launch {
             try {
                 val page = if (refresh) 1 else snapshot.page + 1
-                val result = repository.messages(folder, page)
+                val result = repository.messages(folder, page, fresh = refresh)
                 ensureActive()
                 if (folder == MessageFolder.Inbox) readHistory.remember(result.items.filter { it.read }.map { it.messageId })
                 val previous = if (refresh) emptyList() else snapshot.items

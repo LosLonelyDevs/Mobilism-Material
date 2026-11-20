@@ -23,7 +23,7 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     private val categoryCache = MutableStateFlow(emptyMap<Boolean, Map<ContentSection, List<ReleaseCategory>>>())
     val categoryCatalogs = categoryCache.asStateFlow()
     private val pagerMutex = Mutex()
-    private data class Query(val section: ContentSection, val order: FeedOrder, val categories: Set<Long>, val hideAdult: Boolean,
+    private data class Query(val token: String?, val section: ContentSection, val order: FeedOrder, val categories: Set<Long>, val hideAdult: Boolean,
         val customIds: Set<String> = emptySet(), val customItems: List<CategorizedItem> = emptyList())
     private var pagerQuery: Query? = null
     private var pager: CategoryFeedPager? = null
@@ -32,7 +32,16 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     private val mutableAuth = MutableStateFlow<AuthState>(AuthState.Restoring)
     override val auth = mutableAuth.asStateFlow()
     @Volatile private var session: Session? = null
-    val commentGateway = api.commentGateway { session }
+    private val inbox = RecentPages<String, MessagePage>(AppCache.Inbox, diagnostics, capacity = 1)
+    private val commentPages = RecentPages<Pair<String?, Long>, CommentPage>(AppCache.ReleaseComments, diagnostics, capacity = 12)
+    val commentGateway = api.commentGateway({ session }, ::invalidateComments)
+
+    private fun invalidateComments(topicId: Long) = commentPages.invalidate { it.second == topicId }
+
+    private fun clearPrivatePages() {
+        inbox.clear()
+        commentPages.clear()
+    }
 
     override suspend fun restoreSession() = authMutex.withLock {
         try {
@@ -50,17 +59,20 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         val result = api.signIn(username.trim(), password)
         store.write(result)
         session = result
+        clearPrivatePages()
         mutableAuth.value = AuthState.SignedIn(result.username)
     }
 
     override suspend fun continueAsGuest() = authMutex.withLock {
         store.clear(guest = true)
+        clearPrivatePages()
         session = null
         mutableAuth.value = AuthState.Guest
     }
 
     override suspend fun signOut() = authMutex.withLock {
         store.clear()
+        clearPrivatePages()
         session = null
         mutableAuth.value = AuthState.SignedOut
     }
@@ -85,7 +97,11 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         }
     }
 
-    override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters): ReleasePage {
+    override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters, fresh: Boolean): ReleasePage =
+        if (page == 1) kotlinx.coroutines.withContext(FirstFeedPage(fresh)) { releasePage(section, order, page, filters) }
+        else releasePage(section, order, page, filters)
+
+    private suspend fun releasePage(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters): ReleasePage {
         val effective = if (customCategoriesEnabled()) filters else filters.copy(customCategoryIds = emptySet())
         val local = customCategories?.state?.value ?: CustomCategoryState()
         val hideAdult = contentPreferences.hideAdult.value
@@ -111,7 +127,7 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         withSession { token ->
             if (categories.isEmpty() && customIds.isEmpty()) api.releases(section, order, page, token, hideAdult = hideAdult)
             else pagerMutex.withLock {
-                val query = Query(section, order, categories.toSet(), hideAdult, customIds.toSet(),
+                val query = Query(token, section, order, categories.toSet(), hideAdult, customIds.toSet(),
                     local.items.filter { item -> item.categoryIds.any(customIds::contains) })
                 if (page == 1 || pagerQuery != query) {
                     pagerQuery = query
@@ -165,12 +181,15 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         .digest(username.lowercase(java.util.Locale.ROOT).toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) } + ":$id"
 
-    override suspend fun comments(id: Long, page: Int): CommentPage = withSession { token -> api.comments(id, page, token) }
+    override suspend fun comments(id: Long, page: Int, fresh: Boolean): CommentPage = withSession { token ->
+        if (page == 1) commentPages.get(token to id, fresh) { api.comments(id, page, token) }
+        else api.comments(id, page, token)
+    }
 
     override suspend fun postComment(id: Long, text: String, replyTo: Long?): Long = withSession { token ->
         val account = session?.takeIf { it.accessToken == token }
             ?: throw ApiFailure(FailureKind.Credentials, "Sign in to post a comment.")
-        api.postComment(id, text, account.accessToken, replyTo)
+        api.postComment(id, text, account.accessToken, replyTo).also { invalidateComments(id) }
     }
 
     @Volatile private var listedAnnouncementForums: Set<Long> = emptySet()
@@ -195,8 +214,8 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         api.discussionTopics(category, 1, "", token, fresh = true).items.maxOfOrNull { it.activityAt }?.takeIf { it > 0 }
     }
 
-    override suspend fun homeReleases(section: ContentSection, order: FeedOrder) =
-        releases(section, order, 1, FeedFilters()).items.take(12)
+    override suspend fun homeReleases(section: ContentSection, order: FeedOrder, fresh: Boolean) =
+        releases(section, order, 1, FeedFilters(), fresh).items.take(12)
 
     override suspend fun homeCategories(section: ContentSection) = categories(section)
 
@@ -225,25 +244,27 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         api.postDiscussionComment(topic, text, replyTo, account.accessToken)
     }
 
-    override suspend fun messages(folder: MessageFolder, page: Int): MessagePage = withMessageSession { account ->
+    override suspend fun messages(folder: MessageFolder, page: Int, fresh: Boolean): MessagePage = withMessageSession { account ->
         val userId = account.userId ?: throw ApiFailure(FailureKind.Credentials,
             "Sign in again to load your messages. Your saved login needs to be updated.")
-        api.messages(folder, userId, page, account.accessToken)
+        if (folder == MessageFolder.Inbox && page == 1)
+            inbox.get(account.accessToken, fresh) { api.messages(folder, userId, page, account.accessToken) }
+        else api.messages(folder, userId, page, account.accessToken)
     }
 
     override suspend fun conversation(id: Long): List<PrivateMessage> = withMessageSession { api.conversation(id, it.accessToken) }
 
-    override suspend fun markMessageRead(id: Long) = withMessageSession { api.markMessageRead(id, it.accessToken) }
+    override suspend fun markMessageRead(id: Long) = withMessageSession { api.markMessageRead(id, it.accessToken).also { inbox.clear() } }
 
     override suspend fun replyToMessage(message: PrivateMessage, text: String) = withMessageSession {
-        api.replyToMessage(message, text, it)
+        api.replyToMessage(message, text, it).also { inbox.clear() }
     }
 
     override suspend fun sendMessage(recipient: String, subject: String, body: String) = withMessageSession {
-        api.sendMessage(recipient, subject, body, it)
+        api.sendMessage(recipient, subject, body, it).also { inbox.clear() }
     }
 
-    override suspend fun deleteMessage(messageId: Long) = withMessageSession { api.deleteMessage(messageId, it.accessToken) }
+    override suspend fun deleteMessage(messageId: Long) = withMessageSession { api.deleteMessage(messageId, it.accessToken).also { inbox.clear() } }
 
     private suspend fun <T> withMessageSession(block: suspend (Session) -> T): T = withSession { token ->
         val account = session?.takeIf { it.accessToken == token }
@@ -277,6 +298,7 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
                 // A failed old request must not erase a newly established session.
                 if (session?.accessToken == token) {
                     store.clear()
+                    clearPrivatePages()
                     session = null
                     mutableAuth.value = AuthState.SignedOut
                 }

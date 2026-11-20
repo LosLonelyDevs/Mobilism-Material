@@ -127,10 +127,10 @@ class SearchViewModelTest {
         override suspend fun signOut() = Unit
         override suspend fun register(username: String, email: String, password: String) = Unit
         override suspend fun restorePassword(email: String) = Unit
-        override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters) = error("Unused")
+        override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters, fresh: Boolean) = error("Unused")
         override suspend fun release(id: Long): Release = error("Unused")
         override suspend fun toggleLike(release: Release): Boolean = error("Unused")
-        override suspend fun comments(id: Long, page: Int): CommentPage = error("Unused")
+        override suspend fun comments(id: Long, page: Int, fresh: Boolean): CommentPage = error("Unused")
         override suspend fun postComment(id: Long, text: String, replyTo: Long?): Long = error("Unused")
     }
 }
