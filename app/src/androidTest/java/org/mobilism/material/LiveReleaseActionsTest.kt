@@ -17,6 +17,7 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.platform.app.InstrumentationRegistry
@@ -176,6 +177,7 @@ class LiveReleaseActionsTest {
             assertTrue("Expected browser verification: ${model.state.value.actionMessage}",
                 model.state.value.likeNeedsVerification || model.state.value.release?.likeId != null)
             try {
+                if (model.state.value.likeNeedsVerification) compose.onNodeWithText("Verify").performClick()
                 compose.waitUntil(60_000) { !model.state.value.likeNeedsVerification && model.state.value.release?.likeId != null }
             } catch (failure: Throwable) {
                 val instrumentation = InstrumentationRegistry.getInstrumentation()

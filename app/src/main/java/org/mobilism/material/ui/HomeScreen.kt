@@ -234,7 +234,7 @@ private fun LatestTile(release: Release, section: ContentSection, onRelease: (Lo
     val title = remember(release.title, section) { ReleaseTitles.parse(release.title, section) }
     StoreCard({ onRelease(release.id) }, Modifier.width(if (section == ContentSection.Books) 144.dp else 160.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Box {
                 HomeArtwork(release.thumbnail, Modifier.fillMaxWidth().aspectRatio(if (section == ContentSection.Books) 0.68f else 1f), section)
                 if (isNew) NewReleaseBadge(release.id, Modifier.align(Alignment.TopEnd).padding(4.dp))
@@ -243,9 +243,9 @@ private fun LatestTile(release: Release, section: ContentSection, onRelease: (Lo
             if (section == ContentSection.Books && title.subtitle.isNotBlank()) Text(title.subtitle,
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             else UsernameLink(release.author, style = MaterialTheme.typography.labelMedium)
-            ReleaseMetadataFooter(release) {
-                ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
-                ReleaseViewCount(release.views)
+            ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
+            ReleaseMetadataFooter(release, singleRow = true, showEmptyRow = release.views > 0) {
+                ReleaseViewCount(release.views, numberOnly = true)
             }
         }
     }
@@ -257,14 +257,15 @@ private fun PopularTile(release: Release, section: ContentSection, index: Int, o
     val title = remember(release.title, section) { ReleaseTitles.parse(release.title, section) }
     val tone = homeTone(index)
     StoreCard({ onRelease(release.id) }, Modifier.width(200.dp), color = tone.first, contentColor = tone.second) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             StoreShape(index, 160.dp, tone.second.copy(alpha = 0.09f)) {
                 HomeArtwork(release.thumbnail, Modifier.width(if (section == ContentSection.Books) 84.dp else 106.dp)
                     .height(if (section == ContentSection.Books) 126.dp else 106.dp), section)
             }
             Text(title.name, style = MaterialTheme.typography.titleMediumEmphasized, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
-            ReleaseMetadataFooter(release) {
-                ReleaseViewCount(release.views, textStyle = MaterialTheme.typography.labelMedium, color = tone.second)
+            ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
+            ReleaseMetadataFooter(release, singleRow = true, showEmptyRow = release.views > 0) {
+                ReleaseViewCount(release.views, numberOnly = true, textStyle = MaterialTheme.typography.labelMedium, color = tone.second)
             }
         }
     }

@@ -6,6 +6,7 @@ import android.text.SpannableStringBuilder
 import android.text.style.URLSpan
 import android.text.style.BulletSpan
 import android.text.style.QuoteSpan
+import android.text.style.RelativeSizeSpan
 import android.text.style.TypefaceSpan
 import android.text.style.LeadingMarginSpan
 import android.text.Spanned
@@ -82,6 +83,15 @@ internal fun forumText(html: String, baseUrl: String, options: ForumFormattingOp
         fun literalAt(index: Int) = options.markdown && getSpans(index, index + 1, TypefaceSpan::class.java).isNotEmpty()
         while (isNotEmpty() && last().isWhitespace() && !literalAt(length - 1)) delete(length - 1, length)
         while (isNotEmpty() && first().isWhitespace() && !literalAt(0)) delete(0, 1)
+        if (options.cleanUpReleaseText) {
+            val titleEnd = indexOf('\n')
+            val subtitleStart = titleEnd + 2
+            if (titleEnd >= 0 && subtitleStart < length && this[titleEnd + 1] == '\n' &&
+                requirementsLabel.containsMatchIn(subSequence(subtitleStart, minOf(subtitleStart + 64, length))) &&
+                getSpans(subtitleStart, subtitleStart + 1, RelativeSizeSpan::class.java).any { it.sizeChange < 1f }) {
+                delete(titleEnd + 1, subtitleStart)
+            }
+        }
         if (enhanced) {
             getSpans(0, length, BulletSpan::class.java)
                 .sortedWith(compareBy<BulletSpan> { getSpanStart(it) }.thenByDescending { getSpanEnd(it) }).forEach { span ->

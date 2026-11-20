@@ -55,6 +55,22 @@ import org.mobilism.material.ui.*
 class ReleaseCommentTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun challengedThumbsUpCanBeDismissedWithoutOpeningVerification() {
+        val release = Release(42, "Sample app", "Author", null, 1700000000, 0, 0)
+        var needsVerification by androidx.compose.runtime.mutableStateOf(true)
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            ReleaseScreen(ReleaseState(release = release, busy = false, likeNeedsVerification = needsVerification),
+                DebridState(), DownloadPreferences(), onBack = {}, onRetry = {}, onMoreComments = {},
+                watched = false, downloaded = false, onWatch = {}, onDownloaded = {}, onLike = {},
+                onActionMessageShown = {}, onDismissLikeVerification = { needsVerification = false })
+        } }
+        compose.onNodeWithText("Verify").assertIsDisplayed()
+        compose.onNodeWithText("Verify forum connection").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Dismiss", substring = true).performClick()
+        compose.onNodeWithText("Verify forum connection").assertDoesNotExist()
+        compose.runOnIdle { assertFalse(needsVerification) }
+    }
+
     @Test fun repliesFollowTheirParentAndCollapsingHidesTheWholeThread() {
         val now = java.time.ZonedDateTime.now()
         val parent = ReleaseComment(1, "Parent", null, now.minusDays(16).toEpochSecond(), "Original comment")
@@ -71,6 +87,10 @@ class ReleaseCommentTest {
                 onMoreComments = {}, watched = false, downloaded = false, onWatch = {}, onDownloaded = {},
                 onLike = {}, onActionMessageShown = {})
         } }
+        val headerAuthor = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithText("PARENT", useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(headerAuthor) }
+        assertEquals(ThemeCatalog.default.originalPoster, headerAuthor.single().layoutInput.style.color)
         compose.onNode(hasScrollToIndexAction() and
             SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
             .performScrollToNode(hasTestTag("comment-1"))

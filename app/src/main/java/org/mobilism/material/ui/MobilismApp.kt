@@ -23,6 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavType
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -35,6 +36,12 @@ import org.mobilism.material.data.FeedFilters
 import org.mobilism.material.data.FeedOrder
 import org.mobilism.material.designsystem.LoadingState
 import org.mobilism.material.designsystem.screenMotion
+
+internal fun NavController.openReleaseTopic(id: Long) {
+    if (currentDestination?.route == "release/{id}" && currentBackStackEntry?.arguments?.getLong("id") == id) return
+    // Each topic owns its detail ViewModel and scroll position on the back stack.
+    navigate("release/$id")
+}
 
 @Composable
 fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fromNotification: Boolean = true,
@@ -132,7 +139,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     }
     LaunchedEffect(Unit) {
         if (auth is AuthState.SignedIn) model.releaseAfterSignIn?.let {
-            nav.navigate("release/$it") { launchSingleTop = true }
+            nav.openReleaseTopic(it)
             model.releaseSignInHandled()
         }
         if (auth is AuthState.SignedIn && model.discussionAfterSignIn != null) nav.navigate("discussions") { launchSingleTop = true }
@@ -140,7 +147,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     LaunchedEffect(notificationRelease) {
         notificationRelease?.takeIf { it > 0 }?.let { id ->
             if (fromNotification) nav.navigate("following") { launchSingleTop = true }
-            nav.navigate(if (id == org.mobilism.material.data.DownloadHelp.TOPIC_ID) "download-help" else "release/$id") { launchSingleTop = true }
+            if (id == org.mobilism.material.data.DownloadHelp.TOPIC_ID) nav.navigate("download-help") { launchSingleTop = true }
+            else nav.openReleaseTopic(id)
             onNotificationHandled()
         }
     }
@@ -196,7 +204,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 model.setFeedVisible(tab != BrowseTab.Home)
                 onDispose { home.setVisible(false); model.setFeedVisible(false) }
             }
-            val openRelease: (Long) -> Unit = { nav.navigate("release/$it") { launchSingleTop = true } }
+            val openRelease: (Long) -> Unit = nav::openReleaseTopic
             val openFeed: (FeedOrder, FeedFilters) -> Unit = { order, filters ->
                 model.selectOrder(order)
                 model.applyFilters(filters)
@@ -271,7 +279,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onRemoveRecent = search::removeRecent, onClearRecent = search::clearRecent,
                 customCategories = categoryStore,
                 onManageCategories = { state.scope.section?.let { nav.navigate("categories/${it.name}") } },
-                onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() })
+                onRelease = nav::openReleaseTopic, onBack = { nav.popBackStack() })
         }
         composable("library") { entry ->
             val libraryModel: LibraryViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
@@ -282,7 +290,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onRefresh = libraryModel::refreshInstalled,
                 onSearch = { nav.navigate("search?query=${android.net.Uri.encode(it)}") },
                 onFollowing = { nav.navigate("following") },
-                onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() })
+                onRelease = nav::openReleaseTopic, onBack = { nav.popBackStack() })
         }
         composable("following") { entry ->
             val followingModel: FollowingViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
@@ -295,7 +303,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             val limits by followingModel.limits.collectAsStateWithLifecycle()
             FollowingScreen(library, installed, check, error, preferences, followingModel.preferences,
                 app.followNotifications, model.library, followingModel::refresh, followingModel::checkNow, followingModel::link,
-                onRelease = { nav.navigate("release/$it") }, onBack = { nav.popBackStack() }, limits = limits)
+                onRelease = nav::openReleaseTopic, onBack = { nav.popBackStack() }, limits = limits)
         }
         composable("discussions") { entry ->
             val discussions: DiscussionsViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
@@ -340,7 +348,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                     onCloseReply = messages::closeReply, onNoticeShown = messages::noticeShown,
                     onCheckReply = messages::checkReplyDelivery, onRetryReply = messages::retryReply,
                     onNewReply = messages::newReply, actions = messages.actions,
-                    onRelease = { nav.navigate("release/$it") })
+                    onRelease = nav::openReleaseTopic)
             }
         }
         composable("settings") {
@@ -375,7 +383,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             if (developer.customCategoriesActive) CustomCategoriesScreen(
                 org.mobilism.material.data.ContentSection.valueOf(requireNotNull(entry.arguments?.getString("section"))),
                 model.customCategories, onBack = { nav.popBackStack() },
-                onRelease = { nav.navigate("release/$it") })
+                onRelease = nav::openReleaseTopic)
         }
         composable("about") {
             AboutScreen(onBack = { nav.popBackStack() }, developerMode = developer.enabled,
@@ -389,7 +397,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         }
         composable("download-help") {
             DownloadHelpScreen(app.repository::downloadHelp, onBack = { nav.popBackStack() },
-                onRelease = { nav.navigate("release/$it") { launchSingleTop = true } })
+                onRelease = nav::openReleaseTopic)
         }
         composable("profile?user={user}&name={name}", arguments = listOf(
             navArgument("user") { type = NavType.LongType; defaultValue = 0L },
@@ -428,7 +436,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onRefreshComments = detail::refreshComments,
                 onRefresh = detail::refresh,
                 onReplyToComment = detail::replyToComment, onRemoveReply = detail::clearCommentReply,
-                onRelease = { topic -> if (topic != id) nav.navigate("release/$topic") { launchSingleTop = true } },
+                onRelease = nav::openReleaseTopic,
                 onResolveDownload = model.debrid::resolve,
                 descriptionExpanded = descriptionExpanded, onDescriptionExpanded = app.releaseDisplay::setDescriptionExpanded,
                 onDownloadHosts = model.downloads::discover,

@@ -25,7 +25,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import org.jsoup.Jsoup
 import org.mobilism.material.data.ApiFailure
 import org.mobilism.material.data.CommentForm
 import org.mobilism.material.data.FailureKind
@@ -42,7 +41,8 @@ internal fun ForumCommentEditor(target: ForumCommentTarget, username: String, cu
     val scope = rememberCoroutineScope()
     val edit = target.action == ForumCommentAction.Edit
     var form by remember { mutableStateOf<CommentForm?>(null) }
-    var draft by rememberSaveable { mutableStateOf<String?>(null) }
+    val initialText = rememberSaveable { CommentEditBody.fromHtml(currentHtml) }
+    var draft by rememberSaveable { mutableStateOf(initialText) }
     var password by remember { mutableStateOf("") }
     var attempt by rememberSaveable { mutableStateOf(false) }
     var openedBrowser by rememberSaveable { mutableStateOf(false) }
@@ -50,23 +50,25 @@ internal fun ForumCommentEditor(target: ForumCommentTarget, username: String, cu
     var error by remember { mutableStateOf<String?>(null) }
     var challenge by remember { mutableStateOf(false) }
     var loadKey by remember { mutableIntStateOf(0) }
+    var review by remember { mutableStateOf<CommentEditBody?>(null) }
     var discard by remember { mutableStateOf(false) }
     val dismiss = { if (!busy) {
-        if (draft != null && !attempt) discard = true else onClose(attempt || openedBrowser)
+        if (edit && draft != initialText && !attempt) discard = true else onClose(attempt || openedBrowser)
     } }
 
     fun failed(failure: Exception) {
         if (failure is CancellationException) throw failure
         challenge = failure is ApiFailure && failure.kind == FailureKind.Challenge
         error = when {
-            challenge -> "The forum requires a browser check before it will open this comment."
+            challenge -> "The forum requires a browser check before changing this comment."
+            failure is ApiFailure && failure.httpStatus == 404 -> "The forum could not find this comment's form (404)."
             failure is ApiFailure -> failure.message
             else -> "Could not reach the forum. Check your connection and try again."
         }
     }
 
     LaunchedEffect(loadKey) {
-        if (!attempt) {
+        if (!edit && !attempt) {
             error = null
             challenge = false
             if (gateway == null) error = "Comment editing is unavailable."
@@ -76,24 +78,70 @@ internal fun ForumCommentEditor(target: ForumCommentTarget, username: String, cu
     }
 
     val loaded = form
+    fun submitChange() {
+        if (busy || attempt) return
+        if (gateway == null) {
+            error = "Comment editing is unavailable."
+            return
+        }
+        busy = true
+        error = null
+        challenge = false
+        scope.launch {
+            try {
+                val ready = when {
+                    loaded == null -> gateway.load(target, username)
+                    loaded.needsLogin -> gateway.login(loaded, password).also { password = "" }
+                    else -> loaded
+                }
+                form = ready
+                if (ready.needsLogin) return@launch
+                val message = if (edit) {
+                    val body = CommentEditBody.fromForum(checkNotNull(ready.source))
+                    if (body.message.replace("\r\n", "\n").trim() != initialText && review != body) {
+                        review = body
+                        return@launch
+                    }
+                    body.quotes + draft
+                } else {
+                    if (loaded?.needsLogin == true) return@launch
+                    ""
+                }
+                attempt = true
+                gateway.submit(ready, message)
+                onClose(true)
+            } catch (failure: UnconfirmedCommentChange) {
+                form = null
+            } catch (failure: Exception) {
+                if (failure is CancellationException) throw failure
+                attempt = false
+                if (loaded?.needsLogin != true || failure !is ApiFailure || failure.kind != FailureKind.Credentials) form = null
+                review = null
+                failed(failure)
+            } finally { busy = false }
+        }
+    }
     AlertDialog(onDismissRequest = dismiss, modifier = Modifier.testTag("forum-comment-editor"),
         title = { AppHeading(target.action.title, HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall) },
         text = {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (loaded?.source == null && draft == null && currentHtml.isNotBlank()) {
-                    Text(remember(currentHtml) { Jsoup.parse(currentHtml.take(6000)).text() }, maxLines = 4, overflow = TextOverflow.Ellipsis)
-                }
+                if (edit) {
+                    OutlinedTextField(draft, { draft = it }, Modifier.fillMaxWidth().testTag("edit-comment-text"),
+                        readOnly = busy || attempt, label = { Text("Comment") }, minLines = 3, maxLines = 8,
+                        shape = MaterialTheme.shapes.large)
+                    review?.let {
+                        Text("The forum copy differs from the comment you opened. Review it before replacing it with your changes.")
+                        Text(it.message, style = MaterialTheme.typography.bodySmall)
+                        AppTextButton("Use forum copy", { draft = it.message }, enabled = !busy && !attempt)
+                    }
+                } else if (initialText.isNotBlank()) Text(initialText, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 if (loaded?.needsLogin == true) {
                     Text("Sign in to the forum as $username to change this comment.")
                     OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), singleLine = true,
                         enabled = !busy, label = { Text("Forum password") }, visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), shape = MaterialTheme.shapes.large)
-                } else if (edit && (loaded?.source != null || draft != null)) {
-                    OutlinedTextField(draft ?: loaded?.source.orEmpty(), { draft = it.takeUnless { value -> value == loaded?.source } },
-                        Modifier.fillMaxWidth().testTag("edit-comment-text"), readOnly = busy || attempt,
-                        label = { Text("Comment") }, minLines = 3, maxLines = 8, shape = MaterialTheme.shapes.large)
                 } else if (!edit && loaded != null && !attempt) Text("Delete this comment? This cannot be undone.")
-                if (busy || (loaded == null && error == null && !attempt)) LoadingState(
+                if (busy || (!edit && loaded == null && error == null && !attempt)) LoadingState(
                     if (!busy) "Loading comment…" else if (loaded?.needsLogin == true) "Signing in…"
                     else if (edit) "Saving comment…" else "Deleting comment…")
                 if (attempt && !busy) Text("The forum did not confirm the change. Check the comment before trying again.")
@@ -112,37 +160,15 @@ internal fun ForumCommentEditor(target: ForumCommentTarget, username: String, cu
         confirmButton = {
             when {
                 attempt && !busy -> AppTextButton("Check comment", { onClose(true) })
-                loaded == null && error != null -> AppTextButton("Try again", { loadKey++ })
-                loaded != null && gateway != null -> {
-                    val signingIn = loaded.needsLogin
-                    ExpressiveButton(onClick = {
-                        if (!busy && !attempt) {
-                            busy = true
-                            error = null
-                            challenge = false
-                            if (!signingIn) attempt = true
-                            scope.launch {
-                                try {
-                                    if (signingIn) {
-                                        form = gateway.login(loaded, password)
-                                        password = ""
-                                    } else {
-                                        gateway.submit(loaded, draft.orEmpty())
-                                        onClose(true)
-                                    }
-                                } catch (failure: UnconfirmedCommentChange) {
-                                    form = null
-                                } catch (failure: Exception) {
-                                    if (failure is CancellationException) throw failure
-                                    attempt = false
-                                    if (!signingIn) form = null
-                                    failed(failure)
-                                } finally { busy = false }
-                            }
-                        }
-                    }, enabled = !busy && !attempt && (if (signingIn) password.isNotEmpty() else !edit || !draft.isNullOrBlank())) {
-                        Text(if (signingIn) "Sign in" else if (edit) "Save changes" else "Delete")
-                    }
+                !edit && loaded == null && error != null -> AppTextButton("Try again", { loadKey++ })
+                edit || loaded != null -> ExpressiveButton(onClick = ::submitChange,
+                    enabled = !busy && !attempt && (!edit || draft.isNotBlank() && draft != initialText) &&
+                        (loaded?.needsLogin != true || password.isNotEmpty())) {
+                    Text(when {
+                        loaded?.needsLogin == true -> if (edit) "Sign in and update" else "Sign in"
+                        edit -> "Update"
+                        else -> "Delete"
+                    })
                 }
             }
         }, dismissButton = { AppTextButton("Cancel", dismiss, enabled = !busy) })

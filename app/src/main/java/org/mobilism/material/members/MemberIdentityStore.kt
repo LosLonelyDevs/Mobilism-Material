@@ -34,12 +34,18 @@ class MemberIdentityStore(
     private val mutableIdentities = MutableStateFlow<Map<String, MemberIdentity>>(emptyMap())
     val identities = mutableIdentities.asStateFlow()
 
+    suspend fun restoreCached(username: String): Boolean {
+        val key = key(username)
+        if (key.isEmpty()) return false
+        if (fresh(key)) return key in identities.value
+        return cache != null && withContext(Dispatchers.IO) { restore(key, cache) }
+    }
+
     suspend fun request(username: String) {
         val name = username.trim()
         val key = key(name)
         if (key.isEmpty()) return
-        if (fresh(key)) return
-        if (cache != null && withContext(Dispatchers.IO) { restore(key, cache) }) return
+        if (restoreCached(name)) return
         requests.withLock {
             if (!due(key)) return@withLock
             val remaining = lastRequest?.let { it + limits().memberLookupSpacingMs - now() } ?: 0
@@ -78,16 +84,20 @@ class MemberIdentityStore(
 
     private fun refreshLimits() {
         val policy = limits()
-        if (policy != previousLimits) {
+        if (policy == previousLimits) return
+        if (policy.memberCacheTtlMs != previousLimits.memberCacheTtlMs) {
             expires.clear()
             mutableIdentities.value = emptyMap()
-            cache?.clear()
-            previousLimits = policy
+        } else if (policy.memberMissingCacheTtlMs != previousLimits.memberMissingCacheTtlMs ||
+            policy.memberFailureCooldownMs != previousLimits.memberFailureCooldownMs ||
+            policy.memberFailureMaxCooldownMs != previousLimits.memberFailureMaxCooldownMs) {
+            expires.keys.removeAll { it !in mutableIdentities.value }
         }
+        previousLimits = policy
     }
 
     private fun restore(key: String, cache: MemberIdentityCache): Boolean = synchronized(lock) {
-        if (fresh(key)) return@synchronized true
+        if (fresh(key)) return@synchronized key in mutableIdentities.value
         val entry = cache.read(key, limits().memberCacheTtlMs) ?: return@synchronized false
         mutableIdentities.value = mutableIdentities.value + (key to entry.identity)
         expires[key] = now() + entry.remainingMillis

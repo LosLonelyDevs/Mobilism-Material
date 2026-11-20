@@ -123,22 +123,38 @@ class NativeCookieContinuityTest {
         assumeTrue(phase == "write" || phase == "read")
         val url = "https://app.mobilism.org/"
         val name = "persistent_cookie_fixture"
+        val forum = ProfileReference(username = "Fixture")
+        val forumCookie = "forum_restart_fixture"
         val manager = CookieManager.getInstance()
         val requests = mutableListOf<Request>()
         val repository = DefaultMobilismRepository(isolatedContext(), client = OkHttpClient.Builder().addInterceptor { chain ->
             requests += chain.request()
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).message("Fixture").code(200)
-                .apply { if (phase == "write") header("Set-Cookie", "$name=persisted; Path=/; Secure; HttpOnly; Max-Age=3600") }
-                .body("""{"response":[]}""".toResponseBody()).build()
+                .apply { if (phase == "write" && chain.request().url.host == "app.mobilism.org")
+                    header("Set-Cookie", "$name=persisted; Path=/; Secure; HttpOnly; Max-Age=3600") }
+                .body((if (chain.request().url.host == "forum.mobilism.org")
+                    "<div id='viewprofile'><ul class='reset-list'><li>Username: Fixture</li></ul></div>"
+                    else """{"response":[]}""").toResponseBody()).build()
         }.build())
-        if (phase == "write") manager.setCookie(url, "$name=; Path=/; Secure; Max-Age=0")
+        if (phase == "write") {
+            manager.setCookie(url, "$name=; Path=/; Secure; Max-Age=0")
+            manager.setCookie(forum.url, "$forumCookie=browser; Path=/; Secure; HttpOnly; Max-Age=3600")
+            manager.flush()
+        }
         try {
             repository.comments(413, 1)
-            assertEquals(1, requests.size)
+            repository.profile(forum)
+            assertEquals(2, requests.size)
+            assertTrue(requests.last().header("Cookie").orEmpty().contains("$forumCookie=browser"))
+            assertFalse(requests.first().header("Cookie").orEmpty().contains(forumCookie))
             if (phase == "read") assertTrue("A fresh process must send the stored native-response cookie",
-                requests.single().header("Cookie").orEmpty().contains("$name=persisted"))
+                requests.first().header("Cookie").orEmpty().contains("$name=persisted"))
         } finally {
-            if (phase == "read") { manager.setCookie(url, "$name=; Path=/; Secure; Max-Age=0"); manager.flush() }
+            if (phase == "read") {
+                manager.setCookie(url, "$name=; Path=/; Secure; Max-Age=0")
+                manager.setCookie(forum.url, "$forumCookie=; Path=/; Secure; Max-Age=0")
+                manager.flush()
+            }
         }
     }
 }

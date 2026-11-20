@@ -20,11 +20,14 @@ class CommentManagementTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     @Test fun ownReleaseCommentSavesThroughNativeEditorAndRefreshesOnce() = runBlocking {
-        val fixture = CommentForumFixture()
+        val quote = "[quote=\"DEVIL18\"]add torbox support bro please[/quote]\n"
+        val reply = "See https://example.org/issue"
+        val html = "<blockquote>DEVIL18 wrote: add torbox support bro please</blockquote>See <a href='https://example.org/issue'>https://example.org/issue</a>"
+        val fixture = CommentForumFixture().apply { source = quote + reply }
         fixture.signIn()
         var refreshes = 0
         compose.setContent { CompositionLocalProvider(LocalCommentGateway provides fixture.gateway) { MobilismTheme(reduceMotion = true) {
-            ReleaseScreen(releaseState(), DebridState(), DownloadPreferences(), onBack = {}, onRetry = {},
+            ReleaseScreen(releaseState(comment.copy(contentHtml = html)), DebridState(), DownloadPreferences(), onBack = {}, onRetry = {},
                 onMoreComments = {}, watched = false, downloaded = false, onWatch = {}, onDownloaded = {},
                 onLike = {}, onActionMessageShown = {}, auth = AuthState.SignedIn("Reader"),
                 onRefreshComments = { refreshes++ })
@@ -33,11 +36,15 @@ class CommentManagementTest {
         compose.onNodeWithText("Edit comment").performClick()
         compose.onNodeWithTag("forum-comment-editor").assertExists()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("edit-comment-text").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("edit-comment-text").performTextReplacement("An edited comment")
-        compose.onNodeWithText("Save changes").performClick()
+        compose.onNodeWithTag("edit-comment-text").assertTextContains(reply)
+            .assert(!hasText("DEVIL18", substring = true)).performTextReplacement("An edited comment")
+        assertTrue(fixture.formReads.isEmpty())
+        compose.onNodeWithText("Update").performClick()
         compose.waitUntil(10_000) { refreshes == 1 }
         compose.onNodeWithTag("forum-comment-editor").assertDoesNotExist()
         assertEquals(1, refreshes)
+        assertTrue(fixture.formReads.single().endsWith("mode=edit&p=123"))
+        assertTrue(java.net.URLDecoder.decode(fixture.writes.single(), "UTF-8").contains("message=${quote}An edited comment"))
     }
 
     @Test fun guestAndOtherAuthorsDoNotGetCommentOptions() {
@@ -116,8 +123,8 @@ class CommentManagementTest {
         }
     }
 
-    private fun releaseState() = ReleaseState(Release(42, "Sample", "Author", null, 0, 1, 0), busy = false,
-        comments = CommentsState(listOf(comment), canLoadMore = false))
+    private fun releaseState(selected: ReleaseComment = comment) = ReleaseState(Release(42, "Sample", "Author", null, 0, 1, 0), busy = false,
+        comments = CommentsState(listOf(selected), canLoadMore = false))
 
     private companion object {
         val topic = DiscussionTopic(42, "Discussion", "Author", "Original post", DiscussionKind.Discussion, 500)

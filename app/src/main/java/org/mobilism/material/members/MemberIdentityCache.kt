@@ -14,9 +14,11 @@ class MemberIdentityCache(
         val entry = runCatching {
             val saved = JSONObject(raw)
             val age = wallTime() - saved.getLong("saved")
-            if (age !in 0 until ttl || saved.getLong("ttl") != ttl) return@runCatching null
+            val savedTtl = saved.getLong("ttl")
+            if (age !in 0 until savedTtl) return@runCatching null
+            if (age >= ttl) return null
             Entry(MemberIdentity(saved.optString("avatar").takeIf { it.isNotEmpty() },
-                saved.getBoolean("admin"), saved.getBoolean("major")), ttl - age)
+                saved.getBoolean("admin"), saved.getBoolean("major")), minOf(ttl, savedTtl) - age)
         }.getOrNull()
         if (entry == null) preferences.edit().remove(key).apply()
         return entry
@@ -37,5 +39,4 @@ class MemberIdentityCache(
         edit.apply()
     }
 
-    internal fun clear() = preferences.edit().clear().apply()
 }

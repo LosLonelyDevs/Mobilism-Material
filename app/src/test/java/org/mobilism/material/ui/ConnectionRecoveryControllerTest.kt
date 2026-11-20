@@ -32,14 +32,19 @@ class ConnectionRecoveryControllerTest {
         assertEquals(attempt.id, controller.completed.value[VerificationSite.App])
     }
 
-    @Test fun proactiveChecksStayQuietButAnAwaitingReadCanShowInteraction() = runTest(dispatcher) {
+    @Test fun proactiveAndScheduledChecksCannotInterruptBrowsing() = runTest(dispatcher) {
         val controller = ConnectionRecoveryController { testScheduler.currentTime }
         controller.setForeground(true)
+        assertFalse(kotlinx.coroutines.withContext(org.mobilism.material.data.BackgroundMobilismRead) {
+            controller.recover(VerificationSite.Forum)
+        })
+        assertNull(controller.attempt.value)
         controller.prepare(VerificationSite.App)
-        controller.showInteraction(controller.attempt.value!!.id)
+        controller.offerInteraction(controller.attempt.value!!.id)
         assertNull(controller.attempt.value)
         assertFalse(controller.canPrepare(VerificationSite.App))
-        val read = async { controller.recover(VerificationSite.App) }
+        assertFalse(controller.recover(VerificationSite.App))
+        val read = async { controller.verifyManually(VerificationSite.App) }
         runCurrent()
         assertTrue(controller.attempt.value!!.interactive)
         controller.finish(controller.attempt.value!!.id, true)

@@ -41,7 +41,7 @@ private data class NamedCategory(val name: String, val filters: FeedFilters)
 
 @Composable
 internal fun ReleaseMetadataFooter(release: Release, expanded: Boolean = false, spacing: Dp = 8.dp,
-    singleRow: Boolean = false, metadata: @Composable () -> Unit) {
+    singleRow: Boolean = false, showEmptyRow: Boolean = true, metadata: @Composable () -> Unit) {
     val forum = LocalForumCategoryNames.current[release.categoryId]
     val assignments = LocalReleaseAssignments.current
     val categories = remember(release, forum, assignments) {
@@ -60,6 +60,7 @@ internal fun ReleaseMetadataFooter(release: Release, expanded: Boolean = false, 
         }
         Alphabetical.sorted(names.values) { it.name }
     }
+    if (!showEmptyRow && categories.isEmpty()) return
     val open = LocalOpenReleaseCategory.current
     val chips: @Composable () -> Unit = {
         for (category in categories) {
@@ -88,7 +89,11 @@ internal fun ReleaseMetadataFooter(release: Release, expanded: Boolean = false, 
     }
     if (singleRow) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val metadataWidth = if (categories.isEmpty()) maxWidth else maxWidth * 0.66f
+            val metadataWidth = when {
+                categories.isEmpty() -> maxWidth
+                categories.size == 1 -> maxWidth * 0.72f
+                else -> maxWidth * 0.66f
+            }
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(spacing)) {
                 Row(Modifier.widthIn(max = metadataWidth).horizontalScroll(rememberScrollState()),

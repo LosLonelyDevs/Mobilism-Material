@@ -1,6 +1,7 @@
 package org.mobilism.material.ui
 
 import android.net.Uri
+import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -36,7 +37,11 @@ internal fun ForumAccessVerification(url: String, onRead: (String) -> Boolean, o
         view.evaluateJavascript("(function(){var html=document.documentElement.outerHTML;return html.length<=2097152?html:null})()") { raw ->
             if (browser !== view || complete) return@evaluateJavascript
             val html = runCatching { JSONTokener(raw).nextValue() as? String }.getOrNull()
-            if (html != null && read(html)) { complete = true; dismiss() }
+            if (html != null && read(html)) {
+                complete = true
+                CookieManager.getInstance().flush()
+                dismiss()
+            }
             else if (report) message = "The page is not ready. Complete the forum check, then tap Continue."
         }
     }

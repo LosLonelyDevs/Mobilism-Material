@@ -157,11 +157,15 @@ class CustomCategoriesTest {
         }
         for (density in listOf(false, true)) {
             compose.runOnIdle { compact = density }
-            compose.onNodeWithText("Utilities").performScrollTo().assertIsDisplayed()
+            val chips = compose.onNode(hasAnyDescendant(hasText("Utilities")) and SemanticsMatcher.keyIsDefined(
+                androidx.compose.ui.semantics.SemanticsProperties.HorizontalScrollAxisRange), useUnmergedTree = true)
+            chips.performTouchInput { swipeLeft() }
+            compose.onNodeWithText("Utilities").assertIsDisplayed()
             val order = compose.onAllNodes(hasText("Favorites") or hasText("Travel") or hasText("Utilities"))
                 .fetchSemanticsNodes().flatMap { it.config[androidx.compose.ui.semantics.SemanticsProperties.Text] }.map { it.text }
             assertEquals(listOf("Favorites", "Travel", "Utilities"), order)
-            compose.onNodeWithText("Favorites").performScrollTo().performClick()
+            chips.performTouchInput { swipeRight() }
+            compose.onNodeWithText("Favorites").assertIsDisplayed().performTouchInput { click() }
             assertEquals(setOf(favorites.id), opened?.customCategoryIds)
         }
         val allCategories = compose.onNodeWithTag("release-1").getUnclippedBoundsInRoot()
@@ -175,8 +179,10 @@ class CustomCategoriesTest {
     }
 
     @Test fun cardsKeepTheirHeightAndPlaceCategoriesAfterDateAndViews() {
-        val sample = release().copy(title = "Photo Studio PRO: photo editor v2.15.1.5535 [Paid]", categoryId = 20, views = 139)
-        val unassigned = sample.copy(id = 2, title = "A long release name that spans several lines v2.0", categoryId = null, views = 37)
+        val sample = release().copy(title = "Aloha Browser v2.15.1 [Premium]", categoryId = 20, views = 139,
+            author = "Reader", thumbnail = "file:///android_asset/readme/aloha.png")
+        val unassigned = sample.copy(id = 2, title = "Flud - Torrent Downloader for Android v2.0", author = "Uploader",
+            thumbnail = "file:///android_asset/readme/flud.png", publishedAt = sample.publishedAt + 3600, categoryId = null, views = 37)
         var compact by mutableStateOf(true)
         compose.setContent { MobilismTheme(reduceMotion = true) {
             CompositionLocalProvider(LocalForumCategoryNames provides mapOf(20L to "Photography")) {
@@ -188,18 +194,33 @@ class CustomCategoriesTest {
         } }
         for (isCompact in listOf(true, false)) {
             compose.runOnIdle { compact = isCompact }
-            val date = compose.onNode(hasText("2026", substring = true) and hasAnyAncestor(hasTestTag("release-1")),
+            val clock = android.text.format.DateFormat.getTimeFormat(compose.activity)
+            fun timeOf(item: Release) = clock.format(java.util.Date(item.publishedAt * 1000L))
+            val date = compose.onNode(hasText(" · ${timeOf(sample)}", substring = true) and hasAnyAncestor(hasTestTag("release-1")),
                 useUnmergedTree = true).getUnclippedBoundsInRoot()
+            compose.onNode(hasText(" · ${timeOf(unassigned)}", substring = true) and hasAnyAncestor(hasTestTag("release-2")),
+                useUnmergedTree = true).assertExists()
             val views = compose.onNodeWithContentDescription("139 views", useUnmergedTree = true).getUnclippedBoundsInRoot()
+            val visibleViews = compose.onNodeWithContentDescription("139 views", useUnmergedTree = true).fetchSemanticsNode()
+            assertEquals(visibleViews.size.width.toFloat(), visibleViews.boundsInRoot.width, 2f)
             val chip = compose.onNodeWithText("Photography").getUnclippedBoundsInRoot()
             val card = compose.onNodeWithTag("release-1").getUnclippedBoundsInRoot()
             assertTrue(date.right <= views.left && views.right <= chip.left)
-            assertTrue(date.top < chip.bottom && chip.top < date.bottom)
+            assertEquals((date.top + date.bottom).value / 2, (chip.top + chip.bottom).value / 2, 1f)
+            assertTrue((card.bottom - chip.bottom) <= 16.dp)
+            val artwork = compose.onNodeWithTag("release-artwork-1", useUnmergedTree = true).getUnclippedBoundsInRoot()
+            val uploader = compose.onNode(hasText("Reader") and hasAnyAncestor(hasTestTag("release-1")),
+                useUnmergedTree = true).getUnclippedBoundsInRoot()
+            val title = compose.onNode(hasText("Aloha Browser", substring = true) and hasAnyAncestor(hasTestTag("release-1")),
+                useUnmergedTree = true).getUnclippedBoundsInRoot()
+            assertEquals(if (isCompact) 88f else 128f, (artwork.right - artwork.left).value, 1f)
+            assertTrue(uploader.left >= artwork.right && uploader.top >= title.bottom)
+            assertTrue(uploader.top < artwork.bottom)
             val inset = if (isCompact) 12.dp else 16.dp
             assertEquals((card.right - inset).value, chip.right.value, 1f)
             val other = compose.onNodeWithTag("release-2").getUnclippedBoundsInRoot()
             assertEquals((card.bottom - card.top).value, (other.bottom - other.top).value, 1f)
-            if (isCompact) capture("compact-category-footer", compose.onNodeWithTag("card-comparison"))
+            capture(if (isCompact) "compact-category-footer" else "detailed-category-footer", compose.onNodeWithTag("card-comparison"))
         }
     }
 
@@ -211,7 +232,7 @@ class CustomCategoriesTest {
         var edits = 0
         compose.setContent { MobilismTheme(reduceMotion = true) {
             CompositionLocalProvider(LocalForumCategoryNames provides mapOf(20L to "Photography"),
-                LocalReleaseAssignments provides store.state.value) {
+                LocalReleaseAssignments provides store.state.collectAsState().value) {
                 androidx.compose.material3.Surface(Modifier.width(280.dp).testTag("filter-strip")) {
                     ActiveFilterSummary(filters, { edits++ }, { filters = FeedFilters() }, listOf(ReleaseCategory(30, "Art")))
                 }

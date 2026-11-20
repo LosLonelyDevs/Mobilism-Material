@@ -32,6 +32,8 @@ class MemberIdentityStoreTest {
         store.request("Three")
         assertEquals(3, calls)
         limits = ApiRequestLimits.Defaults
+        store.request("One")
+        assertEquals(3, calls)
         store.request("Three")
         assertEquals(4, calls)
         store.request("Four")

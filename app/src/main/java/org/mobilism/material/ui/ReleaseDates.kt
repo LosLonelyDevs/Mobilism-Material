@@ -1,5 +1,6 @@
 package org.mobilism.material.ui
 
+import android.text.format.DateFormat
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -12,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -20,6 +22,7 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.util.Date
 import java.util.Locale
 import org.mobilism.material.data.Alphabetical
 import org.mobilism.material.data.FeedFilters
@@ -27,16 +30,25 @@ import org.mobilism.material.data.ReleaseCategory
 import org.mobilism.material.designsystem.*
 
 @Composable
-private fun dateFormatter(): DateTimeFormatter =
-    DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(LocalConfiguration.current.locales[0])
+private fun dateFormatter(): DateTimeFormatter {
+    val locale = LocalConfiguration.current.locales[0]
+    return remember(locale) { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale) }
+}
 
 @Composable
 fun ReleasePostDate(timestamp: Long, modifier: Modifier = Modifier, textStyle: TextStyle = MaterialTheme.typography.bodySmall) {
     if (timestamp <= 0) return
-    val date = Instant.ofEpochSecond(timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+    val instant = Instant.ofEpochSecond(timestamp)
+    val zone = ZoneId.systemDefault()
+    val date = instant.atZone(zone).toLocalDate().format(dateFormatter())
+    val context = LocalContext.current
+    val timeFormat = remember(context, LocalConfiguration.current.locales[0], zone, DateFormat.is24HourFormat(context)) {
+        DateFormat.getTimeFormat(context)
+    }
+    val time = timeFormat.format(Date.from(instant))
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
-        Text(date.format(dateFormatter()), style = textStyle,
+        Text("$date · $time", style = textStyle,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

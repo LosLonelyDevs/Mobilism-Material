@@ -102,12 +102,13 @@ class ProfileRecoveryTest {
         } else {
             try {
                 assertNotEquals(prefs.getInt("test-process", -1), android.os.Process.myPid())
-                store.request("Missing")
+                assertFalse(store.restoreCached("Missing"))
+                assertTrue(store.restoreCached("Fixture"))
                 store.request("FIXTURE")
                 val identity = store.identities.value.getValue("fixture")
                 assertTrue(identity.majorAndroidReleaser)
                 assertEquals("https://forum.mobilism.org/fixture.png", identity.avatar)
-                assertEquals(1, loads.get())
+                assertEquals(0, loads.get())
             } finally { prefs.edit().clear().commit() }
         }
     }
@@ -121,6 +122,8 @@ class ProfileRecoveryTest {
             prefs.edit().clear().commit()
             val store = MemberIdentityStore({ error("Offline fixture") }, cache = cache)
             store.remember(ForumProfiles.parse(member, reference))
+            assertEquals(ttl / 2, cache.read("fixture", ttl / 2)?.remainingMillis)
+            assertEquals(ttl, cache.read("fixture", ttl * 2)?.remainingMillis)
             wallTime += ttl - 1
             val restored = MemberIdentityStore({ error("Offline fixture") }, now = { wallTime }, cache = cache)
             restored.request("Fixture")

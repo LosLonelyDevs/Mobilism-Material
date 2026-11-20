@@ -3,6 +3,8 @@ package org.mobilism.material.messages
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import org.mobilism.material.data.BackgroundMobilismRead
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.mobilism.material.data.MessageFolder
@@ -28,7 +30,7 @@ class MessageNotificationChecker(
         if (!allowed()) return@withLock
         if (!policy.begin(account, now())) return@withLock
         try {
-            checkInbox(account)
+            withContext(BackgroundMobilismRead) { checkInbox(account) }
             if (username() == account && allowed()) policy.completed(account, now())
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) {

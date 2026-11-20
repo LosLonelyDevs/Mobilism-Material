@@ -39,8 +39,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -128,7 +130,16 @@ fun ReleaseScreen(
     }
     val downloadRequests = remember(release?.id) { DownloadRequestTracker() }
     if (state.likeNeedsVerification && release != null) {
-        ForumPostVerification(release.id, onLikePostVerified, onDismissLikeVerification)
+        var verifying by rememberSaveable(release.id) { mutableStateOf(false) }
+        if (verifying) {
+            ForumPostVerification(release.id, onLikePostVerified, onDismissLikeVerification)
+        } else {
+            LaunchedEffect(release.id) {
+                val result = snackbar.showSnackbar("Verify forum access to give this release a thumbs up.",
+                    actionLabel = "Verify", withDismissAction = true, duration = SnackbarDuration.Long)
+                if (result == SnackbarResult.ActionPerformed) verifying = true else onDismissLikeVerification()
+            }
+        }
     }
     var collapsedComments by rememberSaveable(release?.id) { mutableStateOf(emptyList<Long>()) }
     val commentTree = remember(state.comments.items) { CommentTree.build(state.comments.items) }
@@ -276,7 +287,7 @@ fun ReleaseScreen(
                     }
                     releaseDetailItem {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            UsernameLink(release.author)
+                            UsernameLink(release.author, color = theme.originalPoster)
                             ReleaseMetadataFooter(release, expanded = true, spacing = 12.dp) {
                                 ReleasePostDate(release.publishedAt)
                                 Text("${release.replies} replies", style = MaterialTheme.typography.bodySmall,

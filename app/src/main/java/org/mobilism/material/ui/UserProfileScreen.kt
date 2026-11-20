@@ -35,9 +35,10 @@ internal val LocalProfileHandler = staticCompositionLocalOf<((ProfileReference) 
 @Composable
 internal fun UsernameLink(name: String, modifier: Modifier = Modifier, label: String = name,
     style: TextStyle = MaterialTheme.typography.bodyMedium, color: Color = MaterialTheme.colorScheme.primary,
-    maxLines: Int = 1, fontWeight: FontWeight? = null, showAvatar: Boolean = true, onOpen: () -> Unit = {}) {
+    maxLines: Int = 1, fontWeight: FontWeight? = null, showAvatar: Boolean = true, lookupIdentity: Boolean = true,
+    onOpen: () -> Unit = {}) {
     val open = LocalProfileHandler.current
-    val identity = memberIdentity(name)
+    val identity = memberIdentity(name, lookup = lookupIdentity)
     val profileLink = if (open != null && name.isNotBlank()) {
         Modifier.clickable(role = Role.Button, onClickLabel = "View $name profile") {
             onOpen()
@@ -64,15 +65,12 @@ internal fun UserProfileScreen(reference: ProfileReference, load: suspend (Profi
     var error by remember(reference) { mutableStateOf<ScreenError?>(null) }
     var attempt by remember(reference) { mutableIntStateOf(0) }
     var verify by remember(reference) { mutableStateOf(false) }
-    var canVerify by remember(reference) { mutableStateOf(false) }
     LaunchedEffect(reference, attempt) {
         error = null
         try { profile = load(reference).also { identities?.remember(it) } }
         catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) {
             error = failure.forScreen()
-            canVerify = failure is ApiFailure && (failure.kind == FailureKind.Challenge ||
-                failure.kind == FailureKind.InvalidResponse || failure.httpStatus == 403)
         }
     }
     if (verify) ForumAccessVerification(reference.url, onRead = { html ->
@@ -91,7 +89,7 @@ internal fun UserProfileScreen(reference: ProfileReference, load: suspend (Profi
                 if (member != null) UserProfileContent(member)
                 else Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     error?.let { ErrorPanel(it, onRetry = { attempt++ },
-                        onVerify = if (canVerify) ({ verify = true }) else null) } ?: LoadingState("Loading profile…")
+                        onVerify = if (it.verificationSite == VerificationSite.Forum) ({ verify = true }) else null) } ?: LoadingState("Loading profile…")
                 }
             }
         }

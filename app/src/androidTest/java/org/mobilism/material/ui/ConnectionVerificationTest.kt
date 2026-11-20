@@ -8,7 +8,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inspector.WindowInspector
 import android.webkit.CookieManager
-import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.*
@@ -101,7 +100,7 @@ class ConnectionVerificationTest {
         compose.runOnIdle {
             browser().apply {
                 assertEquals(VerificationSite.App.url, originalUrl)
-                assertEquals(WebSettings.getDefaultUserAgent(fixture.context), settings.userAgentString)
+                assertEquals(fixture.requests.single().header("User-Agent"), settings.userAgentString)
                 assertTrue(settings.javaScriptEnabled)
                 assertTrue(settings.domStorageEnabled)
                 assertTrue(CookieManager.getInstance().acceptThirdPartyCookies(this))
@@ -148,7 +147,7 @@ class ConnectionVerificationTest {
             appRequests.forEach { request ->
                 assertTrue(request.header("Cookie").orEmpty().contains("connection_test_clearance=fixture"))
                 assertFalse(request.header("Cookie").orEmpty().contains("connection_test_forum"))
-                assertEquals(WebSettings.getDefaultUserAgent(fixture.context), request.header("User-Agent"))
+                assertEquals(AppUserAgent.value(fixture.context), request.header("User-Agent"))
             }
             val failure = runCatching { fixture.repository.profile(ProfileReference(username = "Reader")) }.exceptionOrNull() as ApiFailure
             assertEquals(VerificationSite.Forum, failure.verificationSite)

@@ -31,6 +31,9 @@ private fun isolatedContext() = object : ContextWrapper(InstrumentationRegistry.
 
 internal class CommentForumFixture {
     val writes = CopyOnWriteArrayList<String>()
+    val formReads = CopyOnWriteArrayList<String>()
+    @Volatile var source = "My comment"
+    @Volatile var missing = false
     @Volatile var loginRequired = false
     @Volatile var blocked = false
     @Volatile var confirmed = true
@@ -39,10 +42,15 @@ internal class CommentForumFixture {
     private val client = OkHttpClient.Builder().addInterceptor { chain ->
         val request = chain.request()
         val path = request.url.encodedPath
+        if (path == "/posting.php" && request.method == "GET") formReads += request.url.toString()
         val response = Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("Fixture")
         val body = when {
             path.endsWith("/auth/login") -> """{"access_token":"sample-session","id":7}"""
             request.header("X-Auth-Token") != null -> error("API token sent to forum")
+            missing -> {
+                response.code(404)
+                "Page not found"
+            }
             blocked -> {
                 response.code(403).header("cf-mitigated", "challenge")
                 "<html>Verify connection</html>"
@@ -70,8 +78,7 @@ internal class CommentForumFixture {
                 val action = request.url.newBuilder().setQueryParameter("p", formPostId.toString()).build()
                     .toString().replace("&", "&amp;")
                 val controls = if (request.url.queryParameter("mode") == "edit")
-                    """<input name="subject" value="Re: Original"><textarea name="message">[b]My comment[/b]
-Second line</textarea><input type="submit" name="preview" value="Preview"><input type="submit" name="post" value="Submit">"""
+                    """<input name="subject" value="Re: Original"><textarea name="message">${org.jsoup.nodes.Entities.escape(source)}</textarea><input type="submit" name="preview" value="Preview"><input type="submit" name="post" value="Submit">"""
                 else """<input type="submit" name="confirm" value="Yes">"""
                 """<form action="$action" method="post"><input type="hidden" name="form_token" value="test-token">$controls</form>"""
             }
@@ -168,14 +175,14 @@ class ForumCommentEditorTest {
         val fixture = CommentForumFixture().apply { signIn(); loginRequired = true; confirmed = false }
         var refresh = false
         show(fixture) { refresh = it }
+        compose.onNodeWithTag("edit-comment-text").assertTextContains("My comment")
+        compose.onNodeWithText("Update").assertIsNotEnabled()
+        assertTrue(fixture.formReads.isEmpty())
+        compose.onNodeWithTag("edit-comment-text").performTextReplacement("[b]Edited[/b]")
+        compose.onNodeWithText("Update").performClick()
         awaitText("Forum password")
         compose.onNodeWithText("Forum password").performTextInput("fixture")
-        compose.onNodeWithText("Sign in", substring = false).performClick()
-        awaitText("[b]My comment[/b]")
-        compose.onNodeWithTag("edit-comment-text").assertTextContains("[b]My comment[/b]\nSecond line")
-        compose.onNodeWithText("Save changes").assertIsNotEnabled()
-        compose.onNodeWithTag("edit-comment-text").performTextReplacement("[b]Edited[/b]")
-        compose.onNodeWithText("Save changes").performClick()
+        compose.onNodeWithText("Sign in and update").performClick()
         awaitText("Check comment")
         assertEquals(1, fixture.writes.size)
         val body = java.net.URLDecoder.decode(fixture.writes.single(), "UTF-8")
@@ -189,13 +196,49 @@ class ForumCommentEditorTest {
 
     @Test fun blockedForumShowsCommentAndCanRecoverInPlace() = runBlocking {
         val fixture = CommentForumFixture().apply { signIn(); blocked = true }
-        show(fixture)
+        var refreshed = false
+        show(fixture) { refreshed = it }
+        compose.onNodeWithTag("edit-comment-text").performTextReplacement("My draft")
+        assertTrue(fixture.formReads.isEmpty())
+        compose.onNodeWithText("Update").performClick()
         awaitText("requires a browser check")
-        compose.onNodeWithText("My comment").assertIsDisplayed()
-        compose.onNodeWithText("Save changes").assertDoesNotExist()
+        compose.onNodeWithTag("edit-comment-text").assertTextContains("My draft")
         fixture.blocked = false
-        compose.onNodeWithText("Try again").performClick()
-        awaitText("[b]My comment[/b]")
+        compose.onNodeWithText("Update").performClick()
+        compose.waitUntil(10_000) { refreshed }
+        assertEquals(1, fixture.writes.size)
+    }
+
+    @Test fun openingAndCancellingOnlyUsesTheVisibleComment() = runBlocking {
+        val fixture = CommentForumFixture().apply { signIn() }
+        var dismissed: Boolean? = null
+        show(fixture) { dismissed = it }
+        compose.onNodeWithText("Cancel").performClick()
+        assertEquals(false, dismissed)
+        assertTrue(fixture.formReads.isEmpty())
         assertTrue(fixture.writes.isEmpty())
+    }
+
+    @Test fun missingFormKeepsTheDraft() = runBlocking {
+        val fixture = CommentForumFixture().apply { signIn(); missing = true }
+        show(fixture)
+        compose.onNodeWithTag("edit-comment-text").performTextReplacement("Change this")
+        compose.onNodeWithText("Update").performClick()
+        awaitText("(404)")
+        compose.onNodeWithTag("edit-comment-text").assertTextContains("Change this")
+        assertEquals(1, fixture.formReads.size)
+        assertTrue(fixture.writes.isEmpty())
+    }
+
+    @Test fun newerForumCopyRequiresReviewBeforeWriting() = runBlocking {
+        val fixture = CommentForumFixture().apply { signIn(); source = "An edit from another device" }
+        show(fixture)
+        compose.onNodeWithTag("edit-comment-text").performTextReplacement("My local draft")
+        compose.onNodeWithText("Update").performClick()
+        awaitText("An edit from another device")
+        compose.onNodeWithTag("edit-comment-text").assertTextContains("My local draft")
+        assertTrue(fixture.writes.isEmpty())
+        compose.onNodeWithText("Update").performClick()
+        compose.waitUntil(10_000) { fixture.writes.size == 1 }
     }
 }

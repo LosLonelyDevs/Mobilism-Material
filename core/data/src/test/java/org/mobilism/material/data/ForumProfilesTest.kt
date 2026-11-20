@@ -94,8 +94,11 @@ class ForumProfilesTest {
 
     @Test fun rejectsLoginChallengeAndWrongMemberPages() {
         for (html in listOf("<h1>Verify access</h1>", "<form>Sign in</form>", page(username = "Someone else"))) {
-            assertTrue(runCatching { ForumProfiles.parse(html, reference) }.exceptionOrNull() is ApiFailure)
+            assertEquals(FailureKind.InvalidResponse, (runCatching { ForumProfiles.parse(html, reference) }.exceptionOrNull() as ApiFailure).kind)
         }
+        val check = runCatching { ForumProfiles.parse("<html><div id='cf-chl-widget'></div></html>", reference) }.exceptionOrNull() as ApiFailure
+        assertEquals(FailureKind.Challenge, check.kind)
+        assertEquals(VerificationSite.Forum, check.verificationSite)
     }
 
     @Test fun profileLinksAndUsernameLookupsAreEncodedAndValidated() {

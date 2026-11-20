@@ -69,7 +69,7 @@ class ForumFormattingPreviewTest {
     }
 
     @Test fun cleanupGivesRequirementsAndHeadingsDistinctStylesWithoutColoringProse() {
-        val source = "<u>Requirements:</u> Android 9+<br><b>Choose a Site</b><br>" +
+        val source = "<b>Example App</b><br><u>Requirements:</u> Android 9+<br><b>Choose a Site</b><br>" +
             "A normal paragraph mentions requirements: storage.<pre>Requirements: literal code</pre>"
         val heading = android.graphics.Color.rgb(182, 188, 216)
         val subtitle = android.graphics.Color.rgb(150, 164, 178)
@@ -82,6 +82,7 @@ class ForumFormattingPreviewTest {
                 return text.getSpans(index, index + 1, ForegroundColorSpan::class.java).map { it.foregroundColor }
             }
             val start = text.indexOf("Android 9+")
+            assertTrue(text.toString(), text.startsWith("Example App\nRequirements: Android 9+\n\nChoose a Site"))
             assertEquals(listOf(subtitle), colorsAt("Android 9+"))
             assertTrue(text.getSpans(start, start + 1, RelativeSizeSpan::class.java).any { it.sizeChange < 1f })
             assertEquals(listOf(heading), colorsAt("Choose a Site"))

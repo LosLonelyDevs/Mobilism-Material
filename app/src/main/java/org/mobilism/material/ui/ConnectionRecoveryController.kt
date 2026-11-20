@@ -7,9 +7,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import org.mobilism.material.data.ChallengeRecovery
+import org.mobilism.material.data.BackgroundMobilismRead
 import org.mobilism.material.data.VerificationSite
 
-internal data class ConnectionAttempt(val id: Long, val site: VerificationSite, val interactive: Boolean = false)
+internal data class ConnectionAttempt(val id: Long, val site: VerificationSite, val interactive: Boolean = false,
+    val needsAttention: Boolean = false)
 
 internal class ConnectionRecoveryController(private val now: () -> Long = System::currentTimeMillis) : ChallengeRecovery {
     private class Pending(val attempt: ConnectionAttempt, val proactive: Boolean) {
@@ -42,8 +44,9 @@ internal class ConnectionRecoveryController(private val now: () -> Long = System
     suspend fun verifyManually(site: VerificationSite): Boolean = request(site, manual = true)
 
     private suspend fun request(site: VerificationSite, manual: Boolean, confirmProfile: (suspend () -> Unit)? = null): Boolean = withContext(Dispatchers.Main.immediate) {
-        if (!foreground) return@withContext false
-        val interactive = manual || site in interactionRequired
+        if (!foreground || coroutineContext[BackgroundMobilismRead.Key] != null) return@withContext false
+        if (!manual && site in interactionRequired && site !in pending) return@withContext false
+        val interactive = manual
         if (!interactive && now() - (failedAt[site] ?: Long.MIN_VALUE / 2) < RETRY_DELAY) return@withContext false
         // Requests already in flight may report the old challenge just after another read recovered.
         if (!interactive && site !in pending && now() - (succeededAt[site] ?: Long.MIN_VALUE / 2) < 2_000) {
@@ -102,16 +105,26 @@ internal class ConnectionRecoveryController(private val now: () -> Long = System
         publish()
     }
 
+    fun offerInteraction(id: Long) {
+        val entry = pending.values.firstOrNull { it.attempt.id == id } ?: return
+        val current = mutableAttempt.value ?: return
+        if (current.id != id || current.interactive || current.needsAttention || entry.browserReady.isCompleted) return
+        if (entry.readers == 0) {
+            defer(id)
+        } else mutableAttempt.value = current.copy(needsAttention = true)
+    }
+
+    fun defer(id: Long) {
+        val current = mutableAttempt.value?.takeIf { it.id == id } ?: return
+        finish(id, false)
+        interactionRequired += current.site
+    }
+
     fun showInteraction(id: Long) {
         val entry = pending.values.firstOrNull { it.attempt.id == id } ?: return
         if (mutableAttempt.value?.id != id || entry.browserReady.isCompleted) return
-        if (entry.readers == 0) {
-            interactionRequired += entry.attempt.site
-            finish(id, false)
-        } else {
-            entry.interactive = true
-            mutableAttempt.value = entry.attempt.copy(interactive = true)
-        }
+        entry.interactive = true
+        mutableAttempt.value = entry.attempt.copy(interactive = true)
     }
 
     fun browserPageReady(id: Long) {
@@ -146,15 +159,14 @@ internal class ConnectionRecoveryController(private val now: () -> Long = System
     private companion object { const val RETRY_DELAY = 30_000L }
 }
 
-internal class ClearanceRenewalPolicy {
-    private data class Attempt(val expiresAt: Long, val expired: Boolean)
-    private val attempted = mutableMapOf<VerificationSite, Attempt>()
+internal class ClearanceRenewalPolicy(private val history: android.content.SharedPreferences? = null) {
+    private val attempted = mutableMapOf<VerificationSite, Long>()
 
     fun shouldRenew(site: VerificationSite, expiresAt: Long?, present: Boolean, now: Long): Boolean {
-        if (expiresAt == null || (present && expiresAt - now > 120_000)) return false
-        val next = Attempt(expiresAt, !present || now >= expiresAt)
-        if (attempted[site] == next) return false
-        attempted[site] = next
+        if (!present || expiresAt == null || expiresAt <= now || expiresAt - now > 120_000) return false
+        if (attempted[site] == expiresAt || history?.getLong(site.name, 0L) == expiresAt) return false
+        attempted[site] = expiresAt
+        history?.edit()?.putLong(site.name, expiresAt)?.apply()
         return true
     }
 }

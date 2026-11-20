@@ -310,20 +310,26 @@ fun FeedScreen(
 @Composable
 internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = false, isNew: Boolean = false, onClick: () -> Unit) {
     val title = remember(release.title, release.section) { ReleaseTitles.parse(release.title, release.section) }
-    val thumbnailSize = if (compact) 56.dp else 96.dp
-    val titleLines = if (compact) 2 else 3
+    val thumbnailSize = if (compact) 88.dp else 128.dp
+    val titleLines = 2
+    val subtitleLines = if (compact) 1 else 2
     val titleStyle = MaterialTheme.typography.titleMedium
     val subtitleStyle = MaterialTheme.typography.bodySmall
-    val textHeight = with(LocalDensity.current) { titleStyle.lineHeight.toDp() * titleLines + subtitleStyle.lineHeight.toDp() + 4.dp }
+    val textHeight = with(LocalDensity.current) {
+        titleStyle.lineHeight.toDp() * titleLines + subtitleStyle.lineHeight.toDp() * subtitleLines +
+            maxOf(48.dp, subtitleStyle.lineHeight.toDp()) + 8.dp
+    }
     ExpressiveCard(onClick, Modifier.fillMaxWidth().testTag("release-${release.id}"), colors = CardDefaults.cardColors(
         containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, accent, 0.06f),
     )) {
-        Column(Modifier.padding(if (compact) 12.dp else 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        val inset = if (compact) 12.dp else 16.dp
+        Column(Modifier.padding(start = inset, top = inset, end = inset, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(Modifier.fillMaxWidth().height(maxOf(thumbnailSize, textHeight)), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 AsyncImage(
                     model = release.thumbnail, contentDescription = null,
                     placeholder = painterResource(R.drawable.ic_mobilism), error = painterResource(R.drawable.ic_mobilism),
-                    modifier = Modifier.size(thumbnailSize).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(thumbnailSize).clip(MaterialTheme.shapes.medium).testTag("release-artwork-${release.id}"),
+                    contentScale = ContentScale.Crop,
                 )
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -332,11 +338,11 @@ internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = fal
                         if (isNew) NewReleaseBadge(release.id)
                     }
                     if (title.subtitle.isNotBlank()) Text(title.subtitle, style = subtitleStyle,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (compact) 1 else 3, overflow = TextOverflow.Ellipsis)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = subtitleLines, overflow = TextOverflow.Ellipsis)
+                    UsernameLink(release.author, style = subtitleStyle, showAvatar = !compact, lookupIdentity = !compact)
                 }
             }
-            if (!compact) UsernameLink(release.author, style = MaterialTheme.typography.bodySmall)
-            ReleaseMetadataFooter(release, singleRow = true) {
+            ReleaseMetadataFooter(release, singleRow = true, spacing = 6.dp) {
                 ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
                 if (!compact) Row(Modifier.clearAndSetSemantics { contentDescription = "${release.replies} replies" },
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {

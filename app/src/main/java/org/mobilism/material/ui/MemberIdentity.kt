@@ -16,11 +16,15 @@ import org.mobilism.material.members.MemberIdentityStore
 internal val LocalMemberIdentities = staticCompositionLocalOf<MemberIdentityStore?> { null }
 
 @Composable
-internal fun memberIdentity(username: String): MemberIdentity? {
+internal fun memberIdentity(username: String, lookup: Boolean = true): MemberIdentity? {
     val store = LocalMemberIdentities.current ?: return null
     val owner = LocalLifecycleOwner.current
     val identities by store.identities.collectAsStateWithLifecycle()
-    LaunchedEffect(store, username, owner) {
+    LaunchedEffect(store, username, owner, lookup) {
+        if (!lookup) {
+            store.restoreCached(username)
+            return@LaunchedEffect
+        }
         owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (isActive) {
                 store.request(username)

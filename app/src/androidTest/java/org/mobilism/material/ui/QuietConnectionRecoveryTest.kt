@@ -118,6 +118,35 @@ class QuietConnectionRecoveryTest {
         assertEquals(listOf(VerificationSite.App.url), loaded.toList())
     }
 
+    @Test fun blockedNotificationPollAfterRestartLeavesTheAccountSignedInWithoutOpeningVerification() = runBlocking {
+        val controller = ConnectionRecoveryController()
+        val local = context()
+        val paths = CopyOnWriteArrayList<String>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            paths += request.url.encodedPath
+            val response = Response.Builder().request(request).protocol(Protocol.HTTP_1_1).message("Fixture")
+            if (request.url.encodedPath.endsWith("/auth/login")) response.code(200)
+                .body("""{"access_token":"fixture","id":7}""".toResponseBody()).build()
+            else response.code(403).header("cf-mitigated", "challenge").body("<html>check</html>".toResponseBody()).build()
+        }.build()
+        DefaultMobilismRepository(local, client = client).signIn("Reader", "fixture")
+        val restored = DefaultMobilismRepository(local, client = client, challengeRecovery = controller)
+        restored.restoreSession()
+        compose.setContent { MobilismTheme {
+            ConnectionRecoveryHost(controller, browser(false), { ClearanceExpiry(1L, false) }) { Text("Browsing") }
+        } }
+        val history = org.mobilism.material.settings.MessageReadHistory()
+        val checker = org.mobilism.material.messages.MessageNotificationChecker(restored, { "Reader" }, { true },
+            { history }, { history }, { _, _ -> false }, { _, _ -> })
+        assertEquals(FailureKind.Challenge, (runCatching { checker.check() }.exceptionOrNull() as ApiFailure).kind)
+        assertEquals(AuthState.SignedIn("Reader"), restored.auth.value)
+        assertEquals(2, paths.size)
+        assertTrue(loaded.isEmpty())
+        compose.onNodeWithText("Browsing").assertIsDisplayed()
+        restored.signOut()
+    }
+
     @Test fun existingChallengeErrorResumesAfterVerificationWithoutAnotherRetryTap() {
         val controller = ConnectionRecoveryController()
         val error = ScreenError("Cloudflare needs a browser check.", verificationSite = VerificationSite.App)
@@ -136,18 +165,19 @@ class QuietConnectionRecoveryTest {
         assertEquals(1, loaded.size)
     }
 
-    @Test fun knownCookieExpiryIsReadFromWebViewAndAvailableAfterReaderRecreation() {
+    @Test fun renewalUsesOnlyTheExpiryOfACookieStillInWebView() {
         assumeTrue(WebViewFeature.isFeatureSupported(WebViewFeature.GET_COOKIE_INFO))
-        val context = context()
         compose.runOnIdle {
             val now = System.currentTimeMillis()
             val cookies = CookieManager.getInstance()
             cookies.setCookie(VerificationSite.App.url, "cf_clearance=expiry-fixture; Path=/api-new/release/category; Secure; Max-Age=90")
             cookies.flush()
-            val expiry = ClearanceCookies(context).read(VerificationSite.App)
+            val expiry = ClearanceCookies.read(VerificationSite.App)
             assertTrue(expiry.present)
             assertTrue(checkNotNull(expiry.expiresAt) in (now + 80_000)..(now + 100_000))
-            assertEquals(expiry, ClearanceCookies(context).read(VerificationSite.App))
+            cookies.setCookie(VerificationSite.App.url, "cf_clearance=; Path=/api-new/release/category; Secure; Max-Age=0")
+            cookies.flush()
+            assertEquals(ClearanceExpiry(null, false), ClearanceCookies.read(VerificationSite.App))
         }
     }
 
@@ -160,7 +190,9 @@ class QuietConnectionRecoveryTest {
                 Text(if (recovered == true) "Loading resumed" else "Loading")
             }
         } }
-        compose.waitUntil(10_000) { controller.attempt.value?.interactive == true }
+        compose.waitUntil(10_000) { controller.attempt.value?.needsAttention == true }
+        compose.onNodeWithText("Verify connection").assertDoesNotExist()
+        compose.onNodeWithText("Verify").performClick()
         compose.onNodeWithText("Verify connection").assertIsDisplayed()
         compose.onNodeWithText("Complete the browser check. Loading will resume automatically.").assertIsDisplayed()
         assertEquals(1, browsers.size)
@@ -234,8 +266,9 @@ class QuietConnectionRecoveryTest {
                 Text("Browsing")
             }
         } }
-        compose.waitUntil(10_000) { controller.attempt.value?.interactive == true }
-        compose.onNodeWithText("Cancel").performClick()
+        compose.waitUntil(10_000) { controller.attempt.value?.needsAttention == true }
+        compose.onNodeWithText("Verify connection").assertDoesNotExist()
+        compose.onNodeWithText("Later").performClick()
         compose.waitUntil { recovered != null }
         assertEquals(false, recovered)
         compose.onNodeWithText("Browsing").assertIsDisplayed()

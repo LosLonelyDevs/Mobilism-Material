@@ -44,7 +44,11 @@ data class UserProfile(
 object ForumProfiles {
     fun parse(html: String, reference: ProfileReference): UserProfile {
         val document = Jsoup.parse(html, reference.url)
-        val profile = document.selectFirst("#viewprofile") ?: invalid()
+        val profile = document.selectFirst("#viewprofile") ?: run {
+            NetworkFailures.response(200, false, html, VerificationSite.Forum)
+                ?.takeIf { it.kind == FailureKind.Challenge }?.let { throw it }
+            invalid()
+        }
         val fields = linkedMapOf<String, String>()
         profile.select("ul.reset-list > li, ul.recent-activity > li").forEach { row ->
             val text = row.text()

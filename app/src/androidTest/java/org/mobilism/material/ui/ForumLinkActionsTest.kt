@@ -10,16 +10,71 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.mobilism.material.designsystem.MobilismTheme
+import org.mobilism.material.data.*
+import org.mobilism.material.settings.DownloadPreferences
 
 class ForumLinkActionsTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun linkedReleaseOpensItsOwnDetailAndBackRestoresTheSource() {
+        val source = 6462354L
+        val linked = 6448504L
+        val url = "https://forum.mobilism.org/viewtopic.php?f=1283&t=$linked&p=12747480#p12747480"
+        val visited = mutableListOf<Long>()
+        val commentPages = mutableListOf<Pair<Long, Int>>()
+        val repository = object : MobilismRepository by DefaultMobilismRepository(compose.activity) {
+            override suspend fun release(id: Long): Release {
+                visited += id
+                return Release(id, if (id == source) "Current build" else "Previous build", "Uploader", null,
+                    1_793_188_800L, 0, 0, contentHtml = "<p><a href='$url'>$url</a></p>")
+            }
+            override suspend fun comments(id: Long, page: Int): CommentPage {
+                commentPages += id to page
+                return CommentPage(emptyList(), false)
+            }
+        }
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            val nav = rememberNavController()
+            NavHost(nav, startDestination = "release/$source") {
+                composable("release/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                    val id = entry.arguments!!.getLong("id")
+                    val detail = viewModel<ReleaseViewModel> { ReleaseViewModel(id, repository, SavedStateHandle()) }
+                    val state by detail.state.collectAsStateWithLifecycle()
+                    ReleaseScreen(state, DebridState(), DownloadPreferences(), onBack = { nav.popBackStack() },
+                        onRetry = {}, onMoreComments = {}, watched = false, downloaded = false, onWatch = {},
+                        onDownloaded = {}, onLike = {}, onActionMessageShown = {}, descriptionExpanded = true,
+                        onRelease = nav::openReleaseTopic)
+                }
+            }
+        } }
+        compose.onNodeWithText("Current build").assertIsDisplayed()
+        val localTime = android.text.format.DateFormat.getTimeFormat(compose.activity).format(java.util.Date(1_793_188_800_000L))
+        compose.onNodeWithText(" · $localTime", substring = true).assertIsDisplayed()
+        val target = textView()
+        touch(target, MotionEvent.ACTION_DOWN)
+        touch(target, MotionEvent.ACTION_UP)
+        compose.onNodeWithText("Previous build").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithText("Current build").assertIsDisplayed()
+        assertEquals(listOf(source, linked), visited)
+        assertEquals(listOf(source to 1, linked to 1), commentPages)
+    }
 
     @Test fun nativeDownloadHelpActionKeepsLongPressMenuAndTapOpensReader() {
         var helpOpened = false

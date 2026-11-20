@@ -1,6 +1,8 @@
 package org.mobilism.material.ui
 
+import android.content.Context
 import android.net.Uri
+import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -30,16 +32,23 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 @Composable
-internal fun ForumPostVerification(topicId: Long, onVerified: (Long) -> Unit, onDismiss: () -> Unit) {
+internal fun ForumPostVerification(topicId: Long, onVerified: (Long) -> Unit, onDismiss: () -> Unit,
+    createBrowser: (Context) -> WebView = { WebView(it) }) {
     val verified by rememberUpdatedState(onVerified)
     var browser by remember { mutableStateOf<WebView?>(null) }
+    var completed by remember(topicId) { mutableStateOf(false) }
     var message by remember { mutableStateOf("Complete the forum check, then tap Continue.") }
     fun readPost(view: WebView, reportWaiting: Boolean = false) {
         val uri = view.url?.let(Uri::parse) ?: return
-        if (!isForumTopic(uri, topicId)) return
+        if (completed || !isForumTopic(uri, topicId)) return
         view.evaluateJavascript(FIRST_POST_SCRIPT) { result ->
             val postId = result?.removeSurrounding("\"")?.toLongOrNull()?.takeIf { it > 0 }
-            if (postId != null) verified(postId)
+            if (completed || browser !== view) return@evaluateJavascript
+            if (postId != null) {
+                completed = true
+                CookieManager.getInstance().flush()
+                verified(postId)
+            }
             else if (reportWaiting) message = "The forum check is not finished. Complete it, then tap Continue."
         }
     }
@@ -62,7 +71,7 @@ internal fun ForumPostVerification(topicId: Long, onVerified: (Long) -> Unit, on
                     TextButton(onClick = { browser?.let { readPost(it, reportWaiting = true) } }) { Text("Continue") }
                 }
                 AndroidView(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context ->
-                    WebView(context).apply {
+                    createBrowser(context).apply {
                         // Browser verification needs JavaScript. Navigation stays on this forum topic.
                         settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(context)
                         settings.javaScriptEnabled = true

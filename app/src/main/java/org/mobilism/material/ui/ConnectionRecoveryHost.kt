@@ -13,14 +13,17 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
@@ -38,6 +41,7 @@ import org.json.JSONObject
 import org.json.JSONTokener
 import org.jsoup.Jsoup
 import org.mobilism.material.data.VerificationSite
+import org.mobilism.material.designsystem.AppTextButton
 
 internal val LocalConnectionRecovery = staticCompositionLocalOf<ConnectionRecoveryController?> { null }
 
@@ -50,7 +54,6 @@ internal fun ConnectionRecoveryHost(controller: ConnectionRecoveryController,
     content: @Composable () -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val cookies = remember(context) { ClearanceCookies(context) }
     val attempt by controller.attempt.collectAsState()
     DisposableEffect(controller, lifecycle) {
         val observer = LifecycleEventObserver { _, _ ->
@@ -63,12 +66,14 @@ internal fun ConnectionRecoveryHost(controller: ConnectionRecoveryController,
             controller.setForeground(false)
         }
     }
+    val policy = remember(controller, context) {
+        ClearanceRenewalPolicy(context.getSharedPreferences("attempted-cookie-expiry", Context.MODE_PRIVATE))
+    }
     LaunchedEffect(controller, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            val policy = ClearanceRenewalPolicy()
             while (isActive) {
                 VerificationSite.entries.forEach { site ->
-                    val expiry = runCatching { readExpiry?.invoke(site) ?: cookies.read(site) }.getOrNull()
+                    val expiry = runCatching { readExpiry?.invoke(site) ?: ClearanceCookies.read(site) }.getOrNull()
                     if (expiry != null && controller.canPrepare(site) &&
                         policy.shouldRenew(site, expiry.expiresAt, expiry.present, System.currentTimeMillis())) {
                         controller.prepare(site)
@@ -141,7 +146,7 @@ internal fun ConnectionRecoveryHost(controller: ConnectionRecoveryController,
             delay(500)
             readPage()
             if (android.os.SystemClock.elapsedRealtime() - started >= quietTimeoutMillis &&
-                controller.attempt.value?.interactive == false) controller.showInteraction(current.id)
+                controller.attempt.value?.interactive == false) controller.offerInteraction(current.id)
         }
     }
     CompositionLocalProvider(LocalConnectionRecovery provides controller) {
@@ -149,17 +154,30 @@ internal fun ConnectionRecoveryHost(controller: ConnectionRecoveryController,
             if (attempt?.interactive == false && browser != null) RecoveryBrowser(browser, false,
                 Modifier.fillMaxSize().alpha(0f).clearAndSetSemantics {})
             content()
+            attempt?.takeIf { it.needsAttention && !it.interactive }?.let { pending ->
+                val accessibility = LocalAccessibilityManager.current
+                LaunchedEffect(pending.id) {
+                    delay(accessibility?.calculateRecommendedTimeoutMillis(30_000L, containsText = true, containsControls = true) ?: 30_000L)
+                    controller.defer(pending.id)
+                }
+                Snackbar(modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(12.dp),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface,
+                    action = { AppTextButton("Verify", { controller.showInteraction(pending.id) }) },
+                    dismissAction = { AppTextButton("Later", { controller.defer(pending.id) }) }) {
+                    Text("Verification needed to finish loading.")
+                }
+            }
         }
         val current = attempt
         if (current?.interactive == true && browser != null) {
-            Dialog(onDismissRequest = { controller.finish(current.id, false) },
+            Dialog(onDismissRequest = { controller.defer(current.id) },
                 properties = DialogProperties(usePlatformDefaultWidth = false)) {
                 Surface(Modifier.fillMaxSize()) {
                     Column(Modifier.statusBarsPadding().navigationBarsPadding()) {
                         Text("Verify connection", Modifier.padding(16.dp), style = MaterialTheme.typography.titleLarge)
                         Text("Complete the browser check. Loading will resume automatically.", Modifier.padding(horizontal = 16.dp))
                         FlowRow {
-                            TextButton({ controller.finish(current.id, false) }) { Text("Cancel") }
+                            TextButton({ controller.defer(current.id) }) { Text("Cancel") }
                             TextButton({ browser.reload() }) { Text("Reload") }
                             TextButton({ openForumBrowser(context, "https://forum.mobilism.org/") }) { Text("Use forum in browser") }
                         }
