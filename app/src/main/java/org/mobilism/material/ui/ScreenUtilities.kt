@@ -38,7 +38,7 @@ fun ErrorPanel(error: ScreenError, modifier: Modifier = Modifier, onRetry: (() -
     val context = LocalContext.current
     val recovery = LocalConnectionRecovery.current
     val scope = rememberCoroutineScope()
-    if (recovery != null && error.verificationSite != null) {
+    if (onVerify == null && recovery != null && error.verificationSite != null) {
         val completed by recovery.completed.collectAsState()
         val generation = completed[error.verificationSite] ?: 0
         var handled by remember(error) { mutableLongStateOf(generation) }

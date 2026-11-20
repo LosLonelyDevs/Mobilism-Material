@@ -7,6 +7,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,11 +23,16 @@ import coil3.compose.AsyncImage
 internal fun MessageAvatar(name: String, url: String?, modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primaryContainer,
     contentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
-    initialStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.labelMedium) {
-    val identity = memberIdentity(name)
+    initialStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.labelMedium,
+    lookupIdentity: Boolean = true) {
+    val store = LocalMemberIdentities.current
+    val identity = memberIdentity(name, lookup = lookupIdentity)
     var rejected by remember(name, url, identity?.avatar) { mutableStateOf(emptySet<String>()) }
-    val source = listOfNotNull(url, identity?.avatar).distinct().firstOrNull { it !in rejected }
+    val source = listOfNotNull(identity?.avatar, url).distinct().firstOrNull { it !in rejected }
     var loaded by remember(source) { mutableStateOf(false) }
+    LaunchedEffect(store, name, url) {
+        if (url != null) store?.rememberAvatar(name, url)
+    }
     Surface(modifier, shape = CircleShape, color = color, contentColor = contentColor) {
         Box(contentAlignment = Alignment.Center) {
             if (!loaded) Text(name.firstOrNull()?.uppercase() ?: "?", style = initialStyle)

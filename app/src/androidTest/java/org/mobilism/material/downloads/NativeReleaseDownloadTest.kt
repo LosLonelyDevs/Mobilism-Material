@@ -1,16 +1,19 @@
 package org.mobilism.material.downloads
 
+import android.app.Notification
+import android.app.NotificationManager
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.DocumentsContract
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
@@ -58,6 +61,11 @@ class NativeReleaseDownloadTest {
         device.executeShellCommand("mkdir -p /sdcard/Documents/$folderName")
         val tree = DocumentsContract.buildTreeDocumentUri("com.android.externalstorage.documents", "primary:Documents/$folderName")
         val context = compose.activity
+        val needsPermission = Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        if (needsPermission) context.getSharedPreferences("release-download-notifications", Context.MODE_PRIVATE)
+            .edit().remove("requested").commit()
+        val notifications = context.getSystemService(NotificationManager::class.java)
         val preferencesContext = object : ContextWrapper(context) {
             override fun getSharedPreferences(name: String, mode: Int) = super.getSharedPreferences("fixture-$name", mode)
         }
@@ -82,10 +90,15 @@ class NativeReleaseDownloadTest {
         store.useInternal(tree.toString())
         store.useBrowser()
         store.extractZips(true)
-        val cert = HeldCertificate.Builder().addSubjectAlternativeName("localhost").build()
+        val cert = HeldCertificate.Builder().addSubjectAlternativeName("localhost").addSubjectAlternativeName("127.0.0.1").build()
         val serverTls = HandshakeCertificates.Builder().heldCertificate(cert).build()
         val trust = HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate).build()
-        val client = releaseFileClient(preferencesContext).newBuilder().sslSocketFactory(trust.sslSocketFactory(), trust.trustManager).build()
+        var hostFailure: java.io.IOException? = null
+        val client = releaseFileClient(preferencesContext).newBuilder()
+            .sslSocketFactory(trust.sslSocketFactory(), trust.trustManager)
+            .eventListener(object : okhttp3.EventListener() {
+                override fun callFailed(call: okhttp3.Call, ioe: java.io.IOException) { hostFailure = ioe }
+            }).build()
         val factory = object : WorkerFactory() {
             override fun createWorker(appContext: Context, workerClassName: String, workerParameters: WorkerParameters) =
                 if (workerClassName == ReleaseDownloadWorker::class.java.name) ReleaseDownloadWorker(appContext, workerParameters, client) else null
@@ -140,25 +153,43 @@ class NativeReleaseDownloadTest {
                     throw AssertionError("Folder selection ended on $labels", failure)
                 }
                 assertEquals(tree.toString(), DownloadPreferencesStore(preferencesContext).state.value.downloadFolder)
+                if (Build.VERSION.SDK_INT >= 33 && needsPermission) {
+                    val allowNotifications = By.res(Pattern.compile(".*:id/permission_allow_button"))
+                    compose.waitUntil(15_000) {
+                        device.findObject(allowNotifications)?.click()
+                        context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                    }
+                }
+                compose.onNodeWithText("Release downloads").assertDoesNotExist()
                 capture("settings")
                 compose.runOnIdle { settings = false }
-                compose.onNodeWithTag("open-downloads").performClick()
+                var previousResults = emptySet<String>()
                 fun tap(url: String) {
+                    previousResults = notifications.activeNotifications.map { it.key }.toSet()
+                    compose.onNodeWithTag("open-downloads").performClick()
                     compose.onNode(hasTestTag("download:$url") and hasAnyAncestor(hasTestTag("release-downloads-sheet")))
                         .performScrollTo().performClick()
+                    compose.waitUntil(15_000) { compose.onAllNodesWithTag("release-downloads-sheet").fetchSemanticsNodes().isEmpty() }
+                    compose.onNodeWithText("Release downloads").assertDoesNotExist()
+                }
+                fun resultContaining(text: String): Notification {
+                    fun match() = notifications.activeNotifications.firstOrNull {
+                        it.key !in previousResults && it.tag == "release-result"
+                    }?.notification
+                    compose.waitUntil(20_000) { match() != null }
+                    val notification = requireNotNull(match())
+                    val actual = notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+                    assertTrue("Expected '$text' in '$actual' (fixture host: $hostFailure)", actual.contains(text))
+                    return notification
                 }
                 server.enqueue(MockResponse().setHeader("Content-Type", "application/octet-stream")
                     .setHeader("Content-Disposition", "attachment; filename=\"Reader.apk\"").setBody(Buffer().write(apk)))
                 tap(direct)
-                compose.waitUntil(20_000) { compose.onAllNodesWithText("Saved to your folder").fetchSemanticsNodes().isNotEmpty() }
-                compose.onNodeWithText("Reader.apk").assertIsDisplayed()
-                compose.onNodeWithText("Open file").assertHeightIsAtLeast(48.dp)
+                assertNotNull(resultContaining("Saved to your folder").contentIntent)
                 capture("saved")
-                device.pressBack()
                 server.enqueue(MockResponse().setBody(Buffer().write(archive)))
                 tap(wrapped)
-                compose.waitUntil(20_000) { compose.onAllNodesWithText("Extracted 2 files").fetchSemanticsNodes().isNotEmpty() }
-                compose.onNodeWithText("Close").performClick()
+                assertNotNull(resultContaining("Extracted 2 files").contentIntent)
                 val resolver = context.contentResolver
                 val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
                 val names = mutableListOf<String>()
@@ -177,31 +208,33 @@ class NativeReleaseDownloadTest {
                 server.enqueue(MockResponse().setBody(Buffer().write(ByteArray(1_024_000))).throttleBody(4096, 100, TimeUnit.MILLISECONDS))
                 tap(cancel)
                 compose.waitUntil(15_000) { server.requestCount == 3 }
-                val advancing = SemanticsMatcher("Transfer has made progress") {
-                    val fraction = it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo)?.current ?: 0f
-                    fraction > 0f && fraction < 1f
+                compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+                fun advancing() = notifications.activeNotifications.firstOrNull {
+                    it.notification.extras.getInt(Notification.EXTRA_PROGRESS) in 1..99 && it.notification.isOngoingTransfer()
                 }
-                compose.waitUntil(10_000) { compose.onAllNodes(advancing).fetchSemanticsNodes().isNotEmpty() }
+                compose.waitUntil(15_000) { advancing() != null }
                 capture("active")
                 runBlocking {
                     assertFalse(ReleaseDownloads.enqueue(context, cancel, "Duplicate", tree.toString(), false) {
                         error("Duplicate resolved again")
                     })
                 }
-                compose.onNodeWithText("Cancel download").performClick()
-                compose.waitUntil(10_000) { compose.onAllNodesWithText("Cancelled").fetchSemanticsNodes().isNotEmpty() }
+                val progress = requireNotNull(advancing())
+                progress.notification.actions.single { it.title == "Cancel" }.actionIntent.send()
+                compose.waitUntil(10_000) { notifications.activeNotifications.none { it.key == progress.key } }
+                compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
                 assertEquals(3, server.requestCount)
-                compose.onNodeWithText("Close").performClick()
                 server.enqueue(MockResponse().setHeader("Content-Type", "text/html").setBody("<html>Sign in</html>"))
                 tap(landingPage)
-                compose.waitUntil(10_000) { compose.onAllNodesWithText("host returned a webpage", substring = true).fetchSemanticsNodes().isNotEmpty() }
-                compose.onNodeWithText("Close").performClick()
+                assertNull(resultContaining("host returned a webpage").contentIntent)
                 server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "60"))
                 tap(unavailable)
-                compose.waitUntil(10_000) { compose.onAllNodesWithText("HTTP 429", substring = true).fetchSemanticsNodes().isNotEmpty() }
-                compose.onNodeWithText("Close").performClick()
+                resultContaining("HTTP 429")
                 tap(unavailable)
-                compose.waitUntil(10_000) { compose.onAllNodesWithText("asked you to wait", substring = true).fetchSemanticsNodes().isNotEmpty() }
+                resultContaining("asked you to wait")
+                assertFalse("Cancelling must not post a failure", notifications.activeNotifications.any {
+                    it.tag == "release-result" && it.id == progress.id
+                })
                 assertEquals("Retry-After prevented a second host request", 5, server.requestCount)
                 resolver.query(children, arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null)!!.use {
                     assertEquals("No cancelled or failed file", 3, it.count)
@@ -219,6 +252,9 @@ class NativeReleaseDownloadTest {
             }
         }
     }
+
+    private fun Notification.isOngoingTransfer() =
+        channelId == ReleaseDownloads.TAG && flags and Notification.FLAG_ONGOING_EVENT != 0
 
     private fun button(device: UiDevice, label: String) {
         val button = device.wait(Until.findObject(By.text(Pattern.compile(Pattern.quote(label), Pattern.CASE_INSENSITIVE))), 10_000)

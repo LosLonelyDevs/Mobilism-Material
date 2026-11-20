@@ -106,6 +106,8 @@ Links appear after the message with the configured link text. They open in the u
 | Following apps per batch | 5 | 1 to 20 |
 | Minimum interval per followed app | 21,600,000 ms (6 hours) | 3,600,000 to 604,800,000 ms (1 hour to 7 days) |
 | Minimum following batch interval | 900,000 ms (15 minutes) | 900,000 to 86,400,000 ms (15 minutes to 24 hours) |
+| Shared-cache background interval | 60 minutes | 15 to 1,440 minutes |
+| Shared-cache matches per check | 200 | 0 to 200 |
 
 Open **API controls > Limits** to edit thresholds. Blank fields remove the override. **Use app defaults** clears all threshold overrides in the draft; **Save API limits** applies them. Server `Retry-After` delays remain authoritative even when local limits change.
 
@@ -120,16 +122,18 @@ apps per batch (`followBatchSize`), the minimum interval per app
 These limits apply to both manual and background checks, oldest checks first.
 The app displays the effective limits. Changing limits does not reset check history.
 
-Background checks still run at the user's chosen 6, 12, or 24-hour interval,
-subject to Android scheduling. Remote cooldowns can prevent requests during a
-scheduled pass; they do not shorten or replace that schedule. The worker refreshes
-configuration through the existing throttled store before checking. Each app search
-reads only page one, and the batch stops after the first error. Shared search
-spacing, caching, failure cooldowns, and server `Retry-After` still apply.
+**Following shared cache** controls the automatic background interval and the
+number of matches per check. Set matches to zero to disable reads and contributions.
+Existing user-selected schedules are preserved. A user can pick a slower interval
+or turn background checks off. Android may delay scheduled work.
 
-Larger follow lists take multiple batches. With the defaults, 20 followed apps
-and six-hour background checks take about 24 hours per steady rotation, before
-Android delays. This is a request budget, not a promise of six-hour coverage.
+Each check compares followed apps against one shared snapshot. If there is no
+usable match or Vercel is unavailable, the existing direct-search budget applies.
+Background direct searches still run at most once per six hours, or less often
+if the user selected a longer interval. Check now can start another eligible
+batch after 15 minutes by default. Each search reads page one. A Mobilism error
+ends the batch and server `Retry-After` still applies. With 20 cache misses,
+five direct searches every six hours take about a day to cover the list.
 
 The dashboard can ship before the next app release. The Following section stays
 hidden until the verified release catalog contains a stable v0.1.24 or newer.

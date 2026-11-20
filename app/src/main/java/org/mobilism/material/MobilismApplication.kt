@@ -31,7 +31,7 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
         org.mobilism.material.images.appImageLoader(context)
 
     override val userAgentPolicy get() = remoteControl.userAgentPolicy
-    val memberIdentities by lazy { org.mobilism.material.members.MemberIdentityStore(repository::profileForIdentity,
+    val memberIdentities by lazy { org.mobilism.material.members.MemberIdentityStore(repository::profile,
         limits = { remoteControl.limits }, cache = org.mobilism.material.members.MemberIdentityCache(
             getSharedPreferences("member-identities", MODE_PRIVATE))) }
     val recentSearches by lazy { org.mobilism.material.settings.RecentSearchStore(this) }
@@ -54,9 +54,16 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
     val customCategories by lazy { org.mobilism.material.data.CustomCategoryStore(this) }
     internal val connectionRecovery by lazy { org.mobilism.material.ui.ConnectionRecoveryController() }
     internal val remoteControl by lazy { org.mobilism.material.remote.RemoteControlStore.create(this, diagnostics) }
+    private val latestApps by lazy { org.mobilism.material.data.LatestAppsClient(BuildConfig.DAILY_USAGE_ENDPOINT) }
+    private val latestPages = kotlinx.coroutines.channels.Channel<org.mobilism.material.data.LatestAppsPage>(
+        capacity = 4, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
     val repository by lazy { DefaultMobilismRepository(this, contentPreferences, diagnostics,
         customCategories = customCategories, customCategoriesEnabled = { developer.state.value.customCategoriesActive },
-        challengeRecovery = connectionRecovery, requestLimits = { remoteControl.limits }, requestTraffic = requestTraffic) }
+        challengeRecovery = connectionRecovery, requestLimits = { remoteControl.limits }, requestTraffic = requestTraffic,
+        onLatestApps = { page ->
+            if (latestApps.configured && remoteControl.limits.followCacheBatchSize > 0 && dailyUsage.enabled.value)
+                latestPages.trySend(page)
+        }) }
     val appearance by lazy { AppearanceStore(this) }
     val releaseDisplay by lazy { org.mobilism.material.settings.ReleaseDisplayStore(this) }
     val debrid by lazy { DebridRepository(this, isEnabled = {
@@ -66,7 +73,7 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
     val followPreferences by lazy { FollowingPreferences(this) }
     val followNotifications by lazy { FollowingNotifications(this) }
     val following by lazy { FollowingChecker(library, repository, InstalledApps(this), followPreferences, followNotifications,
-        limits = { remoteControl.limits }) }
+        limits = { remoteControl.limits }, latestApps = { latestApps.snapshot(contentPreferences.hideAdult.value) }) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val foreground = MutableStateFlow(false)
     private val visibleActivities = mutableSetOf<Any>()
@@ -83,6 +90,15 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
 
     override fun onCreate() {
         super.onCreate()
+        scope.launch {
+            for (page in latestPages) {
+                if (dailyUsage.enabled.value && remoteControl.limits.followCacheBatchSize > 0) {
+                    try { latestApps.publish(page) }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { /* A contribution is best effort. The feed is already available. */ }
+                }
+            }
+        }
         org.mobilism.material.remote.RemoteNoticeSchedule.start(this)
         scope.launch {
             repository.auth.collect { auth ->
@@ -120,10 +136,12 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
             }
         }
         scope.launch {
-            combine(library.state, followPreferences.state) { entries, preferences ->
+            combine(library.state, followPreferences.state, remoteControl.limitsState) { entries, preferences, limits ->
                 followNotifications.retain(entries.filter { it.watched }.map { it.release.id }.toSet())
-                (preferences.backgroundChecks && entries.any { it.watched }) to preferences.intervalHours
-            }.distinctUntilChanged().collect { (enabled, hours) -> FollowingSchedule.update(this@MobilismApplication, enabled, hours) }
+                val minimum = if (latestApps.configured && limits.followCacheBatchSize > 0)
+                    limits.followCacheIntervalMinutes.toLong() else FollowCheckPolicy.MIN_BACKGROUND_INTERVAL_HOURS * 60
+                (preferences.backgroundChecks && entries.any { it.watched }) to maxOf(minimum, preferences.intervalHours * 60)
+            }.distinctUntilChanged().collect { (enabled, minutes) -> FollowingSchedule.update(this@MobilismApplication, enabled, minutes) }
         }
     }
 }

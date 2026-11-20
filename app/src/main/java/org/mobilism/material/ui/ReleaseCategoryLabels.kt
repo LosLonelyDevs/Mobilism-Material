@@ -89,18 +89,13 @@ internal fun ReleaseMetadataFooter(release: Release, expanded: Boolean = false, 
     }
     if (singleRow) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val metadataWidth = when {
-                categories.isEmpty() -> maxWidth
-                categories.size == 1 -> maxWidth * 0.72f
-                else -> maxWidth * 0.66f
-            }
+            val categoryWidth = maxWidth * if (categories.size == 1) 0.38f else 0.34f
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(spacing)) {
-                Row(Modifier.widthIn(max = metadataWidth).horizontalScroll(rememberScrollState()),
+                Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(spacing), verticalAlignment = Alignment.CenterVertically) { metadata() }
-                if (categories.isNotEmpty()) Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) { chips() }
-                }
+                if (categories.isNotEmpty()) Row(Modifier.widthIn(max = categoryWidth).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)) { chips() }
             }
         }
     } else {

@@ -41,6 +41,9 @@ fun FollowingScreen(
     limits: ApiRequestLimits = ApiRequestLimits.Defaults,
 ) {
     val context = LocalContext.current
+    val sharedCache = limits.followCacheBatchSize > 0 && org.mobilism.material.BuildConfig.DAILY_USAGE_ENDPOINT.isNotBlank()
+    val intervalMinutes = maxOf(preferences.intervalHours * 60, if (sharedCache)
+        limits.followCacheIntervalMinutes.toLong() else org.mobilism.material.following.FollowCheckPolicy.MIN_BACKGROUND_INTERVAL_HOURS * 60)
     val theme = LocalAppTheme.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -77,7 +80,7 @@ fun FollowingScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text("Background checks", style = MaterialTheme.typography.titleSmall)
-                                    Text("Android may delay checks to save battery.", style = MaterialTheme.typography.bodySmall,
+                                    Text("About every ${(intervalMinutes * 60_000).milliseconds}. Android may delay checks to save battery.", style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Switch(preferences.backgroundChecks, settings::background,
@@ -86,12 +89,12 @@ fun FollowingScreen(
                             Box {
                                 FilledTonalButton(onClick = { frequencyMenu = true }, enabled = preferences.backgroundChecks) {
                                     Icon(Icons.Outlined.Schedule, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
-                                    Text(if (preferences.intervalHours == 1L) "Every hour" else "Every ${preferences.intervalHours} hours")
+                                    Text(followIntervalLabel(preferences.intervalHours))
                                     Icon(Icons.Outlined.ExpandMore, null)
                                 }
                                 DropdownMenu(frequencyMenu, { frequencyMenu = false }, shape = MaterialTheme.shapes.extraLarge) {
                                     FollowingPreferences.intervals.forEach { hours -> RoundedMenuItem(
-                                        label = if (hours == 1L) "Every hour" else "Every $hours hours", accent = theme.featured,
+                                        label = followIntervalLabel(hours), accent = theme.featured,
                                         icon = if (hours == preferences.intervalHours) Icons.Outlined.Check else Icons.Outlined.Schedule,
                                         onClick = { settings.interval(hours); frequencyMenu = false },
                                     ) }
@@ -119,8 +122,11 @@ fun FollowingScreen(
                                 Icon(Icons.Outlined.Refresh, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
                                 Text(if (check.busy) "Checking ${check.done} of ${check.total}…" else "Check now")
                             }
-                            Text("Checks up to ${limits.followBatchSize} ${if (limits.followBatchSize == 1) "app" else "apps"}, starting with those checked longest ago. " +
-                                "Each app waits ${limits.followAppIntervalMs.milliseconds} between checks; batches wait at least ${limits.followAttemptIntervalMs.milliseconds}.",
+                            Text("Follow as many apps as you like. " +
+                                (if (sharedCache) "We check the shared Latest list first. " else "") +
+                                "Direct Mobilism searches check up to ${limits.followBatchSize} at a time, oldest due first. " +
+                                "Check now can start another batch after ${limits.followAttemptIntervalMs.milliseconds}. " +
+                                "Each app is eligible for direct search again after ${limits.followAppIntervalMs.milliseconds}.",
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (check.busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large))
                             if (!check.busy && check.total > 0) Text("Checked ${check.done} of ${check.total}" +
@@ -142,6 +148,12 @@ fun FollowingScreen(
             }
         }
     }
+}
+
+private fun followIntervalLabel(hours: Long): String = when (hours) {
+    0L -> "Automatic"
+    1L -> "Every hour"
+    else -> "Every $hours hours"
 }
 
 @Composable

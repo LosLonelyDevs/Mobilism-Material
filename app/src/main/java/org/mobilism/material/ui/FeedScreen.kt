@@ -316,14 +316,15 @@ internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = fal
     val titleStyle = MaterialTheme.typography.titleMedium
     val subtitleStyle = MaterialTheme.typography.bodySmall
     val textHeight = with(LocalDensity.current) {
-        titleStyle.lineHeight.toDp() * titleLines + subtitleStyle.lineHeight.toDp() * subtitleLines +
-            maxOf(48.dp, subtitleStyle.lineHeight.toDp()) + 8.dp
+        val subtitleHeight = subtitleStyle.lineHeight.toDp()
+        val authorHeight = if (compact) subtitleHeight else maxOf(24.dp, subtitleHeight)
+        titleStyle.lineHeight.toDp() * titleLines + subtitleHeight * subtitleLines + authorHeight + 8.dp
     }
     ExpressiveCard(onClick, Modifier.fillMaxWidth().testTag("release-${release.id}"), colors = CardDefaults.cardColors(
         containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, accent, 0.06f),
     )) {
         val inset = if (compact) 12.dp else 16.dp
-        Column(Modifier.padding(start = inset, top = inset, end = inset, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.padding(start = inset, top = inset, end = inset, bottom = 4.dp)) {
             Row(Modifier.fillMaxWidth().height(maxOf(thumbnailSize, textHeight)), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 AsyncImage(
                     model = release.thumbnail, contentDescription = null,
@@ -342,14 +343,16 @@ internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = fal
                     UsernameLink(release.author, style = subtitleStyle, showAvatar = !compact, lookupIdentity = !compact)
                 }
             }
-            ReleaseMetadataFooter(release, singleRow = true, spacing = 6.dp) {
+            ReleaseMetadataFooter(release, singleRow = true, spacing = 10.dp) {
                 ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
-                if (!compact) Row(Modifier.clearAndSetSemantics { contentDescription = "${release.replies} replies" },
+                ReleaseViewCount(release.views, numberOnly = true)
+                if (release.replies > 0) Row(Modifier.clearAndSetSemantics {
+                    contentDescription = if (release.replies == 1L) "1 comment" else "${release.replies} comments"
+                },
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
                     Text(release.replies.toString(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
                 }
-                ReleaseViewCount(release.views, numberOnly = true)
             }
         }
     }

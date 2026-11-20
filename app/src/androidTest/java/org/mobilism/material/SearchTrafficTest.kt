@@ -37,8 +37,9 @@ class SearchTrafficTest {
                     .body((if (login) """{"access_token":"fixture-account"}""" else """{"releases":[]}""").toResponseBody()).build()
             }.build())
         val library = AppLibraryStore(context)
-        fun checker(limits: ApiRequestLimits = ApiRequestLimits.Defaults) = FollowingChecker(library, repository,
-            InstalledApps(context), FollowingPreferences(context), FollowingNotifications(context), limits = { limits })
+        fun checker(limits: ApiRequestLimits = ApiRequestLimits.Defaults, latest: suspend () -> List<Release> = { emptyList() }) =
+            FollowingChecker(library, repository, InstalledApps(context), FollowingPreferences(context), FollowingNotifications(context),
+                limits = { limits }, latestApps = latest)
         fun followApps() {
             ('A'..'L').forEachIndexed { index, letter ->
                 library.watch(Release(index + 1L, "Fixture $letter v1.0", "", null, 1, 0, 0, section = ContentSection.Apps), true)
@@ -82,6 +83,65 @@ class SearchTrafficTest {
         assertTrue(fixture.library.state.value.all { it.checkedAt == null })
         fixture.checker().check()
         assertEquals(1, fixture.calls)
+    }
+
+    @Test fun oneSnapshotCanUpdateMoreThanFiveFollowedAppsWithoutMobilismReads() = runBlocking {
+        val fixture = Fixture()
+        fixture.followApps()
+        val releases = fixture.library.state.value.map { entry ->
+            entry.release.copy(id = entry.release.id + 100, title = entry.release.title.replace("v1.0", "v2.0"))
+        }
+        var reads = 0
+        val result = fixture.checker(latest = { reads++; releases }).check()
+        assertEquals(1, reads)
+        assertEquals(12, result.done)
+        assertEquals(0, fixture.calls)
+        assertTrue(fixture.library.state.value.all { it.update?.title?.endsWith("v2.0") == true })
+    }
+
+    @Test fun onlyReadingTheAppsLatestFeedContributesItsExistingPage() = runBlocking {
+        val context = Fixture().context
+        val pages = mutableListOf<LatestAppsPage>()
+        var calls = 0
+        val repository = DefaultMobilismRepository(context, onLatestApps = { pages.add(it) },
+            client = OkHttpClient.Builder().addInterceptor { chain ->
+                calls++
+                val body = """{"response":[{"id":77,"name":"Uploader","subject":"Fixture v2.1","date":1700000000}]}"""
+                Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("Fixture")
+                    .body(body.toResponseBody()).build()
+            }.build())
+        repository.releases(ContentSection.Apps, FeedOrder.Latest, 1)
+        repository.releases(ContentSection.Apps, FeedOrder.Top, 1)
+        repository.releases(ContentSection.Games, FeedOrder.Latest, 1)
+        assertEquals(3, calls)
+        assertTrue(pages.single().firstPage)
+        assertEquals("Uploader", pages.single().releases.single().author)
+        assertEquals(77L, pages.single().releases.single().id)
+    }
+
+    @Test fun cacheExceptionStillCompletesTheNormalSearchBatchAndKeepsItsCooldown() = runBlocking {
+        val fixture = Fixture()
+        fixture.followApps()
+        val checker = fixture.checker(latest = { throw java.io.IOException("Vercel unavailable") })
+        assertEquals(5, checker.check(background = true).done)
+        assertEquals(5, fixture.calls)
+        val prefs = fixture.context.getSharedPreferences("following-settings", Context.MODE_PRIVATE)
+        prefs.edit().putLong("last-check-attempt", System.currentTimeMillis() - 20 * 60_000).commit()
+        assertEquals(0, checker.check(background = true).done)
+        assertEquals(5, fixture.calls)
+        assertEquals(5, checker.check().done)
+        assertEquals(10, fixture.calls)
+    }
+
+    @Test fun aCompatibleMatchUsesTheCacheAndOnlyMissesUseTheDirectBatch() = runBlocking {
+        val fixture = Fixture()
+        fixture.followApps()
+        val first = fixture.library.state.value.first().release
+        val newer = first.copy(id = 100, title = first.title.replace("v1.0", "v2.0"))
+        val result = fixture.checker(latest = { listOf(newer) }).check()
+        assertEquals(6, result.done)
+        assertEquals(5, fixture.calls)
+        assertEquals(100L, fixture.library.state.value.single { it.release.id == first.id }.update?.id)
     }
 
     @Test fun followingRemoteBatchAndCooldownSurviveCheckerRecreationAndDefaultFallback() = runBlocking {

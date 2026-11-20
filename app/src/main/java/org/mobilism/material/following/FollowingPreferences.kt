@@ -5,18 +5,25 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.mobilism.material.data.ApiRequestLimits
 
-data class FollowPreferences(val backgroundChecks: Boolean = true, val notifications: Boolean = false, val intervalHours: Long = 6)
+data class FollowPreferences(val backgroundChecks: Boolean = true, val notifications: Boolean = false, val intervalHours: Long = 0)
 
 class FollowingPreferences(context: Context) {
     private val preferences = context.getSharedPreferences("following-settings", Context.MODE_PRIVATE)
     private val mutableState = MutableStateFlow(FollowPreferences(preferences.getBoolean("background", true),
-        preferences.getBoolean("notifications", false), preferences.getLong("hours", 6).takeIf { it in intervals } ?: 6))
+        preferences.getBoolean("notifications", false), preferences.getLong("hours", 0).takeIf { it in intervals } ?: 0))
     val state = mutableState.asStateFlow()
 
-    internal fun beginCheck(now: Long, limits: ApiRequestLimits): Boolean {
+    internal fun beginCheck(now: Long, limits: ApiRequestLimits, background: Boolean = false): Boolean {
         val previous = preferences.getLong("last-check-attempt", 0)
         if (!FollowCheckPolicy.canAttempt(previous, now, limits)) return false
-        preferences.edit().putLong("last-check-attempt", now).apply()
+        val edit = preferences.edit()
+        if (background) {
+            val lastBackground = preferences.getLong("last-background-direct", previous)
+            val interval = maxOf(FollowCheckPolicy.MIN_BACKGROUND_INTERVAL_HOURS, state.value.intervalHours) * 3_600_000
+            if (lastBackground > 0 && now - lastBackground in 0 until interval) return false
+            edit.putLong("last-background-direct", now)
+        }
+        edit.putLong("last-check-attempt", now).apply()
         return true
     }
 
@@ -28,5 +35,5 @@ class FollowingPreferences(context: Context) {
             .putLong("hours", value.intervalHours).apply()
         mutableState.value = value
     }
-    companion object { val intervals = listOf(6L, 12L, 24L) }
+    companion object { val intervals = listOf(0L, 1L, 6L, 12L, 24L) }
 }

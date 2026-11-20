@@ -26,10 +26,12 @@ class RemoteConfigClient(usageEndpoint: String, private val userAgent: String,
     }
 
     companion object {
-        fun endpoint(usageEndpoint: String): String? = runCatching {
-            val uri = URI(usageEndpoint)
-            require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.query == null && uri.fragment == null)
-            uri.resolve("/api/app-config").toString()
-        }.getOrNull()
+        fun endpoint(usageEndpoint: String): String? = serviceEndpoint(usageEndpoint, "/api/app-config")
     }
 }
+
+internal fun serviceEndpoint(usageEndpoint: String, path: String): String? = runCatching {
+    val uri = URI(usageEndpoint)
+    require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.query == null && uri.fragment == null)
+    uri.resolve(path).toString()
+}.getOrNull()

@@ -8,11 +8,11 @@ import okhttp3.HttpUrl
 import org.mobilism.material.data.AppUserAgent
 import org.mobilism.material.data.AppUserAgentInterceptor
 
-internal fun appImageLoader(context: Context): ImageLoader {
+internal fun appImageLoader(context: Context, baseClient: OkHttpClient = OkHttpClient()): ImageLoader {
     val application = context.applicationContext
     val headers = AppUserAgentInterceptor(AppUserAgent.defaultValue(application),
         { AppUserAgent.value(application) }, { AppUserAgent.response(application, it) })
-    val client = OkHttpClient.Builder().addInterceptor { chain ->
+    val client = baseClient.newBuilder().addInterceptor { chain ->
         val request = chain.request()
         chain.proceed(request.newBuilder().url(secureMobilismImageUrl(request.url)).build())
     }.addNetworkInterceptor(headers).addNetworkInterceptor(org.mobilism.material.data.RequestTrafficInterceptor(

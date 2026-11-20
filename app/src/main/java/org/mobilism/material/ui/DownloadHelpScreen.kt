@@ -38,8 +38,8 @@ internal fun DownloadHelpScreen(load: suspend () -> DiscussionTopic, onBack: () 
         catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) {
             error = failure.forScreen()
-            canVerify = failure is org.mobilism.material.data.ApiFailure &&
-                (failure.kind == org.mobilism.material.data.FailureKind.Challenge || failure.httpStatus == 403)
+            verify = error?.verificationSite == org.mobilism.material.data.VerificationSite.Forum
+            canVerify = verify || (failure as? org.mobilism.material.data.ApiFailure)?.httpStatus == 403
         }
     }
     if (verify) ForumAccessVerification(DownloadHelp.URL, onRead = { html ->

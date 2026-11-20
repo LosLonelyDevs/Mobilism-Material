@@ -46,10 +46,12 @@ fun CollapsibleSection(
     headingStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.titleLarge,
     headingColor: Color = Color.Unspecified,
     expanded: Boolean? = null, onExpandedChange: ((Boolean) -> Unit)? = null,
+    compactHeaderBottom: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     var localExpanded by rememberSaveable(id, initiallyExpanded) { mutableStateOf(initiallyExpanded) }
     val isExpanded = expanded ?: localExpanded
+    val compact = isExpanded && compactHeaderBottom
     val rotation by animateFloatAsState(if (isExpanded) 180f else 0f,
         MaterialTheme.motionScheme.fastSpatialSpec(), label = "section chevron")
     AppSurface(
@@ -58,11 +60,11 @@ fun CollapsibleSection(
     ) {
         Column {
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 64.dp)
+                Modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 64.dp)
                     .semantics { stateDescription = if (isExpanded) "Expanded" else "Collapsed" }
                     .clickable(role = Role.Button, onClick = {
                         if (onExpandedChange != null) onExpandedChange(!isExpanded) else localExpanded = !isExpanded
-                    }).padding(20.dp),
+                    }).padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = if (compact) 8.dp else 20.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Icon(icon, null, Modifier.size(24.dp), tint = accent)

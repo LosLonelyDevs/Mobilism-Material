@@ -74,12 +74,12 @@ class BrowsingOptionsTest {
             }
         }
         compose.onNodeWithText("Sample author").assertIsDisplayed()
-        compose.onNodeWithContentDescription("3 replies", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("3 comments", useUnmergedTree = true).assertIsDisplayed()
         val detailed = compose.onNodeWithTag("release-12").fetchSemanticsNode().boundsInRoot.height
         compose.onNodeWithTag("new-release-12", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("Use compact list").performClick()
-        compose.onNodeWithText("Sample author").assertDoesNotExist()
-        compose.onNodeWithContentDescription("3 replies", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("Sample author").assertIsDisplayed()
+        compose.onNodeWithContentDescription("3 comments", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("new-release-12", useUnmergedTree = true).assertIsDisplayed()
         val compact = compose.onNodeWithTag("release-12").fetchSemanticsNode().boundsInRoot.height
         assertTrue(compact < detailed)

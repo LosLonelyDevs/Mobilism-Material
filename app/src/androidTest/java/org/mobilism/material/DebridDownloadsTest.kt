@@ -94,6 +94,19 @@ class DebridDownloadsTest {
         compose.runOnIdle { assertEquals(listOf(original), opened); assertEquals(1, downloads) }
     }
 
+    @Test fun premiumInternalDownloadShowsOnlyTheDownloadAndCopyActions() {
+        val saved = mutableListOf<String>()
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            DownloadLinkRow(DownloadLink(original), verified, onOpened = {},
+                resolveLink = { direct }, openLink = { error("Unexpected browser launch") },
+                downloadFile = { _, resolve -> saved += resolve() }, onCopied = {})
+        } }
+        compose.onAllNodes(hasClickAction()).assertCountEquals(2)
+        compose.onNodeWithContentDescription("Copy Example host link").assertIsDisplayed()
+        compose.onNodeWithText("Example host").performClick()
+        compose.runOnIdle { assertEquals(listOf(direct), saved) }
+    }
+
     @Test fun unverifiedAccountsUseOrdinaryHostLinks() {
         var resolved = false
         val opened = mutableListOf<String>()

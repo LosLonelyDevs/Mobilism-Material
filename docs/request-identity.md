@@ -27,9 +27,9 @@ The bridge accepts only `app.mobilism.org` and `forum.mobilism.org`. WebView enf
 
 ### Avatars and badges
 
-Verified avatar URLs and role flags are cached on the device for the existing member cache interval (one hour by default), up to 256 members. Reopening the app reuses the remaining time. A cached author can still appear while lookups for other authors are cooling down.
+The app keeps up to 256 member identities on the device, keyed by username. A known avatar or badge stays available for 30 days. Reading it does not extend that window. Opening a profile updates its badges immediately. Profiles with neither an avatar nor a badge use the configured member cache interval. Coil stores the image bytes in its disk cache.
 
-An optional author lookup stops on a challenge. Opening a member's profile can use the existing verification flow. After the browser reaches the forum homepage, the original profile read must succeed and parse before the app reports recovery. The retry uses the existing request budget.
+An avatar supplied by a message or comment can be reused even when the profile lookup fails. Only profile ranks and groups supply badges. Optional lookups stop on a challenge. An explicit visit to a profile or Download Help opens the requested page for verification. The app displays the result directly once that page loads.
 
 ## Images
 

@@ -4,6 +4,7 @@ import android.content.ClipData
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +48,7 @@ import org.mobilism.material.designsystem.LocalAppTheme
 import org.mobilism.material.designsystem.LocalReducedMotion
 import org.mobilism.material.downloads.DownloadProblem
 import org.mobilism.material.downloads.ReleaseFiles
+import org.mobilism.material.downloads.showDownloadToast
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -97,9 +98,13 @@ fun DownloadLinkRow(
                                     }
                                 }
                                 catch (cancelled: CancellationException) { throw cancelled }
-                                catch (failure: DebridException) { error = failure.message }
-                                catch (failure: DownloadProblem) { error = failure.message }
-                                catch (_: Exception) { error = "The download could not be resolved. Please try again." }
+                                catch (failure: Exception) {
+                                    val message = when (failure) {
+                                        is DebridException, is DownloadProblem -> failure.message
+                                        else -> null
+                                    } ?: "The download could not be resolved. Please try again."
+                                    if (internal) showDownloadToast(context, message, long = true) else error = message
+                                }
                             }.invokeOnCompletion { requests.finish(link.url) }
                         }
                     }
@@ -110,7 +115,8 @@ fun DownloadLinkRow(
                 },
                 enabled = !resolving,
                 colors = colors,
-                compact = true,
+                minHeight = ButtonDefaults.MinHeight,
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
             ) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Column(Modifier.padding(horizontal = if (supported || resolving) 24.dp else 0.dp),
@@ -120,18 +126,17 @@ fun DownloadLinkRow(
                             internal && fileName != null -> fileName
                             else -> name
                         }
-                        Text(label, style = MaterialTheme.typography.labelLarge, maxLines = if (internal) 2 else 1,
+                        Text(label, style = MaterialTheme.typography.labelMedium, maxLines = if (internal) 2 else 1,
                             overflow = TextOverflow.Ellipsis)
                         if (!resolving && internal && fileName != null)
                             Text(name, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    if (resolving && !LocalReducedMotion.current) LoadingIndicator(Modifier.align(Alignment.CenterStart).size(20.dp))
+                    if (resolving && !LocalReducedMotion.current) LoadingIndicator(Modifier.align(Alignment.CenterStart).size(18.dp))
                     else if (!resolving && supported) Icon(Icons.Outlined.Check, null,
-                        Modifier.align(Alignment.CenterStart).size(20.dp).testTag("premium-download-check"))
+                        Modifier.align(Alignment.CenterStart).size(18.dp).testTag("premium-download-check"))
                 }
             }
             val linkLabel = fileName ?: name
-            if (internal) AppIconButton(Icons.Outlined.OpenInBrowser, "Open $linkLabel in browser", { open(link.url) })
             AppIconButton(Icons.Outlined.ContentCopy, "Copy $linkLabel link", {
                 scope.launch {
                     clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Download link", link.url)))

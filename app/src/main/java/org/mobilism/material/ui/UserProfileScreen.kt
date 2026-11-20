@@ -29,6 +29,7 @@ import org.mobilism.material.data.*
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.LoadingState
+import org.mobilism.material.members.memberBadges
 
 internal val LocalProfileHandler = staticCompositionLocalOf<((ProfileReference) -> Unit)?> { null }
 
@@ -48,11 +49,10 @@ internal fun UsernameLink(name: String, modifier: Modifier = Modifier, label: St
     Row(modifier.minimumInteractiveComponentSize().clip(MaterialTheme.shapes.small).then(profileLink),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (showAvatar && !identity?.avatar.isNullOrBlank()) {
-            MessageAvatar(name, identity.avatar, Modifier.size(24.dp))
+            MessageAvatar(name, identity.avatar, Modifier.size(24.dp), lookupIdentity = false)
         }
         MemberName(name, label, modifier = Modifier.weight(1f, fill = false), style = style, color = color,
-            maxLines = maxLines, fontWeight = fontWeight, administrator = identity?.administrator == true,
-            majorAndroidReleaser = identity?.majorAndroidReleaser == true)
+            maxLines = maxLines, fontWeight = fontWeight, badges = identity?.badges.orEmpty())
     }
 }
 
@@ -71,6 +71,7 @@ internal fun UserProfileScreen(reference: ProfileReference, load: suspend (Profi
         catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) {
             error = failure.forScreen()
+            verify = error?.verificationSite == VerificationSite.Forum
         }
     }
     if (verify) ForumAccessVerification(reference.url, onRead = { html ->
@@ -114,8 +115,7 @@ internal fun UserProfileContent(profile: UserProfile, onOpenContact: ((String) -
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     MessageAvatar(profile.username, profile.avatar, Modifier.size(80.dp), initialStyle = MaterialTheme.typography.headlineMedium)
                     MemberName(profile.username, style = MaterialTheme.typography.headlineSmall, color = colors.primary,
-                        textAlign = TextAlign.Center, maxLines = 2, administrator = AccountRole.Administrator in profile.roles,
-                        majorAndroidReleaser = profile.majorAndroidReleaser)
+                        textAlign = TextAlign.Center, maxLines = 2, badges = profile.memberBadges())
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         profile.roles.forEach { role -> ProfileRoleBadge(role,
                             if (role == AccountRole.Member) profile.rank.ifBlank { "Member" } else role.label) }

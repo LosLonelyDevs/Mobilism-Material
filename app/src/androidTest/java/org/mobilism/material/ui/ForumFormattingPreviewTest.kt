@@ -93,6 +93,22 @@ class ForumFormattingPreviewTest {
         assertTrue(original.getSpans(0, original.length, ForegroundColorSpan::class.java).isEmpty())
     }
 
+    @Test fun cleanupPutsTheAdvertisingNoticeOnTheNextLineInRegularWeight() {
+        val notice = "This app has no advertisements"
+        val source = "<b>Build Notes</b><br>Premium unlocked.<br><br><strong>$notice</strong><br><b>Other Notes</b>"
+        for (markdown in listOf(false, true)) {
+            val text = forumText(source, base, ForumFormattingOptions(cleanUpReleaseText = true, markdown = markdown))
+            assertTrue(text.toString(), text.contains("Premium unlocked.\n$notice\n\nOther Notes"))
+            val start = text.indexOf(notice)
+            assertTrue(text.getSpans(start, start + notice.length, StyleSpan::class.java).isEmpty())
+            assertTrue(text.getSpans(start, start + notice.length, ForegroundColorSpan::class.java).isEmpty())
+            assertTrue(text.getSpans(0, "Build Notes".length, StyleSpan::class.java).isNotEmpty())
+        }
+        val original = forumText(source, base)
+        val start = original.indexOf(notice)
+        assertTrue(original.getSpans(start, start + notice.length, StyleSpan::class.java).isNotEmpty())
+    }
+
     @Test fun captureOriginalCleanupMarkdownAndCombinedReleaseCards() {
         val options = mutableStateOf(ForumFormattingOptions())
         val content = mutableStateOf(releaseFixture)

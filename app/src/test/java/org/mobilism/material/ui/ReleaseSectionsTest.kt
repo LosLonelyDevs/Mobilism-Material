@@ -39,7 +39,9 @@ class ReleaseSectionsTest {
                 val html = "<p>Read books and organize your library.</p>" +
                     (if (before) details + ad else ad + details) +
                     "<u>More Info:</u><a href=\"https://example.com/store\">Store</a>"
-                val sections = ReleaseSections.parse(html).associate { it.kind to Jsoup.parse(it.html).text() }
+                val parsed = ReleaseSections.parse(html)
+                assertEquals(!before, parsed.single { it.kind == ReleaseSection.Mod }.startsWithAdvertisingNotice)
+                val sections = parsed.associate { it.kind to Jsoup.parse(it.html).text() }
                 assertEquals("$statement, before=$before", "Read books and organize your library. More Info:Store", sections[ReleaseSection.Description])
                 assertTrue(sections.getValue(ReleaseSection.Mod).contains("Premium features unlocked."))
                 assertTrue(sections.getValue(ReleaseSection.Mod).contains("License verification disabled."))

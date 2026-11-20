@@ -69,6 +69,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.launch
 import org.jsoup.Jsoup
@@ -163,17 +164,18 @@ fun ReleaseScreen(
     val groups = remember(content, preferences, debrid) { DownloadGroups.group(content?.downloads.orEmpty(), preferences, debrid) }
     val downloadOpened = { if (release?.section == ContentSection.Apps) onDownloaded(true) }
     val downloadSheetState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
-    var showTransfers by rememberSaveable { mutableStateOf(false) }
-    if (showTransfers) ReleaseTransfersDialog { showTransfers = false }
+    val requestDownloadNotifications = rememberDownloadNotificationRequest()
     val downloadFile: (suspend (String, suspend () -> String) -> Unit)? =
         if (preferences.internalDownloads && release != null) { original, direct ->
             val folder = preferences.downloadFolder ?: throw org.mobilism.material.downloads.DownloadProblem(
                 "Choose a folder in Downloads settings.")
-            org.mobilism.material.downloads.ReleaseDownloads.enqueue(context.applicationContext, original, release.title,
+            requestDownloadNotifications()
+            val started = org.mobilism.material.downloads.ReleaseDownloads.enqueue(context.applicationContext, original, release.title,
                 folder, preferences.extractZips, direct)
-            showTransfers = true
+            downloadsOpen = false
+            org.mobilism.material.downloads.showDownloadToast(context, if (started) "Downloading…" else "Already downloading")
         } else null
-    if (downloadsOpen && release != null && !showTransfers) downloadSheetState.SaveableStateProvider(release.id) {
+    if (downloadsOpen && release != null) downloadSheetState.SaveableStateProvider(release.id) {
         ReleaseDownloadsSheet(release.id, ReleaseTitles.parse(release.title, release.section).name,
             groups, content?.downloadNotesHtml.orEmpty(), release.browserUrl ?: "https://forum.mobilism.org/",
             debrid, downloadRequests, onResolveDownload, downloadOpened,
@@ -319,6 +321,7 @@ fun ReleaseScreen(
                         }
                         Box(Modifier.padding(bottom = 12.dp)) {
                             CollapsibleSection("${release.id}-${section.kind}", section.kind.title, icon, accent,
+                                compactHeaderBottom = cleanUpHeadings && section.startsWithAdvertisingNotice,
                                 expanded = descriptionExpanded.takeIf { section.kind == ReleaseSection.Description },
                                 onExpandedChange = onDescriptionExpanded.takeIf { section.kind == ReleaseSection.Description },
                                 headingStyle = MaterialTheme.typography.titleMedium,
@@ -404,7 +407,7 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     linkColor: Color = MaterialTheme.colorScheme.primary,
     textStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge,
-    cleanUp: Boolean = false, allowMarkdown: Boolean = true) {
+    cleanUp: Boolean = false, allowMarkdown: Boolean = true, messageQuoteColor: Color = Color.Unspecified) {
     val context = LocalContext.current
     val options = LocalForumFormatting.current.let {
         ForumFormattingOptions(cleanUp && it.cleanUpReleaseText, allowMarkdown && it.markdown)
@@ -428,9 +431,15 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
         if (font == AppFont.Geist) resources.getFont(org.mobilism.material.designsystem.R.font.geist_regular)
         else Typeface.create("sans-serif", Typeface.NORMAL)
     }
-    val richText = remember(html, baseUrl, context, options, linkArgb, textSize, density, headingArgb, requirementsArgb) {
+    val quoteGuide = MaterialTheme.colorScheme.primary.toArgb()
+    val richText = remember(html, baseUrl, context, options, linkArgb, textSize, density, headingArgb, requirementsArgb,
+        messageQuoteColor, quoteGuide) {
         forumText(html, baseUrl, options, density.density, linkArgb, with(density) { textStyle.fontSize.toPx() },
             headingColor = headingArgb, requirementsColor = requirementsArgb).apply {
+            if (messageQuoteColor != Color.Unspecified) {
+                val size = with(density) { (textSize - 1f).coerceAtLeast(1f).sp.roundToPx() }
+                styleMessageQuotes(density.density, quoteGuide, messageQuoteColor.toArgb(), size)
+            }
             getSpans(0, length, URLSpan::class.java).forEach { link ->
                 val start = getSpanStart(link)
                 val end = getSpanEnd(link)

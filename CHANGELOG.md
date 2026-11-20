@@ -3,8 +3,8 @@
 ## Unreleased
 
 - Compose and delete private messages
-- Choose download folders and optionally extract ZIPs
-- Show release views and local posting times
+- Choose download folders, track progress, and extract ZIPs
+- Show views, comments, and local posting times
 - Enable text cleanup and Markdown in Developer options
 - Name active filters and highlight original posters
 - various bug fixes and improvements

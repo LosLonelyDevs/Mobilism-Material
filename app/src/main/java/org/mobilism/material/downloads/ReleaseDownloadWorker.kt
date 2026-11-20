@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.work.*
@@ -20,7 +21,6 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.security.MessageDigest
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -53,9 +53,8 @@ internal object ReleaseDownloads {
                 throw DownloadProblem("This link needs a browser.")
             val label = title.take(120)
             val request = OneTimeWorkRequestBuilder<ReleaseDownloadWorker>()
-                .addTag(TAG).addTag("title:$label").addTag("time:" + System.currentTimeMillis())
+                .addTag(TAG)
                 .setInputData(workDataOf("link" to links.encrypt(url), "folder" to folder, "title" to label, "extract" to extract))
-                .keepResultsForAtLeast(1, TimeUnit.DAYS)
                 .build()
             manager.enqueueUniqueWork(key, ExistingWorkPolicy.KEEP, request).await()
             true
@@ -78,7 +77,6 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
         try {
             if (ReleaseDownloads.transferSlot.isLocked) {
                 setForeground(notification("Queued", -1))
-                setProgress(workDataOf("status" to "Queued"))
             }
             ReleaseDownloads.transferSlot.withLock {
                 // A stopped worker can be redelivered. Never repeat the host request automatically.
@@ -113,18 +111,22 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
                     "name" to displayName, "multiple" to (created.size > 1))
                 check(journal.edit().remove(id.toString()).commit())
                 created.clear()
-                notifySaved(target, message)
+                notifyResult(message, target)
                 Result.success(result)
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
+            // Closing a cancelled HTTP stream can surface as an IOException.
+            currentCoroutineContext().ensureActive()
+            if (isStopped) throw CancellationException("Download stopped")
             val message = when (error) {
-                is DownloadProblem -> error.message
+                is DownloadProblem -> error.message ?: "Download failed."
                 is SecurityException -> "Folder access was lost. Choose the download folder again."
                 is java.util.zip.ZipException -> "Invalid ZIP. Turn off extraction to save the original file."
                 else -> "Download failed. Check your connection and folder space, then tap the link to retry."
             }
+            notifyResult(message)
             Result.failure(workDataOf("status" to message))
         } finally {
             rollback()
@@ -193,36 +195,52 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
         val now = SystemClock.elapsedRealtime()
         if (!force && now - lastUpdate < 1000) return
         lastUpdate = now
-        setProgressAsync(workDataOf("status" to text, "percent" to percent, "name" to fileName))
         setForegroundAsync(notification(text, percent))
     }
 
-    private fun notification(text: String, percent: Int): ForegroundInfo {
+    private fun notificationBuilder(): NotificationCompat.Builder {
         val context = applicationContext
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(ReleaseDownloads.TAG, "Release downloads", NotificationManager.IMPORTANCE_LOW))
-        val notification = NotificationCompat.Builder(context, ReleaseDownloads.TAG).setSmallIcon(R.drawable.ic_app_update)
-            .setContentTitle(label).setContentText(text).setProgress(100, percent.coerceAtLeast(0), percent < 0)
+        return NotificationCompat.Builder(context, ReleaseDownloads.TAG).setSmallIcon(R.drawable.ic_app_update)
+            .setContentTitle(fileName ?: label.ifBlank { "Release download" })
+    }
+
+    private fun notification(text: String, percent: Int): ForegroundInfo {
+        val notification = notificationBuilder()
+            .setContentText(if (percent >= 0) "$text · $percent%" else text)
+            .setProgress(100, percent.coerceAtLeast(0), percent < 0)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setOnlyAlertOnce(true).setOngoing(true)
-            .addAction(0, "Cancel", WorkManager.getInstance(context).createCancelPendingIntent(id)).build()
+            .addAction(0, "Cancel", WorkManager.getInstance(applicationContext).createCancelPendingIntent(id)).build()
         return if (Build.VERSION.SDK_INT >= 29) ForegroundInfo(notificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         else ForegroundInfo(notificationId, notification)
     }
 
-    private fun notifySaved(target: Uri, message: String) {
+    private fun notifyResult(message: String, target: Uri? = null) {
         val context = applicationContext
+        showDownloadToast(context, if (target == null) message else "Download complete", long = target == null)
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED) return
-        // File publication has committed. A disabled channel or unavailable viewer cannot undo it.
         runCatching {
-            val open = PendingIntent.getActivity(context, notificationId, savedReleaseIntent(context, target),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-            val notification = NotificationCompat.Builder(context, ReleaseDownloads.TAG).setSmallIcon(R.drawable.ic_app_update)
-                .setContentTitle(label).setContentText(message).setContentIntent(open).setAutoCancel(true).build()
-            context.getSystemService(NotificationManager::class.java).notify("saved-release", notificationId, notification)
+            val result = notificationBuilder().setContentText(message)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(message)).setAutoCancel(true)
+                .setSubText(if (target == null) "Download failed" else "Download complete")
+            if (target != null) {
+                result.setContentIntent(PendingIntent.getActivity(context, notificationId, savedReleaseIntent(context, target),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+            }
+            context.getSystemService(NotificationManager::class.java).notify("release-result", notificationId, result.build())
         }
     }
 
+}
+
+internal fun showDownloadToast(context: Context, message: String, long: Boolean = false) {
+    val app = context.applicationContext
+    ContextCompat.getMainExecutor(app).execute {
+        Toast.makeText(app, message, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+    }
 }
 
 internal fun savedReleaseIntent(context: Context, uri: Uri): Intent =

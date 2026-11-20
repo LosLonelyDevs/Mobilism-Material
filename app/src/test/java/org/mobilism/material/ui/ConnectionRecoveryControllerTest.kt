@@ -1,7 +1,6 @@
 package org.mobilism.material.ui
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.*
@@ -118,50 +117,4 @@ class ConnectionRecoveryControllerTest {
         assertFalse(forum.await())
     }
 
-    @Test fun homepageWaitsForTheOriginalProfileAndDoesNotEscalateWhileItLoads() = runTest(dispatcher) {
-        val controller = ConnectionRecoveryController { testScheduler.currentTime }
-        controller.setForeground(true)
-        val reply = CompletableDeferred<String>()
-        val profile = async { controller.retryProfile { reply.await() } }
-        val reader = async { controller.recover(VerificationSite.Forum) }
-        runCurrent()
-        val id = controller.attempt.value!!.id
-        controller.browserPageReady(id)
-        controller.showInteraction(id)
-        runCurrent()
-        assertFalse(controller.attempt.value!!.interactive)
-        assertTrue(controller.completed.value.isEmpty())
-        assertFalse(reader.isCompleted)
-        reply.complete("profile")
-        assertEquals("profile", profile.await())
-        assertTrue(reader.await())
-        assertEquals(id, controller.completed.value[VerificationSite.Forum])
-    }
-
-    @Test fun rejectedProfileReleasesWaitersAndHonorsFailureCooldown() = runTest(dispatcher) {
-        val controller = ConnectionRecoveryController { testScheduler.currentTime }
-        controller.setForeground(true)
-        val profile = async { runCatching { controller.retryProfile { error("Wrong member") } } }
-        val reader = async { controller.recover(VerificationSite.Forum) }
-        runCurrent()
-        controller.browserPageReady(controller.attempt.value!!.id)
-        assertTrue(profile.await().isFailure)
-        assertFalse(reader.await())
-        assertTrue(controller.completed.value.isEmpty())
-        assertNull(controller.retryProfile { error("Unexpected retry") })
-    }
-
-    @Test fun lateProfileResponseCannotPublishAfterBackgrounding() = runTest(dispatcher) {
-        val controller = ConnectionRecoveryController()
-        controller.setForeground(true)
-        val reply = CompletableDeferred<String>()
-        val profile = async { controller.retryProfile { reply.await() } }
-        runCurrent()
-        controller.browserPageReady(controller.attempt.value!!.id)
-        runCurrent()
-        controller.setForeground(false)
-        reply.complete("late")
-        assertNull(profile.await())
-        assertTrue(controller.completed.value.isEmpty())
-    }
 }

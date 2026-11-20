@@ -3,6 +3,7 @@ package org.mobilism.material.ui
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -20,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.mobilism.material.data.DownloadHelp
 
 @Composable
@@ -41,14 +43,15 @@ internal fun DownloadNotes(html: String, baseUrl: String, onRelease: (Long) -> U
 internal fun DownloadHelpAction(onOpen: () -> Unit) {
     var held by remember { mutableStateOf(false) }
     if (held) ForumLinkActions(DownloadHelp.URL, onDismiss = { held = false })
+    val style = MaterialTheme.typography.bodyLarge
     Text(buildAnnotatedString {
         append("Trouble downloading? Read ")
-        withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
+        withStyle(SpanStyle(fontWeight = FontWeight.Bold,
             textDecoration = TextDecoration.Underline)) { append("This") }
         append(".")
     }, modifier = Modifier.fillMaxWidth().testTag("download-help-action")
         .combinedClickable(role = Role.Button, onClickLabel = "Open download help",
             onLongClickLabel = "Show link options", onClick = onOpen, onLongClick = { held = true })
-        .padding(vertical = 12.dp), style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurface)
+        .heightIn(min = 48.dp).padding(top = 4.dp, bottom = 8.dp),
+        style = style, fontSize = (style.fontSize.value - 1).sp, color = MaterialTheme.colorScheme.secondary)
 }

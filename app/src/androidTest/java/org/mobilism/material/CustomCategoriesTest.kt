@@ -179,10 +179,10 @@ class CustomCategoriesTest {
     }
 
     @Test fun cardsKeepTheirHeightAndPlaceCategoriesAfterDateAndViews() {
-        val sample = release().copy(title = "Aloha Browser v2.15.1 [Premium]", categoryId = 20, views = 139,
+        val sample = release().copy(title = "Aloha Browser v2.15.1 [Premium]", categoryId = 20, views = 139, replies = 1,
             author = "Reader", thumbnail = "file:///android_asset/readme/aloha.png")
         val unassigned = sample.copy(id = 2, title = "Flud - Torrent Downloader for Android v2.0", author = "Uploader",
-            thumbnail = "file:///android_asset/readme/flud.png", publishedAt = sample.publishedAt + 3600, categoryId = null, views = 37)
+            thumbnail = "file:///android_asset/readme/flud.png", publishedAt = sample.publishedAt + 3600, categoryId = null, views = 37, replies = 0)
         var compact by mutableStateOf(true)
         compose.setContent { MobilismTheme(reduceMotion = true) {
             CompositionLocalProvider(LocalForumCategoryNames provides mapOf(20L to "Photography")) {
@@ -201,14 +201,17 @@ class CustomCategoriesTest {
             compose.onNode(hasText(" · ${timeOf(unassigned)}", substring = true) and hasAnyAncestor(hasTestTag("release-2")),
                 useUnmergedTree = true).assertExists()
             val views = compose.onNodeWithContentDescription("139 views", useUnmergedTree = true).getUnclippedBoundsInRoot()
+            val comments = compose.onNodeWithContentDescription("1 comment", useUnmergedTree = true).getUnclippedBoundsInRoot()
+            compose.onNodeWithContentDescription("0 comments", useUnmergedTree = true).assertDoesNotExist()
             val visibleViews = compose.onNodeWithContentDescription("139 views", useUnmergedTree = true).fetchSemanticsNode()
             assertEquals(visibleViews.size.width.toFloat(), visibleViews.boundsInRoot.width, 2f)
             val chip = compose.onNodeWithText("Photography").getUnclippedBoundsInRoot()
             val card = compose.onNodeWithTag("release-1").getUnclippedBoundsInRoot()
-            assertTrue(date.right <= views.left && views.right <= chip.left)
+            assertTrue(views.left - date.right >= 9.dp && comments.left >= views.right && comments.right <= chip.left)
             assertEquals((date.top + date.bottom).value / 2, (chip.top + chip.bottom).value / 2, 1f)
             assertTrue((card.bottom - chip.bottom) <= 16.dp)
             val artwork = compose.onNodeWithTag("release-artwork-1", useUnmergedTree = true).getUnclippedBoundsInRoot()
+            assertTrue(date.top - artwork.bottom in 0.dp..20.dp)
             val uploader = compose.onNode(hasText("Reader") and hasAnyAncestor(hasTestTag("release-1")),
                 useUnmergedTree = true).getUnclippedBoundsInRoot()
             val title = compose.onNode(hasText("Aloha Browser", substring = true) and hasAnyAncestor(hasTestTag("release-1")),

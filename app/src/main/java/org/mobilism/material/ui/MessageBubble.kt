@@ -36,6 +36,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
+import androidx.core.graphics.ColorUtils
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -66,6 +69,11 @@ internal fun MessageBubble(message: PrivateMessage, username: String, onRead: ()
     val colors = MaterialTheme.colorScheme
     val fill = if (outgoing) colors.primaryContainer else colors.tertiaryContainer
     val foreground = if (outgoing) colors.onPrimaryContainer else colors.onTertiaryContainer
+    val secondary = colors.secondary
+    val quoteColor = remember(secondary, foreground, fill) {
+        (0..4).map { lerp(secondary, foreground, it / 4f) }
+            .firstOrNull { ColorUtils.calculateContrast(it.toArgb(), fill.toArgb()) >= 4.5 } ?: foreground
+    }
     val accent = if (outgoing) colors.primary else colors.tertiary
     val onAccent = if (outgoing) colors.onPrimary else colors.onTertiary
     Box(Modifier.fillMaxWidth(), contentAlignment = if (outgoing) Alignment.CenterEnd else Alignment.CenterStart) {
@@ -97,7 +105,8 @@ internal fun MessageBubble(message: PrivateMessage, username: String, onRead: ()
                             verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Box(Modifier.testTag("message-content-${message.id}")) {
                                 ReleaseBody(message.contentHtml, "https://forum.mobilism.org/", onRelease,
-                                    contentColor = foreground, linkColor = foreground, allowMarkdown = false)
+                                    contentColor = foreground, linkColor = foreground, allowMarkdown = false,
+                                    messageQuoteColor = quoteColor)
                             }
                             if (!message.read && message.to.equals(username, ignoreCase = true)) AppTextButton("Mark as read",
                                 onRead, enabled = !marking)

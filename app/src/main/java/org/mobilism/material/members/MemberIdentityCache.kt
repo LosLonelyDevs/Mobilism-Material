@@ -15,10 +15,13 @@ class MemberIdentityCache(
             val saved = JSONObject(raw)
             val age = wallTime() - saved.getLong("saved")
             val savedTtl = saved.getLong("ttl")
-            if (age !in 0 until savedTtl) return@runCatching null
-            if (age >= ttl) return null
-            Entry(MemberIdentity(saved.optString("avatar").takeIf { it.isNotEmpty() },
-                saved.getBoolean("admin"), saved.getBoolean("major")), minOf(ttl, savedTtl) - age)
+            val badges = MemberBadge.entries.filterTo(mutableSetOf()) { saved.optBoolean(it.key) }
+            if (saved.optBoolean("major")) badges.add(MemberBadge.MajorReleaser)
+            val identity = MemberIdentity(saved.optString("avatar").takeIf { it.isNotEmpty() },
+                badges, saved.optBoolean("badgesKnown", true))
+            val lifetime = identity.displayLifetime(minOf(ttl, savedTtl))
+            if (age !in 0 until lifetime) return@runCatching null
+            Entry(identity, lifetime - age)
         }.getOrNull()
         if (entry == null) preferences.edit().remove(key).apply()
         return entry
@@ -26,8 +29,8 @@ class MemberIdentityCache(
 
     internal fun put(key: String, identity: MemberIdentity, ttl: Long) {
         val saved = JSONObject().put("saved", wallTime()).put("ttl", ttl)
-            .put("avatar", identity.avatar.orEmpty()).put("admin", identity.administrator)
-            .put("major", identity.majorAndroidReleaser)
+            .put("avatar", identity.avatar.orEmpty()).put("badgesKnown", identity.badgesKnown)
+        identity.badges.forEach { saved.put(it.key, true) }
         val edit = preferences.edit().putString(key, saved.toString())
         if (!preferences.contains(key)) {
             val entries = preferences.all

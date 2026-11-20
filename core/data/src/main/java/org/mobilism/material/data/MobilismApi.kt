@@ -30,7 +30,8 @@ import org.json.JSONObject
 internal class MobilismApi(private val context: Context, private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
     client: OkHttpClient = OkHttpClient(), private val challengeRecovery: ChallengeRecovery = ChallengeRecovery.None,
     private val requestLimits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
-    requestTraffic: RequestTrafficSink = RequestTrafficSink.None) {
+    requestTraffic: RequestTrafficSink = RequestTrafficSink.None,
+    private val onLatestApps: (LatestAppsPage) -> Unit = {}) {
     private val client = client.newBuilder()
         .apply {
             interceptors().add(0, DiagnosticInterceptor(diagnostics))
@@ -81,7 +82,10 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         val path = "release/${section.apiPath}/category/$category/page/$page/limit/$PAGE_SIZE/orderby/${order.apiValue}/desc/0"
         val response = request(path, token, emptyRecordsAsArray = true, hideAdult = hideAdult).getJSONArray("response")
         return ReleaseJson.page(response).let { result ->
-            result.copy(items = result.items.map { it.copy(section = it.section ?: section) })
+            result.copy(items = result.items.map { it.copy(section = it.section ?: section) }).also { pageResult ->
+                if (section == ContentSection.Apps && order == FeedOrder.Latest)
+                    onLatestApps(LatestAppsPage(pageResult.items, page == 1 && categoryId == null, hideAdult))
+            }
         }
     }
 
@@ -121,7 +125,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
     }
 
     // This is a forum guide, not a release in the app catalog.
-    suspend fun downloadHelp(): DiscussionTopic = DownloadHelp.parse(forumPage(DownloadHelp.URL.toHttpUrl()))
+    suspend fun downloadHelp(): DiscussionTopic = DownloadHelp.parse(directForumPage(DownloadHelp.URL.toHttpUrl()))
 
     suspend fun comments(id: Long, page: Int, token: String?): CommentPage {
         require(id > 0 && page > 0)
@@ -234,22 +238,12 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         }
     }
 
-    suspend fun profile(reference: ProfileReference, allowInteraction: Boolean = true): UserProfile {
-        val url = reference.url.toHttpUrl()
-        var verified: UserProfile? = null
-        val html = forumReads.request(url.toString()) {
-            readForumPage(url) { challenge ->
-                if (!allowInteraction) throw challenge
-                challengeRecovery.retryProfile {
-                    withContext(Dispatchers.IO) {
-                        forumReads.checkAllowed()
-                        readForumPage(url).also { verified = ForumProfiles.parse(it, reference) }
-                    }
-                } ?: throw challenge
-            }
-        }
-        return verified ?: ForumProfiles.parse(html, reference)
-    }
+    suspend fun profile(reference: ProfileReference): UserProfile =
+        ForumProfiles.parse(directForumPage(reference.url.toHttpUrl()), reference)
+
+    // These screens can display the requested page directly when the forum requires verification.
+    private suspend fun directForumPage(url: okhttp3.HttpUrl): String =
+        forumReads.request(url.toString()) { readForumPage(url) }
 
     private suspend fun forumTopic(id: Long, commentsStart: Int? = null): String {
         val url = "https://forum.mobilism.org/viewtopic.php".toHttpUrl().newBuilder()
@@ -285,7 +279,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                 val challenged = NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", html,
                     VerificationSite.Forum)?.kind == FailureKind.Challenge
                 forumReads.response(response.code, response.header("Retry-After"), challenged)
-                if (!response.isSuccessful || response.header("cf-mitigated") == "challenge") {
+                if (!response.isSuccessful || challenged) {
                     NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", html,
                         VerificationSite.Forum)?.let { throw it }
                     throw ApiFailure(FailureKind.Server, "The forum could not load this page (HTTP ${response.code}).", response.code)

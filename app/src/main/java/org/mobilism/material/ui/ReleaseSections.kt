@@ -6,7 +6,7 @@ import org.jsoup.nodes.Node
 import org.jsoup.nodes.TextNode
 
 enum class ReleaseSection(val title: String) { Description("Description"), Changes("What's new"), Mod("Mod info") }
-data class ReleaseTextSection(val kind: ReleaseSection, val html: String)
+data class ReleaseTextSection(val kind: ReleaseSection, val html: String, val startsWithAdvertisingNotice: Boolean = false)
 
 internal data class ReleaseLine(
     val nodes: List<TextNode>,
@@ -35,6 +35,8 @@ object ReleaseSections {
         \s+(?:by|from)\s+[^:!?\n]{1,80}:?$""")
     private val advertising = Regex("""(?i)^this\s+(?:app|application|game)\s+(?:has|contains|includes|does\s+not\s+contain)\s+(?:[\w-]+\s+){0,3}(?:advertisements?|ads)[.!]?$""")
     private val styledTags = setOf("b", "strong", "u", "h1", "h2", "h3", "h4", "h5", "h6")
+
+    internal fun isAdvertisingNotice(text: String) = advertising.matches(text.trim())
 
     fun parse(html: String, releaseTitle: String = ""): List<ReleaseTextSection> {
         val body = Jsoup.parseBodyFragment(html).body()
@@ -71,7 +73,7 @@ object ReleaseSections {
                     line.kind = current
                     line.boundary = true
                 }
-                advertising.matches(labelText) -> {
+                isAdvertisingNotice(labelText) -> {
                     line.kind = ReleaseSection.Mod
                     line.advertising = true
                     line.boundary = true
@@ -100,9 +102,12 @@ object ReleaseSections {
             return output
         }
         val fragments = body.childNodes().flatMap { split(it) }
+        val firstModLine = lines.firstOrNull { line -> line.kind == ReleaseSection.Mod &&
+            line.nodes.any { (replacements[it] ?: it.wholeText).isNotBlank() } }
         return ReleaseSection.entries.mapNotNull { kind ->
             val content = fragments.filter { it.first == kind }.joinToString("") { it.second.outerHtml() }
-            if (Jsoup.parseBodyFragment(content).text().isBlank()) null else ReleaseTextSection(kind, content)
+            if (Jsoup.parseBodyFragment(content).text().isBlank()) null else ReleaseTextSection(kind, content,
+                startsWithAdvertisingNotice = kind == ReleaseSection.Mod && firstModLine?.advertising == true)
         }
     }
 

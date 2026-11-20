@@ -108,7 +108,7 @@ class MemberIdentityStoreTest {
         var calls = 0
         val store = MemberIdentityStore({ calls++; error("Unavailable") }, { time })
         store.remember(profile(setOf(AccountRole.Administrator)))
-        time += 60 * 60_000
+        time += 30L * 24 * 60 * 60_000
         store.request("Example"); advanceUntilIdle()
         assertNull(store.identities.value["example"])
         store.request("Example"); advanceUntilIdle()
@@ -177,6 +177,29 @@ class MemberIdentityStoreTest {
         assertNull(store.identities.value.getValue("example").avatar)
     }
 
+    @Test fun anAvatarFromAMessageSurvivesAChallengeAndDoesNotImplyABadge() = runTest {
+        var time = 1L
+        var calls = 0
+        val store = MemberIdentityStore({ calls++; error("Challenge") }, { time })
+        store.rememberAvatar(" Example ", "https://example.org/message.png")
+        repeat(3) { store.request("EXAMPLE") }
+        val observed = store.identities.value.getValue("example")
+        assertEquals("https://example.org/message.png", observed.avatar)
+        assertTrue(observed.badges.isEmpty())
+        assertFalse(observed.badgesKnown)
+        assertEquals(1, calls)
+        store.remember(profile(setOf(AccountRole.Moderator)).copy(avatar = null))
+        time += 24 * 60 * 60_000L
+        store.request("Example")
+        assertEquals(1, calls)
+        val verified = store.identities.value.getValue("example")
+        assertEquals(observed.avatar, verified.avatar)
+        assertEquals(setOf(MemberBadge.Moderator), verified.badges)
+        store.remember(profile().copy(avatar = null))
+        assertTrue(store.identities.value.getValue("example").badges.isEmpty())
+        assertNull(store.identities.value.getValue("example").avatar)
+    }
+
     @Test fun avatarsAndBadgesShareOneBackgroundLookupAndRefreshTogether() = runTest {
         var time = 1L
         var calls = 0
@@ -190,7 +213,11 @@ class MemberIdentityStoreTest {
         assertTrue(identity.majorAndroidReleaser)
 
         current = profile().copy(avatar = null, rank = "Member")
-        time += 60 * 60_000
+        time += 24L * 60 * 60_000
+        store.request("Example")
+        assertEquals(1, calls)
+        assertTrue(store.identities.value.getValue("example").administrator)
+        time += 29L * 24 * 60 * 60_000
         store.request("Example"); advanceUntilIdle()
         val refreshed = store.identities.value.getValue("example")
         assertEquals(2, calls)

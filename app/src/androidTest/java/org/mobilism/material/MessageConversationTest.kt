@@ -57,6 +57,33 @@ class MessageConversationTest {
         conversation = listOf(incoming, outgoing)))
     private var openedRelease: Long? = null
 
+    @Test fun bothBubblesIndentAndTintOnlyTheQuotedPassage() {
+        fun quoted(author: String, body: String) = "<blockquote><b>$author wrote:</b><br>Quoted passage</blockquote><p>$body</p>"
+        state.value = state.value.copy(conversation = listOf(
+            incoming.copy(contentHtml = quoted("Reader", "Thanks for the update.")),
+            outgoing.copy(contentHtml = quoted("Morgan", "Glad it helps."))))
+        setScreen()
+        for (author in listOf("Reader", "Morgan")) {
+            onView(withText(containsString("$author wrote:"))).check { view, error ->
+                if (error != null) throw error
+                val body = view as TextView
+                val text = body.text as Spanned
+                val quote = text.indexOf("Quoted passage")
+                val end = quote + "Quoted passage".length
+                val color = text.getSpans(quote, end, android.text.style.ForegroundColorSpan::class.java).single()
+                assertNotEquals(body.currentTextColor, color.foregroundColor)
+                assertEquals(0, text.getSpanStart(color))
+                assertTrue(text.getSpanEnd(color) >= end && text.subSequence(end, text.getSpanEnd(color)).isBlank())
+                assertTrue(text.getSpans(quote, end, android.text.style.AbsoluteSizeSpan::class.java).single().size < body.textSize)
+                assertTrue(text.getSpans(0, author.length, android.text.style.StyleSpan::class.java).any { it.style == android.graphics.Typeface.BOLD })
+                val layout = body.layout
+                assertTrue(layout.getParagraphLeft(layout.getLineForOffset(quote)) - layout.getParagraphLeft(layout.lineCount - 1)
+                    >= 20 * body.resources.displayMetrics.density)
+            }
+        }
+        capture("conversation-quotes")
+    }
+
     @Test fun bubblesKeepDirectionTimestampsAndIndependentCollapseStateAfterRestoration() {
         val restoration = StateRestorationTester(compose)
         setScreen(restoration = restoration)

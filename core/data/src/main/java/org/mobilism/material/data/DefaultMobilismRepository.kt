@@ -13,8 +13,9 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     challengeRecovery: ChallengeRecovery = ChallengeRecovery.None,
     private val requestLimits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
     requestTraffic: RequestTrafficSink = RequestTrafficSink.None,
+    onLatestApps: (LatestAppsPage) -> Unit = {},
 ) : MobilismRepository, MessagesRepository, DiscussionsRepository, HomeRepository {
-    private val api = MobilismApi(context.applicationContext, diagnostics, client, challengeRecovery, requestLimits, requestTraffic)
+    private val api = MobilismApi(context.applicationContext, diagnostics, client, challengeRecovery, requestLimits, requestTraffic, onLatestApps)
     private val store = SessionStore(context.applicationContext)
     private val reactions = context.getSharedPreferences("release-reactions", Context.MODE_PRIVATE)
     private val authMutex = Mutex()
@@ -151,8 +152,6 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
 
     suspend fun downloadHelp(): DiscussionTopic = api.downloadHelp()
     suspend fun profile(reference: ProfileReference): UserProfile = api.profile(reference)
-
-    suspend fun profileForIdentity(reference: ProfileReference): UserProfile = api.profile(reference, allowInteraction = false)
 
     override suspend fun toggleLike(release: Release): Boolean = withSession { token ->
         val account = session?.takeIf { it.accessToken == token }

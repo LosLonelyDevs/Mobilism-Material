@@ -60,6 +60,11 @@ internal fun forumText(html: String, baseUrl: String, options: ForumFormattingOp
         // Add theme colors after sanitization so only the app supplies presentation attributes.
         safe.select("p, h1, h2, h3, h4, h5, h6").forEach { block ->
             if (block.parents().any { it.normalName() in setOf("pre", "code", "tt", "blockquote") }) return@forEach
+            if (ReleaseSections.isAdvertisingNotice(block.text()) && block.selectFirst("tt") == null) {
+                block.tagName("p")
+                block.select("b, strong").unwrap()
+                return@forEach
+            }
             val requirements = requirementsLabel.containsMatchIn(block.text()) &&
                 !block.childNodes().all { it is Element && it.normalName() == "tt" }
             if (requirements || block.normalName() != "p") {
@@ -84,6 +89,12 @@ internal fun forumText(html: String, baseUrl: String, options: ForumFormattingOp
         while (isNotEmpty() && last().isWhitespace() && !literalAt(length - 1)) delete(length - 1, length)
         while (isNotEmpty() && first().isWhitespace() && !literalAt(0)) delete(0, 1)
         if (options.cleanUpReleaseText) {
+            Regex("""\n\n([^\n]+)""").findAll(this).filter { match ->
+                val line = match.groups[1]!!
+                ReleaseSections.isAdvertisingNotice(line.value) &&
+                    getSpans(line.range.first, line.range.last + 1, TypefaceSpan::class.java).isEmpty() &&
+                    getSpans(line.range.first, line.range.last + 1, QuoteSpan::class.java).isEmpty()
+            }.map { it.range.first }.toList().asReversed().forEach { delete(it, it + 1) }
             val titleEnd = indexOf('\n')
             val subtitleStart = titleEnd + 2
             if (titleEnd >= 0 && subtitleStart < length && this[titleEnd + 1] == '\n' &&

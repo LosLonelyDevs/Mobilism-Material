@@ -1,6 +1,7 @@
 package org.mobilism.material.ui
 
 import android.net.Uri
+import android.content.Context
 import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -21,18 +22,20 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import org.json.JSONTokener
 
+internal val LocalForumVerificationBrowser = staticCompositionLocalOf<(Context) -> WebView> { { WebView(it) } }
+
 @Composable
 internal fun ForumAccessVerification(url: String, onRead: (String) -> Boolean, onDismiss: () -> Unit) {
     val read by rememberUpdatedState(onRead)
     val dismiss by rememberUpdatedState(onDismiss)
     val target = remember(url) { Uri.parse(url) }
+    val createBrowser = LocalForumVerificationBrowser.current
     var browser by remember { mutableStateOf<WebView?>(null) }
     var complete by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("Complete the forum check, then tap Continue.") }
     fun accepts(uri: Uri): Boolean = uri.scheme == "https" && uri.host == "forum.mobilism.org" &&
         uri.userInfo == null && uri.port in listOf(-1, 443) && uri.path == target.path &&
         listOf("u", "t").all { target.getQueryParameter(it)?.let { expected -> uri.getQueryParameter(it) == expected } ?: true }
-    fun readPage(view: WebView, report: Boolean = false) {
+    fun readPage(view: WebView) {
         if (complete || view.url?.let { accepts(Uri.parse(it)) } != true) return
         view.evaluateJavascript("(function(){var html=document.documentElement.outerHTML;return html.length<=2097152?html:null})()") { raw ->
             if (browser !== view || complete) return@evaluateJavascript
@@ -42,7 +45,6 @@ internal fun ForumAccessVerification(url: String, onRead: (String) -> Boolean, o
                 CookieManager.getInstance().flush()
                 dismiss()
             }
-            else if (report) message = "The page is not ready. Complete the forum check, then tap Continue."
         }
     }
     LaunchedEffect(browser) {
@@ -54,13 +56,13 @@ internal fun ForumAccessVerification(url: String, onRead: (String) -> Boolean, o
             Column(Modifier.statusBarsPadding().navigationBarsPadding()) {
                 Text("Verify forum access", Modifier.padding(16.dp), style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.primary)
-                Text(message, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodyMedium)
+                Text("This page closes when the forum finishes checking.", Modifier.padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.bodyMedium)
                 Row {
                     TextButton(onClick = onDismiss) { Text("Cancel") }
                     TextButton(onClick = { browser?.reload() }) { Text("Reload") }
-                    TextButton(onClick = { browser?.let { readPage(it, true) } }) { Text("Continue") }
                 }
-                AndroidView(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context -> WebView(context).apply {
+                AndroidView(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context -> createBrowser(context).apply {
                     settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(context)
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true

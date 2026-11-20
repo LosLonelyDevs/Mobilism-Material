@@ -14,7 +14,7 @@ class FollowingWorker(context: Context, parameters: WorkerParameters) : Coroutin
         if (!app.followPreferences.state.value.backgroundChecks) Result.success()
         else {
             app.remoteControl.refresh()
-            withContext(BackgroundMobilismRead) { app.following.check() }
+            withContext(BackgroundMobilismRead) { app.following.check(background = true) }
             Result.success()
         }
     } catch (cancelled: CancellationException) { throw cancelled }
@@ -23,10 +23,10 @@ class FollowingWorker(context: Context, parameters: WorkerParameters) : Coroutin
 
 object FollowingSchedule {
     const val NAME = "followed-app-updates"
-    fun update(context: Context, enabled: Boolean, hours: Long) {
+    fun update(context: Context, enabled: Boolean, minutes: Long) {
         val manager = WorkManager.getInstance(context)
         if (!enabled) { manager.cancelUniqueWork(NAME); return }
-        val request = PeriodicWorkRequestBuilder<FollowingWorker>(maxOf(hours, FollowCheckPolicy.MIN_BACKGROUND_INTERVAL_HOURS), TimeUnit.HOURS)
+        val request = PeriodicWorkRequestBuilder<FollowingWorker>(minutes, TimeUnit.MINUTES)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setInitialDelay(kotlin.random.Random.nextLong(15, 61), TimeUnit.MINUTES).build()
         manager.enqueueUniquePeriodicWork(NAME, ExistingPeriodicWorkPolicy.UPDATE, request)

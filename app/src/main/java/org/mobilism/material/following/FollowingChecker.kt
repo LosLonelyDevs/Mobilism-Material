@@ -15,6 +15,7 @@ class FollowingChecker(
     private val library: AppLibraryStore, private val repository: MobilismRepository,
     private val device: InstalledApps, private val preferences: FollowingPreferences, private val notifications: FollowingNotifications,
     private val limits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
+    private val latestApps: suspend () -> List<Release> = { emptyList() },
 ) {
     private val mutex = Mutex()
     private val mutableState = MutableStateFlow(FollowCheckState())
@@ -33,47 +34,79 @@ class FollowingChecker(
         }
     }
 
-    suspend fun check(): FollowCheckState {
-        if (!mutex.tryLock()) return mutableState.value
-        return try { checkDue() } finally { mutex.unlock() }
+    suspend fun check(background: Boolean = false): FollowCheckState = withContext(Dispatchers.Default) {
+        checkUpdates(background)
     }
 
-    private suspend fun checkDue(): FollowCheckState {
-        val now = System.currentTimeMillis()
-        val policy = limits()
-        val watches = FollowCheckPolicy.due(library.state.value, now, policy)
-        if (watches.isEmpty() || !preferences.beginCheck(now, policy)) return mutableState.value
-        mutableState.value = FollowCheckState(busy = true, total = watches.size)
+    private suspend fun checkUpdates(background: Boolean): FollowCheckState {
+        if (!mutex.tryLock()) return mutableState.value
         try {
-            if (repository.auth.value == AuthState.Restoring) repository.restoreSession()
+            if (library.state.value.none { it.watched }) return FollowCheckState()
+            val policy = limits()
+            mutableState.value = FollowCheckState(busy = true)
+            val candidates = if (policy.followCacheBatchSize == 0) emptyList() else try { latestApps() }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { emptyList() }
+            val byName = candidates.groupBy { ReleaseTitles.parse(it.title).name.lowercase(java.util.Locale.ROOT) }
             refreshInstalled()
-            for (original in watches) {
+            val watches = library.state.value.filter { it.watched }.sortedBy { it.checkedAt ?: 0L }
+            val hits = mutableSetOf<Long>()
+            for (entry in watches) {
+                if (hits.size >= policy.followCacheBatchSize) break
+                val matches = byName[ReleaseTitles.parse(entry.release.title).name.lowercase(java.util.Locale.ROOT)] ?: continue
+                val current = FollowingVersions.matchingInstalled(entry, installed.value)
+                val baseline = FollowingVersions.baseline(entry, current)
+                val compatible = matches.filter { release ->
+                    val title = ReleaseTitles.parse(release.title)
+                    ReleaseVersions.sameApp(release, entry.release) &&
+                        (ReleaseVersions.isPreview(baseline) || !ReleaseVersions.isPreview(title)) &&
+                        (ReleaseVersions.compare(title, baseline) ?: -1) >= 0
+                }
+                if (compatible.isEmpty()) continue
+                applyResult(entry, current, compatible)
+                hits.add(entry.release.id)
+            }
+            val now = System.currentTimeMillis()
+            val due = FollowCheckPolicy.due(watches.filterNot { it.release.id in hits }, now, policy)
+            val direct = if (due.isNotEmpty() && preferences.beginCheck(now, policy, background)) due else emptyList()
+            mutableState.value = FollowCheckState(busy = true, total = hits.size + direct.size, done = hits.size)
+            if (direct.isNotEmpty() && repository.auth.value == AuthState.Restoring) repository.restoreSession()
+            for (original in direct) {
                 val entry = library.state.value.firstOrNull { it.watched && it.release.id == original.release.id } ?: continue
                 try {
-                    val candidates = repository.search(ReleaseTitles.parse(entry.release.title).name, SearchScope.Apps, 1).items
-                    // Read again after the request. An install can finish while the search runs.
+                    val results = repository.search(ReleaseTitles.parse(entry.release.title).name, SearchScope.Apps, 1).items
                     refreshInstalled()
-                    val current = FollowingVersions.matchingInstalled(entry, installed.value)
-                    val result = FollowingVersions.evaluate(entry, current, candidates)
-                    library.checked(entry, result.latest, result.update)
-                    val stillFollowed = library.state.value.firstOrNull { it.watched && it.release.id == entry.release.id && it.linkedPackage == entry.linkedPackage }
-                    val update = result.update
-                    if (stillFollowed != null && update != null) {
-                        val key = FollowingVersions.notificationKey(update)
-                        if (preferences.state.value.notifications && stillFollowed.lastNotifiedVersion != key &&
-                            notifications.post(stillFollowed, update, FollowingVersions.baseline(entry, current), current != null)) {
-                            library.notified(entry.release.id, key)
-                        }
-                    } else notifications.cancel(entry.release.id)
+                    applyResult(entry, FollowingVersions.matchingInstalled(entry, installed.value), results)
+                    mutableState.update { it.copy(done = it.done + 1) }
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) {
                     library.failed(entry, "Couldn't check for updates. Try again.")
                     mutableState.update { it.copy(failed = it.failed + 1) }
                     break
                 }
-                mutableState.update { it.copy(done = it.done + 1) }
             }
-        } finally { mutableState.update { it.copy(busy = false) } }
+        } finally {
+            mutableState.update { it.copy(busy = false) }
+            mutex.unlock()
+        }
         return mutableState.value
+    }
+
+    private fun applyResult(entry: LibraryEntry, current: InstalledVersion?, candidates: List<Release>) {
+        val followed = library.state.value.firstOrNull { it.watched && it.release.id == entry.release.id &&
+            it.linkedPackage == entry.linkedPackage } ?: return
+        val result = FollowingVersions.evaluate(followed, current, candidates)
+        library.checked(followed, result.latest, result.update)
+        val saved = library.state.value.firstOrNull { it.watched && it.release.id == followed.release.id &&
+            it.linkedPackage == followed.linkedPackage } ?: return
+        val update = result.update
+        if (update == null) {
+            notifications.cancel(entry.release.id)
+        } else {
+            val key = FollowingVersions.notificationKey(update)
+            if (preferences.state.value.notifications && saved.lastNotifiedVersion != key &&
+                notifications.post(saved, update, FollowingVersions.baseline(saved, current), current != null))
+                library.notified(entry.release.id, key)
+        }
     }
 }

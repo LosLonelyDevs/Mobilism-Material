@@ -15,7 +15,27 @@ import org.mobilism.material.data.AccountRole
 import org.mobilism.material.data.ProfileReference
 import org.mobilism.material.data.UserProfile
 
-data class MemberIdentity(val avatar: String?, val administrator: Boolean, val majorAndroidReleaser: Boolean = false)
+enum class MemberBadge(val key: String, val label: String) {
+    Administrator("admin", "Administrator"), Moderator("moderator", "Moderator"),
+    Developer("developer", "Developer"), MajorReleaser("major-android-releaser", "Major Android Releaser")
+}
+
+internal fun UserProfile.memberBadges(): Set<MemberBadge> = buildSet {
+    if (AccountRole.Administrator in roles) add(MemberBadge.Administrator)
+    if (AccountRole.Moderator in roles) add(MemberBadge.Moderator)
+    if (AccountRole.Developer in roles) add(MemberBadge.Developer)
+    if (majorAndroidReleaser) add(MemberBadge.MajorReleaser)
+}
+
+data class MemberIdentity(val avatar: String?, val badges: Set<MemberBadge>,
+    val badgesKnown: Boolean = true) {
+    val administrator get() = MemberBadge.Administrator in badges
+    val majorAndroidReleaser get() = MemberBadge.MajorReleaser in badges
+    internal val hasDisplayDetails get() = avatar != null || badges.isNotEmpty()
+    internal fun displayLifetime(freshMillis: Long): Long =
+        if (hasDisplayDetails) maxOf(freshMillis, 30L * 24 * 60 * 60_000)
+        else freshMillis
+}
 
 class MemberIdentityStore(
     private val load: suspend (ProfileReference) -> UserProfile,
@@ -26,6 +46,7 @@ class MemberIdentityStore(
 ) {
     private val lock = Any()
     private val expires = linkedMapOf<String, Long>()
+    private val retryAfter = mutableMapOf<String, Long>()
     private val requests = Mutex()
     private var lastRequest: Long? = null
     private var failedAt: Long? = null
@@ -37,7 +58,7 @@ class MemberIdentityStore(
     suspend fun restoreCached(username: String): Boolean {
         val key = key(username)
         if (key.isEmpty()) return false
-        if (fresh(key)) return key in identities.value
+        if (fresh(key)) return identities.value[key]?.badgesKnown == true
         return cache != null && withContext(Dispatchers.IO) { restore(key, cache) }
     }
 
@@ -60,15 +81,15 @@ class MemberIdentityStore(
             } catch (failure: Exception) {
                 synchronized(lock) {
                     // A profile opened manually may have verified access while this request was running.
-                    if ((expires[key] ?: 0) <= now()) {
-                        mutableIdentities.value = mutableIdentities.value - key
+                    if (dueForMember(key)) {
                         val missing = failure is ApiFailure && failure.httpStatus in setOf(400, 404)
                         val cooldown = if (missing) limits().memberMissingCacheTtlMs else {
                             failures = (failures + 1).coerceAtMost(5)
                             failedAt = now()
                             failureCooldown()
                         }
-                        expires[key] = now() + cooldown
+                        retryAfter[key] = now() + cooldown
+                        if (key !in mutableIdentities.value) expires[key] = now() + cooldown
                         trim()
                     }
                 }
@@ -86,44 +107,70 @@ class MemberIdentityStore(
         val policy = limits()
         if (policy == previousLimits) return
         if (policy.memberCacheTtlMs != previousLimits.memberCacheTtlMs) {
-            expires.clear()
-            mutableIdentities.value = emptyMap()
-        } else if (policy.memberMissingCacheTtlMs != previousLimits.memberMissingCacheTtlMs ||
+            val empty = mutableIdentities.value.filterValues { !it.hasDisplayDetails }.keys
+            expires.keys.removeAll(empty)
+            mutableIdentities.value = mutableIdentities.value - empty
+        }
+        if (policy.memberMissingCacheTtlMs != previousLimits.memberMissingCacheTtlMs ||
             policy.memberFailureCooldownMs != previousLimits.memberFailureCooldownMs ||
             policy.memberFailureMaxCooldownMs != previousLimits.memberFailureMaxCooldownMs) {
             expires.keys.removeAll { it !in mutableIdentities.value }
+            retryAfter.clear()
         }
         previousLimits = policy
     }
 
     private fun restore(key: String, cache: MemberIdentityCache): Boolean = synchronized(lock) {
-        if (fresh(key)) return@synchronized key in mutableIdentities.value
+        if (fresh(key)) return@synchronized identities.value[key]?.badgesKnown == true
         val entry = cache.read(key, limits().memberCacheTtlMs) ?: return@synchronized false
         mutableIdentities.value = mutableIdentities.value + (key to entry.identity)
         expires[key] = now() + entry.remainingMillis
         trim()
-        true
+        entry.identity.badgesKnown
     }
 
     private fun fresh(key: String) = synchronized(lock) {
         refreshLimits()
-        (expires[key] ?: 0) > now()
+        if ((expires[key] ?: 0) > now()) true else {
+            if (key in mutableIdentities.value) mutableIdentities.value = mutableIdentities.value - key
+            false
+        }
     }
 
+    private fun dueForMember(key: String): Boolean =
+        (retryAfter[key] ?: 0) <= now() && !(fresh(key) && mutableIdentities.value[key]?.badgesKnown == true)
+
     private fun due(key: String) = synchronized(lock) {
-        !fresh(key) && failedAt?.let { now() < it + failureCooldown() } != true
+        dueForMember(key) && failedAt?.let { now() < it + failureCooldown() } != true
+    }
+
+    suspend fun rememberAvatar(username: String, avatar: String) = withContext(Dispatchers.IO) {
+        val key = key(username)
+        if (key.isEmpty() || avatar.isBlank()) return@withContext
+        synchronized(lock) {
+            cache?.let { restore(key, it) }
+            val known = mutableIdentities.value[key]
+            if (known?.avatar == avatar || (known?.badgesKnown == true && known.avatar != null)) return@synchronized
+            save(key, known?.copy(avatar = avatar) ?: MemberIdentity(avatar, emptySet(), badgesKnown = false))
+        }
     }
 
     fun remember(profile: UserProfile) = synchronized(lock) {
         refreshLimits()
         val key = key(profile.username)
-        val identity = MemberIdentity(profile.avatar, AccountRole.Administrator in profile.roles, profile.majorAndroidReleaser)
+        val observed = mutableIdentities.value[key]?.takeUnless { it.badgesKnown }?.avatar
+        val identity = MemberIdentity(profile.avatar ?: observed, profile.memberBadges())
+        save(key, identity)
+        retryAfter.remove(key)
+        failures = 0
+        failedAt = null
+    }
+
+    private fun save(key: String, identity: MemberIdentity) {
         mutableIdentities.value = mutableIdentities.value + (key to identity)
         cache?.put(key, identity, limits().memberCacheTtlMs)
         expires.remove(key)
-        expires[key] = now() + limits().memberCacheTtlMs
-        failures = 0
-        failedAt = null
+        expires[key] = now() + identity.displayLifetime(limits().memberCacheTtlMs)
         trim()
     }
 
@@ -131,6 +178,7 @@ class MemberIdentityStore(
         while (expires.size > 256) {
             val oldest = expires.keys.first()
             expires.remove(oldest)
+            retryAfter.remove(oldest)
             mutableIdentities.value = mutableIdentities.value - oldest
         }
     }
