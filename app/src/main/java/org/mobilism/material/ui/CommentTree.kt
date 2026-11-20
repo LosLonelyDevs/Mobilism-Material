@@ -16,6 +16,21 @@ internal data class ThreadComment(
     val latestActivity: Long = comment.publishedAt,
 )
 
+internal enum class CommentSortField { Activity, Threads }
+
+internal data class CommentSort(val field: CommentSortField = CommentSortField.Activity, val newestFirst: Boolean = true) :
+    java.io.Serializable {
+    fun select(next: CommentSortField) = CommentSort(next, next != field || !newestFirst)
+
+    fun order(roots: List<ThreadComment>): List<ThreadComment> {
+        if (field == CommentSortField.Activity) return if (newestFirst) roots else roots.asReversed()
+        val byStart = compareBy<ThreadComment> { it.comment.publishedAt }.thenBy { it.comment.id }
+        // A quoted parent can arrive on a later page. Its opening date is still unknown.
+        return roots.sortedWith(compareBy<ThreadComment> { it.comment.publishedAt <= 0 }
+            .then(if (newestFirst) byStart.reversed() else byStart))
+    }
+}
+
 internal object CommentTree {
     private val chronological = compareBy<ReleaseComment> { it.publishedAt }.thenBy { it.id }
 

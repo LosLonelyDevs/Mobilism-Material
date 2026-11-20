@@ -304,7 +304,9 @@ private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit,
     val topic = state.topic ?: return
     var collapsedComments by rememberSaveable(topic.key) { mutableStateOf(emptyList<Long>()) }
     val commentTree = remember(state.comments.items) { CommentTree.build(state.comments.items) }
-    val commentRows = remember(commentTree, collapsedComments) { CommentTree.flatten(commentTree, collapsedComments.toSet()) }
+    var sort by rememberSaveable(topic.key) { mutableStateOf(CommentSort()) }
+    val ordered = remember(commentTree, sort) { sort.order(commentTree) }
+    val commentRows = remember(ordered, collapsedComments) { CommentTree.flatten(ordered, collapsedComments.toSet()) }
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize().testTag("discussion-reader")) {
         item {
@@ -321,7 +323,12 @@ private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit,
                 ReleaseCommentCard(topic.originalPost, topic.browserUrl, originalPoster = topic.author, onImage = onImage)
             }
         }
-        item { AppHeading("Comments · latest activity first", HeadingLevel.Section, style = MaterialTheme.typography.titleMedium) }
+        item("comments-heading") {
+            Column {
+                AppHeading("Comments", HeadingLevel.Section, style = MaterialTheme.typography.titleMedium)
+                CommentSortMenu(sort, topic.replies.toLong()) { sort = sort.select(it) }
+            }
+        }
         items(commentRows, key = { it.comment.id }) { row ->
             val comment = row.comment
             val canManage = !row.placeholder && canManageComment(comment, auth)

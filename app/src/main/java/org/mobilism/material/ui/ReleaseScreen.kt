@@ -144,7 +144,9 @@ fun ReleaseScreen(
     }
     var collapsedComments by rememberSaveable(release?.id) { mutableStateOf(emptyList<Long>()) }
     val commentTree = remember(state.comments.items) { CommentTree.build(state.comments.items) }
-    val commentRows = remember(commentTree, collapsedComments) { CommentTree.flatten(commentTree, collapsedComments.toSet()) }
+    var sort by rememberSaveable(release?.id) { mutableStateOf(CommentSort()) }
+    val ordered = remember(commentTree, sort) { sort.order(commentTree) }
+    val commentRows = remember(ordered, collapsedComments) { CommentTree.flatten(ordered, collapsedComments.toSet()) }
     LaunchedEffect(state.actionMessage) {
         state.actionMessage?.let { snackbar.showSnackbar(it); onActionMessageShown() }
     }
@@ -363,13 +365,7 @@ fun ReleaseScreen(
                                     if (cleanUpHeadings) AppIconButton(Icons.Outlined.ChatBubbleOutline, label, write,
                                         Modifier.testTag("write-comment"))
                                 }
-                                if (cleanUpHeadings) {
-                                    val total = release.replies
-                                    val unit = if (total == 1L) "comment" else "comments"
-                                    Text("Latest activity first · $total $unit", style = MaterialTheme.typography.labelSmall,
-                                        color = releaseHeadingColor(MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.secondary))
-                                } else Text("Latest activity first", style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                CommentSortMenu(sort, release.replies) { sort = sort.select(it) }
                             }
                             if (!cleanUpHeadings) ExpressiveButton(write, Modifier.fillMaxWidth().testTag("write-comment"),
                                 colors = ButtonDefaults.filledTonalButtonColors()) {

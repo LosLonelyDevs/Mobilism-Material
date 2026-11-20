@@ -266,7 +266,11 @@ class ReleaseCommentTest {
         assertTrue(signIn)
         compose.runOnIdle { signIn = false; cleanUp = true }
         val action = compose.onNodeWithContentDescription("Sign in to comment").performScrollTo()
-        compose.onNodeWithText("Latest activity first · 0 comments").assertExists()
+        compose.onNodeWithText("0 comments").assertExists()
+        compose.onNodeWithTag("comment-sort").performClick()
+        compose.onNodeWithText("Threads").performClick()
+        compose.onNodeWithTag("comment-sort").performClick()
+        compose.onNodeWithContentDescription("Newest first").performClick()
         compose.onNodeWithText("Sign in to comment").assertDoesNotExist()
         val headingBounds = compose.onNodeWithText("Comments").fetchSemanticsNode().boundsInRoot
         val actionBounds = action.fetchSemanticsNode().boundsInRoot

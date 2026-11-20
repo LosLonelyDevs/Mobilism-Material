@@ -20,6 +20,19 @@ class CommentTreeTest {
         assertEquals(listOf(0, 1, 2, 0), rows.map { it.depth })
     }
 
+    @Test fun switchingAndReversingSortKeepsRepliesInOrder() {
+        val first = comment(1)
+        val tree = CommentTree.build(listOf(first, comment(2), comment(3, parent = first), comment(4, parent = first)))
+        val activity = CommentSort()
+        val threads = activity.select(CommentSortField.Threads)
+        fun rows(sort: CommentSort) = CommentTree.flatten(sort.order(tree), emptySet()).map { it.comment.id }
+        assertEquals(listOf(1L, 3L, 4L, 2L), rows(activity))
+        assertEquals(listOf(2L, 1L, 3L, 4L), rows(activity.select(CommentSortField.Activity)))
+        assertEquals(listOf(2L, 1L, 3L, 4L), rows(threads))
+        assertEquals(listOf(1L, 3L, 4L, 2L), rows(threads.select(CommentSortField.Threads)))
+        assertEquals(activity, threads.select(CommentSortField.Activity))
+    }
+
     @Test fun collapsingACommentHidesItsWholeSubtree() {
         val parent = comment(1)
         val reply = comment(2, parent = parent)
