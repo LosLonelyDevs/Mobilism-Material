@@ -12,6 +12,10 @@ import kotlinx.coroutines.withContext
 import org.mobilism.material.data.ApiFailure
 import org.mobilism.material.data.ApiRequestLimits
 import org.mobilism.material.data.AccountRole
+import org.mobilism.material.data.AppCache
+import org.mobilism.material.data.CacheOutcome
+import org.mobilism.material.data.DiagnosticLogger
+import org.mobilism.material.data.cacheLookup
 import org.mobilism.material.data.ProfileReference
 import org.mobilism.material.data.UserProfile
 
@@ -37,11 +41,19 @@ data class MemberIdentity(val avatar: String?, val badges: Set<MemberBadge>,
         else freshMillis
 }
 
+private val stockAvatarFile = Regex("""(?i)(?:no[-_ ]?(?:avatar|image|photo|picture)(?:[-_ ]?available)?|(?:default|blank)[-_ ]?avatar|avatar[-_ ]?(?:default|blank))(?:[-_]\d+(?:x\d+)?)?(?:\.(?:png|jpe?g|gif|webp|svg|avif))?""")
+
+internal fun String?.displayAvatar(): String? = this?.trim()?.takeIf { url ->
+    url.isNotEmpty() && !url.equals("null", ignoreCase = true) &&
+        !stockAvatarFile.matches(url.substringBefore('?').substringBefore('#').substringAfterLast('/'))
+}
+
 class MemberIdentityStore(
     private val load: suspend (ProfileReference) -> UserProfile,
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
     private val limits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
     private val cache: MemberIdentityCache? = null,
+    private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
     private val wait: suspend (Long) -> Unit = { delay(it) },
 ) {
     private val lock = Any()
@@ -58,8 +70,16 @@ class MemberIdentityStore(
     suspend fun restoreCached(username: String): Boolean {
         val key = key(username)
         if (key.isEmpty()) return false
-        if (fresh(key)) return identities.value[key]?.badgesKnown == true
-        return cache != null && withContext(Dispatchers.IO) { restore(key, cache) }
+        val memory = fresh(key)
+        val badgesKnown = if (memory) identities.value[key]?.badgesKnown == true
+            else cache != null && withContext(Dispatchers.IO) { restore(key, cache) }
+        val outcome = when {
+            identities.value[key] == null -> CacheOutcome.Miss
+            memory -> CacheOutcome.MemoryHit
+            else -> CacheOutcome.DiskHit
+        }
+        diagnostics.cacheLookup(AppCache.MemberIdentity, outcome)
+        return badgesKnown
     }
 
     suspend fun request(username: String) {
@@ -150,7 +170,7 @@ class MemberIdentityStore(
         synchronized(lock) {
             cache?.let { restore(key, it) }
             val known = mutableIdentities.value[key]
-            if (known?.avatar == avatar || (known?.badgesKnown == true && known.avatar != null)) return@synchronized
+            if (known?.avatar == avatar || (known?.badgesKnown == true && known.avatar.displayAvatar() != null)) return@synchronized
             save(key, known?.copy(avatar = avatar) ?: MemberIdentity(avatar, emptySet(), badgesKnown = false))
         }
     }
@@ -159,7 +179,7 @@ class MemberIdentityStore(
         refreshLimits()
         val key = key(profile.username)
         val observed = mutableIdentities.value[key]?.takeUnless { it.badgesKnown }?.avatar
-        val identity = MemberIdentity(profile.avatar ?: observed, profile.memberBadges())
+        val identity = MemberIdentity(profile.avatar.displayAvatar() ?: observed.displayAvatar() ?: profile.avatar, profile.memberBadges())
         save(key, identity)
         retryAfter.remove(key)
         failures = 0

@@ -9,6 +9,20 @@ import org.mobilism.material.data.*
 class DiagnosticLogStoreTest {
     @get:Rule val temporary = TemporaryFolder()
 
+    @Test fun followingCheckExportsCountsInBasicLogs() {
+        val logs = DiagnosticLogStore(temporary.newFolder(), { true }, isVerbose = { false })
+        logs.record(DiagnosticEvent(DiagnosticSource.Vercel, DiagnosticOperation.FollowingCheck, DiagnosticPhase.Completed,
+            httpStatus = 200, cache = CacheDiagnostic(AppCache.Following, CacheOutcome.Available,
+                hits = 3, misses = 5, items = 20, background = true, fallbackSearches = 2)))
+        val row = org.json.JSONObject(logs.snapshot())
+        assertEquals("FollowingCheck", row.getString("operation"))
+        assertEquals("Available", row.getString("outcome"))
+        assertTrue(row.getBoolean("background"))
+        assertEquals(3, row.getInt("hits"))
+        assertEquals(5, row.getInt("misses"))
+        assertEquals(2, row.getInt("fallbackSearches"))
+    }
+
     @Test fun noticeLogsDistinguishRenderedFromPostedAndOnlyWriteFingerprints() {
         val logs = DiagnosticLogStore(temporary.newFolder(), { true })
         val key = "a".repeat(64)

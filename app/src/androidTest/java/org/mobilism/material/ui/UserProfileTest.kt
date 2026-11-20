@@ -1,10 +1,16 @@
 package org.mobilism.material.ui
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
@@ -40,6 +46,38 @@ class UserProfileTest {
         } }
         compose.onNodeWithText("Example Member").performClick()
         compose.runOnIdle { assertEquals("Example Member", opened?.username) }
+    }
+
+    @Test fun onlyTheAvatarAndUsernameInterceptCardTaps() {
+        var profiles = 0
+        var cards = 0
+        val identities = org.mobilism.material.members.MemberIdentityStore({ error("Cached") })
+        identities.remember(profile.copy(username = "Alex"))
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            CompositionLocalProvider(LocalMemberIdentities provides identities, LocalProfileHandler provides { profiles++ }) {
+                Box(Modifier.width(320.dp).testTag("card").clickable { cards++ }) {
+                    UsernameLink("Alex", Modifier.fillMaxWidth(), prefix = "To ", suffix = " · 12 replies")
+                }
+            }
+        } }
+        val card = compose.onNodeWithTag("card")
+        val text = compose.onNodeWithText("To Alex (Developer) · 12 replies", useUnmergedTree = true)
+        val layouts = mutableListOf<TextLayoutResult>()
+        text.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val layout = layouts.single()
+        fun tapCharacter(index: Int) = text.performTouchInput { click(layout.getBoundingBox(index).center) }
+        tapCharacter(0)
+        tapCharacter(layout.layoutInput.text.text.indexOf("replies"))
+        compose.onNodeWithTag("developer-badge-Alex", useUnmergedTree = true).performTouchInput { click() }
+        card.performTouchInput { click(Offset(width - 2f, centerY)) }
+        card.performTouchInput { click(Offset(width / 2f, 1f)) }
+        val avatar = compose.onNodeWithText("A", useUnmergedTree = true)
+        val avatarCenter = avatar.fetchSemanticsNode().boundsInRoot.center - card.fetchSemanticsNode().boundsInRoot.topLeft
+        card.performTouchInput { click(avatarCenter + Offset(0f, 15.dp.toPx())) }
+        compose.runOnIdle { assertEquals(6, cards); assertEquals(0, profiles) }
+        tapCharacter(4)
+        card.performTouchInput { click(avatarCenter) }
+        compose.runOnIdle { assertEquals(6, cards); assertEquals(2, profiles) }
     }
 
     @Test fun contributorRankRemainsVisibleAsItsOwnBadge() {

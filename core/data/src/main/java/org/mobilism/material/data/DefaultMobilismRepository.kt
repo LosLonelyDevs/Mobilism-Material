@@ -173,8 +173,20 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         api.postComment(id, text, account.accessToken, replyTo)
     }
 
-    override suspend fun discussionCategories(area: DiscussionArea) = withSession { api.discussionCategories(area, it) }
-    override suspend fun refreshDiscussionCategories(area: DiscussionArea) = withSession { api.discussionCategories(area, it, fresh = true) }
+    @Volatile private var listedAnnouncementForums: Set<Long> = emptySet()
+    fun isAnnouncementForum(id: Long) = id == 1L || id == 13L || id in listedAnnouncementForums
+    suspend fun announcement(id: Long, forumId: Long) = withSession { api.announcement(id, forumId, it) }
+
+    override suspend fun discussionCategories(area: DiscussionArea) = discussionCategories(area, fresh = false)
+    override suspend fun refreshDiscussionCategories(area: DiscussionArea) = discussionCategories(area, fresh = true)
+
+    private suspend fun discussionCategories(area: DiscussionArea, fresh: Boolean) = withSession { token ->
+        api.discussionCategories(area, token, fresh).also { categories ->
+            if (area == DiscussionArea.Community) {
+                listedAnnouncementForums = categories.filter { it.section == "Announcements" }.map { it.id }.toSet()
+            }
+        }
+    }
 
     override suspend fun discussionLastActivity(category: DiscussionCategory): Long? = withSession { token ->
         api.discussionTopics(category, 1, "", token).items.maxOfOrNull { it.activityAt }?.takeIf { it > 0 }

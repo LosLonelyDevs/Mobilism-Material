@@ -5,6 +5,55 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReleaseSectionsTest {
+    @Test fun versionedPatchSetsKeepTheirHeadingAndPlainFeatureLinesTogether() {
+        val features = listOf("Custom seek step", "Disable forced update", "Prefer highest resolution",
+            "Serve requested resolution", "Unlock VIP")
+        val heading = "Beyonder Morphe Patches 1.18.0"
+        val html = "<p>Original player description.</p>$heading<br><br>" +
+            features.joinToString("<br>") + "<p>Available on tablets.</p>" +
+            "<p>What's new:</p><p>Player fixes.</p>"
+        val body = ReleaseContentParser.parse(html, emptyList(), "https://example.org/").bodyHtml
+        val sections = ReleaseSections.parse(body, cleanUp = true).associate { it.kind to Jsoup.parse(it.html).text() }
+        assertEquals((listOf(heading) + features).joinToString(" "), sections[ReleaseSection.Mod])
+        assertEquals("Original player description. Available on tablets.", sections[ReleaseSection.Description])
+        assertEquals("Player fixes.", sections[ReleaseSection.Changes])
+        assertTrue(ReleaseSections.parse(body).none { it.kind == ReleaseSection.Mod })
+    }
+
+    @Test fun extractsPatchListInsideChangelogAndPreservesTheSurroundingNotesAndMarkup() {
+        val html = "<p>What's new:</p><p>Player fixes.</p><strong>Community Patches v2.3-beta:</strong>" +
+            "<ul><li>Remove overlays</li><li>Prefer <a href='https://example.org/codec'>original codec</a></li></ul>" +
+            "<p>Updated translations.</p><p>More Info:</p><p>Project page.</p>"
+        val sections = ReleaseSections.parse(html, cleanUp = true).associate { it.kind to it.html }
+        val mod = Jsoup.parse(sections.getValue(ReleaseSection.Mod))
+        assertEquals("Community Patches v2.3-beta: Remove overlays Prefer original codec", mod.text())
+        assertEquals("https://example.org/codec", mod.selectFirst("li a")?.attr("href"))
+        assertEquals("Player fixes. Updated translations.", Jsoup.parse(sections.getValue(ReleaseSection.Changes)).text())
+    }
+
+    @Test fun patchMentionsAndOrdinaryVersionNotesStayInTheirOriginalSection() {
+        val examples = listOf(
+            "<p>We recommend Community Patches 2.1 for playback.</p><p>Custom seek step</p><p>Unlock VIP</p>",
+            "<p>Original Player 2.1</p><p>Custom seek step</p><p>Unlock VIP</p>",
+            "<p>Community Patches 2.1</p><p>Unlock VIP when you subscribe</p><p>Prefer highest resolution</p>",
+            "<p>Security Patches 2.1</p><ul><li>Updated dependencies</li><li>Fixed startup</li></ul>",
+        )
+        for (body in examples) {
+            val sections = ReleaseSections.parse("<p>What's new:</p>$body", cleanUp = true)
+            assertEquals(body, listOf(ReleaseSection.Changes), sections.map { it.kind })
+        }
+    }
+
+    @Test fun onlyPlainStandaloneNoChangelogMessagesUseTheStyledNote() {
+        fun changes(html: String, cleanUp: Boolean = true) =
+            ReleaseSections.parse("<p>What's new:</p>$html", cleanUp = cleanUp).single()
+        assertEquals("No changelog", changes("<strong>No changelog</strong>").changelogPlaceholder)
+        assertEquals("No changelog available.", changes("<p>No changelog available.</p>").changelogPlaceholder)
+        assertNull(changes("<strong>No changelog</strong>", cleanUp = false).changelogPlaceholder)
+        assertNull(changes("<a href='https://example.org'>No changelog</a>").changelogPlaceholder)
+        assertNull(changes("<strong>No changelog</strong><br>Fixed playback.").changelogPlaceholder)
+    }
+
     @Test fun recognizesCustomAttributedModBlocksWithoutNeedingKnownFeatureWords() {
         listOf("Custom Mod Info By Example", "Mod Features from Another Author", "Patched Details by Team.Name").forEach { heading ->
             val html = "<p>Original app description.</p><b>Custom Mod Tested On Many Devices</b><br>" +

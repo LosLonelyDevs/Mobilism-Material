@@ -66,6 +66,23 @@ class DiscussionsTest {
         assertNull(forumBrowserIntent("javascript:alert(1)"))
     }
 
+    @Test fun announcementMissingFromTheFirstPageLoadsItsForumUrlAndReusesTheReplies() = runBlocking {
+        val fixture = Fixture()
+        val target = "https://forum.mobilism.org/viewtopic.php?f=1&t=6464350"
+        fixture.topicsBody = """{"response":[]}"""
+        fixture.forumBody = """
+            <h2 class="topic-title"><a href="$target">Archived announcement</a></h2>
+            <div class="post" id="p101"><div class="postbody"><div class="content">Announcement body</div></div></div>
+            <div class="post" id="p102"><div class="postbody"><div class="content">Reply</div></div></div>
+        """.trimIndent()
+        val result = fixture.repository.announcement(6464350, 1)
+        assertEquals("Archived announcement", result.topic.title)
+        assertEquals(102L, result.forumComments!!.items.single().id)
+        assertEquals(listOf("/api-new/other/category/1/page/1/limit/20/orderby/topic_last_post_time/desc/1",
+            "/viewtopic.php"), fixture.requests.map { it.url.encodedPath })
+        assertEquals(target, fixture.requests.last().url.toString())
+    }
+
     @Test fun categoriesTopicsSearchAndPostingUseTheLegacyRoutes() = runBlocking {
         val fixture = Fixture()
         fixture.repository.signIn("Reader", "sample-password")
@@ -267,6 +284,7 @@ class DiscussionsTest {
         @Volatile var offline = false
         @Volatile var topicsBody = """{"response":[$TOPIC]}"""
         @Volatile var communityBody = """{"announcements":[],"contests":[],"talk":[{"id":66,"name":"General chat"}],"services":[],"feedback":[]}"""
+        var forumBody: String? = null
         @Volatile var categoriesBody = """{"response":{"app|game":[{"id":500,"name":"Help &amp; support","topics":42}],"books":[{"id":501,"name":"Book discussions"}]}}"""
         private val context = object : ContextWrapper(InstrumentationRegistry.getInstrumentation().targetContext) {
             override fun getApplicationContext(): Context = this
@@ -279,6 +297,7 @@ class DiscussionsTest {
             if (offline && path.contains("/category/")) throw java.io.IOException("Fixture offline")
             var status = 200
             val response = when {
+                path == "/viewtopic.php" -> checkNotNull(forumBody)
                 path == "auth/login" -> """{"access_token":"sample-session","id":7}"""
                 path == "discussion/categories" -> categoriesBody
                 path == "other/category" -> communityBody

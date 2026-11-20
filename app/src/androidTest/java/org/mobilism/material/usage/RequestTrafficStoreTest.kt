@@ -14,6 +14,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mobilism.material.BuildConfig
 import org.mobilism.material.data.RequestTraffic
+import org.mobilism.material.data.AppCache
+import org.mobilism.material.data.CacheDiagnostic
+import org.mobilism.material.data.CacheOutcome
 
 @RunWith(AndroidJUnit4::class)
 class RequestTrafficStoreTest {
@@ -32,13 +35,17 @@ class RequestTrafficStoreTest {
             val bucket = JSONObject().put("day", yesterday.toString()).put("id", UUID.randomUUID().toString())
                 .put("appVersion", BuildConfig.VERSION_NAME).put("versionCode", BuildConfig.VERSION_CODE)
                 .put("metrics", JSONArray().put(metric))
+                .put("caches", JSONObject().put("FollowingBackground", JSONObject().put("hits", 3).put("misses", 2)))
             prefs.edit().putString("traffic-$yesterday-${BuildConfig.VERSION_CODE}", bucket.toString()).commit()
             val store = DailyUsageStore(context)
             val first = JSONObject(store.report(today)!!)
             assertEquals(1, first.getJSONArray("requestTraffic").length())
+            assertEquals(3, first.getJSONArray("requestTraffic").getJSONObject(0).getJSONObject("caches")
+                .getJSONObject("FollowingBackground").getInt("hits"))
             assertEquals(bucket.getString("id"), first.getJSONArray("requestTraffic").getJSONObject(0).getString("id"))
             assertEquals(first.toString(), DailyUsageStore(context).storedReport(today))
             store.setEnabled(context, false)
+            store.recordCache(CacheDiagnostic(AppCache.Following, CacheOutcome.Available, hits = 1, background = true))
             store.recordTraffic(RequestTraffic("api/search", "POST", 0, 5))
             assertTrue(prefs.all.keys.none { it.startsWith("traffic-") })
             val queued = JSONObject(store.storedReport(today)!!)

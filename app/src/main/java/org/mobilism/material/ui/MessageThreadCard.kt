@@ -36,7 +36,7 @@ internal fun MessageThreadCard(thread: MessageThread, folder: MessageFolder, mar
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 MessageAvatar(person, thread.avatarFor(person), Modifier.size(32.dp))
-                UsernameLink(person, Modifier.weight(1f), label = if (incoming) person else "To $person",
+                UsernameLink(person, Modifier.weight(1f), prefix = if (incoming) "" else "To ",
                     color = colors.primary, style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold, maxLines = 2, showAvatar = false)
                 if (unread) PulsingNotificationDot("Unread messages", Modifier.padding(horizontal = 6.dp)

@@ -43,6 +43,12 @@ internal fun NavController.openReleaseTopic(id: Long) {
     navigate("release/$id")
 }
 
+internal fun NavController.openAnnouncement(id: Long, forum: Long, repository: org.mobilism.material.data.DefaultMobilismRepository): Boolean {
+    if (!repository.isAnnouncementForum(forum)) return false
+    navigate("announcement/$forum/$id") { launchSingleTop = true }
+    return true
+}
+
 @Composable
 fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fromNotification: Boolean = true,
     notificationMessage: org.mobilism.material.messages.MessageNotificationTarget? = null,
@@ -172,6 +178,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         },
         LocalForumFormatting provides ForumFormattingOptions(developer.releaseTextCleanupActive, developer.markdownSyntaxActive),
         LocalDownloadHelpHandler provides { nav.navigate("download-help") { launchSingleTop = true } },
+        LocalAnnouncementLinkHandler provides { id, forum -> nav.openAnnouncement(id, forum, app.repository) },
         LocalProfileHandler provides { reference ->
             nav.navigate("profile?user=${reference.id ?: 0}&name=${android.net.Uri.encode(reference.username.orEmpty())}") { launchSingleTop = true }
         },
@@ -322,6 +329,18 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                     createSavedStateHandle(), announcementsOnly = true) }
             })
             DiscussionsScreen(announcements, auth, onBack = { nav.popBackStack() }, onSignIn = model::signInForDiscussion)
+        }
+        composable("announcement/{forum}/{id}", arguments = listOf(navArgument("forum") { type = NavType.LongType },
+            navArgument("id") { type = NavType.LongType })) { entry ->
+            val args = requireNotNull(entry.arguments)
+            val id = args.getLong("id")
+            val forum = args.getLong("forum")
+            val reader: DiscussionsViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
+                initializer { DiscussionsViewModel(app.repository, (auth as? AuthState.SignedIn)?.username,
+                    createSavedStateHandle(), announcementsOnly = true, linkedAnnouncement = { app.repository.announcement(id, forum) }) }
+            })
+            DiscussionsScreen(reader, auth, onBack = { nav.popBackStack() }, onSignIn = model::signInForDiscussion,
+                linkedUrl = "https://forum.mobilism.org/viewtopic.php?f=$forum&t=$id")
         }
         composable("messages") { entry ->
             if (auth is AuthState.SignedIn) {

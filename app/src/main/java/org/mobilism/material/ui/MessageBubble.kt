@@ -75,7 +75,6 @@ internal fun MessageBubble(message: PrivateMessage, username: String, onRead: ()
             .firstOrNull { ColorUtils.calculateContrast(it.toArgb(), fill.toArgb()) >= 4.5 } ?: foreground
     }
     val accent = if (outgoing) colors.primary else colors.tertiary
-    val onAccent = if (outgoing) colors.onPrimary else colors.onTertiary
     Box(Modifier.fillMaxWidth(), contentAlignment = if (outgoing) Alignment.CenterEnd else Alignment.CenterStart) {
         Surface(Modifier.widthIn(max = 620.dp).fillMaxWidth(0.9f).testTag("message-${message.id}"),
             shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp,
@@ -88,7 +87,7 @@ internal fun MessageBubble(message: PrivateMessage, username: String, onRead: ()
                         onClickLabel = if (expanded) "Collapse message" else "Expand message", onClick = toggle)
                     .padding(horizontal = 12.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MessageAvatar(message.from, message.avatar, Modifier.size(28.dp), color = accent, contentColor = onAccent)
+                    MessageAvatar(message.from, message.avatar, Modifier.size(28.dp))
                     Column(Modifier.weight(1f)) {
                         UsernameLink(message.from, label = if (outgoing) "You" else message.from,
                             style = MaterialTheme.typography.titleSmall, color = accent, fontWeight = FontWeight.SemiBold,

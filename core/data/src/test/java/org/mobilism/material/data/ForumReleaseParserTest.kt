@@ -9,6 +9,16 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 class ForumReleaseParserTest {
+    @Test fun olderAnnouncementAndRepliesComeFromOneForumPage() {
+        val html = topic().replace("6075324", "6464350").replace("1347", "1").replace(">Apps<", ">Announcements<")
+        val result = ForumReleaseParser.announcement(html, 6464350)
+        assertEquals("https://forum.mobilism.org/viewtopic.php?f=1&t=6464350", result.topic.browserUrl)
+        assertTrue(result.topic.contentHtml.contains("Watch description"))
+        assertEquals("Reader", result.forumComments!!.items.single().author)
+        assertFalse(result.forumComments.canLoadMore)
+        assertThrows(ApiFailure::class.java) { ForumReleaseParser.announcement(html, 6451572) }
+    }
+
     @Test fun helpTopicsKeepTheirContentWithoutPretendingToBeAppReleases() {
         val html = topic().replace("6075324", DownloadHelp.TOPIC_ID.toString()).replace(">Apps<", ">Help<")
         val help = DownloadHelp.parse(html)

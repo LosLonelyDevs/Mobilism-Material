@@ -34,6 +34,8 @@ data class DiscussionTopic(
 
 data class DiscussionPage(val items: List<DiscussionTopic>, val canLoadMore: Boolean)
 
+data class LinkedAnnouncement(val topic: DiscussionTopic, val forumComments: CommentPage? = null)
+
 interface DiscussionsRepository {
     suspend fun discussionCategories(area: DiscussionArea): List<DiscussionCategory>
     suspend fun refreshDiscussionCategories(area: DiscussionArea): List<DiscussionCategory> = discussionCategories(area)

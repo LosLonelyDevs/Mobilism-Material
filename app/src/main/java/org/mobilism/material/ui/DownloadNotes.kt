@@ -52,6 +52,6 @@ internal fun DownloadHelpAction(onOpen: () -> Unit) {
     }, modifier = Modifier.fillMaxWidth().testTag("download-help-action")
         .combinedClickable(role = Role.Button, onClickLabel = "Open download help",
             onLongClickLabel = "Show link options", onClick = onOpen, onLongClick = { held = true })
-        .heightIn(min = 48.dp).padding(top = 4.dp, bottom = 8.dp),
+        .heightIn(min = 48.dp).padding(top = if (LocalForumFormatting.current.cleanUpReleaseText) 0.dp else 4.dp, bottom = 8.dp),
         style = style, fontSize = (style.fontSize.value - 1).sp, color = MaterialTheme.colorScheme.secondary)
 }

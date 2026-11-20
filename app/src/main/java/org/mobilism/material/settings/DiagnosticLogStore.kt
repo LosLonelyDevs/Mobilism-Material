@@ -13,7 +13,8 @@ class DiagnosticLogStore(private val directory: File, private val isEnabled: () 
     @Synchronized
     override fun record(event: DiagnosticEvent) {
         if (!isEnabled()) return
-        if (!isVerbose() && event.phase == org.mobilism.material.data.DiagnosticPhase.Started) return
+        if (!isVerbose() && (event.phase == org.mobilism.material.data.DiagnosticPhase.Started ||
+                event.operation == org.mobilism.material.data.DiagnosticOperation.CacheLookup)) return
         runCatching {
             directory.mkdirs()
             val line = buildString {
@@ -24,6 +25,21 @@ class DiagnosticLogStore(private val directory: File, private val isEnabled: () 
                 event.requestId?.let { append(",\"requestId\":").append(it) }
                 event.httpStatus?.let { append(",\"httpStatus\":").append(it) }
                 event.elapsedMillis?.let { append(",\"elapsedMillis\":").append(it) }
+                event.cache?.let { cache ->
+                    append(",\"cache\":\"").append(cache.name.name).append('"')
+                    append(",\"outcome\":\"").append(cache.outcome.name).append('"')
+                    when (event.operation) {
+                        org.mobilism.material.data.DiagnosticOperation.CacheLookup,
+                        org.mobilism.material.data.DiagnosticOperation.FollowingCheck -> {
+                            append(",\"hits\":").append(cache.hits)
+                            append(",\"misses\":").append(cache.misses)
+                        }
+                        else -> Unit
+                    }
+                    cache.items?.let { append(",\"items\":").append(it) }
+                    cache.background?.let { append(",\"background\":").append(it) }
+                    cache.fallbackSearches?.let { append(",\"fallbackSearches\":").append(it) }
+                }
                 event.failure?.let { append(",\"failure\":\"").append(it.name).append("\"") }
                 event.noticeKey?.takeIf { it.matches(Regex("[a-f0-9]{64}")) }
                     ?.let { append(",\"noticeKey\":\"").append(it).append("\"") }

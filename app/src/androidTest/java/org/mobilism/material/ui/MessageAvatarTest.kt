@@ -6,12 +6,16 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import org.junit.Rule
 import org.junit.Test
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import coil3.asDrawable
 import kotlinx.coroutines.runBlocking
 import org.mobilism.material.data.*
@@ -47,6 +51,22 @@ class MessageAvatarTest {
             compose.waitUntil(10_000) { compose.onAllNodesWithText("V").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithContentDescription("Verified profile picture").assertIsDisplayed()
         } finally { file.delete() }
+    }
+
+    @Test fun sameMemberUsesTheSameInitialAndColorForMissingAndStockPictures() {
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            androidx.compose.foundation.layout.Column {
+                MessageAvatar("  Alice ", null, Modifier.size(40.dp).testTag("absent"))
+                MessageAvatar("ALICE", "https://example.org/images/no_avatar.gif",
+                    Modifier.size(40.dp).testTag("stock"))
+                MessageAvatar("Bob", null, Modifier.size(40.dp).testTag("other"))
+            }
+        } }
+        compose.onAllNodesWithText("A", useUnmergedTree = true).assertCountEquals(2)
+        compose.onNodeWithContentDescription("ALICE profile picture").assertDoesNotExist()
+        fun background(tag: String) = compose.onNodeWithTag(tag).captureToImage().toPixelMap().let { it[it.width / 2, it.height / 5] }
+        assertEquals(background("absent"), background("stock"))
+        assertNotEquals(background("absent"), background("other"))
     }
 
     @Test fun defaultImageLoaderDecodesGifAsAnimation() = runBlocking {

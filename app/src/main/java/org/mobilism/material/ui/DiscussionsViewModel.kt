@@ -37,6 +37,7 @@ class DiscussionsViewModel(
     private val repository: DiscussionsRepository, private val username: String?, private val saved: SavedStateHandle,
     initialTopic: DiscussionTopic? = null, initialCategory: DiscussionCategory? = null,
     private val announcementsOnly: Boolean = false,
+    private val linkedAnnouncement: (suspend () -> LinkedAnnouncement)? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(DiscussionsState(
         area = if (announcementsOnly) DiscussionArea.Community else initialCategory?.area
@@ -53,7 +54,7 @@ class DiscussionsViewModel(
     private val refreshActivityKeys = mutableSetOf<String>()
 
     init {
-        loadCategories(refreshActivity = false)
+        if (linkedAnnouncement != null) loadAnnouncement() else loadCategories(refreshActivity = false)
         initialCategory?.let(::openCategory)
         initialTopic?.let(::openTopic)
     }
@@ -65,7 +66,24 @@ class DiscussionsViewModel(
         loadCategories(refreshActivity = false)
     }
 
-    fun loadCategories() = loadCategories(refreshActivity = true)
+    fun loadCategories() {
+        if (linkedAnnouncement != null) loadAnnouncement() else loadCategories(refreshActivity = true)
+    }
+
+    private fun loadAnnouncement() {
+        val load = linkedAnnouncement ?: return
+        categoriesJob?.cancel()
+        mutableState.update { it.copy(loading = true, error = null) }
+        categoriesJob = viewModelScope.launch {
+            try {
+                val result = load()
+                ensureActive()
+                showTopic(result.topic, result.forumComments)
+                mutableState.update { it.copy(loading = false) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { mutableState.update { it.copy(loading = false, error = failure.forScreen()) } }
+        }
+    }
 
     private fun loadCategories(refreshActivity: Boolean) {
         categoriesJob?.cancel()
@@ -155,21 +173,26 @@ class DiscussionsViewModel(
         }
     }
 
-    fun openTopic(topic: DiscussionTopic) {
+    fun openTopic(topic: DiscussionTopic) = showTopic(topic, null)
+
+    private fun showTopic(topic: DiscussionTopic, forumComments: CommentPage?) {
         if (state.value.composer.posting) return
         commentsJob?.cancel()
-        mutableState.update { it.copy(topic = topic, comments = CommentsState(), commentRefreshFailed = false,
+        // Forum HTML starts with the oldest replies. An explicit next request starts at API page one.
+        val comments = forumComments?.let { CommentsState(items = it.items, canLoadMore = it.canLoadMore) } ?: CommentsState()
+        mutableState.update { it.copy(topic = topic, comments = comments, commentRefreshFailed = false,
             composer = CommentComposerState(draft = saved["draft:${topic.key}"] ?: "",
                 replyTo = saved.get<Long>("reply:${topic.key}")?.let { id ->
                     CommentReplyTarget(id, saved["author:${topic.key}"] ?: "", saved["quote:${topic.key}"] ?: "")
                 }, error = if (saved.get<Boolean>("pending:${topic.key}") == true) UNCONFIRMED else null),
             notice = null, forward = true) }
-        loadComments()
+        if (forumComments == null) loadComments()
     }
 
     fun back(): Boolean {
         if (state.value.composer.posting) return true
         if (state.value.composer.open) { closeComposer(); return true }
+        if (linkedAnnouncement != null) return false
         if (state.value.topic != null) {
             commentsJob?.cancel()
             mutableState.update { it.copy(topic = null, comments = CommentsState(), composer = CommentComposerState(), notice = null, forward = false) }
@@ -197,7 +220,7 @@ class DiscussionsViewModel(
                 val page = if (restart) 1 else snapshot.comments.page + 1
                 val result = repository.discussionComments(topic, page)
                 ensureActive()
-                val previous = if (restart) emptyList() else snapshot.comments.items
+                val previous = if (page == 1) emptyList() else snapshot.comments.items
                 val serverItems = (previous + result.items).distinctBy { it.id }
                 val items = (confirmed[topic.key].orEmpty() + serverItems).distinctBy { it.id }
                 mutableState.update { it.copy(comments = CommentsState(items, page,

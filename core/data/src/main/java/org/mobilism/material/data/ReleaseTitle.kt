@@ -14,6 +14,7 @@ object ReleaseTitles {
     private val bareVersion = Regex("""\s+(\d+(?:\.\d+){1,}(?:[-+][\w.]+)?)(?=\s|[\[(]|$)""")
     private val build = Regex("""(?i)^(?:build\s*[:#]?\s*|b\s*)(\d[\w.-]*)\s*""")
     private val numericBuild = Regex("""^\((\d+)\)\s*""")
+    private val parenthesizedVersion = Regex("""(?i)^\(v?(\d+(?:\.\d+)+(?:[-+][\w.-]+)?)\)\s*""")
     private val tag = Regex("""^(?:\[([^\[\]]+)\]|\(([^()]+)\))\s*""")
     private val channel = Regex("""(?i)^(alpha|beta|rc|stable|final|fixed|hotfix|release)(?:\s+(\d+))?(?=\s|[\[(]|$)\s*""")
     private val standaloneTags = setOf("premium", "pro", "paid", "mod", "unlocked", "patched", "adfree", "ad-free", "free")
@@ -24,7 +25,9 @@ object ReleaseTitles {
             return BookTitles.parse(original)
         }
         val marker = version.findAll(original).firstOrNull { match ->
-            match.groupValues[1].contains('.') || understoodSuffix(original.substring(match.range.last + 1))
+            val value = match.groupValues[1]
+            val suffix = original.substring(match.range.last + 1).trimStart()
+            value.contains('.') || versionAfterBuildCode(value, suffix) != null || understoodSuffix(suffix)
         } ?: bareVersion.findAll(original).firstOrNull { match ->
             val suffix = original.substring(match.range.last + 1).trim()
             suffix.isNotEmpty() && understoodSuffix(suffix)
@@ -38,7 +41,10 @@ object ReleaseTitles {
         val name = original.substring(0, marker.range.first).trim().trimEnd('-', ':', '|').trim()
         if (name.isBlank()) return ReleaseTitle(original)
         var rest = original.substring(marker.range.last + 1).trim()
-        var buildValue: String? = null
+        val rawVersion = marker.groupValues[1]
+        val pairedVersion = versionAfterBuildCode(rawVersion, rest)
+        var buildValue: String? = if (pairedVersion != null) rawVersion else null
+        if (pairedVersion != null) rest = rest.substring(pairedVersion.value.length)
         val tags = mutableListOf<String>()
         while (rest.isNotEmpty()) {
             val buildMatch = if (buildValue == null) build.find(rest) ?: numericBuild.find(rest) else null
@@ -60,8 +66,11 @@ object ReleaseTitles {
             }
             rest = rest.substring(consumed).trim()
         }
-        return ReleaseTitle(name, marker.groupValues[1], buildValue, tags)
+        return ReleaseTitle(name, pairedVersion?.groupValues?.get(1) ?: rawVersion, buildValue, tags)
     }
+
+    private fun versionAfterBuildCode(value: String, suffix: String): MatchResult? =
+        if (value.length >= 4 && value.all(Char::isDigit)) parenthesizedVersion.find(suffix) else null
 
     private fun understoodSuffix(value: String): Boolean {
         val suffix = value.trim()

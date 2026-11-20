@@ -51,8 +51,8 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         .build()
     // Connection recovery can resend a request. Keep writes on the non-retrying client.
     private val readClient = this.client.newBuilder().retryOnConnectionFailure(true).build()
-    private val searches = SearchRequestPolicy(limits = requestLimits)
-    private val reads = ReadRequestPolicy(limits = requestLimits)
+    private val searches = SearchRequestPolicy(limits = requestLimits, diagnostics = diagnostics)
+    private val reads = ReadRequestPolicy(limits = requestLimits, diagnostics = diagnostics)
     private val forumReads = ReadRequestPolicy(limits = requestLimits)
     fun commentGateway(account: () -> Session?): ForumCommentGateway =
         NativeForumComments(context, this.client, forumReads, account)
@@ -175,6 +175,15 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             token, emptyRecordsAsArray = true).getJSONArray("response"))
     }
 
+    suspend fun announcement(id: Long, forumId: Long, token: String?): LinkedAnnouncement {
+        require(id > 0 && forumId > 0)
+        val category = DiscussionCategory(forumId, "Announcements", DiscussionArea.Community)
+        val listed = discussionTopics(category, 1, "", token).items.firstOrNull { it.id == id }
+        if (listed != null) return LinkedAnnouncement(listed)
+        // Older announcements can fall off the first page. Read the linked topic directly.
+        return ForumReleaseParser.announcement(forumTopic(id, forumId = forumId), id)
+    }
+
     suspend fun postDiscussionComment(topic: DiscussionTopic, text: String, replyTo: Long?, token: String): Long {
         require(topic.id > 0 && token.isNotBlank() && text.isNotBlank() && text.length <= ReleaseComments.MAX_LENGTH)
         require(replyTo == null || replyTo > 0)
@@ -245,8 +254,9 @@ internal class MobilismApi(private val context: Context, private val diagnostics
     private suspend fun directForumPage(url: okhttp3.HttpUrl): String =
         forumReads.request(url.toString()) { readForumPage(url) }
 
-    private suspend fun forumTopic(id: Long, commentsStart: Int? = null): String {
+    private suspend fun forumTopic(id: Long, commentsStart: Int? = null, forumId: Long? = null): String {
         val url = "https://forum.mobilism.org/viewtopic.php".toHttpUrl().newBuilder()
+            .apply { forumId?.let { addQueryParameter("f", it.toString()) } }
             .addQueryParameter("t", id.toString()).apply {
                 if (commentsStart != null) {
                     addQueryParameter("sd", "d")

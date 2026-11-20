@@ -46,17 +46,17 @@ import java.util.Date
 
 @Composable
 fun DiscussionsScreen(model: DiscussionsViewModel, auth: AuthState, onBack: () -> Unit,
-    onSignIn: (DiscussionTopic, DiscussionCategory?) -> Unit) {
+    onSignIn: (DiscussionTopic, DiscussionCategory?) -> Unit, linkedUrl: String? = null) {
     val context = LocalContext.current
     CompositionLocalProvider(LocalForumLinkHandler provides { url -> openForumBrowser(context, url); Unit }) {
-        DiscussionsContent(model, auth, onBack, onSignIn)
+        DiscussionsContent(model, auth, onBack, onSignIn, linkedUrl)
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onBack: () -> Unit,
-    onSignIn: (DiscussionTopic, DiscussionCategory?) -> Unit) {
+    onSignIn: (DiscussionTopic, DiscussionCategory?) -> Unit, linkedUrl: String?) {
     val state by model.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -94,13 +94,13 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(title = { AppHeading(if (state.topic != null) {
+            TopAppBar(title = { AppHeading(if (state.topic != null || linkedUrl != null) {
                 if (state.announcementsOnly) "Announcement" else "Discussion"
             } else state.category?.name ?: if (state.announcementsOnly) "Announcements" else "Discussions",
                 HeadingLevel.Page, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", back, enabled = !state.composer.posting) },
                 actions = {
-                    val url = state.topic?.browserUrl ?: state.category?.browserUrl ?: "https://forum.mobilism.org/"
+                    val url = state.topic?.browserUrl ?: linkedUrl ?: state.category?.browserUrl ?: "https://forum.mobilism.org/"
                     Box {
                         AppIconButton(Icons.Outlined.MoreVert, "Discussion options", { menu = true })
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = MaterialTheme.shapes.extraLarge) {
@@ -148,6 +148,13 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
                                 onReply = { if (auth is AuthState.SignedIn) model.openComposer(it) else onSignIn(screen.topic, screen.category) },
                                 auth = auth, onManage = { comment, action -> commentAction = action.name; managedCommentId = comment.id },
                                 onImage = { urls, index -> gallery = urls to index })
+                            linkedUrl != null -> Column(Modifier.padding(20.dp)) {
+                                if (screen.loading) LoadingState("Loading announcement…", Modifier.fillMaxWidth())
+                                screen.error?.let {
+                                    ErrorPanel(it, onRetry = model::loadCategories)
+                                    AppTextButton("Open in browser", { openForumBrowser(context, linkedUrl) })
+                                }
+                            }
                             screen.category != null -> DiscussionTopics(screen, model::openTopic, model::loadTopics,
                                 model::editQuery, onSearch = { keyboard?.hide(); model.search() }, model::clearSearch)
                             else -> DiscussionCategories(screen, model::selectArea, model::openCategory, model::loadCategories, model::loadActivity)
@@ -335,8 +342,8 @@ private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit,
         if (state.comments.busy) item { LoadingState("Loading comments…", Modifier.fillMaxWidth()) }
         state.comments.error?.let { item { ErrorPanel(it, onRetry = { onMore(false) }) } }
         if (!state.comments.busy && state.comments.error == null) {
-            if (state.comments.items.isEmpty()) item { DiscussionEmpty("Start the conversation", "Be the first to comment on this topic.") }
-            else if (state.comments.canLoadMore) item { AppTextButton("Load more comments", { onMore(false) }, Modifier.fillMaxWidth()) }
+            if (state.comments.canLoadMore) item { AppTextButton("Load more comments", { onMore(false) }, Modifier.fillMaxWidth()) }
+            else if (state.comments.items.isEmpty()) item { DiscussionEmpty("Start the conversation", "Be the first to comment on this topic.") }
         }
     }
 }

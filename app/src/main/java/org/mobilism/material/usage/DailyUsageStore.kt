@@ -43,6 +43,10 @@ class DailyUsageStore(context: Context) {
         if (enabled.value) traffic.record(LocalDate.now(ZoneOffset.UTC), event)
     }
 
+    @Synchronized fun recordCache(event: org.mobilism.material.data.CacheDiagnostic) {
+        if (enabled.value) traffic.recordCache(LocalDate.now(ZoneOffset.UTC), event)
+    }
+
     internal fun storedReport(day: LocalDate): String? = storage.get("report-$day")
 
     @Synchronized internal fun report(day: LocalDate): String? {

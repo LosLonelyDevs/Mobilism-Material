@@ -37,9 +37,11 @@ class SearchTrafficTest {
                     .body((if (login) """{"access_token":"fixture-account"}""" else """{"releases":[]}""").toResponseBody()).build()
             }.build())
         val library = AppLibraryStore(context)
+        val cacheEvents = mutableListOf<DiagnosticEvent>()
         fun checker(limits: ApiRequestLimits = ApiRequestLimits.Defaults, latest: suspend () -> List<Release> = { emptyList() }) =
             FollowingChecker(library, repository, InstalledApps(context), FollowingPreferences(context), FollowingNotifications(context),
-                limits = { limits }, latestApps = latest)
+                limits = { limits }, latestApps = { LatestAppsSnapshot(CacheOutcome.Available, latest()) },
+                diagnostics = DiagnosticLogger { cacheEvents.add(it) })
         fun followApps() {
             ('A'..'L').forEachIndexed { index, letter ->
                 library.watch(Release(index + 1L, "Fixture $letter v1.0", "", null, 1, 0, 0, section = ContentSection.Apps), true)
@@ -94,6 +96,8 @@ class SearchTrafficTest {
         var reads = 0
         val result = fixture.checker(latest = { reads++; releases }).check()
         assertEquals(1, reads)
+        assertEquals(CacheDiagnostic(AppCache.Following, CacheOutcome.Available, 12, 0, 12, false, 0),
+            fixture.cacheEvents.single().cache)
         assertEquals(12, result.done)
         assertEquals(0, fixture.calls)
         assertTrue(fixture.library.state.value.all { it.update?.title?.endsWith("v2.0") == true })
@@ -124,10 +128,13 @@ class SearchTrafficTest {
         fixture.followApps()
         val checker = fixture.checker(latest = { throw java.io.IOException("Vercel unavailable") })
         assertEquals(5, checker.check(background = true).done)
+        assertEquals(CacheDiagnostic(AppCache.Following, CacheOutcome.Failed, 0, 0, 0, true, 5),
+            fixture.cacheEvents.single().cache)
         assertEquals(5, fixture.calls)
         val prefs = fixture.context.getSharedPreferences("following-settings", Context.MODE_PRIVATE)
         prefs.edit().putLong("last-check-attempt", System.currentTimeMillis() - 20 * 60_000).commit()
         assertEquals(0, checker.check(background = true).done)
+        assertEquals(0, fixture.cacheEvents.last().cache!!.fallbackSearches)
         assertEquals(5, fixture.calls)
         assertEquals(5, checker.check().done)
         assertEquals(10, fixture.calls)
@@ -140,6 +147,8 @@ class SearchTrafficTest {
         val newer = first.copy(id = 100, title = first.title.replace("v1.0", "v2.0"))
         val result = fixture.checker(latest = { listOf(newer) }).check()
         assertEquals(6, result.done)
+        assertEquals(CacheDiagnostic(AppCache.Following, CacheOutcome.Available, 1, 11, 1, false, 5),
+            fixture.cacheEvents.single().cache)
         assertEquals(5, fixture.calls)
         assertEquals(100L, fixture.library.state.value.single { it.release.id == first.id }.update?.id)
     }

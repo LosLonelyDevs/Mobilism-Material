@@ -32,7 +32,7 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
 
     override val userAgentPolicy get() = remoteControl.userAgentPolicy
     val memberIdentities by lazy { org.mobilism.material.members.MemberIdentityStore(repository::profile,
-        limits = { remoteControl.limits }, cache = org.mobilism.material.members.MemberIdentityCache(
+        limits = { remoteControl.limits }, diagnostics = appLogger, cache = org.mobilism.material.members.MemberIdentityCache(
             getSharedPreferences("member-identities", MODE_PRIVATE))) }
     val recentSearches by lazy { org.mobilism.material.settings.RecentSearchStore(this) }
     val messageAlerts by lazy { MessageAlertStore(this, limits = { remoteControl.limits }) }
@@ -51,13 +51,19 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
     val developer by lazy { DeveloperPreferencesStore(this) }
     val diagnostics by lazy { DiagnosticLogStore(java.io.File(filesDir, "diagnostics"),
         { true }, isVerbose = { developer.state.value.enabled && developer.state.value.verboseLogging }) }
+    private val appLogger = org.mobilism.material.data.DiagnosticLogger { event ->
+        diagnostics.record(event)
+        val cache = event.cache
+        if (cache != null && (cache.hits > 0 || cache.misses > 0) && org.mobilism.material.usage.DailyUsageSchedule.configured)
+            dailyUsage.recordCache(cache)
+    }
     val customCategories by lazy { org.mobilism.material.data.CustomCategoryStore(this) }
     internal val connectionRecovery by lazy { org.mobilism.material.ui.ConnectionRecoveryController() }
     internal val remoteControl by lazy { org.mobilism.material.remote.RemoteControlStore.create(this, diagnostics) }
-    private val latestApps by lazy { org.mobilism.material.data.LatestAppsClient(BuildConfig.DAILY_USAGE_ENDPOINT) }
+    private val latestApps by lazy { org.mobilism.material.data.LatestAppsClient(BuildConfig.DAILY_USAGE_ENDPOINT, diagnostics = appLogger) }
     private val latestPages = kotlinx.coroutines.channels.Channel<org.mobilism.material.data.LatestAppsPage>(
         capacity = 4, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
-    val repository by lazy { DefaultMobilismRepository(this, contentPreferences, diagnostics,
+    val repository by lazy { DefaultMobilismRepository(this, contentPreferences, appLogger,
         customCategories = customCategories, customCategoriesEnabled = { developer.state.value.customCategoriesActive },
         challengeRecovery = connectionRecovery, requestLimits = { remoteControl.limits }, requestTraffic = requestTraffic,
         onLatestApps = { page ->
@@ -73,7 +79,7 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
     val followPreferences by lazy { FollowingPreferences(this) }
     val followNotifications by lazy { FollowingNotifications(this) }
     val following by lazy { FollowingChecker(library, repository, InstalledApps(this), followPreferences, followNotifications,
-        limits = { remoteControl.limits }, latestApps = { latestApps.snapshot(contentPreferences.hideAdult.value) }) }
+        limits = { remoteControl.limits }, latestApps = { latestApps.snapshot(contentPreferences.hideAdult.value) }, diagnostics = appLogger) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val foreground = MutableStateFlow(false)
     private val visibleActivities = mutableSetOf<Any>()

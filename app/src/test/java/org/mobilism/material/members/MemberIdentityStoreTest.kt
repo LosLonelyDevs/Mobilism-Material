@@ -177,6 +177,20 @@ class MemberIdentityStoreTest {
         assertNull(store.identities.value.getValue("example").avatar)
     }
 
+    @Test fun aCachedStockAvatarYieldsToARealPictureWithoutAnotherProfileLookup() = runTest {
+        val placeholder = "https://example.org/images/no_image.png?size=80"
+        val picture = "https://example.org/download/file.php?avatar=123.gif"
+        val store = MemberIdentityStore({ error("Unexpected profile request") })
+        store.remember(profile(setOf(AccountRole.Administrator)).copy(avatar = placeholder))
+        assertNull(store.identities.value.getValue("example").avatar.displayAvatar())
+        assertEquals("https://example.org/my-no-image-art.png", "https://example.org/my-no-image-art.png".displayAvatar())
+        store.rememberAvatar("Example", picture)
+        store.request("EXAMPLE")
+        val member = store.identities.value.getValue("example")
+        assertEquals(picture, member.avatar.displayAvatar())
+        assertTrue(member.administrator)
+    }
+
     @Test fun anAvatarFromAMessageSurvivesAChallengeAndDoesNotImplyABadge() = runTest {
         var time = 1L
         var calls = 0

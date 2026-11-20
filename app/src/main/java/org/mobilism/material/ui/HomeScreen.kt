@@ -309,7 +309,7 @@ private fun HomeForumShelf(title: String, state: HomeForum, reviews: Boolean, on
                             Modifier.size(24.dp), tint = MaterialTheme.colorScheme.tertiary)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(topic.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            UsernameLink(topic.author, label = "${topic.author} · ${topic.replies} replies", style = MaterialTheme.typography.labelMedium)
+                            UsernameLink(topic.author, suffix = " · ${topic.replies} replies", style = MaterialTheme.typography.labelMedium)
                         }
                         Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

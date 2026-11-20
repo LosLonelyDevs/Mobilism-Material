@@ -9,6 +9,7 @@ internal class SearchRequestPolicy(
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
     private val wallTime: () -> Long = System::currentTimeMillis,
     private val limits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
+    private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
     private val wait: suspend (Long) -> Unit = { delay(it) },
 ) {
     private data class Cached(val body: String, val expires: Long)
@@ -26,7 +27,11 @@ internal class SearchRequestPolicy(
             previousLimits = policy
         }
         cache.entries.removeAll { it.value.expires <= now() }
-        cache[key]?.let { return@withLock it.body }
+        cache[key]?.let {
+            diagnostics.cacheLookup(AppCache.Search, CacheOutcome.MemoryHit)
+            return@withLock it.body
+        }
+        diagnostics.cacheLookup(AppCache.Search, CacheOutcome.Miss)
         if (now() < blockedUntil || failedAt?.let { now() - it < policy.searchFailureCooldownMs } == true) throw ApiFailure(FailureKind.Server,
             "Search is paused after a failed request. Try again later.")
         val remaining = lastRequest?.let { it + policy.searchSpacingMs - now() } ?: 0

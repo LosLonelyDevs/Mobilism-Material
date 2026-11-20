@@ -22,6 +22,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.test.platform.app.InstrumentationRegistry
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -31,6 +35,55 @@ import org.mobilism.material.settings.DownloadPreferences
 
 class ForumLinkActionsTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun announcementLinkInReleaseCommentOpensTheNativeReaderAndBackReturnsToComment() {
+        val requests = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val path = chain.request().url.encodedPath.removePrefix("/api-new/")
+            requests += path
+            val body = when (path) {
+                "other/category/1/page/1/limit/20/orderby/topic_last_post_time/desc/1" ->
+                    """{"response":[{"id":6464350,"subject":"Forum announcement","name":"Moderator","forum_id":1,"content":"Announcement body"}]}"""
+                "other/6464350/comments/page/1/limit/20/orderby/date/desc" -> """{"response":[]}"""
+                else -> error("Unexpected request: $path")
+            }
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body(body.toResponseBody()).build()
+        }.build()
+        val repository = DefaultMobilismRepository(compose.activity, client = client)
+        val url = "https://forum.mobilism.org/viewtopic.php?f=1&t=6464350"
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            val nav = rememberNavController()
+            androidx.compose.runtime.CompositionLocalProvider(LocalAnnouncementLinkHandler provides { id, forum ->
+                nav.openAnnouncement(id, forum, repository)
+            }) {
+                NavHost(nav, startDestination = "comment") {
+                    composable("comment") {
+                        ReleaseCommentCard(ReleaseComment(42, "Reader", null, 0, "<a href='$url'>See the announcement</a>"),
+                            "https://forum.mobilism.org/viewtopic.php?t=6451572", onRelease = { error("Opened a release") },
+                            onImage = { _, _ -> })
+                    }
+                    composable("announcement/{forum}/{id}", arguments = listOf(navArgument("forum") { type = NavType.LongType },
+                        navArgument("id") { type = NavType.LongType })) { entry ->
+                        val args = requireNotNull(entry.arguments)
+                        val reader = viewModel<DiscussionsViewModel> { DiscussionsViewModel(repository, null, SavedStateHandle(),
+                            announcementsOnly = true, linkedAnnouncement = { repository.announcement(args.getLong("id"), args.getLong("forum")) }) }
+                        DiscussionsScreen(reader, AuthState.Guest, { nav.popBackStack() }, { _, _ -> }, linkedUrl = url)
+                    }
+                }
+            }
+        } }
+        val link = textView()
+        touch(link, MotionEvent.ACTION_DOWN)
+        touch(link, MotionEvent.ACTION_UP)
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Forum announcement").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Announcement").assertIsDisplayed()
+        compose.onNodeWithText("Forum announcement").assertIsDisplayed()
+        compose.waitUntil(10_000) { requests.size == 2 }
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithTag("comment-42").assertIsDisplayed()
+        assertEquals(2, requests.size)
+    }
 
     @Test fun linkedReleaseOpensItsOwnDetailAndBackRestoresTheSource() {
         val source = 6462354L

@@ -6,7 +6,8 @@ import org.jsoup.nodes.Node
 import org.jsoup.nodes.TextNode
 
 enum class ReleaseSection(val title: String) { Description("Description"), Changes("What's new"), Mod("Mod info") }
-data class ReleaseTextSection(val kind: ReleaseSection, val html: String, val startsWithAdvertisingNotice: Boolean = false)
+data class ReleaseTextSection(val kind: ReleaseSection, val html: String, val startsWithAdvertisingNotice: Boolean = false,
+    val changelogPlaceholder: String? = null)
 
 internal data class ReleaseLine(
     val nodes: List<TextNode>,
@@ -35,10 +36,11 @@ object ReleaseSections {
         \s+(?:by|from)\s+[^:!?\n]{1,80}:?$""")
     private val advertising = Regex("""(?i)^this\s+(?:app|application|game)\s+(?:has|contains|includes|does\s+not\s+contain)\s+(?:[\w-]+\s+){0,3}(?:advertisements?|ads)[.!]?$""")
     private val styledTags = setOf("b", "strong", "u", "h1", "h2", "h3", "h4", "h5", "h6")
+    private val noChangelog = Regex("""(?i)no\s+change\s*log(?:\s+(?:available|provided))?[.!]?""")
 
     internal fun isAdvertisingNotice(text: String) = advertising.matches(text.trim())
 
-    fun parse(html: String, releaseTitle: String = ""): List<ReleaseTextSection> {
+    fun parse(html: String, releaseTitle: String = "", cleanUp: Boolean = false): List<ReleaseTextSection> {
         val body = Jsoup.parseBodyFragment(html).body()
         val lines = lines(body)
         val replacements = mutableMapOf<TextNode, String>()
@@ -83,7 +85,7 @@ object ReleaseSections {
                 else -> line.kind = current
             }
         }
-        ReleaseModHeuristics.classify(lines, releaseTitle)
+        ReleaseModHeuristics.classify(lines, releaseTitle, cleanUp)
         val kinds = lines.flatMap { line -> line.nodes.map { it to line.kind } }.toMap()
         var lastKind = ReleaseSection.Description
         fun split(node: Node): List<Pair<ReleaseSection, Node>> {
@@ -106,8 +108,12 @@ object ReleaseSections {
             line.nodes.any { (replacements[it] ?: it.wholeText).isNotBlank() } }
         return ReleaseSection.entries.mapNotNull { kind ->
             val content = fragments.filter { it.first == kind }.joinToString("") { it.second.outerHtml() }
-            if (Jsoup.parseBodyFragment(content).text().isBlank()) null else ReleaseTextSection(kind, content,
-                startsWithAdvertisingNotice = kind == ReleaseSection.Mod && firstModLine?.advertising == true)
+            val fragment = Jsoup.parseBodyFragment(content)
+            val text = fragment.text()
+            if (text.isBlank()) null else ReleaseTextSection(kind, content,
+                startsWithAdvertisingNotice = kind == ReleaseSection.Mod && firstModLine?.advertising == true,
+                changelogPlaceholder = text.takeIf { cleanUp && kind == ReleaseSection.Changes && noChangelog.matches(it) &&
+                    fragment.selectFirst("a, img, code, pre") == null })
         }
     }
 

@@ -253,13 +253,26 @@ class ReleaseCommentTest {
         val fixture = Fixture()
         fixture.repository.continueAsGuest()
         var signIn = false
+        var cleanUp by androidx.compose.runtime.mutableStateOf(false)
         compose.setContent { MobilismTheme(reduceMotion = true) {
-            ReleaseScreen(ReleaseState(release = Release(42, "Sample release", "Author", null, 1, 0, 0), busy = false,
-                comments = CommentsState(canLoadMore = false)), DebridState(), DownloadPreferences(),
-                onBack = {}, onRetry = {}, onMoreComments = {}, watched = false, downloaded = false,
-                onWatch = {}, onDownloaded = {}, onLike = {}, onActionMessageShown = {}, onSignIn = { signIn = true })
+            androidx.compose.runtime.CompositionLocalProvider(LocalForumFormatting provides ForumFormattingOptions(cleanUpReleaseText = cleanUp)) {
+                ReleaseScreen(ReleaseState(release = Release(42, "Sample release", "Author", null, 1, 0, 0), busy = false,
+                    comments = CommentsState(canLoadMore = false)), DebridState(), DownloadPreferences(),
+                    onBack = {}, onRetry = {}, onMoreComments = {}, watched = false, downloaded = false,
+                    onWatch = {}, onDownloaded = {}, onLike = {}, onActionMessageShown = {}, onSignIn = { signIn = true })
+            }
         } }
         compose.onNodeWithText("Sign in to comment").performScrollTo().performClick()
+        assertTrue(signIn)
+        compose.runOnIdle { signIn = false; cleanUp = true }
+        val action = compose.onNodeWithContentDescription("Sign in to comment").performScrollTo()
+        compose.onNodeWithText("Latest activity first · 0 comments").assertExists()
+        compose.onNodeWithText("Sign in to comment").assertDoesNotExist()
+        val headingBounds = compose.onNodeWithText("Comments").fetchSemanticsNode().boundsInRoot
+        val actionBounds = action.fetchSemanticsNode().boundsInRoot
+        assertTrue(actionBounds.left >= headingBounds.right)
+        assertEquals(headingBounds.center.y, actionBounds.center.y, 1f)
+        action.performClick()
         assertTrue(signIn)
         assertTrue(runCatching { fixture.repository.postComment(42, "Guest text") }.exceptionOrNull() is ApiFailure)
         assertTrue(fixture.posts.isEmpty())

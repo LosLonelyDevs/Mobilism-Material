@@ -6,19 +6,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.mobilism.material.data.RequestTraffic
 import org.mobilism.material.data.RequestTrafficProtocol
+import org.mobilism.material.data.CacheDiagnostic
+import org.mobilism.material.data.AppCache
 
 internal class RequestTrafficJournal(private val storage: UsageStorage, private val version: String, private val code: Int,
     private val newId: () -> String = { UUID.randomUUID().toString() }) {
     @Synchronized fun record(day: LocalDate, event: RequestTraffic) {
         if (event.endpoint !in RequestTrafficProtocol.endpoints || event.method !in RequestTrafficProtocol.methods || event.outcome !in 0..5) return
-        prune(day)
-        val key = "traffic-$day-$code"
-        val existing = storage.get(key)
-        if (existing == null && storage.keys().count { it.startsWith("traffic-") } >= 32) return
-        val bucket = existing?.let(::JSONObject) ?: JSONObject().put("day", day.toString()).put("id", newId())
-            .put("appVersion", version).put("versionCode", code).put("metrics", JSONArray())
-        // A sealed day's ID always identifies the same totals, even if the device clock moves backward.
-        if (bucket.optBoolean("sealed")) return
+        val bucket = openBucket(day) ?: return
         val rows = bucket.getJSONArray("metrics")
         val row = (0 until rows.length()).map(rows::getJSONObject).firstOrNull {
             it.getString("endpoint") == event.endpoint && it.getString("method") == event.method
@@ -31,7 +26,31 @@ internal class RequestTrafficJournal(private val storage: UsageStorage, private 
         if ((0..5).sumOf { counts.getLong(it) } >= RequestTrafficProtocol.MAX_REQUESTS) return
         counts.put(event.outcome, counts.getLong(event.outcome) + 1)
         row.put("durationMs", row.getLong("durationMs") + event.durationMs.coerceIn(0, RequestTrafficProtocol.MAX_DURATION_MS))
-        storage.put(key, bucket.toString())
+        storage.put("traffic-$day-$code", bucket.toString())
+    }
+
+    @Synchronized fun recordCache(day: LocalDate, event: CacheDiagnostic) {
+        if (event.hits < 0 || event.misses < 0 || (event.hits == 0 && event.misses == 0)) return
+        val bucket = openBucket(day) ?: return
+        val caches = bucket.optJSONObject("caches") ?: JSONObject().also { bucket.put("caches", it) }
+        val key = when (event.name) {
+            AppCache.Following -> if (event.background == true) "FollowingBackground" else "FollowingManual"
+            else -> event.name.name
+        }
+        val row = caches.optJSONObject(key) ?: JSONObject().also { caches.put(key, it) }
+        row.put("hits", (row.optLong("hits") + event.hits).coerceAtMost(RequestTrafficProtocol.MAX_REQUESTS))
+        row.put("misses", (row.optLong("misses") + event.misses).coerceAtMost(RequestTrafficProtocol.MAX_REQUESTS))
+        storage.put("traffic-$day-$code", bucket.toString())
+    }
+
+    private fun openBucket(day: LocalDate): JSONObject? {
+        prune(day)
+        val existing = storage.get("traffic-$day-$code")
+        if (existing == null && storage.keys().count { it.startsWith("traffic-") } >= 32) return null
+        val bucket = existing?.let(::JSONObject) ?: JSONObject().put("day", day.toString()).put("id", newId())
+            .put("appVersion", version).put("versionCode", code).put("metrics", JSONArray())
+        // A sealed day's ID always identifies the same totals, even if the device clock moves backward.
+        return bucket.takeUnless { it.optBoolean("sealed") }
     }
 
     @Synchronized fun closedDays(today: LocalDate): JSONArray {

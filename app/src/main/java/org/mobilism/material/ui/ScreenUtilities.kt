@@ -81,6 +81,7 @@ fun openWeb(context: Context, url: String): Boolean {
 }
 
 internal val LocalForumLinkHandler = staticCompositionLocalOf<((String) -> Unit)?> { null }
+internal val LocalAnnouncementLinkHandler = staticCompositionLocalOf<((Long, Long) -> Boolean)?> { null }
 internal val LocalDownloadHelpHandler = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 internal fun forumBrowserIntent(url: String): Intent? {

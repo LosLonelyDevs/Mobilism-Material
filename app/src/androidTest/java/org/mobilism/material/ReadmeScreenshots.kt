@@ -84,8 +84,11 @@ class ReadmeScreenshots {
         releaseScreen(browserPreview = true)
         awaitImages(listOf(asset("aloha")))
         val uploader = compose.onNodeWithText("Hunter2").fetchSemanticsNode().boundsInRoot
+        val replies = compose.onNodeWithText("8 replies").fetchSemanticsNode().boundsInRoot
         val chip = compose.onNodeWithText("Internet & Network").fetchSemanticsNode().boundsInRoot
-        assertTrue(chip.left > uploader.right && chip.center.y in uploader.top..uploader.bottom)
+        assertTrue("Metadata should appear below the uploader", replies.top >= uploader.bottom && chip.top >= uploader.bottom)
+        assertTrue("The category should follow the reply count, including when the footer wraps",
+            chip.top >= replies.bottom || (chip.left >= replies.right && chip.center.y in replies.top..replies.bottom))
         capture("release")
     }
 

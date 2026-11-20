@@ -16,6 +16,7 @@ internal class ReadRequestPolicy(
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
     private val wallTime: () -> Long = System::currentTimeMillis,
     private val limits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
+    private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
     private val wait: suspend (Long) -> Unit = { delay(it) },
 ) {
     private data class Cached(val body: String, val expires: Long)
@@ -33,19 +34,24 @@ internal class ReadRequestPolicy(
 
     suspend fun request(key: String, cacheMillis: Long = 0, fresh: Boolean = false, load: suspend () -> String): String {
         val requestPolicy = limits()
-        val result: CompletableDeferred<String>
-        val owner: Boolean
-        synchronized(lock) {
+        lateinit var result: CompletableDeferred<String>
+        var owner = false
+        val cached = synchronized(lock) {
             if (requestPolicy != previousLimits) {
                 cache.clear()
                 previousLimits = requestPolicy
             }
             cache.entries.removeAll { it.value.expires <= now() }
             if (fresh) cache.remove(key)
-            else cache[key]?.let { return it.body }
+            cache[key]?.let { return@synchronized it }
             val existing = pending[key]
             owner = existing == null
             result = existing ?: CompletableDeferred<String>().also { pending[key] = it }
+            null
+        }
+        if (cached != null) {
+            diagnostics.cacheLookup(AppCache.Read, CacheOutcome.MemoryHit)
+            return cached.body
         }
         if (!owner) return try { result.await() }
         catch (cancelled: CancellationException) {
@@ -53,6 +59,7 @@ internal class ReadRequestPolicy(
             request(key, cacheMillis, fresh, load)
         }
         try {
+            if (cacheMillis > 0 && !fresh) diagnostics.cacheLookup(AppCache.Read, CacheOutcome.Miss)
             val body = pacedRead(load)
             synchronized(lock) {
                 if (cacheMillis > 0 && body.length <= 256_000 && limits() == requestPolicy) {

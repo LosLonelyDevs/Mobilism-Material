@@ -114,6 +114,7 @@ class UsernameAvatarTest {
             } }
             compose.waitUntil { identities.identities.value.containsKey("author") }
             compose.onNodeWithText("Author").assertIsDisplayed()
+            compose.onNodeWithText("A", useUnmergedTree = true).assertIsDisplayed()
             compose.onNodeWithContentDescription("Author profile picture", useUnmergedTree = true).assertDoesNotExist()
             compose.onNodeWithTag("major-android-releaser-badge-Author", useUnmergedTree = true).assertDoesNotExist()
         } finally { scope.cancel() }

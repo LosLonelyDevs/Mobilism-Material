@@ -6,8 +6,8 @@ import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 
-enum class DiagnosticSource { App, Forum, RealDebrid, MegaDebrid, MobilismPremium }
-enum class DiagnosticOperation { Startup, Settings, Export, Login, Categories, Releases, Search, Comments, Messages, Reaction, Account, Hosts, Resolve, SessionRenewal, NoticeDisplay, DeviceNotification, Other }
+enum class DiagnosticSource { App, Forum, RealDebrid, MegaDebrid, MobilismPremium, Vercel }
+enum class DiagnosticOperation { Startup, Settings, Export, Login, Categories, Releases, Search, Comments, Messages, Reaction, Account, Hosts, Resolve, SessionRenewal, NoticeDisplay, DeviceNotification, FollowingCheck, CacheLookup, CacheContribution, Other }
 enum class DiagnosticPhase { Started, Completed, Failed, Retrying, Rendered, Posted, Dismissed }
 enum class DiagnosticFailure { Timeout, Network, Cancelled, ProviderRejected, Unrestricting, Unexpected,
     Dns, Tls, Permission, Challenge, Server, InvalidResponse, SessionExpired, Credentials }
@@ -21,7 +21,30 @@ data class DiagnosticEvent(
     val elapsedMillis: Long? = null,
     val failure: DiagnosticFailure? = null,
     val noticeKey: String? = null,
+    val cache: CacheDiagnostic? = null,
 )
+
+enum class AppCache { Following, MemberIdentity, Search, Read }
+enum class CacheOutcome { Available, MemoryHit, DiskHit, Miss, Stale, Unconfigured, Disabled, Failed, Published, Empty }
+
+data class CacheDiagnostic(val name: AppCache, val outcome: CacheOutcome, val hits: Int = 0, val misses: Int = 0,
+    val items: Int? = null, val background: Boolean? = null, val fallbackSearches: Int? = null)
+
+suspend fun DiagnosticLogger.cacheLookup(cache: AppCache, outcome: CacheOutcome) {
+    val miss = outcome == CacheOutcome.Miss
+    recordCache(CacheDiagnostic(cache, outcome, hits = if (miss) 0 else 1, misses = if (miss) 1 else 0))
+}
+
+suspend fun DiagnosticLogger.recordCache(detail: CacheDiagnostic, operation: DiagnosticOperation = DiagnosticOperation.CacheLookup,
+    httpStatus: Int? = null) {
+    if (this === DiagnosticLogger.None) return
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val source = if (detail.name == AppCache.Following) DiagnosticSource.Vercel else DiagnosticSource.App
+        val phase = if (detail.outcome == CacheOutcome.Failed) DiagnosticPhase.Failed else DiagnosticPhase.Completed
+        // Diagnostics are best effort, including when local storage is full.
+        runCatching { record(DiagnosticEvent(source, operation, phase, httpStatus = httpStatus, cache = detail)) }
+    }
+}
 
 fun interface DiagnosticLogger {
     fun record(event: DiagnosticEvent)

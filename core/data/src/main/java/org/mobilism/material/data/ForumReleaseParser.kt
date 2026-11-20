@@ -19,13 +19,22 @@ internal object ForumReleaseParser {
 
     fun release(html: String, id: Long): Release = parse(html, id, requireSection = true)
 
-    fun topic(html: String, id: Long): DiscussionTopic = parse(html, id, requireSection = false).let {
-        DiscussionTopic(it.id, it.title, it.author, it.contentHtml, DiscussionKind.Other, it.categoryId ?: 0,
-            publishedAt = it.publishedAt, replies = it.replies, browserUrl = requireNotNull(it.browserUrl), images = it.images)
+    fun topic(html: String, id: Long): DiscussionTopic = asTopic(parse(html, id, requireSection = false))
+
+    fun announcement(html: String, id: Long): LinkedAnnouncement {
+        val document = document(html, id)
+        val post = parse(document, id, requireSection = false)
+        val replies = comments(document, id, requireNotNull(post.likeId), 0).page
+        return LinkedAnnouncement(asTopic(post), replies)
     }
 
-    private fun parse(html: String, id: Long, requireSection: Boolean): Release {
-        val document = document(html, id)
+    private fun asTopic(post: Release) =
+        DiscussionTopic(post.id, post.title, post.author, post.contentHtml, DiscussionKind.Other, post.categoryId ?: 0,
+            publishedAt = post.publishedAt, replies = post.replies, browserUrl = requireNotNull(post.browserUrl), images = post.images)
+
+    private fun parse(html: String, id: Long, requireSection: Boolean) = parse(document(html, id), id, requireSection)
+
+    private fun parse(document: Document, id: Long, requireSection: Boolean): Release {
         val title = document.selectFirst(".page-category-topic a[href], h2.topic-title a[href]")!!
         val post = posts(document).firstOrNull() ?: invalid()
         val content = content(post)
@@ -46,8 +55,10 @@ internal object ForumReleaseParser {
         )
     }
 
-    fun comments(html: String, topicId: Long, originalPostId: Long, start: Int): ForumComments {
-        val document = document(html, topicId)
+    fun comments(html: String, topicId: Long, originalPostId: Long, start: Int) =
+        comments(document(html, topicId), topicId, originalPostId, start)
+
+    private fun comments(document: Document, topicId: Long, originalPostId: Long, start: Int): ForumComments {
         val posts = posts(document)
         if (posts.isEmpty()) invalid()
         val comments = posts.filter { id(it) != originalPostId }.map { post ->
@@ -130,5 +141,5 @@ internal object ForumReleaseParser {
 
     private fun images(content: Element) = content.select("img[src]").mapNotNull { webUrlOrNull(it.attr("src")) }.distinct()
 
-    private fun invalid(): Nothing = throw ApiFailure(FailureKind.InvalidResponse, "The forum did not return this release. Try opening it in your browser.")
+    private fun invalid(): Nothing = throw ApiFailure(FailureKind.InvalidResponse, "The forum did not return the requested topic.")
 }

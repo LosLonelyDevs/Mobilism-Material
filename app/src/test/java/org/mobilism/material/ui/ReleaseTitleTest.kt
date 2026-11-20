@@ -6,6 +6,13 @@ import org.mobilism.material.data.ReleaseTitle
 import org.mobilism.material.data.ReleaseTitles
 
 class ReleaseTitleTest {
+    @Test fun recognizesBuildCodeBeforeParenthesizedVersion() {
+        val expected = ReleaseTitle("Nova Launcher: Home Screen", "8.9.9", "89900", listOf("Prime", "Mod Extra"))
+        assertEquals(expected, ReleaseTitles.parse("Nova Launcher: Home Screen v89900 (8.9.9) [Prime] [Mod Extra]"))
+        assertEquals(expected, ReleaseTitles.parse("Nova Launcher: Home Screen v8.9.9 (89900) [Prime] [Mod Extra]"))
+        assertEquals("v8.9.9 · build 89900 · Prime · Mod Extra", expected.subtitle)
+    }
+
     @Test fun separatesVersionBuildAndMultipleTags() {
         assertEquals(ReleaseTitle("Example - Multiple Accounts", "6.0.8", "130", listOf("Premium")),
             ReleaseTitles.parse("Example - Multiple Accounts v6.0.8 build 130 [Premium]"))

@@ -4,6 +4,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReleaseLinksTest {
+    @Test fun retainsTheForumForAnnouncementLinksFromReleaseComments() {
+        assertEquals(ReleaseLinks.Topic(6464350, 1),
+            ReleaseLinks.topic("https://forum.mobilism.org/viewtopic.php?f=1&t=6464350"))
+        assertEquals(ReleaseLinks.Topic(6464350, null),
+            ReleaseLinks.topic("https://forum.mobilism.org/viewtopic.php?f=1&f=429&t=6464350"))
+    }
+
     @Test fun acceptsTopicLinksWithExtraForumParametersAndAnchors() {
         assertEquals(123L, ReleaseLinks.topicId("https://forum.mobilism.org/viewtopic.php?f=429&t=123#p456"))
         assertEquals(123L, ReleaseLinks.topicId("http://forum.mobilism.org/viewtopic.php?t=123&start=20"))

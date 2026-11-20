@@ -6,7 +6,7 @@ The [Obtainium badge](https://github.com/ImranR98/Obtainium/tree/main/assets/gra
 
 App screenshots use fixed sample content. No account credentials or personal data.
 
-CI rebuilds the four screenshots when the app version or capture setup changes on `main`. A manual Android checks run refreshes them too. It uses a fresh Android emulator, bundled images, and the real Compose screens. It never signs in or loads saved account settings.
+After the APK is published, the release workflow captures the README screenshots on an emulator using bundled images and the real Compose screens. It updates the README images if `main` still points to the released commit.
 
 The release screenshot shows the TizenTube carousel. Its two images are from [this public release](https://forum.mobilism.org/viewtopic.php?t=6429197). Feed fixtures also use public images from [Windfinder](https://forum.mobilism.org/viewtopic.php?t=6436583), [Flud+](https://forum.mobilism.org/viewtopic.php?t=6436566), and [Aloha](https://forum.mobilism.org/viewtopic.php?t=6436688). Titles, counts, and release text are sample data. Fixture assets live in `app/src/debug/assets/readme` and aren't included in release APKs.
 

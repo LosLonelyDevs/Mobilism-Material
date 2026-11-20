@@ -18,6 +18,20 @@ class DiscussionsViewModelTest {
     @Before fun setup() = Dispatchers.setMain(dispatcher)
     @After fun teardown() = Dispatchers.resetMain()
 
+    @Test fun linkedAnnouncementUsesBundledRepliesAndReturnsDirectlyToTheComment() = runTest(dispatcher) {
+        val repo = Repository()
+        val linked = topic.copy(id = 6464350, forumId = 1, kind = DiscussionKind.Other)
+        val model = DiscussionsViewModel(repo, null, SavedStateHandle(), announcementsOnly = true,
+            linkedAnnouncement = { LinkedAnnouncement(linked, CommentPage(listOf(comment), false)) })
+        advanceUntilIdle()
+        assertEquals(linked, model.state.value.topic)
+        assertEquals(listOf(comment), model.state.value.comments.items)
+        assertTrue(model.state.value.categories.isEmpty())
+        assertTrue(repo.pages.isEmpty())
+        assertFalse(model.state.value.comments.canLoadMore)
+        assertFalse(model.back())
+    }
+
     @Test fun announcementsOpenTheirOnlyForumAndReturnToCallerAfterReading() = runTest(dispatcher) {
         val repo = Repository()
         val announcement = category.copy(id = 13, name = "Announcements", area = DiscussionArea.Community, section = "Announcements")

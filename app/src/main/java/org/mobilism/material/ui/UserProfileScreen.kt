@@ -1,7 +1,6 @@
 package org.mobilism.material.ui
 
 import androidx.compose.animation.Crossfade
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,10 +14,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -29,30 +26,34 @@ import org.mobilism.material.data.*
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.LoadingState
+import org.mobilism.material.designsystem.LocalAppTheme
 import org.mobilism.material.members.memberBadges
 
 internal val LocalProfileHandler = staticCompositionLocalOf<((ProfileReference) -> Unit)?> { null }
 
 @Composable
+internal fun profileClick(name: String, onOpen: () -> Unit = {}): (() -> Unit)? {
+    val open = LocalProfileHandler.current ?: return null
+    if (name.isBlank()) return null
+    return { onOpen(); open(ProfileReference(username = name)) }
+}
+
+@Composable
 internal fun UsernameLink(name: String, modifier: Modifier = Modifier, label: String = name,
     style: TextStyle = MaterialTheme.typography.bodyMedium, color: Color = MaterialTheme.colorScheme.primary,
     maxLines: Int = 1, fontWeight: FontWeight? = null, showAvatar: Boolean = true, lookupIdentity: Boolean = true,
+    prefix: String = "", suffix: String = "",
     onOpen: () -> Unit = {}) {
-    val open = LocalProfileHandler.current
+    val open = profileClick(name, onOpen)
     val identity = memberIdentity(name, lookup = lookupIdentity)
-    val profileLink = if (open != null && name.isNotBlank()) {
-        Modifier.clickable(role = Role.Button, onClickLabel = "View $name profile") {
-            onOpen()
-            open(ProfileReference(username = name))
-        }
-    } else Modifier
-    Row(modifier.minimumInteractiveComponentSize().clip(MaterialTheme.shapes.small).then(profileLink),
+    Row(modifier.minimumInteractiveComponentSize(),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (showAvatar && !identity?.avatar.isNullOrBlank()) {
-            MessageAvatar(name, identity.avatar, Modifier.size(24.dp), lookupIdentity = false)
+        if (showAvatar && name.isNotBlank()) {
+            MessageAvatar(name, identity?.avatar, Modifier.size(24.dp), lookupIdentity = false, onProfile = open)
         }
         MemberName(name, label, modifier = Modifier.weight(1f, fill = false), style = style, color = color,
-            maxLines = maxLines, fontWeight = fontWeight, badges = identity?.badges.orEmpty())
+            maxLines = maxLines, fontWeight = fontWeight, badges = identity?.badges.orEmpty(), prefix = prefix, suffix = suffix,
+            onProfile = open)
     }
 }
 
@@ -113,7 +114,8 @@ internal fun UserProfileContent(profile: UserProfile, onOpenContact: ((String) -
             Surface(shape = MaterialTheme.shapes.extraLarge, color = colors.surfaceContainerLow) {
                 Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MessageAvatar(profile.username, profile.avatar, Modifier.size(80.dp), initialStyle = MaterialTheme.typography.headlineMedium)
+                    MessageAvatar(profile.username, profile.avatar, Modifier.size(80.dp), initialStyle = MaterialTheme.typography.headlineMedium,
+                        onProfile = null)
                     MemberName(profile.username, style = MaterialTheme.typography.headlineSmall, color = colors.primary,
                         textAlign = TextAlign.Center, maxLines = 2, badges = profile.memberBadges())
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -194,7 +196,7 @@ private fun ProfileRoleBadge(role: AccountRole, label: String) {
     val colors = MaterialTheme.colorScheme
     val (background, foreground) = when (role) {
         AccountRole.Administrator -> colors.tertiaryContainer to colors.onTertiaryContainer
-        AccountRole.Developer -> colors.primaryContainer to colors.onPrimaryContainer
+        AccountRole.Developer -> LocalAppTheme.current.let { it.success to it.onSuccess }
         AccountRole.Moderator -> colors.secondaryContainer to colors.onSecondaryContainer
         AccountRole.Member -> if (label.equals("Member", true)) colors.surfaceContainerHigh to colors.onSurfaceVariant
             else colors.secondaryContainer to colors.onSecondaryContainer

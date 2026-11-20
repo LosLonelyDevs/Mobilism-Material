@@ -2,11 +2,15 @@ package org.mobilism.material
 
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -20,6 +24,8 @@ import org.mobilism.material.settings.DownloadPreferences
 import org.mobilism.material.settings.ReleaseDisplayStore
 import org.mobilism.material.ui.ReleaseScreen
 import org.mobilism.material.ui.ReleaseState
+import org.mobilism.material.ui.ForumFormattingOptions
+import org.mobilism.material.ui.LocalForumFormatting
 
 @RunWith(AndroidJUnit4::class)
 class ReleaseDownloadsTest {
@@ -49,6 +55,28 @@ class ReleaseDownloadsTest {
             Page(release.copy(contentHtml = "<p>Description only.</p>"))
         } }
         compose.onNodeWithTag("open-downloads").assertDoesNotExist()
+    }
+
+    @Test fun styledReleaseUsesARegularChangelogNoteAndHeavierDownloadGroupTitle() {
+        var styled by mutableStateOf(true)
+        val sample = release.copy(contentHtml = "<p>What's new:</p><strong>No changelog</strong><br>" +
+            "<b>Download Instructions:</b><br><b>arm64-v8a:</b><br><a href='$link'>Download</a>")
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            CompositionLocalProvider(LocalForumFormatting provides ForumFormattingOptions(cleanUpReleaseText = styled)) { Page(sample) }
+        } }
+        fun style(label: String): androidx.compose.ui.text.TextStyle {
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(label, useUnmergedTree = true).performScrollTo()
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            return layouts.single().layoutInput.style
+        }
+        val header = style("What's new")
+        val note = style("No changelog")
+        org.junit.Assert.assertTrue(note.fontSize.value < header.fontSize.value)
+        org.junit.Assert.assertEquals(FontWeight.Normal, note.fontWeight)
+        org.junit.Assert.assertEquals(FontWeight.SemiBold, style("arm64-v8a").fontWeight)
+        compose.runOnIdle { styled = false }
+        org.junit.Assert.assertNotEquals(FontWeight.SemiBold, style("arm64-v8a").fontWeight)
     }
 
     @Test fun descriptionChoiceCarriesToTheNextReleaseAndCanBeExpandedAgain() {

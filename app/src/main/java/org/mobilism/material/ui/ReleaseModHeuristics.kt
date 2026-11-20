@@ -17,10 +17,11 @@ internal object ReleaseModHeuristics {
         Regex("""(?i)^(?:no\s+(?:root|license\s+(?:check|verification))\s+(?:needed|required)|unlimited\s+(?:coins|gems|credits|lives)|mod\s+menu|patched\s+(?:license|signature))\b"""),
     )
     private val weakFeatures = Regex("""(?i)\b(?:amoled|accent\s+colou?r|ghost\s+mode|spoof|custom\s+theme|hide\s+\w+|block\s+\w+)\b""")
+    private val patchAction = Regex("""(?i)^(?:custom|disable|enable|prefer|serve|unlock|remove|hide|show|skip|block|force|replace|override|spoof)\s+\S""")
     private val purchaseCondition = Regex("""(?i)\b(?:(?:when|after|once|if|by|with|requires?)\s+(?:you\s+)?(?:subscrib\w*|purchas\w*|pay\w*|buy\w*)|(?:with|requires?)\s+(?:a\s+)?(?:paid\s+)?subscription|upgrade\s+to\s+(?:premium|pro))\b""")
     private val note = Regex("""(?i)^(?:notes?\s*:|important\s*:|installation\s*:|install\b|uninstall\b|changes\s+and\s+bug\s+fixes|mod\s+changelog)""")
 
-    fun classify(lines: List<ReleaseLine>, releaseTitle: String) {
+    fun classify(lines: List<ReleaseLine>, releaseTitle: String, cleanUp: Boolean) {
         val title = Jsoup.parseBodyFragment(releaseTitle).text()
         val appName = Regex("""(?i)^(.+?)\s+v\d""").find(title)?.groupValues?.get(1)?.lowercase()
         val tags = titleTag.findAll(title).map { it.groupValues[1].trim() }.toList()
@@ -41,6 +42,23 @@ internal object ReleaseModHeuristics {
                 !text.endsWith('.') && !lines[index].linkOnly &&
                 (lines[index].styled || version.matches(text) || headerName(index) in names)
         }
+        fun patchListEnd(start: Int): Int {
+            val heading = lines[start]
+            if (heading.boundary || heading.kind == ReleaseSection.Mod || heading.text.length > 100 ||
+                version.matchEntire(label(start))?.groupValues?.get(1)?.endsWith(" patches", ignoreCase = true) != true ||
+                !header(start)) return start
+            var end = start + 1
+            var actions = 0
+            while (end < lines.size && !lines[end].boundary && lines[end].kind == heading.kind) {
+                val text = featureText(end)
+                if (text.length > 90 || purchaseCondition.containsMatchIn(text)) break
+                val action = patchAction.containsMatchIn(text) || strong(end)
+                if (!action && !isBullet(end)) break
+                if (action) actions++
+                end++
+            }
+            return if (actions >= 2) end else start
+        }
         fun nearbyAdvertising(start: Int, end: Int): Boolean {
             fun scan(from: Int, step: Int): Boolean {
                 var index = from
@@ -57,6 +75,12 @@ internal object ReleaseModHeuristics {
 
         var start = 0
         while (start < lines.size) {
+            val patchEnd = if (cleanUp) patchListEnd(start) else start
+            if (patchEnd > start) {
+                for (index in start until patchEnd) lines[index].kind = ReleaseSection.Mod
+                start = patchEnd
+                continue
+            }
             if (!eligible(start)) { start++; continue }
             val hasHeader = header(start)
             var end = if (hasHeader) start + 1 else start

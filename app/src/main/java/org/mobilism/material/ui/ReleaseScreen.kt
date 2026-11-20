@@ -158,8 +158,8 @@ fun ReleaseScreen(
         release?.let { ReleaseContentParser.parse(it.contentHtml, it.downloadLinks, it.browserUrl ?: "https://forum.mobilism.org/") }
     }
     LaunchedEffect(content) { onDownloadHosts(content?.downloads.orEmpty().map { it.url }) }
-    val sections = remember(content, release?.title) {
-        ReleaseSections.parse(content?.bodyHtml.orEmpty(), release?.title.orEmpty())
+    val sections = remember(content, release?.title, cleanUpHeadings) {
+        ReleaseSections.parse(content?.bodyHtml.orEmpty(), release?.title.orEmpty(), cleanUp = cleanUpHeadings)
     }
     val groups = remember(content, preferences, debrid) { DownloadGroups.group(content?.downloads.orEmpty(), preferences, debrid) }
     val downloadOpened = { if (release?.section == ContentSection.Apps) onDownloaded(true) }
@@ -321,18 +321,22 @@ fun ReleaseScreen(
                         }
                         Box(Modifier.padding(bottom = 12.dp)) {
                             CollapsibleSection("${release.id}-${section.kind}", section.kind.title, icon, accent,
-                                compactHeaderBottom = cleanUpHeadings && section.startsWithAdvertisingNotice,
+                                compactHeaderBottom = cleanUpHeadings && (section.kind == ReleaseSection.Changes || section.startsWithAdvertisingNotice),
                                 expanded = descriptionExpanded.takeIf { section.kind == ReleaseSection.Description },
                                 onExpandedChange = onDescriptionExpanded.takeIf { section.kind == ReleaseSection.Description },
                                 headingStyle = MaterialTheme.typography.titleMedium,
                                 headingColor = if (cleanUpHeadings) releaseHeadingColor(MaterialTheme.colorScheme.onSurface, accent)
                                     else Color.Unspecified) {
-                                ReleaseBody(section.html, release.browserUrl ?: "https://forum.mobilism.org/", onRelease, cleanUp = true)
+                                if (section.changelogPlaceholder != null) {
+                                    Text(section.changelogPlaceholder, style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                } else ReleaseBody(section.html, release.browserUrl ?: "https://forum.mobilism.org/", onRelease, cleanUp = true)
                             }
                         }
                     }
                     if (groups.isNotEmpty() || !content?.downloadNotesHtml.isNullOrBlank()) releaseDetailItem("downloads") {
                         CollapsibleSection("${release.id}-downloads", "Downloads", Icons.Outlined.Download, theme.success,
+                            compactHeaderBottom = cleanUpHeadings,
                             headingStyle = MaterialTheme.typography.titleMedium,
                             headingColor = if (cleanUpHeadings) releaseHeadingColor(MaterialTheme.colorScheme.onSurface, theme.success)
                                 else Color.Unspecified) {
@@ -348,18 +352,29 @@ fun ReleaseScreen(
                         }
                     }
                     item("comments-heading") {
+                        val label = if (auth !is AuthState.SignedIn) "Sign in to comment"
+                            else if (state.composer.draft.isNotBlank()) "Continue your comment" else "Comment"
+                        val write = if (auth is AuthState.SignedIn) onWriteComment else onSignIn
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                AppHeading("Comments", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                                Text("Latest activity first", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    AppHeading("Comments", HeadingLevel.Section, Modifier.weight(1f),
+                                        style = if (cleanUpHeadings) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge)
+                                    if (cleanUpHeadings) AppIconButton(Icons.Outlined.ChatBubbleOutline, label, write,
+                                        Modifier.testTag("write-comment"))
+                                }
+                                if (cleanUpHeadings) {
+                                    val total = release.replies
+                                    val unit = if (total == 1L) "comment" else "comments"
+                                    Text("Latest activity first · $total $unit", style = MaterialTheme.typography.labelSmall,
+                                        color = releaseHeadingColor(MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.secondary))
+                                } else Text("Latest activity first", style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            ExpressiveButton(if (auth is AuthState.SignedIn) onWriteComment else onSignIn,
-                                Modifier.fillMaxWidth().testTag("write-comment"),
-                                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors()) {
+                            if (!cleanUpHeadings) ExpressiveButton(write, Modifier.fillMaxWidth().testTag("write-comment"),
+                                colors = ButtonDefaults.filledTonalButtonColors()) {
                                 Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null)
-                                Text(if (auth !is AuthState.SignedIn) "Sign in to comment"
-                                    else if (state.composer.draft.isNotBlank()) "Continue your comment" else "Comment",
-                                    Modifier.padding(start = 8.dp))
+                                Text(label, Modifier.padding(start = 8.dp))
                             }
                         }
                     }
@@ -414,6 +429,7 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
     }
     val currentOnRelease = androidx.compose.runtime.rememberUpdatedState(onRelease)
     val currentForumLinkHandler = androidx.compose.runtime.rememberUpdatedState(LocalForumLinkHandler.current)
+    val currentAnnouncementHandler = androidx.compose.runtime.rememberUpdatedState(LocalAnnouncementLinkHandler.current)
     val currentDownloadHelpHandler = androidx.compose.runtime.rememberUpdatedState(LocalDownloadHelpHandler.current)
     val currentProfileHandler = androidx.compose.runtime.rememberUpdatedState(LocalProfileHandler.current)
     var heldUrl by remember(html, baseUrl) { mutableStateOf<String?>(null) }
@@ -447,16 +463,17 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
                 removeSpan(link)
                 setSpan(object : URLSpan(link.url) {
                     override fun onClick(widget: View) {
-                        val topic = org.mobilism.material.ReleaseLinks.topicId(link.url)
+                        val topic = org.mobilism.material.ReleaseLinks.topic(link.url)
                         val navigate = currentOnRelease.value
                         val forumHandler = currentForumLinkHandler.value
                         val help = currentDownloadHelpHandler.value
                         val profile = org.mobilism.material.data.ProfileReference.fromUrl(link.url)
                         val openProfile = currentProfileHandler.value
                         if (profile != null && openProfile != null) openProfile(profile)
-                        else if (topic == org.mobilism.material.data.DownloadHelp.TOPIC_ID && help != null) help()
+                        else if (topic?.id == org.mobilism.material.data.DownloadHelp.TOPIC_ID && help != null) help()
+                        else if (topic?.forumId != null && currentAnnouncementHandler.value?.invoke(topic.id, topic.forumId) == true) return
                         else if (forumHandler != null) forumHandler(link.url)
-                        else if (topic != null && navigate != null) navigate(topic) else openWeb(context, link.url)
+                        else if (topic != null && navigate != null) navigate(topic.id) else openWeb(context, link.url)
                     }
                 }, start, end, flags)
             }

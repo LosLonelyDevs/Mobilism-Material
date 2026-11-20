@@ -343,7 +343,7 @@ internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = fal
                     UsernameLink(release.author, style = subtitleStyle, showAvatar = !compact, lookupIdentity = !compact)
                 }
             }
-            ReleaseMetadataFooter(release, singleRow = true, spacing = 10.dp) {
+            ReleaseMetadataFooter(release, singleRow = true, spacing = 10.dp, listCard = true) {
                 ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
                 ReleaseViewCount(release.views, numberOnly = true)
                 if (release.replies > 0) Row(Modifier.clearAndSetSemantics {

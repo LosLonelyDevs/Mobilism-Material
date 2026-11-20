@@ -125,7 +125,7 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             }
             item("privacy-section") { SettingsSectionLabel("Privacy and diagnostics") }
             item(key = "daily-usage") {
-                SettingsToggleRow("Anonymous usage", "Help measure daily activity, devices, and request totals.", Icons.Outlined.Insights,
+                SettingsToggleRow("Anonymous usage", "Share daily activity, device, request, and cache totals.", Icons.Outlined.Insights,
                     dailyUsageEnabled, onDailyUsage)
                 Text("Sends app version, Android version, manufacturer, and model once per active day. " +
                     "No account data or permanent device ID.", Modifier.padding(horizontal = 16.dp),

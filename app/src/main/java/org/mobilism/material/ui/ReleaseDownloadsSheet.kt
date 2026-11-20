@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -116,7 +117,9 @@ internal fun ReleaseDownloadGroup(releaseId: Long, group: DownloadGroup, baseUrl
             .clickable(role = Role.Button, onClick = { expanded = !expanded })
             .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            AppHeading(group.title, HeadingLevel.Page, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+            val titleStyle = MaterialTheme.typography.titleSmall
+            AppHeading(group.title, HeadingLevel.Page, Modifier.weight(1f), style = if (LocalForumFormatting.current.cleanUpReleaseText)
+                titleStyle.copy(fontWeight = FontWeight.SemiBold) else titleStyle)
             Icon(Icons.Outlined.ExpandMore, null, Modifier.size(24.dp).rotate(rotation), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         AnimatedVisibility(expanded,

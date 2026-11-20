@@ -10,6 +10,26 @@ class RequestTrafficJournalTest {
     private val day = LocalDate.of(2026, 11, 17)
     private val event = RequestTraffic("api/search", "POST", 0, 24)
 
+    @Test fun cacheOnlyDaySurvivesRestartAndCannotChangeAfterSealing() {
+        val storage = Storage()
+        val journal = RequestTrafficJournal(storage, "0.1.24", 25)
+        val cache = org.mobilism.material.data.CacheDiagnostic(org.mobilism.material.data.AppCache.Following,
+            org.mobilism.material.data.CacheOutcome.Available, hits = 3, misses = 4, background = true)
+        repeat(2) { journal.recordCache(day, cache) }
+        journal.recordCache(day, cache.copy(background = false))
+        val restarted = RequestTrafficJournal(storage, "0.1.24", 25)
+        val sealed = restarted.closedDays(day.plusDays(1)).getJSONObject(0)
+        assertEquals(0, sealed.getJSONArray("metrics").length())
+        val totals = sealed.getJSONObject("caches").getJSONObject("FollowingBackground")
+        assertEquals(3, sealed.getJSONObject("caches").getJSONObject("FollowingManual").getInt("hits"))
+        assertEquals(6, totals.getInt("hits"))
+        assertEquals(8, totals.getInt("misses"))
+        restarted.recordCache(day, cache)
+        assertEquals(sealed.toString(), restarted.closedDays(day.plusDays(2)).getJSONObject(0).toString())
+        restarted.clear()
+        assertEquals(0, journal.closedDays(day.plusDays(1)).length())
+    }
+
     @Test fun finishedDaysKeepStableImmutableTotalsAcrossRestartsAndReports() {
         val storage = Storage()
         val journal = RequestTrafficJournal(storage, "0.1.24", 25)

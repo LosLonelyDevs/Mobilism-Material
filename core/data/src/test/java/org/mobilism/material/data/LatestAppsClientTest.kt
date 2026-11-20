@@ -36,9 +36,9 @@ class LatestAppsClientTest {
         assertEquals(setOf("id", "name", "title", "postedAt", "version", "author"), row.keys().asSequence().toSet())
         assertEquals("Fixture", row.getString("name"))
         assertEquals("2.1", row.getString("version"))
-        assertEquals(page.title, client.snapshot(hideAdult = false).single().title)
-        assertTrue(client.snapshot(hideAdult = true).isEmpty())
+        assertEquals(page.title, client.snapshot(hideAdult = false).releases.single().title)
+        assertTrue(client.snapshot(hideAdult = true).releases.isEmpty())
         now = posted + 24 * 3600
-        assertTrue(client.snapshot(hideAdult = false).isEmpty())
+        assertEquals(CacheOutcome.Stale, client.snapshot(hideAdult = false).outcome)
     }
 }
