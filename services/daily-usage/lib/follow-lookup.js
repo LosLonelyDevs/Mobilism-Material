@@ -4,7 +4,7 @@ export const appKey = name => name.normalize('NFKC').trim().toLowerCase().replac
 
 export function parseLookup(body) {
   if (Object.keys(body).some(k => !['apps', 'adultFiltered', 'day'].includes(k)) ||
-      typeof body.adultFiltered !== 'boolean' || !/^\d{4}-\d{2}-\d{2}$/u.test(body.day) ||
+      typeof body.adultFiltered !== 'boolean' || typeof body.day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(body.day) ||
       !Array.isArray(body.apps) || !body.apps.length || body.apps.length > maxNames) throw new Error();
   const names = new Set(), tokens = new Set();
   return body.apps.map(app => {

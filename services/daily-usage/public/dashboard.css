@@ -107,4 +107,5 @@
 .admin-traffic-table th, .admin-traffic-table td { padding: 12px 10px; text-align: right; white-space: nowrap; }
 .admin-traffic-table th:first-child, .admin-traffic-table td:first-child { text-align: left; }
 .admin-traffic-table th { font-size: 12px; }
+#follow-rankings th[scope="row"] { white-space: normal; overflow-wrap: anywhere; }
 .admin-traffic-table td { border-top: 1px solid var(--md-sys-color-outline-variant); font-size: 13px; }
