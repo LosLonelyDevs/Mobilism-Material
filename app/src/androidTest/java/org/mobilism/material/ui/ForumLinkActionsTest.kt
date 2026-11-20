@@ -37,21 +37,23 @@ class ForumLinkActionsTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     @Test fun announcementLinkInReleaseCommentOpensTheNativeReaderAndBackReturnsToComment() {
+        val topicId = 6464350L
+        val page = "page/1/limit/20/orderby"
         val requests = java.util.concurrent.CopyOnWriteArrayList<String>()
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val path = chain.request().url.encodedPath.removePrefix("/api-new/")
             requests += path
             val body = when (path) {
-                "other/category/1/page/1/limit/20/orderby/topic_last_post_time/desc/1" ->
-                    """{"response":[{"id":6464350,"subject":"Forum announcement","name":"Moderator","forum_id":1,"content":"Announcement body"}]}"""
-                "other/6464350/comments/page/1/limit/20/orderby/date/desc" -> """{"response":[]}"""
+                "other/category/1/$page/topic_last_post_time/desc/1" ->
+                    """{"response":[{"id":$topicId,"subject":"Forum announcement","name":"Moderator","forum_id":1,"content":"Announcement body"}]}"""
+                "other/$topicId/comments/$page/date/desc" -> """{"response":[]}"""
                 else -> error("Unexpected request: $path")
             }
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
                 .body(body.toResponseBody()).build()
         }.build()
         val repository = DefaultMobilismRepository(compose.activity, client = client)
-        val url = "https://forum.mobilism.org/viewtopic.php?f=1&t=6464350"
+        val url = "https://forum.mobilism.org/viewtopic.php?f=1&t=$topicId"
         compose.setContent { MobilismTheme(reduceMotion = true) {
             val nav = rememberNavController()
             androidx.compose.runtime.CompositionLocalProvider(LocalAnnouncementLinkHandler provides { id, forum ->

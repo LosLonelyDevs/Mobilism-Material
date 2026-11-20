@@ -78,8 +78,9 @@ class DiscussionsTest {
         val result = fixture.repository.announcement(6464350, 1)
         assertEquals("Archived announcement", result.topic.title)
         assertEquals(102L, result.forumComments!!.items.single().id)
-        assertEquals(listOf("/api-new/other/category/1/page/1/limit/20/orderby/topic_last_post_time/desc/1",
-            "/viewtopic.php"), fixture.requests.map { it.url.encodedPath })
+        assertEquals(2, fixture.requests.size)
+        assertEquals(listOf("api-new", "other", "category", "1", "page", "1", "limit", "20",
+            "orderby", "topic_last_post_time", "desc", "1"), fixture.requests.first().url.pathSegments)
         assertEquals(target, fixture.requests.last().url.toString())
     }
 
