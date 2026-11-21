@@ -104,7 +104,7 @@ private fun ThemePicker(state: AppearanceState, onDismiss: () -> Unit, onSelect:
                         title = stringResource(if (dark) R.string.appearance_dark_themes else R.string.appearance_light_themes),
                         initiallyExpanded = selectedTheme.isDark == dark,
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             org.mobilism.material.data.Alphabetical.sorted(ThemeCatalog.forMode(dark, state.customThemes)) { it.name }.forEach { theme ->
                                 ThemeOption(theme, state.theme.id == theme.id, { onSelect(theme) }, Modifier.fillMaxWidth())
                             }

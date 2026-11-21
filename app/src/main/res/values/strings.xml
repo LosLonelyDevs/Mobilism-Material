@@ -58,6 +58,10 @@
     <string name="download_arch_all">All architectures</string>
     <string name="download_preferred_hosts">Preferred file hosts</string>
     <string name="download_preferred_hosts_summary">Reorders displayed filehosters based on preference.</string>
+    <string name="download_search_hosts">Search file hosts</string>
+    <string name="download_clear_host_search">Clear host search</string>
+    <string name="download_no_hosts">No file hosts available yet.</string>
+    <string name="download_no_host_matches">No matching file hosts.</string>
     <string name="download_loading_hosts">Loading Mobilism hosts…</string>
     <string name="download_arch_unknown">Unknown</string>
     <string name="download_writable_folder">Choose a folder that allows files to be created.</string>
