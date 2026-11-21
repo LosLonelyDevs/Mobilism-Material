@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.26
+
+- Improved update notifications for followed apps
+- In app downloader for premium links is now available
+- Expanded functionality for private messages and comments
+- Improved text formatting on release pages (can be turned off in settings)
+
 ## 0.1.25
 
 - Improved update notifications for followed apps
