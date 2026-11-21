@@ -123,6 +123,21 @@ test('two comparable gaps ten minutes apart hide a topic until a newer sighting'
   assert.equal(await visible(now + 1860), true);
 });
 
+test('a newly confirmed name can be served while the Latest feed is stale', async () => {
+  const apps = ['Reader', 'Missing'].map(name => ({ name, receipt: randomUUID() }));
+  await post([item(1)], true);
+  const later = now + 21601;
+  const reader = item(2, 'Reader');
+  await call('POST', { firstPage: false, adultFiltered: true, items: [reader], readAt: later }, query, later);
+  const result = await named(apps, true, query, later);
+  assert.equal(result.body.observedAt, later);
+  assert.deepEqual(result.body.items.map(item => item.name), ['Reader']);
+  assert.equal(result.body.misses, 0);
+  assert.equal((await call('GET', null, query, later)).body.observedAt, now);
+  assert.deepEqual(await query('SELECT sum(hits)::int AS hits, sum(misses)::int AS misses FROM daily_followed_apps'), [{ hits: 1, misses: 0 }]);
+  assert.deepEqual((await named(apps, true, query, later + 21601)).body.items, []);
+});
+
 test('paging past a topic cannot evict it, and other fresh topics do not extend its 24 hours', async () => {
   const original = [105, 104, 103, 102, 101], newer = [110, 109, 108, 107, 106];
   await feed(original, [], now);

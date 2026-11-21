@@ -36,12 +36,16 @@ export async function lookup(database, apps, adultFiltered, now, clientDay) {
         AND NOT (item ? 'hiddenAt') AND coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $3
     ) available WHERE singleton`, [keys, adultFiltered, now - cacheLifetime]);
   if (!row) throw new Error();
-  const observedAt = Number(row.observed_at);
+  const feedObservedAt = Number(row.observed_at);
   const matches = new Set(row.keys);
-  const fresh = observedAt > 0 && now - observedAt >= -300 && now - observedAt <= 21600;
+  const isFresh = at => at > 0 && now - at >= -300 && now - at <= 21600;
+  const fresh = isFresh(feedObservedAt);
+  // A recent sighting confirms that specific app even when nobody has opened Latest recently.
+  const items = fresh ? row.matches : row.matches.filter(item => isFresh(item.lastSeen));
+  const observedAt = fresh || !items.length ? feedObservedAt : Math.min(...items.map(item => item.lastSeen));
   const day = new Date(now * 1000).toISOString().slice(0, 10);
-  const returned = new Set(row.matches.map(item => item.key));
-  const counts = apps.map(app => ({ ...app, hit: fresh && returned.has(app.key) ? 1 : 0,
+  const returned = new Set(items.map(item => item.key));
+  const counts = apps.map(app => ({ ...app, hit: returned.has(app.key) ? 1 : 0,
     miss: fresh && !matches.has(app.key) ? 1 : 0 }));
   try {
     await database(`WITH input AS (
@@ -57,6 +61,6 @@ export async function lookup(database, apps, adultFiltered, now, clientDay) {
           measured_misses = daily_followed_apps.measured_misses + excluded.measured_misses`, [JSON.stringify(counts), day, day === clientDay]);
   } catch { /* A statistics write must never turn a cache hit into a Mobilism search. */ }
   return { observedAt, misses: counts.filter(app => app.miss).length,
-    items: row.matches.map(({ id, title, name, version, postedAt, author, adultFiltered }) =>
+    items: items.map(({ id, title, name, version, postedAt, author, adultFiltered }) =>
     ({ id, title, name, version, postedAt, author, adultFiltered })) };
 }
