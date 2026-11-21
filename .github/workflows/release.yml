@@ -95,7 +95,7 @@ jobs:
       - uses: android-actions/setup-android@v4.0.4
       - uses: gradle/actions/setup-gradle@v6.4.0
       - name: Install Android SDK
-        run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+        run: sdkmanager "platforms;android-37.0" "platforms;android-37.2" "build-tools;37.0.0"
       - name: Decode release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -164,7 +164,7 @@ jobs:
       - uses: android-actions/setup-android@v4.0.4
       - uses: gradle/actions/setup-gradle@v6.4.0
       - name: Install Android SDK
-        run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+        run: sdkmanager "platforms;android-37.0" "platforms;android-37.2" "build-tools;37.0.0"
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -196,7 +196,7 @@ jobs:
             echo 'Main moved during capture. Leaving its screenshots unchanged.'
             exit 0
           fi
-          git add -- docs/images/apps.png docs/images/release.png docs/images/downloads.png docs/images/appearance.png docs/images/apps-hero.png docs/images/books-hero.png docs/images/games-hero.png
+          git add -- docs/images/apps.png docs/images/release.png docs/images/downloads.png docs/images/settings.png docs/images/appearance.png docs/images/apps-hero.png docs/images/books-hero.png docs/images/games-hero.png
           if git diff --cached --quiet; then exit 0; fi
           git config user.name "$(git show -s --format=%an "$SOURCE_SHA")"
           git config user.email "$(git show -s --format=%ae "$SOURCE_SHA")"

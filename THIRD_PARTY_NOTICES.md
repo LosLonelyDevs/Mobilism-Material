@@ -34,4 +34,6 @@ Changes: Mobilism content and theme roles, shared focus/state feedback, manual h
 
 ## Libraries
 
+RAR and 7z extraction uses [libarchive-android](https://github.com/zhanghai/libarchive-android), an Apache 2.0 licensed Android binding for [libarchive](https://www.libarchive.org/). Libarchive uses the BSD license.
+
 Gradle resolves AndroidX/Jetpack Compose, Kotlin, coroutines, OkHttp, Coil, and jsoup from their configured repositories. Their upstream licenses remain applicable. The app's project license does not replace bundled assets' or dependencies' licenses.

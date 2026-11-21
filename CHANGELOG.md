@@ -1,13 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.1.24
 
-- Compose and delete private messages
-- Choose download folders, track progress, and extract ZIPs
-- Show views, comments, and local posting times
-- Format release text by default. Markdown remains optional
-- Name active filters and highlight original posters
-- various bug fixes and improvements
+- Improved update notifications for followed apps
+- In app downloader for premium links is now available
+- Expanded functionality for private messages and comments
+- Improved text formatting on release pages (can be turned off in settings)
 
 ## 0.1.23
 

@@ -8,7 +8,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = "cum.ahfu.mobi.material"
-NAMES = ("apps", "release", "downloads", "appearance")
+NAMES = ("apps", "release", "downloads", "settings", "appearance")
 CAPTURES = {name: "readme-screenshots" for name in NAMES}
 CAPTURES.update({f"{section}-hero": "home-screenshots" for section in ("apps", "books", "games")})
 parser = argparse.ArgumentParser()
@@ -44,6 +44,7 @@ adb("shell", "rm", "-f", *(f"{output}/{folder}/{name}.png" for name, folder in C
 result = adb("shell", "am", "instrument", "-w", "-r", "-e", "class",
              "org.mobilism.material.ReadmeScreenshots,org.mobilism.material.DebridDownloadsTest,org.mobilism.material.DebridRepositoryTest,org.mobilism.material.AboutScreenTest,org.mobilism.material.DiagnosticExportTest,org.mobilism.material.AppearanceOptionsTest,org.mobilism.material.HomeTest#allThreeSectionsExposeHeroCollectionsAndWorkingShortcuts,org.mobilism.material.MessageMailboxTest,org.mobilism.material.ui.UserProfileTest,org.mobilism.material.ui.SearchDiscoveryTest,org.mobilism.material.ui.MessageAvatarTest,"
              "org.mobilism.material.updates.UpdateInstallerHandoffTest,"
+             "org.mobilism.material.downloads.ArchiveExtractionTest,"
              "org.mobilism.material.AppUpdatesTest#installerRejectsSameVersionAndForeignPackagesAndSharesOnlyTheUpdateDirectory",
              f"{PACKAGE}.test/org.mobilism.material.ReadmeScreenshotRunner", timeout=600)
 passed = re.search(r"OK \(([1-9][0-9]*) tests?\)", result)

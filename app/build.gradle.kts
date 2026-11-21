@@ -21,15 +21,17 @@ fun String.buildConfigString() = "\"" + replace("\\", "\\\\").replace("\"", "\\\
 
 android {
     namespace = "org.mobilism.material"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) { minorApiLevel = 2 }
+    }
 
     defaultConfig {
         // A separate identity during migration protects the legacy app's data.
         applicationId = "cum.ahfu.mobi.material"
         minSdk = 26
         targetSdk = 36
-        versionCode = 24
-        versionName = "0.1.23"
+        versionCode = 25
+        versionName = "0.1.24"
         buildConfigField("String", "DAILY_USAGE_ENDPOINT", dailyUsageEndpoint.buildConfigString())
         val releaseNotes = changelog.substringAfter("## $versionName\n", "")
             .substringBefore("\n## ").trim()
@@ -120,6 +122,7 @@ dependencies {
     implementation(libs.coil.gif)
     implementation(libs.jsoup)
     implementation(libs.commonmark)
+    implementation(libs.libarchive)
     implementation(libs.okhttp)
     debugImplementation(libs.compose.tooling)
     debugImplementation("androidx.compose.ui:ui-test-manifest")

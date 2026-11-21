@@ -20,7 +20,7 @@ The migration identity `cum.ahfu.mobi.material` permits a separate install when 
 | Appearance | Frappé default, fonts, reduced motion, theme support; import hidden |
 | Debrid settings | Encrypted keys, cached provider host lists, supported-host colors |
 | Download preferences | Preferred architecture, collapsed alternatives, favorite hosts sorted first |
-| Premium / unrestricted / native downloads | Verified accounts resolve supported links. Use the external browser or save direct files in a selected folder with optional ZIP extraction. |
+| Premium / unrestricted / native downloads | Verified accounts resolve supported links. Use the external browser or save direct files in a selected folder with optional ZIP, RAR, and 7z extraction. |
 | Release search | Native search, section filter, artwork, infinite scrolling, empty/error states and retry |
 | My Applications | Installed launcher apps, Apps search, downloaded marks, delete/Undo |
 | Following | Installed-version matching and manual linking, scheduled checks, optional update notifications, release navigation |

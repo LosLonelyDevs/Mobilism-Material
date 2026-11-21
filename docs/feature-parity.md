@@ -12,7 +12,7 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 - Discussions for Apps, Games, Books, and Community, including Announcements, Contests, Chitchat, Services, and Suggestions & Feedback. Browse categories, search topics, read original posts, page through comments, and post comments or quoted replies with per-topic drafts.
 - Full-screen images, zoom/paging, architecture groups, preferred hosts, host links, clipboard actions, and browser opening.
 - Material 3 Expressive components and motion, Frappé/Geist defaults, 13 themes including AMOLED Black, appearance preferences, and reduced motion. Theme import is hidden for now.
-- Premium settings for Mobilism Premium, MegaDebrid, and Real-Debrid, with encrypted credentials, account verification, supported-host indicators, and direct link resolution. Downloads default to the browser. The internal downloader saves direct files and resolved links in a selected folder, with progress, cancellation, completion alerts, and optional ZIP extraction.
+- Premium settings for Mobilism Premium, MegaDebrid, and Real-Debrid, with encrypted credentials, account verification, supported-host indicators, and direct link resolution. Downloads default to the browser. The internal downloader saves direct files and resolved links in a selected folder, with progress, cancellation, completion alerts, and optional ZIP, RAR, and 7z extraction.
 - Native release search with saved section/category/date filters, paginated results, artwork, empty/error states, and retry. Cards and release pages show the original post date.
 - My Applications with launcher-app discovery, installed-app search, optional system apps, downloaded marks, removal and Undo.
 - Release thumbs-up, visible watch/download controls, and optional auto-watch when opening a file host. Browser opens are a rough download signal, not completion tracking.
@@ -27,7 +27,6 @@ Source audit against the local legacy manifest, drawer and action menus, setting
 | Forum sections | Native topic creation and unread-topic tracking | `res/menu/activity_main_drawer.xml`, `UI/Discussion/` |
 | My Applications | Full non-launcher discovery, batch actions, save/copy/export, legacy data import | `UI/MyApplications/`, installed/downloaded/favorites action menus |
 | Version tracker | Full version history, broader matching for ambiguous/unversioned releases, large-library performance | `UI/VersionTracker/` |
-| Downloads | Built-in RAR and 7z extraction. These archives save intact. Interrupted file transfers can be restarted from the release link. | `logic/download/`, `UI/Release/DownloadsActivity.java` |
 | Premium | Mobilism Premium trial/plans/payment flows | `UI/AMember/`, premium/payment API endpoints |
 | Settings and utilities | Notification preferences/sounds, content filters, cache controls, old listing options, download/extraction options, QR scanner, About, app-update flow | `res/xml/pref_general.xml`, `UI/QRCodeScanner/`, `UI/Settings/AboutActivity.java`, `logic/updater/` |
 

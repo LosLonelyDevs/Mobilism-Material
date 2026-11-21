@@ -2,13 +2,17 @@
 
 Modern Mobilism Android client rewritten in Kotlin and Jetpack Compose. Built with Material 3 Expressive components and motion.
 
+<div align="center">
+
 [![Latest release](https://img.shields.io/github/v/release/LosLonelyDevs/Mobilism-Material?label=version&color=7aa2f7)](https://github.com/LosLonelyDevs/Mobilism-Material/releases/latest)
 [![Total GitHub release downloads](https://img.shields.io/github/downloads/LosLonelyDevs/Mobilism-Material/total?color=9ece6a)](https://github.com/LosLonelyDevs/Mobilism-Material/releases)
 [![Tests and lint](https://img.shields.io/github/actions/workflow/status/LosLonelyDevs/Mobilism-Material/ci.yml?branch=main&event=push&label=tests%20%26%20lint)](https://github.com/LosLonelyDevs/Mobilism-Material/actions/workflows/ci.yml?query=branch%3Amain)
 [![Android 8.0 or newer](https://img.shields.io/badge/Android-8.0%2B-9ece6a?logo=android&logoColor=white)](https://github.com/LosLonelyDevs/Mobilism-Material/releases/latest)
 [![License](https://img.shields.io/github/license/LosLonelyDevs/Mobilism-Material?color=bb9af7)](LICENSE)
 
-<p>
+</div>
+
+<p align="center">
 <a href="https://github.com/LosLonelyDevs/Mobilism-Material/releases"><img src="docs/images/github.png" alt="Get it on GitHub" width="180"></a>
 <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22cum.ahfu.mobi.material%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2FLosLonelyDevs%2FMobilism-Material%22%2C%22author%22%3A%22LosLonelyDevs%22%2C%22name%22%3A%22Mobilism%20Material%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Atrue%7D%22%7D"><img src="docs/images/obtainium.png" alt="Install with Obtainium" width="180"></a>
 </p>
@@ -28,35 +32,30 @@ Still a work in progress. Requires Android 8+. Installs alongside the old app an
   <img src="docs/images/apps.png" alt="Latest apps with separate names and version details" width="200">
   <img src="docs/images/release.png" alt="Release details with the Material 3 Expressive image carousel" width="200">
   <img src="docs/images/downloads.png" alt="Downloads grouped by architecture with file host buttons" width="200">
-  <img src="docs/images/appearance.png" alt="Catppuccin Frappé theme, fonts, and motion settings" width="200">
+</p>
+<p>
+  <img src="docs/images/settings.png" alt="Settings categories and account options" width="200">
+  <img src="docs/images/appearance.png" alt="Appearance settings for themes, fonts, and release formatting" width="200">
 </p>
 
 Screenshots use sample data. CI refreshes them on version bumps and screenshot test changes.
 
 ## Features
 
-- [Home tabs](docs/home.md) for Apps, Books, and Games, with featured releases, categories, reviews, and discussions.
-- Search, compact or detailed Latest and Top feeds, date/category filters, and infinite scrolling. NEW badges mark releases since the previous visit.
-- Clear app versions and book details, collapsible release sections, and full-screen images.
-- [Comments](docs/release-comments.md) with nested replies, threads sorted by latest activity, saved drafts, and collapse controls.
-- [Discussions](docs/discussions.md) with forum browsing, topic search, and replies.
-- Start a private conversation, reply, mark messages as read, or delete an individual message. Inbox and Sent include conversation history. [Incoming message alerts](docs/message-alerts.md)
-- Optional [anonymous daily usage, request totals, and cache hit rates](services/daily-usage/README.md), with a Settings opt-out. Disabled until an endpoint is configured.
-- Clickable URLs and emoji support in release text, comments, and messages.
-- Tap usernames for native member profiles, forum role badges, and Telegram or WhatsApp links.
-- Following with background update checks and optional notifications. My Applications tracks installed and downloaded apps.
-- Mobilism Premium, MegaDebrid, and Real-Debrid links with encrypted account storage.
-- Downloads shortcut with grouped links, preferred architectures, and preferred file hosts. Download help opens in the app. Description remembers its last expanded or collapsed state across releases.
-- Material You wallpaper colors on Android 12+, 13 preset themes including AMOLED Black, bundled and custom fonts, and reduced motion.
-- [In-app updates](docs/app-updates.md) with automatic checks, verified downloads, Android installation, and release notes. Open Updates from Settings.
+- Browse Apps, Books, and Games. Filter by category or date and see what's new since your last visit.
+- Follow the apps you care about and get notified when someone posts a newer version.
+- Read what changed, check the mod info, and jump straight to downloads. Release pages put each in its own section.
+- Put your preferred file hosts first. Use Mobilism Premium, Real-Debrid, or MegaDebrid to download directly to a folder you choose. The optional in-app downloader can unpack ZIP, RAR, and 7z files there too.
+- Reply to comments, join forum discussions, and send private messages. You can share a link to a specific reply or turn on alerts for incoming messages.
+- Pick a theme, match your wallpaper colors, or use AMOLED Black. You can also change the font and reduce motion.
 
-Downloads open in your browser by default. In Settings > Downloads, turn on Internal downloader and choose a folder to save direct files and resolved Premium links. APKs save as received. Optional ZIP extraction puts the files in that same folder. File-host webpages still open in your browser.
+[More features](docs/notable-features.md) · [Usage reporting and opt-out](services/daily-usage/README.md) · [Troubleshooting](docs/troubleshooting.md)
 
-Older saved logins need one fresh sign-in for Inbox access.
+## Requesting Features For Paid Services
 
-Connection trouble? Reproduce it, then use **Export logs** in Settings or on the login screen. [Troubleshooting](docs/troubleshooting.md).
+I've gotten a lot of requests to add support for paid services. I'm one engineer working on this app in my spare time. I won't buy a subscription just to build a requested integration. If it's a service I don't already use, please be prepared to provide a development account and keep it active long enough for me to build and test with it.
 
-Opening a file host marks that release downloaded as a rough record. Auto-watch is on by default; you can turn it off in Download settings.
+Providing an account gives me a way to try the service. I can't promise the integration is possible, that I'll build it, or when it would ship. If those terms don't work for you, the project is open source. You're welcome to build the integration yourself and send a pull request.
 
 ## Build
 

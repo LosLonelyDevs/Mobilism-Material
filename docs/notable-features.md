@@ -7,4 +7,4 @@
 - Manage installed apps and downloaded marks in My Applications. Find matching releases, keep download history when following a newer version, and undo removals.
 - Group download links by architecture and put preferred file hosts first. Open links in your browser or copy them.
 - Like, watch, and mark releases downloaded from the release page. Opening a file host adds a downloaded mark and can automatically follow the app.
-- Save Premium and debrid accounts encrypted. Open resolved links in your browser or download them directly into a chosen folder. Track progress, cancel transfers, and optionally extract ZIPs there.
+- Save Premium and debrid accounts encrypted. Open resolved links in your browser or download them directly into a chosen folder. Track progress, cancel transfers, and optionally extract ZIP, RAR, and 7z files there.

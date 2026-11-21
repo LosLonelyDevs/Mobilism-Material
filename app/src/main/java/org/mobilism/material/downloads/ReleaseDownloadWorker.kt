@@ -38,10 +38,10 @@ import org.mobilism.material.data.ReleaseTitle
 import org.mobilism.material.data.ReleaseTitles
 import org.mobilism.material.data.retryAfterMillis
 
-internal fun ReleaseTitle.downloadNotificationTitle(savedName: String? = null): String {
+internal fun ReleaseTitle.downloadNotificationTitle(fallback: String, savedName: String? = null): String {
     // Older queued downloads may already have a section-specific name.
     if (!savedName.isNullOrBlank() && savedName != name) return savedName
-    if (name.isBlank()) return "Release download"
+    if (name.isBlank()) return fallback
     val displayName = name.take(120)
     val displayVersion = version.orEmpty().take(80)
     return if (displayVersion.isBlank()) displayName else "$displayName v$displayVersion"
@@ -56,7 +56,7 @@ internal object ReleaseDownloads {
     val completions = completed.asSharedFlow()
 
     fun announceCompletion(context: Context, title: String) {
-        val message = "Download complete · $title"
+        val message = context.getString(R.string.download_completed_title, title)
         if (completed.subscriptionCount.value == 0 || !completed.tryEmit(message)) {
             showDownloadToast(context, message)
         }
@@ -73,12 +73,12 @@ internal object ReleaseDownloads {
             val url = directLink()
             val parsed = url.toHttpUrlOrNull()
             if (parsed == null || !parsed.isHttps || parsed.username.isNotEmpty() || parsed.password.isNotEmpty())
-                throw DownloadProblem("This link needs a browser.")
+                throw DownloadProblem(context.getString(R.string.download_link_needs_browser))
             val title = ReleaseTitles.parse(release.title, release.section)
             val request = OneTimeWorkRequestBuilder<ReleaseDownloadWorker>()
                 .addTag(TAG)
                 .setInputData(workDataOf("link" to links.encrypt(url), "folder" to folder, "extract" to extract,
-                    "title" to release.title.take(120), "notificationTitle" to title.downloadNotificationTitle()))
+                    "title" to release.title.take(120), "notificationTitle" to title.downloadNotificationTitle(context.getString(R.string.download_title))))
                 .build()
             manager.enqueueUniqueWork(key, ExistingWorkPolicy.KEEP, request).await()
             true
@@ -92,7 +92,8 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
     private val releaseTitle get() = inputData.getString("title").orEmpty()
     private val notificationTitle by lazy {
         inputData.getString("notificationTitle")
-            ?: ReleaseTitles.parse(releaseTitle).downloadNotificationTitle(inputData.getString("releaseName"))
+            ?: ReleaseTitles.parse(releaseTitle).downloadNotificationTitle(applicationContext.getString(R.string.download_title),
+                inputData.getString("releaseName"))
     }
     private val notificationId = id.hashCode() or 1
     private val journal = context.getSharedPreferences("release-download-outputs", Context.MODE_PRIVATE)
@@ -103,33 +104,42 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
         val stage = File(applicationContext.cacheDir, "release-$id.part")
         try {
             if (ReleaseDownloads.transferSlot.isLocked) {
-                setForeground(notification("Queued", -1))
+                setForeground(notification(applicationContext.getString(R.string.download_queued), -1))
             }
             ReleaseDownloads.transferSlot.withLock {
                 // A stopped worker can be redelivered. Never repeat the host request automatically.
                 rollback()
-                if (runAttemptCount > 0) throw DownloadProblem("Download interrupted. Tap the release link to try again.")
+                if (runAttemptCount > 0) throw DownloadProblem(applicationContext.getString(R.string.download_interrupted))
                 val tree = Uri.parse(requireNotNull(inputData.getString("folder")))
                 val folder = ReleaseFolder(applicationContext, tree)
                 folder.requireWritable()
-                setForeground(notification("Downloading", -1))
+                setForeground(notification(applicationContext.getString(R.string.download_downloading), -1))
                 val url = ReleaseDownloads.links.decrypt(requireNotNull(inputData.getString("link")))
                 val name = fetch(url, stage)
-                status("Saving files", -1, true)
+                status(applicationContext.getString(R.string.download_saving), -1, true)
                 val job = currentCoroutineContext().job
-                ReleaseFiles.publish(stage, name, inputData.getBoolean("extract", true), { job.ensureActive() }) { filename, input ->
+                fun save(filename: String, input: InputStream) {
                     job.ensureActive()
                     val uri = folder.create(filename)
                     created += uri
                     check(journal.edit().putStringSet(id.toString(), created.map { it.toString() }.toSet()).commit())
                     val output = applicationContext.contentResolver.openOutputStream(uri, "w")
-                        ?: throw DownloadProblem("Could not write to the selected folder.")
+                        ?: throw DownloadProblem(applicationContext.getString(R.string.download_write_failed))
                     output.use { copy(input, it, job) }
+                }
+                val message = try {
+                    ReleaseFiles.publish(stage, name, inputData.getBoolean("extract", true), { job.ensureActive() }, ::save)
+                    if (created.size == 1) applicationContext.getString(R.string.download_saved)
+                    else applicationContext.resources.getQuantityString(R.plurals.download_extracted_files, created.size, created.size)
+                } catch (failure: UnreadableArchive) {
+                    job.ensureActive()
+                    if (!rollback()) throw DownloadProblem(applicationContext.getString(R.string.download_cleanup_failed))
+                    stage.inputStream().use { save(failure.archiveName, it) }
+                    applicationContext.getString(R.string.download_saved_original_archive)
                 }
                 job.ensureActive()
                 val target = if (created.size == 1) created.single()
                     else DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
-                val message = if (created.size == 1) "Saved to your folder" else "Extracted " + created.size + " files"
                 val displayName = if (created.size == 1) runCatching {
                     applicationContext.contentResolver.query(target, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
                         ?.use { if (it.moveToFirst()) it.getString(0) else null }
@@ -148,10 +158,11 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
             currentCoroutineContext().ensureActive()
             if (isStopped) throw CancellationException("Download stopped")
             val message = when (error) {
-                is DownloadProblem -> error.message ?: "Download failed."
-                is SecurityException -> "Folder access was lost. Choose the download folder again."
-                is java.util.zip.ZipException -> "Invalid ZIP. Turn off extraction to save the original file."
-                else -> "Download failed. Check your connection and folder space, then tap the link to retry."
+                is ArchiveProblem -> applicationContext.getString(error.reason)
+                is DownloadProblem -> error.message ?: applicationContext.getString(R.string.download_failed)
+                is SecurityException -> applicationContext.getString(R.string.download_folder_access_lost)
+                is java.util.zip.ZipException -> applicationContext.getString(R.string.download_zip_invalid)
+                else -> applicationContext.getString(R.string.download_retry)
             }
             notifyResult(message)
             Result.failure(workDataOf("status" to message))
@@ -161,7 +172,7 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
         }
     }
 
-    private fun rollback() {
+    private fun rollback(): Boolean {
         val pending = journal.getStringSet(id.toString(), emptySet()).orEmpty().map(Uri::parse) + created
         val remaining = pending.distinct().filterNot { uri ->
             try { DocumentsContract.deleteDocument(applicationContext.contentResolver, uri) }
@@ -175,6 +186,7 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
             edit.apply()
         }
         created.clear()
+        return remaining.isEmpty()
     }
 
     private suspend fun fetch(url: String, stage: File): String = coroutineScope {
@@ -183,8 +195,8 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
         val transfer = async(Dispatchers.IO) {
             val job = currentCoroutineContext().job
             call.execute().use { response ->
-                if (response.code != 200) throw DownloadProblem("File host returned HTTP " + response.code + ".")
-                val body = response.body ?: throw DownloadProblem("The host returned an empty file.")
+                if (response.code != 200) throw DownloadProblem(applicationContext.getString(R.string.download_http_error, response.code))
+                val body = response.body ?: throw DownloadProblem(applicationContext.getString(R.string.download_empty_file))
                 val mime = body.contentType()?.let { it.type + "/" + it.subtype }
                 val name = ReleaseFiles.name(response.request.url.toString(), response.header("Content-Disposition"), mime, releaseTitle)
                 val source = body.source()
@@ -192,12 +204,13 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
                     .toString(Charsets.UTF_8).trimStart('\uFEFF', ' ', '\t', '\n', '\r')
                 if (mime == "text/html" || mime == "application/xhtml+xml" || preview.startsWith("<!doctype html", true)
                     || preview.startsWith("<html", true))
-                    throw DownloadProblem("The host returned a webpage. Open the original link in your browser.")
+                    throw DownloadProblem(applicationContext.getString(R.string.download_host_webpage))
+                val downloading = applicationContext.getString(R.string.download_downloading)
                 val expected = body.contentLength()
                 val bytes = stage.outputStream().use { out -> copy(body.byteStream(), out, job) { n ->
-                    status("Downloading", if (expected > 0) (n.toDouble() * 100 / expected).toInt().coerceIn(0, 100) else -1)
+                    status(downloading, if (expected > 0) (n.toDouble() * 100 / expected).toInt().coerceIn(0, 100) else -1)
                 } }
-                if (bytes == 0L || (expected >= 0 && bytes != expected)) throw DownloadProblem("The file is incomplete.")
+                if (bytes == 0L || (expected >= 0 && bytes != expected)) throw DownloadProblem(applicationContext.getString(R.string.download_incomplete))
                 name
             }
         }
@@ -227,18 +240,18 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
     private fun notificationBuilder(): NotificationCompat.Builder {
         val context = applicationContext
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(ReleaseDownloads.TAG, "Release downloads", NotificationManager.IMPORTANCE_LOW))
+            NotificationChannel(ReleaseDownloads.TAG, context.getString(R.string.download_channel), NotificationManager.IMPORTANCE_LOW))
         return NotificationCompat.Builder(context, ReleaseDownloads.TAG).setSmallIcon(R.drawable.ic_app_update)
             .setContentTitle(notificationTitle)
     }
 
     private fun notification(text: String, percent: Int): ForegroundInfo {
         val notification = notificationBuilder()
-            .setContentText(if (percent >= 0) "$text · $percent%" else text)
+            .setContentText(if (percent >= 0) applicationContext.getString(R.string.download_percent, text, percent) else text)
             .setProgress(100, percent.coerceAtLeast(0), percent < 0)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setOnlyAlertOnce(true).setOngoing(true)
-            .addAction(0, "Cancel", WorkManager.getInstance(applicationContext).createCancelPendingIntent(id)).build()
+            .addAction(0, applicationContext.getString(android.R.string.cancel), WorkManager.getInstance(applicationContext).createCancelPendingIntent(id)).build()
         return if (Build.VERSION.SDK_INT >= 29) ForegroundInfo(notificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         else ForegroundInfo(notificationId, notification)
     }
@@ -252,7 +265,7 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
         runCatching {
             val result = notificationBuilder().setContentText(message)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message)).setAutoCancel(true)
-                .setSubText(if (target == null) "Download failed" else "Download complete")
+                .setSubText(context.getString(if (target == null) R.string.download_failed else R.string.download_complete))
             if (target != null) {
                 result.setContentIntent(PendingIntent.getActivity(context, notificationId, savedReleaseIntent(context, target),
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
@@ -281,7 +294,7 @@ internal fun releaseFileClient(context: Context): OkHttpClient {
             val request = chain.request()
             val host = request.url.host
             val now = System.currentTimeMillis()
-            if (cooldowns.getLong(host, 0L) > now) throw DownloadProblem("The file host asked you to wait before retrying.")
+            if (cooldowns.getLong(host, 0L) > now) throw DownloadProblem(context.getString(R.string.download_host_wait))
             val response = chain.proceed(request)
             if (response.code >= 400) {
                 val delay = retryAfterMillis(response.header("Retry-After"), now)
@@ -291,7 +304,7 @@ internal fun releaseFileClient(context: Context): OkHttpClient {
                     edit.putLong(host, now + delay.coerceAtMost(Long.MAX_VALUE - now)).apply()
                 }
                 response.close()
-                throw DownloadProblem("File host returned HTTP " + response.code + ". Try again later.")
+                throw DownloadProblem(context.getString(R.string.download_http_retry, response.code))
             }
             response
         }.build()

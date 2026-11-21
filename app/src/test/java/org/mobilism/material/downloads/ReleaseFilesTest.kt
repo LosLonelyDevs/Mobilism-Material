@@ -14,10 +14,11 @@ class ReleaseFilesTest {
 
     @Test fun notificationUsesOnlyTheReleaseNameAndAvailableVersion() {
         val release = ReleaseTitles.parse("Pocket Reader v1.2.3 build 456 [Premium]")
-        assertEquals("Pocket Reader v1.2.3", release.downloadNotificationTitle())
-        assertEquals("Pocket Reader v1.2.3", release.downloadNotificationTitle(savedName = "Pocket Reader"))
-        assertEquals("Pocket Reader", ReleaseTitles.parse("Pocket Reader [Premium]").downloadNotificationTitle())
-        assertEquals("Release download", ReleaseTitles.parse("").downloadNotificationTitle())
+        val fallback = "Release download"
+        assertEquals("Pocket Reader v1.2.3", release.downloadNotificationTitle(fallback))
+        assertEquals("Pocket Reader v1.2.3", release.downloadNotificationTitle(fallback, savedName = "Pocket Reader"))
+        assertEquals("Pocket Reader", ReleaseTitles.parse("Pocket Reader [Premium]").downloadNotificationTitle(fallback))
+        assertEquals(fallback, ReleaseTitles.parse("").downloadNotificationTitle(fallback))
     }
 
     @Test fun directFileAndAttachmentNamesSurviveSignedUrlsAndGenericMime() {
