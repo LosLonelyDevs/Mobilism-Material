@@ -14,7 +14,8 @@ const ranks = `WITH selected AS (
 ), totals AS (
   SELECT app_key, min(name) AS name, sum(followers) AS followers, sum(misses) AS misses,
     sum(hits) AS hits, sum(measured_misses) AS measured_misses, sum(other_lookups) AS other_lookups,
-    max(last_requested_at) AS last_requested_at
+    max(last_requested_at) AS last_requested_at,
+    (array_agg(last_client_version ORDER BY last_requested_at DESC NULLS LAST))[1] AS client_version
   FROM selected GROUP BY app_key
 ), ranked AS (
   SELECT *, row_number() OVER (ORDER BY followers DESC, app_key) AS follow_rank,
@@ -22,20 +23,23 @@ const ranks = `WITH selected AS (
     row_number() OVER (ORDER BY last_requested_at DESC NULLS LAST, app_key) AS recent_rank FROM totals
 ) SELECT coalesce(sum(hits),0)::text AS hits, coalesce(sum(misses),0)::text AS misses,
   coalesce(sum(measured_misses),0)::text AS "measuredMisses",
-  coalesce(jsonb_agg(jsonb_build_object('key', app_key, 'name', name, 'requestedAt', last_requested_at)
+  coalesce(jsonb_object_agg(app_key, client_version) FILTER (WHERE client_version IS NOT NULL AND app_key IN (
+    SELECT item->>'key' FROM latest_apps_cache CROSS JOIN LATERAL jsonb_array_elements(items) item WHERE singleton)), '{}') AS "catalogClients",
+  coalesce(jsonb_agg(jsonb_build_object('key', app_key, 'name', name, 'requestedAt', last_requested_at, 'clientVersion', client_version)
     ORDER BY recent_rank) FILTER (WHERE recent_rank <= 15 AND last_requested_at IS NOT NULL), '[]') AS recent,
   (SELECT jsonb_build_object('hits', coalesce(sum(hits),0)::text, 'misses', coalesce(sum(misses),0)::text,
     'measuredMisses', coalesce(sum(measured_misses),0)::text,
     'backgroundHits', coalesce(sum(background_hits),0)::text, 'backgroundMisses', coalesce(sum(background_misses),0)::text,
     'manualHits', coalesce(sum(manual_hits),0)::text, 'manualMisses', coalesce(sum(manual_misses),0)::text)
     FROM selected WHERE day = $4::date) AS "todayLookups",
-  coalesce(jsonb_agg(jsonb_build_object('key', app_key, 'name', name, 'followers', followers::text, 'misses', misses::text,
+  coalesce(jsonb_agg(jsonb_build_object('key', app_key, 'name', name, 'clientVersion', client_version, 'followers', followers::text, 'misses', misses::text,
     'totalLookups', (hits + misses + other_lookups)::text, 'followRank', follow_rank, 'missRank', miss_rank))
     FILTER (WHERE (follow_rank <= $3 AND followers > 0)
     OR (miss_rank <= $3 AND misses > 0)), '[]') AS rankings FROM ranked`;
 
-const rates = `SELECT cache, sum(hits)::text AS hits, sum(misses)::text AS misses FROM daily_cache_usage
-  WHERE day BETWEEN $1::date AND $2::date AND cache IN ('FollowingBackground', 'FollowingManual') GROUP BY cache ORDER BY cache`;
+const rates = `SELECT cache, app_version AS "clientVersion", sum(hits)::text AS hits, sum(misses)::text AS misses FROM daily_cache_usage
+  WHERE day BETWEEN $1::date AND $2::date AND cache IN ('FollowingBackground', 'FollowingManual')
+  GROUP BY cache, app_version ORDER BY cache, max(version_code) DESC, app_version`;
 const setting = config => ({ revision: config.revision, enabled: config.limits.followPullToRefreshEnabled === true });
 
 export function createHandler(database = query, session = req => sessionUser(req, { database }), catalog = releaseCatalog, now = () => new Date()) {
@@ -56,11 +60,12 @@ export function createHandler(database = query, session = req => sessionUser(req
         const [cacheUsage, [totals], snapshot, config] = await Promise.all([database(rates, [from, to]), database(ranks, [from, to, followingRankingLimit, today]),
           visibleSnapshot(database, Math.floor(asOf.getTime() / 1000)), readConfig(database)]);
         const versions = new Map(snapshot.items.map(item => [item.key, item.version]));
-        const { rankings, recent, todayLookups, ...lookups } = totals;
+        const { rankings, recent, todayLookups, catalogClients, ...lookups } = totals;
         const withVersion = ({ key, ...row }) => ({ ...row, cachedVersion: versions.get(key) ?? null });
         return respond(res, 200, { available, from, to, asOf: asOf.toISOString(), cachedApps: versions.size,
           cacheUsage, lookups, todayLookups: to === today ? todayLookups : null, followRankings: rankings.map(withVersion),
-          recentApps: recent.map(withVersion), catalog: snapshot.items.map(({ name, version }) => ({ name, version })),
+          recentApps: recent.map(withVersion), catalog: snapshot.items.map(({ key, name, version }) =>
+            ({ name, version, clientVersion: Object.hasOwn(catalogClients, key) ? catalogClients[key] : null })),
           pullToRefresh: setting(config) });
       }
       if (!available) return respond(res, 409, { error: 'Requires stable v0.1.24 or later.' });

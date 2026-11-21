@@ -184,4 +184,4 @@ Open **API controls > User-Agent** to create a rule. Choose published app versio
 
 Response-triggered activation lasts only in memory. Rule edits, removal, expiry, failed config checks, and process restarts reset it. The shipped header returns whenever no valid rule applies. Config is checked on the existing schedule; headers do not create another polling loop.
 
-Rules apply to Mobilism API and forum calls, plus newly opened verification browsers. They do not alter config checks, usage reporting, downloads, or debrid headers. Existing installations need an APK containing this support before remote header rules can affect them.
+The shared Android transport applies the active prefix and installed version/build to API requests, verification browsers, Vercel, images, update checks, file downloads, and debrid services. Per-service credentials and Following check labels keep their own scope. Only eligible Mobilism responses can activate a status-triggered rule. Published v0.1.26 uses the earlier host-specific behavior.

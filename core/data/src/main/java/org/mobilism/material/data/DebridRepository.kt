@@ -94,29 +94,27 @@ object HostMatcher {
     }
 }
 
-class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
+class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
     private val isEnabled: () -> Boolean = { true },
     private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
     private val requestLimits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
     private val now: () -> Long = { System.nanoTime() / 1_000_000 }) {
     private val keys = DebridKeyStore(context)
-    private val userAgent = AppUserAgent.identity(context)
     private val cache = context.getSharedPreferences("material-debrid-hosts", Context.MODE_PRIVATE)
     private val mutex = Mutex()
     private val loading = Mutex()
     @Volatile private var lastLoad: Long? = null
     private val mutableState = MutableStateFlow(DebridState(enabled = isEnabled()))
     val state = mutableState.asStateFlow()
-    private val client = client.newBuilder().connectTimeout(15, TimeUnit.SECONDS)
+    private val client = AppHttp.builder(client).connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS).callTimeout(30, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false)
-        .addNetworkInterceptor(AppUserAgentInterceptor(userAgent, { AppUserAgent.value(context) },
-            { AppUserAgent.response(context, it) }))
+        .addNetworkInterceptor(MobilismResponseInterceptor { AppUserAgent.response(context, it) })
         .addInterceptor { chain ->
             if (!isEnabled()) throw java.io.IOException("Premium services disabled")
             chain.proceed(chain.request())
         }.addInterceptor(DiagnosticInterceptor(diagnostics)).build()
-    private val api = DebridApi(this.client, diagnostics, userAgent)
+    private val api = DebridApi(this.client, diagnostics)
     private val megaSessions = MegaDebridSessions(api,
         read = { keys.read(DebridProvider.MegaDebrid) },
         save = { value -> requireEnabled(); keys.write(DebridProvider.MegaDebrid, value) },
@@ -308,7 +306,6 @@ class DebridRepository(context: Context, client: OkHttpClient = OkHttpClient(),
         else block(keys.read(provider).orEmpty())
 
     private fun get(url: String): String = client.newCall(Request.Builder().url(url)
-        .header("User-Agent", userAgent)
         .build()).execute().use { response ->
         if (!response.isSuccessful) throw DebridException("Real-Debrid host list returned HTTP ${response.code}. Try again later.")
         val source = checkNotNull(response.body).source()

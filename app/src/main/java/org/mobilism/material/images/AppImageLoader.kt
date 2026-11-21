@@ -14,17 +14,16 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import okhttp3.OkHttpClient
 import okhttp3.HttpUrl
 import org.mobilism.material.data.AppUserAgent
-import org.mobilism.material.data.AppUserAgentInterceptor
+import org.mobilism.material.data.MobilismResponseInterceptor
+import org.mobilism.material.data.AppHttp
 
-internal fun appImageLoader(context: Context, baseClient: OkHttpClient = OkHttpClient(),
+internal fun appImageLoader(context: Context, baseClient: OkHttpClient = AppHttp.client,
     diagnostics: DiagnosticLogger = DiagnosticLogger.None): ImageLoader {
     val application = context.applicationContext
-    val headers = AppUserAgentInterceptor(AppUserAgent.defaultValue(application),
-        { AppUserAgent.value(application) }, { AppUserAgent.response(application, it) })
-    val client = baseClient.newBuilder().addInterceptor { chain ->
+    val client = AppHttp.builder(baseClient).addInterceptor { chain ->
         val request = chain.request()
         chain.proceed(request.newBuilder().url(secureMobilismImageUrl(request.url)).build())
-    }.addNetworkInterceptor(headers).addNetworkInterceptor(org.mobilism.material.data.RequestTrafficInterceptor(
+    }.addNetworkInterceptor(MobilismResponseInterceptor { AppUserAgent.response(application, it) }).addNetworkInterceptor(org.mobilism.material.data.RequestTrafficInterceptor(
         (application as? org.mobilism.material.data.RequestTrafficProvider)?.requestTraffic
             ?: org.mobilism.material.data.RequestTrafficSink.None, image = true)).build()
     return ImageLoader.Builder(application).components {

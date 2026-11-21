@@ -60,7 +60,8 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
     val customCategories by lazy { org.mobilism.material.data.CustomCategoryStore(this) }
     internal val connectionRecovery by lazy { org.mobilism.material.ui.ConnectionRecoveryController() }
     internal val remoteControl by lazy { org.mobilism.material.remote.RemoteControlStore.create(this, diagnostics) }
-    private val latestApps by lazy { org.mobilism.material.data.LatestAppsClient(BuildConfig.DAILY_USAGE_ENDPOINT, diagnostics = appLogger) }
+    private val latestApps by lazy { org.mobilism.material.data.LatestAppsClient(BuildConfig.DAILY_USAGE_ENDPOINT,
+        diagnostics = appLogger) }
     private val latestPages = kotlinx.coroutines.channels.Channel<org.mobilism.material.data.LatestAppsPage>(
         capacity = 4, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
     val repository by lazy { DefaultMobilismRepository(this, contentPreferences, appLogger,
@@ -101,6 +102,7 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
 
     override fun onCreate() {
         super.onCreate()
+        org.mobilism.material.data.AppHttp.initialize(this)
         scope.launch {
             for (page in latestPages) {
                 if (dailyUsage.enabled.value && remoteControl.limits.followCacheBatchSize > 0) {

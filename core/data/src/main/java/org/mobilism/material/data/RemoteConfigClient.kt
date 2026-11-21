@@ -8,15 +8,15 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-class RemoteConfigClient(usageEndpoint: String, private val userAgent: String,
-    private val client: OkHttpClient = OkHttpClient.Builder().callTimeout(10, TimeUnit.SECONDS)
+class RemoteConfigClient(usageEndpoint: String,
+    private val client: OkHttpClient = AppHttp.builder().callTimeout(10, TimeUnit.SECONDS)
         .followRedirects(false).retryOnConnectionFailure(false).build()) {
     private val endpoint = endpoint(usageEndpoint)
 
     suspend fun fetch(): RemoteAppConfig = withContext(Dispatchers.IO) {
         val url = endpoint ?: throw IOException("Remote configuration is not configured")
         client.newCall(Request.Builder().url(url).header("Accept", "application/json")
-            .header("User-Agent", userAgent).build()).execute().use { response ->
+            .build()).execute().use { response ->
             if (!response.isSuccessful) throw IOException("Remote configuration unavailable")
             val source = response.body?.source() ?: throw IOException("Empty configuration")
             source.request(65_537)

@@ -11,10 +11,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LatestAppsClientTest {
+    private val identity = AppUserAgent.format("Fixture", "1.2.3", 27)
     @Test fun oneNamedRequestDeduplicatesAppsAndUsesUnrelatedDailyReceipts() = runBlocking {
         val requests = mutableListOf<okhttp3.Request>()
         var now = 172800L
-        val client = LatestAppsClient("https://fixture.invalid/api/ping", OkHttpClient.Builder().addInterceptor { chain ->
+        val client = LatestAppsClient("https://fixture.invalid/api/ping", AppHttp.builder(OkHttpClient()) { identity }.addInterceptor { chain ->
             requests.add(chain.request())
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("Fixture")
                 .body(JSONObject().put("observedAt", now).put("items", org.json.JSONArray()).toString().toResponseBody()).build()
@@ -37,9 +38,10 @@ class LatestAppsClientTest {
         assertTrue(first.intersect(receipts(false).toSet()).isEmpty())
         assertEquals("manual", requests.last().header("X-Following-Check"))
         assertEquals(3, requests.size)
-        client.lookup((1..513).map { "App $it" }, true) { error("Snapshot needs no receipt") }
+        client.lookup((1..513).map { "App $it" }, true, background = true) { error("Snapshot needs no receipt") }
         assertEquals(4, requests.size)
         assertEquals("GET", requests.last().method)
+        requests.forEach { assertEquals(identity, it.header("User-Agent")) }
     }
 
     @Test fun acceptsFiveHundredAppsAndRejectsAnOversizedList() = runBlocking {
@@ -47,7 +49,7 @@ class LatestAppsClientTest {
         fun add(id: Int) { items.put(JSONObject().put("id", id).put("name", "App $id").put("title", "App $id v1.0")
             .put("version", "1.0").put("author", "Uploader").put("postedAt", 100)) }
         (1..500).forEach(::add)
-        val client = LatestAppsClient("https://fixture.invalid/api/ping", OkHttpClient.Builder().addInterceptor { chain ->
+        val client = LatestAppsClient("https://fixture.invalid/api/ping", AppHttp.builder(OkHttpClient()) { identity }.addInterceptor { chain ->
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("Fixture")
                 .body(JSONObject().put("observedAt", 101).put("items", items).toString().toResponseBody()).build()
         }.build(), now = { 101 })
@@ -62,8 +64,9 @@ class LatestAppsClientTest {
         val page = Release(72, "Fixture v2.1 build 9 [Premium]", "Uploader", null, posted, 0, 0,
             section = ContentSection.Apps, contentHtml = "private body", downloadLinks = listOf("private link"))
         var uploaded = JSONObject()
-        val client = LatestAppsClient("https://fixture.invalid/api/ping", OkHttpClient.Builder().addInterceptor { chain ->
+        val client = LatestAppsClient("https://fixture.invalid/api/ping", AppHttp.builder(OkHttpClient()) { identity }.addInterceptor { chain ->
             val request = chain.request()
+            assertEquals(identity, request.header("User-Agent"))
             assertEquals("https://fixture.invalid/api/latest-apps", request.url.toString())
             assertNull(request.header("Authorization"))
             val reply = if (request.method == "POST") {

@@ -27,7 +27,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mobilism.material.data.AppRelease
 import org.mobilism.material.data.AppReleaseUpdates
-import org.mobilism.material.data.AppUserAgent
 import org.mobilism.material.designsystem.MobilismTheme
 import org.mobilism.material.ui.AppUpdateSettings
 import org.mobilism.material.ui.AppUpdateHost
@@ -158,7 +157,7 @@ class AppUpdatesTest {
 
     @Test fun liveGithubReleaseCanBeCheckedManually() = kotlinx.coroutines.runBlocking<Unit> {
         org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("liveUpdates") == "true")
-        val release = AppReleaseUpdates(AppUserAgent.identity(InstrumentationRegistry.getInstrumentation().targetContext)).latest()
+        val release = AppReleaseUpdates().latest()
         assertNotNull(org.mobilism.material.data.AppVersions.parts(release.version))
         assertTrue(release.pageUrl.startsWith(AppReleaseUpdates.REPOSITORY_URL + "/releases/tag/"))
         assertNotNull(release.apkUrl)

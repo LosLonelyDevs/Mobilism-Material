@@ -11,7 +11,7 @@ User-Agent: <Android WebView user agent or configured prefix> MobilismMaterial/{
 GET https://images.mobilism.org/?dm=UP6E
 User-Agent: <Android WebView user agent or configured prefix> MobilismMaterial/{{versionName}} (Android; build {{versionCode}})
 
-### Update checks use the shipped identity, independent of remote overrides
+### Update checks use the same app identity
 GET https://api.github.com/repos/LosLonelyDevs/Mobilism-Material/releases/latest
 Accept: application/vnd.github+json
-User-Agent: MobilismMaterial/{{versionName}} (Android; build {{versionCode}})
+User-Agent: <Android WebView user agent or configured prefix> MobilismMaterial/{{versionName}} (Android; build {{versionCode}})

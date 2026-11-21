@@ -29,11 +29,11 @@ import org.json.JSONException
 import org.json.JSONObject
 
 internal class MobilismApi(private val context: Context, private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
-    client: OkHttpClient = OkHttpClient(), private val challengeRecovery: ChallengeRecovery = ChallengeRecovery.None,
+    client: OkHttpClient = AppHttp.client, private val challengeRecovery: ChallengeRecovery = ChallengeRecovery.None,
     private val requestLimits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
     requestTraffic: RequestTrafficSink = RequestTrafficSink.None,
     private val onLatestApps: (LatestAppsPage) -> Unit = {}) {
-    private val client = client.newBuilder()
+    private val client = AppHttp.builder(client)
         .apply {
             interceptors().add(0, DiagnosticInterceptor(diagnostics))
             interceptors().add(1, BrowserCookiesInterceptor())
@@ -322,7 +322,6 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         try {
             // Forum reads never receive the API session token.
             val request = Request.Builder().url(url)
-            request.header("User-Agent", AppUserAgent.value(context))
             client.newCall(request.build()).await().use { response ->
                 userAgentChanged = AppUserAgent.response(context, response.code)
                 val source = response.body?.source() ?: throw ApiFailure(FailureKind.InvalidResponse, context.getString(R.string.forum_empty))
@@ -395,8 +394,6 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             // This legacy GET changes the mailbox. Skip caches and prevent HTTP follow-up replays.
             if (path.startsWith("message/delete/")) builder.header("Cache-Control", "no-cache, no-store")
                 .tag(MessageDeletion::class.java, MessageDeletion())
-            // Clearance belongs to the browser's origin and user agent, across all API requests.
-            builder.header("User-Agent", AppUserAgent.value(context))
             // This client is used only for the API origin, never images or download URLs.
             token?.let { builder.header("X-Auth-Token", it) }
             form?.let { fields ->

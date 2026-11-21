@@ -3,7 +3,6 @@ package org.mobilism.material.updates
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
-import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
@@ -12,8 +11,7 @@ import kotlinx.coroutines.withContext
 import org.mobilism.material.data.AppReleaseUpdates
 import org.mobilism.material.data.MAX_UPDATE_APK_BYTES
 import org.mobilism.material.data.ReleaseApk
-import org.mobilism.material.BuildConfig
-import org.mobilism.material.data.AppUserAgent
+import org.mobilism.material.data.AppHttp
 
 internal fun isUpdateDownloadUrl(url: URL, initial: URL): Boolean =
     url.protocol == "https" && url.userInfo == null && url.port in listOf(-1, 443) &&
@@ -30,11 +28,10 @@ internal suspend fun downloadUpdateApk(apk: ReleaseApk, destination: File, onPro
         repeat(6) {
             coroutineContext.ensureActive()
             require(isUpdateDownloadUrl(url, initial)) { "The update server returned an unsafe download address." }
-            val connection = (url.openConnection() as HttpURLConnection).apply {
+            val connection = AppHttp.openConnection(url).apply {
                 instanceFollowRedirects = false
                 connectTimeout = 15_000
                 readTimeout = 15_000
-                setRequestProperty("User-Agent", AppUserAgent.format(null, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE.toLong()))
                 setRequestProperty("Accept", "application/vnd.android.package-archive, application/octet-stream")
                 setRequestProperty("Accept-Encoding", "identity")
             }

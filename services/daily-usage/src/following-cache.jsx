@@ -24,8 +24,9 @@ function Rankings({ rows, title, rank, count, displayCount = count, label }) {
   const sorted = rows.filter(row => row[rank] <= followingRankingLimit && BigInt(row[count]) > 0n)
     .sort((a, b) => a[rank] - b[rank]);
   return <CacheCard title={title} defaultOpen>
-    {sorted.length ? <table className="admin-traffic-table cache-rankings"><thead><tr><th>App</th><th>Current cached version</th><th>{label}</th></tr></thead>
+    {sorted.length ? <table className="admin-traffic-table cache-rankings"><thead><tr><th>App</th><th>Cached version</th><th>Last client version</th><th>{label}</th></tr></thead>
       <tbody>{sorted.map(row => <tr key={row[rank]}><td>{row.name}</td><td>{row.cachedVersion ?? 'Not cached'}</td>
+        <td className="client-version">{row.clientVersion ?? 'Unknown'}</td>
         <td>{BigInt(row[displayCount]) > 0n ? number(row[displayCount]) : '—'}</td></tr>)}</tbody></table>
       : <p className="muted">No apps reported for these dates.</p>}
   </CacheCard>;
@@ -34,8 +35,9 @@ function Rankings({ rows, title, rank, count, displayCount = count, label }) {
 function RecentApps({ apps }) {
   return <CacheCard title="Most recently requested apps">
     {apps.length ? <table className="admin-traffic-table cache-rankings recent-apps">
-      <thead><tr><th>App</th><th>Cached version</th><th>Requested (UTC)</th></tr></thead>
+      <thead><tr><th>App</th><th>Cached version</th><th>Last client version</th><th>Requested (UTC)</th></tr></thead>
       <tbody>{apps.map(app => <tr key={app.name}><td>{app.name}</td><td>{app.cachedVersion ?? 'Not cached'}</td>
+        <td className="client-version">{app.clientVersion ?? 'Unknown'}</td>
         <td>{requestTime.format(app.requestedAt * 1000)}</td></tr>)}</tbody>
     </table> : <p className="muted">No timestamped requests for these dates.</p>}
   </CacheCard>;
@@ -52,11 +54,14 @@ function CacheSearch({ apps }) {
       Number(b.key.startsWith(term)) - Number(a.key.startsWith(term)) || a.key.localeCompare(b.key))
     .slice(0, 5) : [];
   return <CacheCard title="Search cache">
-    <InputField label="App name" type="search" value={query} maxLength={200} autoComplete="off" onChange={e => setQuery(e.target.value)} />
-    {term && (matches.length ? <table className="admin-traffic-table cache-rankings">
-      <thead><tr><th>App</th><th>Cached version</th></tr></thead>
-      <tbody>{matches.map(app => <tr key={app.key}><td>{app.name}</td><td>{app.version}</td></tr>)}</tbody>
-    </table> : <p role="status" className="muted">No matching apps in the cache.</p>)}
+    <div className="cache-search-body">
+      <InputField label="App name" type="search" value={query} maxLength={200} autoComplete="off" onChange={e => setQuery(e.target.value)} />
+      {term && (matches.length ? <table className="admin-traffic-table cache-rankings">
+        <thead><tr><th>App</th><th>Cached version</th><th>Last client version</th></tr></thead>
+        <tbody>{matches.map(app => <tr key={app.key}><td>{app.name}</td><td>{app.version}</td>
+          <td className="client-version">{app.clientVersion ?? 'Unknown'}</td></tr>)}</tbody>
+      </table> : <p role="status" className="muted">No matching apps in the cache.</p>)}
+    </div>
   </CacheCard>;
 }
 
@@ -92,13 +97,13 @@ function DeviceReports({ report }) {
     rows.push({ label: report.todayLookups ? `Earlier · ${mode}` : mode, ...row });
   }
   return <section className="admin-panel"><h2>Device reports</h2>
-    {rows.length ? <table className="admin-traffic-table"><thead><tr>
-      <th>Check</th><th>Hits</th><th>Misses</th><th>Hit rate</th><th>Miss rate</th>
+    {rows.length ? <div className="admin-traffic-scroll"><table className="admin-traffic-table"><thead><tr>
+      <th>Check</th><th className="client-version">Client version</th><th>Hits</th><th>Misses</th><th>Hit rate</th><th>Miss rate</th>
     </tr></thead><tbody>{rows.map(row => {
       const hits = BigInt(row.hits), measured = BigInt(row.measuredMisses ?? row.misses), total = hits + measured;
-      return <tr key={row.label}><td>{row.label}</td><td>{number(hits)}</td><td>{number(row.misses)}</td>
+      return <tr key={JSON.stringify([row.label, row.clientVersion])}><td>{row.label}</td><td className="client-version">{row.clientVersion ?? 'All'}</td><td>{number(hits)}</td><td>{number(row.misses)}</td>
         <td>{rate(hits, total)}</td><td>{rate(measured, total)}</td></tr>;
-    })}</tbody></table> : <p>No phones have reported Following checks for the selected dates.</p>}
+    })}</tbody></table></div> : <p>No phones have reported Following checks for the selected dates.</p>}
   </section>;
 }
 

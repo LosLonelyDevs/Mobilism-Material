@@ -24,7 +24,7 @@ private val appWhitespace = Regex("[\\s\\p{Z}]+")
 fun latestAppKey(name: String): String = Normalizer.normalize(name, Normalizer.Form.NFKC)
     .trim().lowercase(Locale.ROOT).replace(appWhitespace, " ")
 
-class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient = OkHttpClient.Builder()
+class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient = AppHttp.builder()
     .callTimeout(4, TimeUnit.SECONDS).followRedirects(false).retryOnConnectionFailure(false).build(),
     private val now: () -> Long = { System.currentTimeMillis() / 1000 },
     private val diagnostics: DiagnosticLogger = DiagnosticLogger.None) {
@@ -76,10 +76,12 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
 
     suspend fun lookup(names: List<String>, hideAdult: Boolean, background: Boolean? = null, dailySeed: (String) -> String): LatestAppsSnapshot {
         val url = endpoint ?: return LatestAppsSnapshot(CacheOutcome.Unconfigured)
+        val request = Request.Builder().url(url)
+        if (background != null) request.header("X-Following-Check", if (background) "background" else "manual")
         val unique = names.distinctBy(::latestAppKey)
         // Very large libraries still fit in one read of the bounded shared snapshot.
         if (unique.size !in 1..512 || unique.any { it.length !in 1..200 || latestAppKey(it).length !in 1..200 ||
-                it.any(Char::isISOControl) }) return snapshot(hideAdult)
+                it.any(Char::isISOControl) }) return read(request.build(), hideAdult)
         val day = LocalDate.ofEpochDay(Math.floorDiv(now(), 86400L)).toString()
         val seed = dailySeed(day)
         val apps = JSONArray()
@@ -88,8 +90,7 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
             apps.put(JSONObject().put("name", name).put("receipt", receipt.toString()))
         }
         val body = JSONObject().put("apps", apps).put("adultFiltered", hideAdult).put("day", day)
-        val request = Request.Builder().url(url).post(body.toString().toRequestBody("application/json".toMediaType()))
-        if (background != null) request.header("X-Following-Check", if (background) "background" else "manual")
+        request.post(body.toString().toRequestBody("application/json".toMediaType()))
         return read(request.build(), hideAdult)
     }
 

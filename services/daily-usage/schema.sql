@@ -77,6 +77,9 @@ CREATE TABLE IF NOT EXISTS follow_lookup_receipts (
     PRIMARY KEY (day, receipt)
 );
 
+ALTER TABLE daily_followed_apps
+    ADD COLUMN IF NOT EXISTS last_client_version varchar(50);
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT FROM pg_constraint WHERE conrelid = 'daily_cache_usage'::regclass

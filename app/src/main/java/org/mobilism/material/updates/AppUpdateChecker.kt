@@ -76,7 +76,7 @@ internal class AppUpdateChecker(
     private val installed: String = BuildConfig.VERSION_NAME,
 ) {
     constructor(context: Context, notifications: AppUpdateNotifications = AppUpdateNotifications(context)) : this(
-        SavedAppUpdateSettings(context), AppReleaseUpdates(org.mobilism.material.data.AppUserAgent.identity(context))::latest,
+        SavedAppUpdateSettings(context), AppReleaseUpdates()::latest,
         notifications::post, notifications::cancel)
 
     private val cached = settings.cachedRelease?.takeIf { AppVersions.newer(it.version, installed) }

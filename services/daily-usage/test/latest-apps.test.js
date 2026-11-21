@@ -98,7 +98,7 @@ test('each ranking includes its own top 20 apps without truncating lookup totals
     { method: 'GET', url: '/api/following-cache', headers: {} }, res);
   assert.equal(res.body.recentApps.length, 15);
   assert.equal(new Set(res.body.recentApps.map(row => row.name)).size, 15);
-  assert.deepEqual(res.body.recentApps[0], { name: 'App 17', requestedAt: now + 20, cachedVersion: null });
+  assert.deepEqual(res.body.recentApps[0], { name: 'App 17', requestedAt: now + 20, cachedVersion: null, clientVersion: null });
 });
 
 test('a search contribution fills a miss and dates include the current partial UTC day', async () => {
@@ -135,7 +135,20 @@ test('a search contribution fills a miss and dates include the current partial U
   assert.equal((await report(yesterday, yesterday)).todayLookups, null);
   assert.equal(range.cachedApps, 2);
   assert.equal(range.followRankings.find(r => r.name === 'Facebook').cachedVersion, '2.0');
-  assert.deepEqual(range.catalog, [{ name: 'Facebook', version: '2.0' }, { name: 'App 1', version: '1.1' }]);
+  assert.deepEqual(range.catalog, [{ name: 'Facebook', version: '2.0', clientVersion: null }, { name: 'App 1', version: '1.1', clientVersion: null }]);
+  const clientHeaders = version => ({ 'x-following-check': 'manual',
+    'user-agent': `Example prefix MobilismMaterial/${version} (Android; build 27)` });
+  await call('POST', names, query, now + 25, clientHeaders('0.1.26'));
+  await call('POST', names, query, now + 10, clientHeaders('0.1.25'));
+  const tracked = await report(yesterday, day, now + 25);
+  assert.equal(tracked.followRankings.find(r => r.name === 'Facebook').clientVersion, '0.1.26');
+  assert.equal(tracked.recentApps.find(r => r.name === 'Facebook').clientVersion, '0.1.26');
+  assert.equal(tracked.catalog.find(r => r.name === 'Facebook').clientVersion, '0.1.26');
+  for (const headers of [{}, { 'x-following-check': 'manual', 'user-agent': 'okhttp/4.12.0' },
+    { 'user-agent': clientHeaders('0.1.26')['user-agent'] }]) {
+    await call('POST', names, query, now + 30, headers);
+    assert.equal((await report(day, day, now + 30)).recentApps[0].clientVersion, null);
+  }
   assert.equal(range.followRankings.find(r => r.name === 'Facebook').totalLookups, '2');
   assert.equal(range.followRankings.find(r => r.name === 'older').totalLookups, '5');
   await query("UPDATE latest_apps_cache SET items = jsonb_set(items, '{0,hiddenAt}', to_jsonb($1::bigint))", [now]);

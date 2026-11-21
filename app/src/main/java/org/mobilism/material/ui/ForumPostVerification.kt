@@ -31,7 +31,7 @@ import kotlinx.coroutines.isActive
 
 @Composable
 internal fun ForumPostVerification(topicId: Long, onVerified: (Long) -> Unit, onDismiss: () -> Unit,
-    createBrowser: (Context) -> WebView = { WebView(it) }) {
+    createBrowser: (Context) -> WebView = org.mobilism.material.data.AppHttp::webView) {
     val verified by rememberUpdatedState(onVerified)
     var browser by remember { mutableStateOf<WebView?>(null) }
     var completed by remember(topicId) { mutableStateOf(false) }
@@ -71,7 +71,7 @@ internal fun ForumPostVerification(topicId: Long, onVerified: (Long) -> Unit, on
                 VerificationBrowserPane(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context, onPageVisible ->
                     createBrowser(context).apply {
                         // Browser verification needs JavaScript. Navigation stays on this forum topic.
-                        settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(context)
+                        org.mobilism.material.data.AppHttp.applyBrowserIdentity(this)
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.allowFileAccess = false

@@ -6,7 +6,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
+import org.mobilism.material.data.AppHttp
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -30,7 +30,6 @@ class DailyUsageWorker(context: Context, parameters: WorkerParameters) : Corouti
                 return@withContext Result.success()
             }
             val request = Request.Builder().url(BuildConfig.DAILY_USAGE_ENDPOINT)
-                .header("User-Agent", org.mobilism.material.data.AppUserAgent.identity(applicationContext, "Mobilism-Usage/1"))
                 .post(body.toRequestBody("application/json".toMediaType())).build()
             client.newCall(request).execute().use { response ->
                 if (response.code == 200) {
@@ -50,7 +49,7 @@ class DailyUsageWorker(context: Context, parameters: WorkerParameters) : Corouti
     }
 
     private companion object {
-        val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
+        val client = AppHttp.builder().followRedirects(false).followSslRedirects(false)
             .callTimeout(20, TimeUnit.SECONDS).build()
     }
 }

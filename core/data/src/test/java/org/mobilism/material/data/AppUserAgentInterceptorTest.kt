@@ -15,16 +15,18 @@ import org.junit.Test
 class AppUserAgentInterceptorTest {
     private val shipped = AppUserAgent.format("Browser", "0.1.23", 24)
 
-    @Test fun statusRulesChangeOnlySubsequentMobilismRequestsAndFallBackWhenRemoved() {
+    @Test fun selectedPrefixAppliesAcrossServicesAndFallsBackWhenRemoved() {
         var rules = listOf(UserAgentRule("image", "Image rule", true, false, setOf("0.1.23"), "Allowed", setOf(403)))
         val policy = UserAgentPolicy("0.1.23") { rules }
-        val interceptor = AppUserAgentInterceptor(shipped,
-            { policy.prefix()?.let { AppUserAgent.format(it, "0.1.23", 24) } ?: shipped }, { policy.response(it) })
+        val interceptor = AppHttp.builder(OkHttpClient()) {
+            policy.prefix()?.let { AppUserAgent.format(it, "0.1.23", 24) } ?: shipped
+        }.build().interceptors.first()
         val first = Chain("https://images.mobilism.org/?dm=UP6E", 403)
         interceptor.intercept(first).close()
         assertEquals(shipped, first.sent.single().header("User-Agent"))
         assertEquals(1, first.sent.size)
-        val next = Chain("https://forum.mobilism.org/filehosts.xml")
+        MobilismResponseInterceptor { policy.response(it) }.intercept(Chain("https://images.mobilism.org", 403)).close()
+        val next = Chain("https://fixture.invalid/api/latest-apps")
         interceptor.intercept(next).close()
         assertEquals("Allowed MobilismMaterial/0.1.23 (Android; build 24)", next.sent.single().header("User-Agent"))
         rules = emptyList()
@@ -33,19 +35,17 @@ class AppUserAgentInterceptorTest {
         assertEquals(shipped, restored.sent.single().header("User-Agent"))
     }
 
-    @Test fun remoteOverridesDoNotReachOtherHostsOrActivateOnTheirFailures() {
-        var selected = 0
+    @Test fun otherHostsCannotActivateStatusRules() {
         val observed = mutableListOf<Int>()
-        val interceptor = AppUserAgentInterceptor(shipped, { selected++; "Configured" }, observed::add)
+        val interceptor = MobilismResponseInterceptor(observed::add)
         listOf("https://example.org/image.png", "https://mobilism.org.evil.example/image.png",
             "http://images.mobilism.org/image.png", "https://mblservices.org/image.png").forEach { url ->
             val chain = Chain(url, 403, previousUserAgent = "Configured")
             interceptor.intercept(chain).close()
-            assertEquals(shipped, chain.sent.single().header("User-Agent"))
+            assertEquals("Configured", chain.sent.single().header("User-Agent"))
             assertNull(chain.sent.single().header("Authorization"))
             assertNull(chain.sent.single().header("Cookie"))
         }
-        assertEquals(0, selected)
         assertTrue(observed.isEmpty())
     }
 

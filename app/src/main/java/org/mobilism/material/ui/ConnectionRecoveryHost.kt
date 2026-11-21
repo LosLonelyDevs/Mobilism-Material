@@ -46,7 +46,7 @@ internal val LocalConnectionRecovery = staticCompositionLocalOf<ConnectionRecove
 
 @Composable
 internal fun ConnectionRecoveryHost(controller: ConnectionRecoveryController,
-    createBrowser: (Context) -> WebView = { WebView(it) },
+    createBrowser: (Context) -> WebView = org.mobilism.material.data.AppHttp::webView,
     readExpiry: ((VerificationSite) -> ClearanceExpiry)? = null,
     quietTimeoutMillis: Long = 8_000,
     pollMillis: Long = 30_000,
@@ -117,7 +117,7 @@ internal fun ConnectionRecoveryHost(controller: ConnectionRecoveryController,
                 }
             }
         }
-        view.settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(context)
+        org.mobilism.material.data.AppHttp.applyBrowserIdentity(view)
         view.settings.javaScriptEnabled = true
         view.settings.domStorageEnabled = true
         view.settings.allowFileAccess = false

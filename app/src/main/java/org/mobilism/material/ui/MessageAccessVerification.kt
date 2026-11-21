@@ -32,8 +32,7 @@ internal fun MessageAccessVerification(onDismiss: () -> Unit, onContinue: () -> 
                     TextButton(onClick = { CookieManager.getInstance().flush(); onContinue() },
                         modifier = Modifier.testTag("continue-message-verification")) { Text("Continue") }
                 }
-                VerificationBrowserPane(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context, onPageVisible -> WebView(context).apply {
-                    settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(context)
+                VerificationBrowserPane(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context, onPageVisible -> org.mobilism.material.data.AppHttp.webView(context).apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.allowFileAccess = false

@@ -113,7 +113,7 @@ internal class NativeForumComments(private val context: Context, private val cli
         val transport = transport(username)
         require(target.accepts(url.toString()))
         policy.checkAllowed()
-        val builder = Request.Builder().url(url).header("User-Agent", AppUserAgent.value(context))
+        val builder = Request.Builder().url(url)
             .header("Cache-Control", "no-cache, no-store")
         if (fields != null) {
             val body = FormBody.Builder().apply { fields.forEach { (name, value) -> add(name, value) } }.build()

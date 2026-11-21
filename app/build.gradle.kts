@@ -5,6 +5,29 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val verifyAppHttp by tasks.registering {
+    val sources = rootProject.subprojects.map { module ->
+        module.fileTree("src") {
+            include("**/*.kt", "**/*.java")
+            exclude("test*/**", "androidTest*/**", "testFixtures/**")
+        }
+    }
+    val factory = rootProject.file("core/data/src/main/java/org/mobilism/material/data/AppHttp.kt")
+    inputs.files(sources)
+    doLast {
+        val bypass = Regex("""\bOkHttpClient\s*(?:\.\s*Builder\s*)?\(|\bWebView\s*\(|::WebView\b|\.\s*(?:openConnection|openStream)\s*\(|\bJsoup\.connect\s*\(|\buserAgentString\s*=|["']User-Agent["']""")
+        val sharedConnection = Regex("""\bAppHttp\s*\.\s*openConnection\s*\(""")
+        val offenders = inputs.files.filter { it != factory }.filter { file ->
+            bypass.containsMatchIn(file.readText().replace(sharedConnection, ""))
+        }
+        check(offenders.isEmpty()) {
+            "Use AppHttp for network clients, URL connections, WebViews and User-Agent headers: " +
+                offenders.joinToString { it.relativeTo(rootProject.projectDir).path }
+        }
+    }
+}
+tasks.named("preBuild") { dependsOn(verifyAppHttp) }
+
 val signingPath = providers.environmentVariable("KEYSTORE_FILE").orNull
 val dailyUsageEndpoint = providers.environmentVariable("DAILY_USAGE_ENDPOINT").orElse("").get().trim()
 if (dailyUsageEndpoint.isNotEmpty()) {

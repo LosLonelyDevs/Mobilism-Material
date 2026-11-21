@@ -38,6 +38,8 @@ Include accessibility labels, errors, and notifications. Use placeholders for
 dynamic text and plurals for counts. Preserve user content and stable IDs.
 
 ## Request volume and app controls
+Create Android HTTP clients, URL connections, and WebViews through `AppHttp`.
+It supplies the configured User-Agent and installed app identity on every request.
 Preserve request pacing, bounded pagination, caches, failure cooldowns, and server
 `Retry-After`. Reuse release metadata already loaded; never fetch each row's details
 just to display view counts. Following defaults to five due apps per batch.

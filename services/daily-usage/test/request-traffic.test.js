@@ -56,7 +56,7 @@ test('cache-only days share a receipt across retries and report weighted totals'
   assert.deepEqual(res.body.requestTraffic, []);
   await followingHandler(query, () => true, async () => ({ versions: [{ version: '0.1.24', prerelease: false, versionCode: 25 }] }))(
     { method: 'GET', url: `/api/following-cache?from=${dateAgo(2)}&to=${dateAgo(0)}`, headers: {} }, res);
-  assert.deepEqual(res.body.cacheUsage, [{ cache: 'FollowingBackground', hits: '3', misses: '7' }]);
+  assert.deepEqual(res.body.cacheUsage, [{ cache: 'FollowingBackground', clientVersion: '0.1.24', hits: '3', misses: '7' }]);
 });
 
 test('old clients remain valid and traffic rejects private or unbounded input', async () => {

@@ -66,8 +66,7 @@ internal fun ConnectionVerification(site: VerificationSite, onDismiss: () -> Uni
                     TextButton(onClick = { openForumBrowser(context, "https://forum.mobilism.org/") }) { Text("Use forum in browser") }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    VerificationBrowserPane(modifier = Modifier.fillMaxSize().clipToBounds(), factory = { viewContext, onPageVisible -> WebView(viewContext).apply {
-                        settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(viewContext)
+                    VerificationBrowserPane(modifier = Modifier.fillMaxSize().clipToBounds(), factory = { viewContext, onPageVisible -> org.mobilism.material.data.AppHttp.webView(viewContext).apply {
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.allowFileAccess = false

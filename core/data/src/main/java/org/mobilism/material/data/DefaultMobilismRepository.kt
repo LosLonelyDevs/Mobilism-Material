@@ -7,7 +7,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class DefaultMobilismRepository(context: Context, private val contentPreferences: ContentPreferencesStore = ContentPreferencesStore(context),
-    diagnostics: DiagnosticLogger = DiagnosticLogger.None, client: okhttp3.OkHttpClient = okhttp3.OkHttpClient(),
+    diagnostics: DiagnosticLogger = DiagnosticLogger.None, client: okhttp3.OkHttpClient = AppHttp.client,
     private val customCategories: CustomCategoryStore? = null,
     private val customCategoriesEnabled: () -> Boolean = { false },
     challengeRecovery: ChallengeRecovery = ChallengeRecovery.None,

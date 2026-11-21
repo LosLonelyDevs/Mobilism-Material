@@ -11,9 +11,18 @@
 .following-report .admin-traffic-table th { white-space: normal; }
 .cache-rankings :is(th, td):nth-child(n + 2) { text-align: center; vertical-align: middle; }
 .following-report .cache-rankings td:nth-child(2) { white-space: normal; overflow-wrap: anywhere; }
+.following-report .admin-traffic-table .client-version { text-align: center; vertical-align: middle; white-space: normal; overflow-wrap: anywhere; }
 .following-report .recent-apps td:last-child { white-space: normal; }
+/* The disclosure adds 16px of padding on each side of the search body. */
+.cache-search-body { --expanded-height: 369px; min-height: calc(var(--expanded-height) - 32px); }
 @media (max-width: 480px) {
   .following-report .admin-traffic-table :is(th, td) { padding: 10px 5px; }
+}
+@media (max-width: 389px) {
+  .cache-search-body { --expanded-height: 384px; }
+}
+@media (max-width: 359px) {
+  .cache-search-body { --expanded-height: 442px; }
 }
 .usage-period { display: grid; gap: 6px; }
 .usage-period > span { font-size: 12px; color: var(--admin-muted); }

@@ -31,7 +31,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.mobilism.material.R
-import org.mobilism.material.data.AppUserAgent
+import org.mobilism.material.data.AppHttp
 import org.mobilism.material.data.KeystoreText
 import org.mobilism.material.data.Release
 import org.mobilism.material.data.ReleaseTitle
@@ -190,8 +190,7 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
     }
 
     private suspend fun fetch(url: String, stage: File): String = coroutineScope {
-        val call = http.newCall(Request.Builder().url(url)
-            .header("User-Agent", AppUserAgent.identity(applicationContext)).build())
+        val call = http.newCall(Request.Builder().url(url).build())
         val transfer = async(Dispatchers.IO) {
             val job = currentCoroutineContext().job
             call.execute().use { response ->
@@ -289,7 +288,7 @@ internal fun savedReleaseIntent(context: Context, uri: Uri): Intent =
 
 internal fun releaseFileClient(context: Context): OkHttpClient {
     val cooldowns = context.getSharedPreferences("release-host-cooldowns", Context.MODE_PRIVATE)
-    return OkHttpClient.Builder().retryOnConnectionFailure(false).followSslRedirects(false)
+    return AppHttp.builder().retryOnConnectionFailure(false).followSslRedirects(false)
         .addNetworkInterceptor { chain ->
             val request = chain.request()
             val host = request.url.host

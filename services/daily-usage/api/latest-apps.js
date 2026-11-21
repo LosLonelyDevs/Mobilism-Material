@@ -117,8 +117,12 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
     try {
       if (requested) {
         const mode = req.headers?.['x-following-check'];
-        return respond(res, 200, await lookup(database, requested, body.adultFiltered, now, body.day,
-          mode === 'background' || mode === 'manual' ? mode : null));
+        const check = mode === 'background' || mode === 'manual' ? mode : null;
+        const agent = req.headers?.['user-agent'];
+        const version = check && typeof agent === 'string' && agent.length <= 1024
+          ? /(?:^| )MobilismMaterial\/(\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?) \(Android; build \d{1,19}\)$/.exec(agent)?.[1] : null;
+        return respond(res, 200, await lookup(database, requested, body.adultFiltered, now, body.day, check,
+          version && version.length <= 50 ? version : null));
       }
       const { items, ids, at, dated, anchors, missing, adultFiltered } = page;
       for (const item of items) if (anchors[item.id]) item.anchors = anchors[item.id];
