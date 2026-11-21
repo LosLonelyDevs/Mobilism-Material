@@ -61,6 +61,9 @@ ALTER TABLE daily_followed_apps
     ADD COLUMN IF NOT EXISTS hits bigint NOT NULL DEFAULT 0 CHECK (hits >= 0),
     ADD COLUMN IF NOT EXISTS measured_misses bigint NOT NULL DEFAULT 0 CHECK (measured_misses >= 0);
 
+ALTER TABLE daily_followed_apps
+    ADD COLUMN IF NOT EXISTS other_lookups bigint NOT NULL DEFAULT 0 CHECK (other_lookups >= 0);
+
 CREATE TABLE IF NOT EXISTS follow_lookup_receipts (
     day date NOT NULL,
     receipt uuid NOT NULL,

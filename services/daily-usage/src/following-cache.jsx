@@ -9,12 +9,13 @@ const calendarHtml = { __html: calendarMarkup };
 const number = value => BigInt(value).toLocaleString();
 const rate = (count, total) => total ? percentage(count, total) + '%' : '—';
 
-function Rankings({ rows, title, rank, count, label }) {
+function Rankings({ rows, title, rank, count, displayCount = count, label }) {
   const sorted = rows.filter(row => row[rank] <= 10 && BigInt(row[count]) > 0n)
     .sort((a, b) => a[rank] - b[rank]);
   return <section className="admin-panel"><h2>{title}</h2>
     {sorted.length ? <table className="admin-traffic-table"><thead><tr><th>App</th><th>Current cached version</th><th>{label}</th></tr></thead>
-      <tbody>{sorted.map(row => <tr key={row[rank]}><td>{row.name}</td><td>{row.cachedVersion ?? 'Not cached'}</td><td>{number(row[count])}</td></tr>)}</tbody></table>
+      <tbody>{sorted.map(row => <tr key={row[rank]}><td>{row.name}</td><td>{row.cachedVersion ?? 'Not cached'}</td>
+        <td>{BigInt(row[displayCount]) > 0n ? number(row[displayCount]) : '—'}</td></tr>)}</tbody></table>
       : <p className="muted">No apps reported for these dates.</p>}
   </section>;
 }
@@ -70,7 +71,7 @@ export default function FollowingCache() {
     {error ? <Notice variant="danger">{error}</Notice> : !report ? <p role="status">Loading report…</p> :
       !report.available ? <p>Available with stable v0.1.24 or later.</p> : <>
         <LookupSummary report={report} />
-        <Rankings rows={report.followRankings} title="Most followed apps" rank="followRank" count="followers" label="Reporting device-days" />
+        <Rankings rows={report.followRankings} title="Most followed apps" rank="followRank" count="followers" displayCount="totalLookups" label="Total lookups" />
         <Rankings rows={report.followRankings} title="Most missed apps" rank="missRank" count="misses" label="Missing lookups" />
         <section className="admin-panel"><h2>Device reports</h2>
           <p>Phones report background and manual checks after each UTC day ends.</p>

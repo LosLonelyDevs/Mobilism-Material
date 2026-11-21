@@ -10,7 +10,7 @@ import { followingControlsAvailable } from '../public/limit-availability.js';
 
 const ranks = `WITH totals AS (
   SELECT app_key, min(name) AS name, sum(followers) AS followers, sum(misses) AS misses,
-    sum(hits) AS hits, sum(measured_misses) AS measured_misses
+    sum(hits) AS hits, sum(measured_misses) AS measured_misses, sum(other_lookups) AS other_lookups
   FROM daily_followed_apps WHERE day BETWEEN $1::date AND $2::date GROUP BY app_key
 ), ranked AS (
   SELECT *, row_number() OVER (ORDER BY followers DESC, app_key) AS follow_rank,
@@ -18,7 +18,8 @@ const ranks = `WITH totals AS (
 ) SELECT coalesce(sum(hits),0)::text AS hits, coalesce(sum(misses),0)::text AS misses,
   coalesce(sum(measured_misses),0)::text AS "measuredMisses",
   coalesce(jsonb_agg(jsonb_build_object('key', app_key, 'name', name, 'followers', followers::text, 'misses', misses::text,
-    'followRank', follow_rank, 'missRank', miss_rank)) FILTER (WHERE (follow_rank <= 10 AND followers > 0)
+    'totalLookups', (hits + misses + other_lookups)::text, 'followRank', follow_rank, 'missRank', miss_rank))
+    FILTER (WHERE (follow_rank <= 10 AND followers > 0)
     OR (miss_rank <= 10 AND misses > 0)), '[]') AS rankings FROM ranked`;
 
 const rates = `SELECT cache, sum(hits)::text AS hits, sum(misses)::text AS misses FROM daily_cache_usage

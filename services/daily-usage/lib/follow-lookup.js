@@ -53,12 +53,13 @@ export async function lookup(database, apps, adultFiltered, now, clientDay) {
       ), first_today AS (
         INSERT INTO follow_lookup_receipts(day, receipt) SELECT $2::date, receipt FROM input WHERE $3::boolean
         ORDER BY receipt ON CONFLICT DO NOTHING RETURNING receipt
-      ) INSERT INTO daily_followed_apps(day, app_key, name, followers, misses, hits, measured_misses)
-        SELECT $2::date, key, name, (f.receipt IS NOT NULL)::int, miss, hit, miss FROM input LEFT JOIN first_today f USING(receipt)
-        WHERE f.receipt IS NOT NULL OR hit > 0 OR miss > 0 ORDER BY key
+      ) INSERT INTO daily_followed_apps(day, app_key, name, followers, misses, hits, measured_misses, other_lookups)
+        SELECT $2::date, key, name, (f.receipt IS NOT NULL)::int, miss, hit, miss, 1 - hit - miss
+        FROM input LEFT JOIN first_today f USING(receipt) ORDER BY key
         ON CONFLICT (day, app_key) DO UPDATE SET followers = daily_followed_apps.followers + excluded.followers,
           misses = daily_followed_apps.misses + excluded.misses, hits = daily_followed_apps.hits + excluded.hits,
-          measured_misses = daily_followed_apps.measured_misses + excluded.measured_misses`, [JSON.stringify(counts), day, day === clientDay]);
+          measured_misses = daily_followed_apps.measured_misses + excluded.measured_misses,
+          other_lookups = daily_followed_apps.other_lookups + excluded.other_lookups`, [JSON.stringify(counts), day, day === clientDay]);
   } catch { /* A statistics write must never turn a cache hit into a Mobilism search. */ }
   return { observedAt, misses: counts.filter(app => app.miss).length,
     items: items.map(({ id, title, name, version, postedAt, author, adultFiltered }) =>
