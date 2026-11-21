@@ -24,7 +24,7 @@ function Rankings({ rows, title, rank, count, displayCount = count, label }) {
   const sorted = rows.filter(row => row[rank] <= followingRankingLimit && BigInt(row[count]) > 0n)
     .sort((a, b) => a[rank] - b[rank]);
   return <CacheCard title={title} defaultOpen>
-    {sorted.length ? <table className="admin-traffic-table cache-rankings"><thead><tr><th>App</th><th>Cached version</th><th>Last client version</th><th>{label}</th></tr></thead>
+    {sorted.length ? <table className="admin-traffic-table cache-rankings"><thead><tr><th>App</th><th>Cached version</th><th>Client version</th><th>{label}</th></tr></thead>
       <tbody>{sorted.map(row => <tr key={row[rank]}><td>{row.name}</td><td>{row.cachedVersion ?? 'Not cached'}</td>
         <td className="client-version">{row.clientVersion ?? 'Unknown'}</td>
         <td>{BigInt(row[displayCount]) > 0n ? number(row[displayCount]) : '—'}</td></tr>)}</tbody></table>
@@ -35,7 +35,7 @@ function Rankings({ rows, title, rank, count, displayCount = count, label }) {
 function RecentApps({ apps }) {
   return <CacheCard title="Most recently requested apps">
     {apps.length ? <table className="admin-traffic-table cache-rankings recent-apps">
-      <thead><tr><th>App</th><th>Cached version</th><th>Last client version</th><th>Requested (UTC)</th></tr></thead>
+      <thead><tr><th>App</th><th>Cached version</th><th>Client version</th><th>Requested (UTC)</th></tr></thead>
       <tbody>{apps.map(app => <tr key={app.name}><td>{app.name}</td><td>{app.cachedVersion ?? 'Not cached'}</td>
         <td className="client-version">{app.clientVersion ?? 'Unknown'}</td>
         <td>{requestTime.format(app.requestedAt * 1000)}</td></tr>)}</tbody>
@@ -57,7 +57,7 @@ function CacheSearch({ apps }) {
     <div className="cache-search-body">
       <InputField label="App name" type="search" value={query} maxLength={200} autoComplete="off" onChange={e => setQuery(e.target.value)} />
       {term && (matches.length ? <table className="admin-traffic-table cache-rankings">
-        <thead><tr><th>App</th><th>Cached version</th><th>Last client version</th></tr></thead>
+        <thead><tr><th>App</th><th>Cached version</th><th>Client version</th></tr></thead>
         <tbody>{matches.map(app => <tr key={app.key}><td>{app.name}</td><td>{app.version}</td>
           <td className="client-version">{app.clientVersion ?? 'Unknown'}</td></tr>)}</tbody>
       </table> : <p role="status" className="muted">No matching apps in the cache.</p>)}
