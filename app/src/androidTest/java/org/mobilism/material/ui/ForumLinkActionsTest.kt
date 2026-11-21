@@ -87,6 +87,111 @@ class ForumLinkActionsTest {
         assertEquals(2, requests.size)
     }
 
+    @Test fun announcementOpensLinkedTopicInsideTheAppWithOneForumRead() {
+        val url = "https://forum.mobilism.org/viewtopic.php?f=399&t=6465717"
+        val requests = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            requests += chain.request().url.toString()
+            check(chain.request().url.toString() == url)
+            val html = """<h2 class='topic-title'><a href='$url'>Destination topic</a></h2>
+                <div class='post' id='p10'><div class='postbody'><div class='content'>Destination body</div></div></div>
+                <div class='post' id='p11'><div class='postbody'><div class='content'>Existing reply</div></div></div>"""
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body(html.toResponseBody()).build()
+        }.build()
+        val repository = DefaultMobilismRepository(compose.activity, client = client)
+        val announcement = DiscussionTopic(6464350, "Source announcement", "Moderator", "<a href='$url'>Open topic</a>",
+            DiscussionKind.Other, 1)
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            val nav = rememberNavController()
+            androidx.compose.runtime.CompositionLocalProvider(LocalLinkedTopicHandler provides nav::openForumTopic) {
+                NavHost(nav, startDestination = "source") {
+                    composable("source") {
+                        val model = viewModel<DiscussionsViewModel> { DiscussionsViewModel(repository, null, SavedStateHandle(),
+                            announcementsOnly = true, linkedAnnouncement = { LinkedAnnouncement(announcement, CommentPage(emptyList(), false)) }) }
+                        DiscussionsScreen(model, AuthState.Guest, { nav.popBackStack() }, { _, _ -> }, announcement.browserUrl)
+                    }
+                    composable("release/{id}?forum={forum}", arguments = listOf(navArgument("id") { type = NavType.LongType },
+                        navArgument("forum") { type = NavType.LongType; defaultValue = -1L })) { entry ->
+                        val args = requireNotNull(entry.arguments)
+                        val model = viewModel<ReleaseViewModel> { ReleaseViewModel(args.getLong("id"), repository, SavedStateHandle()) {
+                            repository.openTopic(it, args.getLong("forum"))
+                        } }
+                        val state by model.state.collectAsStateWithLifecycle()
+                        state.discussion?.let { discussion ->
+                            val reader = viewModel<DiscussionsViewModel> { DiscussionsViewModel(repository, null, SavedStateHandle(),
+                                linkedAnnouncement = { discussion }) }
+                            DiscussionsScreen(reader, AuthState.Guest, { nav.popBackStack() }, { _, _ -> }, url)
+                        }
+                    }
+                }
+            }
+        } }
+        compose.onNodeWithText("Source announcement").assertIsDisplayed()
+        val link = textView()
+        touch(link, MotionEvent.ACTION_DOWN)
+        touch(link, MotionEvent.ACTION_UP)
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Destination topic").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("comment-11").assertExists()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithText("Source announcement").assertIsDisplayed()
+        assertEquals(listOf(url), requests)
+    }
+
+    @Test fun holdCommentCopiesTheForumPermalink() {
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            ReleaseCommentCard(ReleaseComment(77, "Reader", null, 0, "Comment body"),
+                "https://forum.mobilism.org/viewtopic.php?t=42", onImage = { _, _ -> })
+        } }
+        compose.onNodeWithTag("comment-toggle-77").performTouchInput { longClick() }
+        compose.onNodeWithText("Copy comment link").performClick()
+        compose.runOnUiThread {
+            val clipboard = compose.activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            assertEquals("https://forum.mobilism.org/viewtopic.php?t=42&p=77#p77", clipboard.primaryClip!!.getItemAt(0).text.toString())
+        }
+    }
+
+    @Test fun cachedLinkScrollsToExactReplyWithoutCallingTheForum() {
+        val url = "https://forum.mobilism.org/viewtopic.php?t=42&p=113#p113"
+        val source = Release(42, "Current release", "Uploader", null, 0, 20, 0, contentHtml = "<a href='$url'>Jump to reply</a>")
+        val rows = (101L..120L).map { ReleaseComment(it, "Reader", null, it, "Comment $it") }
+        compose.setContent { MobilismTheme(reduceMotion = false) {
+            androidx.compose.runtime.CompositionLocalProvider(LocalCommentLinkHandler provides { error("Requested a loaded reply") }) {
+                ReleaseScreen(ReleaseState(source, false, comments = CommentsState(rows, canLoadMore = false)),
+                    DebridState(), DownloadPreferences(), onBack = {}, onRetry = {}, onMoreComments = { error("Loaded another page") },
+                    watched = false, downloaded = false, onWatch = {}, onDownloaded = {}, onLike = {}, onActionMessageShown = {},
+                    descriptionExpanded = true)
+            }
+        } }
+        val link = textView()
+        touch(link, MotionEvent.ACTION_DOWN)
+        touch(link, MotionEvent.ACTION_UP)
+        compose.onNodeWithTag("comment-113").assertIsDisplayed()
+        val cue = SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Linked comment")
+        compose.onNodeWithTag("comment-113").assert(cue)
+        compose.mainClock.advanceTimeBy(2600)
+        compose.onNodeWithTag("comment-113").assert(cue.not())
+    }
+
+    @Test fun aMissingReplyLoadsOnePageAndNearbyPermalinksReuseIt() = kotlinx.coroutines.runBlocking {
+        val requests = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            requests += chain.request().url.toString()
+            val html = """<h2 class='topic-title'><a href='/viewtopic.php?t=42'>Target thread</a></h2>
+                <article class='post' id='p77'><div class='postbody'><div class='content'>First reply</div></div></article>
+                <article class='post' id='p78'><div class='postbody'><div class='content'>Second reply</div></div></article>"""
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body(html.toResponseBody()).build()
+        }.build()
+        val repository = DefaultMobilismRepository(compose.activity, client = client)
+        val model = LinkedCommentViewModel { repository.linkedComment(78, null) }
+        compose.setContent { MobilismTheme(reduceMotion = true) { LinkedCommentScreen(model, 78, {}, {}) } }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("comment-78").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("comment-78").assertIsDisplayed()
+        assertEquals(42L, repository.linkedComment(77, 42).topicId)
+        assertEquals(listOf("https://forum.mobilism.org/viewtopic.php?p=78"), requests)
+    }
+
     @Test fun linkedReleaseOpensItsOwnDetailAndBackRestoresTheSource() {
         val source = 6462354L
         val linked = 6448504L
@@ -128,7 +233,7 @@ class ForumLinkActionsTest {
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Current build").assertIsDisplayed()
         assertEquals(listOf(source, linked), visited)
-        assertEquals(listOf(source to 1, linked to 1), commentPages)
+        assertTrue(commentPages.isEmpty())
     }
 
     @Test fun nativeDownloadHelpActionKeepsLongPressMenuAndTapOpensReader() {

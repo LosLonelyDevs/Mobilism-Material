@@ -49,6 +49,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.designsystem.AppIconButton
@@ -119,7 +120,7 @@ internal fun ReleaseDownloadGroup(releaseId: Long, group: DownloadGroup, baseUrl
             verticalAlignment = Alignment.CenterVertically) {
             val titleStyle = MaterialTheme.typography.titleSmall
             AppHeading(group.title, HeadingLevel.Page, Modifier.weight(1f), style = if (LocalForumFormatting.current.cleanUpReleaseText)
-                titleStyle.copy(fontWeight = FontWeight.SemiBold) else titleStyle)
+                titleStyle.copy(fontSize = (titleStyle.fontSize.value + 1).sp, fontWeight = FontWeight.SemiBold) else titleStyle)
             Icon(Icons.Outlined.ExpandMore, null, Modifier.size(24.dp).rotate(rotation), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         AnimatedVisibility(expanded,

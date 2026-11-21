@@ -9,7 +9,6 @@ import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
@@ -21,9 +20,9 @@ internal fun CommentSortMenu(sort: CommentSort, total: Long, onSelect: (CommentS
     var expanded by remember { mutableStateOf(false) }
     val arrow = if (sort.newestFirst) Icons.Outlined.ArrowDownward else Icons.Outlined.ArrowUpward
     val direction = if (sort.newestFirst) "Newest first" else "Oldest first"
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box {
-            TextButton(onClick = { expanded = true }, contentPadding = PaddingValues(horizontal = 6.dp),
+    Row {
+        Box(Modifier.alignByBaseline()) {
+            TextButton(onClick = { expanded = true }, contentPadding = PaddingValues(start = 6.dp, end = 6.dp, bottom = 8.dp),
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
                 modifier = Modifier.testTag("comment-sort").semantics { stateDescription = direction }) {
                 Text(sort.field.name, style = MaterialTheme.typography.labelSmall)
@@ -40,7 +39,7 @@ internal fun CommentSortMenu(sort: CommentSort, total: Long, onSelect: (CommentS
                 }
             }
         }
-        Text(if (total == 1L) "1 comment" else "$total comments", style = MaterialTheme.typography.labelSmall,
+        Text(if (total == 1L) "1 comment" else "$total comments", Modifier.alignByBaseline(), style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

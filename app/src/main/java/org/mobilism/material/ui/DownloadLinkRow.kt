@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -65,6 +66,7 @@ fun DownloadLinkRow(
     val scope = rememberCoroutineScope()
     val providers = debrid.supporting(link.url).map { it.provider.label }
     val name = debrid.hostName(link.url)
+    val hostWeight = if (LocalForumFormatting.current.cleanUpReleaseText) FontWeight.Bold else null
     val supported = providers.isNotEmpty()
     val fileName = remember(link.url) { ReleaseFiles.directName(link.url) }
     val internal = downloadFile != null && (supported || fileName != null)
@@ -126,10 +128,12 @@ fun DownloadLinkRow(
                             internal && fileName != null -> fileName
                             else -> name
                         }
-                        Text(label, style = MaterialTheme.typography.labelMedium, maxLines = if (internal) 2 else 1,
+                        Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = if (label == name) hostWeight else null,
+                            maxLines = if (internal) 2 else 1,
                             overflow = TextOverflow.Ellipsis)
                         if (!resolving && internal && fileName != null)
-                            Text(name, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(name, style = MaterialTheme.typography.labelSmall, fontWeight = hostWeight,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (resolving && !LocalReducedMotion.current) LoadingIndicator(Modifier.align(Alignment.CenterStart).size(18.dp))
                     else if (!resolving && supported) Icon(Icons.Outlined.Check, null,

@@ -1,5 +1,6 @@
 package org.mobilism.material.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
@@ -26,18 +27,23 @@ import org.mobilism.material.designsystem.LocalReducedMotion
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun FeedRefreshContainer(refreshing: Boolean, busy: Boolean, onRefresh: () -> Unit,
+    enabled: Boolean = true, indicatorDescription: String = "Refreshing releases", modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit) {
+    if (!enabled) {
+        Box(modifier.fillMaxSize(), content = content)
+        return
+    }
     val pull = rememberPullToRefreshState()
     val refresh = { if (!busy) onRefresh() }
     PullToRefreshBox(isRefreshing = refreshing, onRefresh = refresh, state = pull,
-        modifier = Modifier.fillMaxSize().semantics {
+        modifier = modifier.fillMaxSize().semantics {
             customActions = listOf(CustomAccessibilityAction("Refresh") {
                 if (busy) false else { onRefresh(); true }
             })
         }, indicator = {
             val modifier = Modifier.align(Alignment.TopCenter).then(if (refreshing) Modifier
                 .testTag("feed-refresh-indicator").semantics {
-                    contentDescription = "Refreshing releases"
+                    contentDescription = indicatorDescription
                     liveRegion = LiveRegionMode.Polite
                 } else Modifier)
             if (LocalReducedMotion.current) PullToRefreshDefaults.IndicatorBox(pull, refreshing, modifier) {

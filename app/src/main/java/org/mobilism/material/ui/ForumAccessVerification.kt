@@ -6,7 +6,6 @@ import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -15,7 +14,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
@@ -62,17 +60,16 @@ internal fun ForumAccessVerification(url: String, onRead: (String) -> Boolean, o
                     TextButton(onClick = onDismiss) { Text("Cancel") }
                     TextButton(onClick = { browser?.reload() }) { Text("Reload") }
                 }
-                AndroidView(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context -> createBrowser(context).apply {
+                VerificationBrowserPane(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context, onPageVisible -> createBrowser(context).apply {
                     settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(context)
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.allowFileAccess = false
                     settings.allowContentAccess = false
                     settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                    webViewClient = object : WebViewClient() {
+                    webViewClient = object : VerificationPageClient(onPageVisible, ::readPage) {
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
                             request.isForMainFrame && !accepts(request.url)
-                        override fun onPageFinished(view: WebView, url: String) { readPage(view) }
                     }
                     browser = this
                     loadUrl(url)

@@ -17,14 +17,34 @@ internal object ForumReleaseParser {
     private val postId = Regex("p([1-9][0-9]*)")
     private val dateFormat = DateTimeFormatter.ofPattern("MMM d, uuuu, h:mm a", Locale.ENGLISH)
 
+    fun linkedTopic(html: String, id: Long): TopicContent {
+        val document = document(html)
+        val post = parse(document, id, requireSection = false)
+        return if (post.section != null) TopicContent.Catalog(post)
+        else TopicContent.Forum(discussion(document, post))
+    }
+
+    fun linkedComment(html: String, postId: Long, expectedTopic: Long?): LinkedCommentPage {
+        val document = document(html)
+        val (heading, url) = topicHeader(document, expectedTopic)
+        val topic = requireNotNull(url.queryParameter("t")?.toLongOrNull())
+        val posts = comments(document, topic, originalPostId = 0, start = 0).page.items
+        if (posts.none { it.id == postId }) throw ApiFailure(FailureKind.InvalidResponse,
+            "This comment is unavailable. It may have been removed or moved.")
+        return LinkedCommentPage(topic, heading.text(), posts)
+    }
+
     fun release(html: String, id: Long): Release = parse(html, id, requireSection = true)
 
     fun topic(html: String, id: Long): DiscussionTopic = asTopic(parse(html, id, requireSection = false))
 
     fun announcement(html: String, id: Long): LinkedAnnouncement {
-        val document = document(html, id)
-        val post = parse(document, id, requireSection = false)
-        val replies = comments(document, id, requireNotNull(post.likeId), 0).page
+        val document = document(html)
+        return discussion(document, parse(document, id, requireSection = false))
+    }
+
+    private fun discussion(document: Document, post: Release): LinkedAnnouncement {
+        val replies = comments(document, post.id, requireNotNull(post.likeId), 0).page
         return LinkedAnnouncement(asTopic(post), replies)
     }
 
@@ -32,18 +52,18 @@ internal object ForumReleaseParser {
         DiscussionTopic(post.id, post.title, post.author, post.contentHtml, DiscussionKind.Other, post.categoryId ?: 0,
             publishedAt = post.publishedAt, replies = post.replies, browserUrl = requireNotNull(post.browserUrl), images = post.images)
 
-    private fun parse(html: String, id: Long, requireSection: Boolean) = parse(document(html, id), id, requireSection)
+    private fun parse(html: String, id: Long, requireSection: Boolean) = parse(document(html), id, requireSection)
 
     private fun parse(document: Document, id: Long, requireSection: Boolean): Release {
-        val title = document.selectFirst(".page-category-topic a[href], h2.topic-title a[href]")!!
+        val (title, url) = topicHeader(document, id)
         val post = posts(document).firstOrNull() ?: invalid()
         val content = content(post)
         val images = images(content)
         val forums = document.select(".pagination a[href*='viewforum.php'], .breadcrumbs a[href*='viewforum.php']")
         val section = forums.mapNotNull { link -> ContentSection.entries.find { it.label.equals(link.text(), true) } }.lastOrNull()
         if (section == null && requireSection) invalid()
-        val url = title.absUrl("href").toHttpUrlOrNull() ?: invalid()
         val category = url.queryParameter("f")?.toLongOrNull()?.takeIf { it > 0 }
+            ?: forums.lastOrNull()?.absUrl("href")?.toHttpUrlOrNull()?.queryParameter("f")?.toLongOrNull()?.takeIf { it > 0 }
         val totalPosts = Regex("([0-9,]+)\\s+posts?\\b", RegexOption.IGNORE_CASE)
             .find(document.select(".pagination").text())?.groupValues?.get(1)?.replace(",", "")?.toLongOrNull()
         return Release(
@@ -55,8 +75,11 @@ internal object ForumReleaseParser {
         )
     }
 
-    fun comments(html: String, topicId: Long, originalPostId: Long, start: Int) =
-        comments(document(html, topicId), topicId, originalPostId, start)
+    fun comments(html: String, topicId: Long, originalPostId: Long, start: Int): ForumComments {
+        val document = document(html)
+        topicHeader(document, topicId)
+        return comments(document, topicId, originalPostId, start)
+    }
 
     private fun comments(document: Document, topicId: Long, originalPostId: Long, start: Int): ForumComments {
         val posts = posts(document)
@@ -88,16 +111,24 @@ internal object ForumReleaseParser {
         return ForumComments(CommentPage(comments, next != null), next)
     }
 
-    private fun document(html: String, id: Long): Document {
-        val document = Jsoup.parse(html, BASE_URL)
-        document.outputSettings().prettyPrint(false)
-        val title = document.selectFirst(".page-category-topic a[href], h2.topic-title a[href]") ?: invalid()
-        val url = title.absUrl("href").toHttpUrlOrNull() ?: invalid()
-        if (url.host != "forum.mobilism.org" || url.queryParameter("t")?.toLongOrNull() != id || title.text().isBlank()) invalid()
-        return document
+    private fun document(html: String) = Jsoup.parse(html, BASE_URL).apply { outputSettings().prettyPrint(false) }
+
+    private fun topicHeader(document: Document, id: Long?): Pair<Element, okhttp3.HttpUrl> {
+        fun matchingUrl(element: Element) = element.absUrl("href").toHttpUrlOrNull()?.takeIf {
+            it.host == "forum.mobilism.org" && it.encodedPath == "/viewtopic.php" &&
+                it.queryParameterValues("t").singleOrNull()?.toLongOrNull()?.let { topic -> topic > 0 && (id == null || topic == id) } == true
+        }
+        val headings = ".page-category-topic a[href], .topic-title a[href], h1.page-title a[href], h2.page-title a[href]"
+        document.select(headings).forEach { link ->
+            if (link.text().isNotBlank()) matchingUrl(link)?.let { return link to it }
+        }
+        val canonical = document.select("head link[rel=canonical][href]").firstNotNullOfOrNull(::matchingUrl) ?: invalid()
+        val title = document.select("h1.topic-title, h2.topic-title, h1.page-title, h2.page-title, .page-category-topic h3")
+            .firstOrNull { it.text().isNotBlank() && it.selectFirst("a[href]") == null } ?: invalid()
+        return title to canonical
     }
 
-    private fun posts(document: Document) = document.select("div.post[id], div[id]:has(> article .postbody)")
+    private fun posts(document: Document) = document.select(".post[id], div[id]:has(> article .postbody)")
         .filter { postId.matches(it.id()) }
 
     private fun id(post: Element) = postId.matchEntire(post.id())!!.groupValues[1].toLong()

@@ -54,6 +54,24 @@ class ForumReleaseParserTest {
         assertNull(release.liked)
     }
 
+    @Test fun linkedCommunityTopicKeepsRepliesAndSkipsUnrelatedBreadcrumbLinks() {
+        val html = topic().replace("6075324", "6465717").replace("1347", "399").replace(">Apps<", ">Help<")
+            .replace("<h3>", "<a href='viewforum.php?f=399'>Help</a><h3>")
+        val result = ForumReleaseParser.linkedTopic(html, 6465717) as TopicContent.Forum
+        assertEquals(6465717L, result.discussion.topic.id)
+        assertEquals(399L, result.discussion.topic.forumId)
+        assertEquals("Reader", result.discussion.forumComments!!.items.single().author)
+        assertTrue(ForumReleaseParser.linkedTopic(topic(), 6075324) is TopicContent.Catalog)
+    }
+
+    @Test fun acceptsAPlainTopicHeadingOnlyWithAnIdentifyingForumCanonical() {
+        val html = """<link rel='canonical' href='/viewtopic.php?t=6465717'><h2 class='topic-title'>Help topic</h2>
+            <article class='post' id='p123'><div class='postbody'><div class='content'>Forum post</div></div></article>"""
+        assertEquals("Help topic", ForumReleaseParser.topic(html, 6465717).title)
+        assertThrows(ApiFailure::class.java) { ForumReleaseParser.topic(html, 6464350) }
+        assertThrows(ApiFailure::class.java) { ForumReleaseParser.topic(html.replace("href='/", "href='https://example.org/"), 6465717) }
+    }
+
     @Test fun fallbackIsNotHardcodedToWearOrOneTopic() {
         val html = topic().replace("6075324", "99").replace("1347", "100")
             .replace(">Apps<", ">Books<")
@@ -73,6 +91,14 @@ class ForumReleaseParserTest {
             assertTrue(error is ApiFailure)
             assertEquals(FailureKind.InvalidResponse, (error as ApiFailure).kind)
         }
+    }
+
+    @Test fun postPermalinkUsesTheExactPostOnTheReturnedPage() {
+        val page = ForumReleaseParser.linkedComment(topic(), 12033953, expectedTopic = null)
+        assertEquals(6075324L, page.topicId)
+        assertEquals(listOf(12016008L, 12033953L), page.posts.map { it.id })
+        assertThrows(ApiFailure::class.java) { ForumReleaseParser.linkedComment(topic(), 12033953, 123) }
+        assertThrows(ApiFailure::class.java) { ForumReleaseParser.linkedComment(topic(), 123, 6075324) }
     }
 
     @Test fun commentsExcludeOriginalPostAndUseForumPaginationOffsets() {

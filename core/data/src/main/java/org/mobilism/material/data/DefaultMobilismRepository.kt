@@ -36,11 +36,17 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     private val commentPages = RecentPages<Pair<String?, Long>, CommentPage>(AppCache.ReleaseComments, diagnostics, capacity = 12)
     val commentGateway = api.commentGateway({ session }, ::invalidateComments)
 
-    private fun invalidateComments(topicId: Long) = commentPages.invalidate { it.second == topicId }
+    private val linkedPages = RecentPages<Pair<String?, Long>, LinkedCommentPage>(AppCache.ReleaseComments, diagnostics, capacity = 6)
+
+    private fun invalidateComments(topicId: Long) {
+        commentPages.invalidate { it.second == topicId }
+        linkedPages.clear()
+    }
 
     private fun clearPrivatePages() {
         inbox.clear()
         commentPages.clear()
+        linkedPages.clear()
     }
 
     override suspend fun restoreSession() = authMutex.withLock {
@@ -158,14 +164,34 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
             }
         }
 
-    override suspend fun release(id: Long): Release = withSession { token ->
+    override suspend fun release(id: Long): Release = (openTopic(id) as? TopicContent.Catalog)?.release
+        ?: throw ApiFailure(FailureKind.InvalidResponse, "This forum topic is a discussion.")
+
+    suspend fun openTopic(id: Long, directForum: Long? = null): TopicContent = withSession { token ->
         val account = session
-        val release = api.release(id, token)
-        val key = account?.takeIf { it.accessToken == token }?.let { reactionKey(it.username, id) }
-        if (release.liked != null && key != null) reactions.edit().putBoolean(key, release.liked).apply()
-        release.copy(liked = release.liked ?: key?.takeIf(reactions::contains)?.let { reactions.getBoolean(it, false) })
+        when (val result = api.openTopic(id, token, directForum)) {
+            is TopicContent.Forum -> result
+            is TopicContent.Catalog -> {
+                val release = result.release
+                val key = account?.takeIf { it.accessToken == token }?.let { reactionKey(it.username, id) }
+                if (release.liked != null && key != null) reactions.edit().putBoolean(key, release.liked).apply()
+                TopicContent.Catalog(release.copy(liked = release.liked ?: key?.takeIf(reactions::contains)?.let { reactions.getBoolean(it, false) }))
+            }
+        }
     }
 
+    suspend fun linkedComment(postId: Long, topicId: Long?): LinkedCommentPage {
+        val token = session?.accessToken
+        linkedPages.find { key, page -> key.first == token && (topicId == null || topicId == page.topicId) &&
+            page.posts.any { it.id == postId } }?.let { return it.second }
+        commentPages.find { key, page -> key.first == token && (topicId == null || topicId == key.second) &&
+            page.items.any { it.id == postId } }?.let { (key, page) ->
+            return LinkedCommentPage(key.second, "", page.items.sortedBy { it.publishedAt })
+        }
+        val result = linkedPages.get(token to postId, fresh = false) { api.linkedComment(postId, topicId) }
+        if (topicId != null && result.topicId != topicId) throw ApiFailure(FailureKind.InvalidResponse, "This comment belongs to another topic.")
+        return result
+    }
     suspend fun downloadHelp(): DiscussionTopic = api.downloadHelp()
     suspend fun profile(reference: ProfileReference): UserProfile = api.profile(reference)
 
@@ -183,7 +209,7 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
 
     override suspend fun comments(id: Long, page: Int, fresh: Boolean): CommentPage = withSession { token ->
         if (page == 1) commentPages.get(token to id, fresh) { api.comments(id, page, token) }
-        else api.comments(id, page, token)
+        else rememberCommentPage(token, id, "") { api.comments(id, page, token) }
     }
 
     override suspend fun postComment(id: Long, text: String, replyTo: Long?): Long = withSession { token ->
@@ -236,12 +262,23 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     override suspend fun refreshDiscussionTopics(category: DiscussionCategory, query: String) =
         withSession { api.discussionTopics(category, 1, query, it, fresh = true) }
 
-    override suspend fun discussionComments(topic: DiscussionTopic, page: Int) = withSession { api.discussionComments(topic, page, it) }
+    override suspend fun discussionComments(topic: DiscussionTopic, page: Int) = withSession { token ->
+        rememberCommentPage(token, topic.id, topic.title) { api.discussionComments(topic, page, token) }
+    }
+
+    private suspend fun rememberCommentPage(token: String?, topic: Long, title: String, load: suspend () -> CommentPage): CommentPage {
+        val revision = linkedPages.revision()
+        return load().also { page ->
+            page.items.firstOrNull()?.let { first ->
+                linkedPages.store(token to first.id, LinkedCommentPage(topic, title, page.items.sortedBy { it.publishedAt }), revision)
+            }
+        }
+    }
 
     override suspend fun postDiscussionComment(topic: DiscussionTopic, text: String, replyTo: Long?) = withSession { token ->
         val account = session?.takeIf { it.accessToken == token }
             ?: throw ApiFailure(FailureKind.Credentials, "Sign in to join this discussion.")
-        api.postDiscussionComment(topic, text, replyTo, account.accessToken)
+        api.postDiscussionComment(topic, text, replyTo, account.accessToken).also { invalidateComments(topic.id) }
     }
 
     override suspend fun messages(folder: MessageFolder, page: Int, fresh: Boolean): MessagePage = withMessageSession { account ->

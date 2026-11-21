@@ -87,6 +87,38 @@ class SearchTrafficTest {
         assertEquals(1, fixture.calls)
     }
 
+    @Test fun manualChecksUseOneWholeListLookupAndOnlyFiveSearchesOnCacheFailure() = runBlocking {
+        val fixture = Fixture()
+        fixture.followApps()
+        val requests = mutableListOf<List<String>>()
+        val checker = FollowingChecker(fixture.library, fixture.repository, InstalledApps(fixture.context),
+            FollowingPreferences(fixture.context), FollowingNotifications(fixture.context),
+            limits = { ApiRequestLimits.Defaults.copy(followCacheBatchSize = 2) }, latestApps = { names ->
+                requests.add(names)
+                throw java.io.IOException("Fixture outage")
+            })
+        assertEquals(5, checker.check().done)
+        checker.check()
+        assertEquals(12, requests.single().size)
+        assertEquals(5, fixture.calls)
+    }
+
+    @Test fun rotatingBackgroundBatchAndIndependentCacheClocksSurviveProcessRecreation() {
+        val fixture = Fixture()
+        val prefs = FollowingPreferences(fixture.context)
+        val names = listOf("App A", "App B", "App C")
+        val limits = ApiRequestLimits.Defaults
+        assertEquals(names.take(2), prefs.backgroundBatch(names, 2))
+        val restored = FollowingPreferences(fixture.context)
+        assertEquals(listOf("App C", "App A"), restored.backgroundBatch(names, 2))
+        assertTrue(prefs.beginCacheCheck(3000000, limits, background = true))
+        assertTrue(restored.beginCacheCheck(3001000, limits, background = false))
+        assertFalse(restored.beginCacheCheck(3301000, limits, background = true))
+        assertTrue(restored.beginCacheCheck(3301000, limits, background = false))
+        assertTrue(restored.beginCheck(3301000, limits))
+        assertFalse(prefs.beginCheck(3302000, limits))
+    }
+
     @Test fun oneSnapshotCanUpdateMoreThanFiveFollowedAppsWithoutMobilismReads() = runBlocking {
         val fixture = Fixture()
         fixture.followApps()

@@ -15,7 +15,7 @@ class FollowingChecker(
     private val library: AppLibraryStore, private val repository: MobilismRepository,
     private val device: InstalledApps, private val preferences: FollowingPreferences, private val notifications: FollowingNotifications,
     private val limits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
-    private val latestApps: suspend () -> LatestAppsSnapshot = { LatestAppsSnapshot(CacheOutcome.Unconfigured) },
+    private val latestApps: suspend (List<String>) -> LatestAppsSnapshot = { LatestAppsSnapshot(CacheOutcome.Unconfigured) },
     private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
 ) {
     private val mutex = Mutex()
@@ -42,22 +42,32 @@ class FollowingChecker(
     private suspend fun checkUpdates(background: Boolean): FollowCheckState {
         if (!mutex.tryLock()) return mutableState.value
         try {
-            if (library.state.value.none { it.watched }) return FollowCheckState()
+            val watched = library.state.value.filter { it.watched }
+            if (watched.isEmpty()) return FollowCheckState()
             val policy = limits()
+            val enabled = policy.followCacheBatchSize > 0
+            val readCache = enabled && preferences.beginCacheCheck(System.currentTimeMillis(), policy, background)
+            val names = watched.map { ReleaseTitles.parse(it.release.title).name }.distinctBy(::latestAppKey)
+            val requested = if (readCache && background) preferences.backgroundBatch(names, policy.followCacheBatchSize) else names
+            val previous = mutableState.value
             mutableState.value = FollowCheckState(busy = true)
-            val snapshot = if (policy.followCacheBatchSize == 0) LatestAppsSnapshot(CacheOutcome.Disabled) else try { latestApps() }
+            val snapshot = if (!readCache) LatestAppsSnapshot(if (enabled) CacheOutcome.Cooldown else CacheOutcome.Disabled)
+                else try { latestApps(requested) }
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { LatestAppsSnapshot(CacheOutcome.Failed) }
             val candidates = snapshot.releases
-            val byName = candidates.groupBy { ReleaseTitles.parse(it.title).name.lowercase(java.util.Locale.ROOT) }
+            val byName = candidates.groupBy { latestAppKey(ReleaseTitles.parse(it.title).name) }
+            val wanted = requested.map(::latestAppKey).toSet()
             refreshInstalled()
             val watches = library.state.value.filter { it.watched }.sortedBy { it.checkedAt ?: 0L }
             val hits = mutableSetOf<Long>()
-            var compared = 0
+            val searched = mutableSetOf<Long>()
             for (entry in watches) {
-                if (snapshot.outcome != CacheOutcome.Available || hits.size >= policy.followCacheBatchSize) break
-                compared++
-                val matches = byName[ReleaseTitles.parse(entry.release.title).name.lowercase(java.util.Locale.ROOT)] ?: continue
+                if (snapshot.outcome != CacheOutcome.Available) break
+                val key = latestAppKey(ReleaseTitles.parse(entry.release.title).name)
+                if (key !in wanted) continue
+                searched.add(entry.release.id)
+                val matches = byName[key] ?: continue
                 val current = FollowingVersions.matchingInstalled(entry, installed.value)
                 val baseline = FollowingVersions.baseline(entry, current)
                 val compatible = matches.filter { release ->
@@ -71,8 +81,15 @@ class FollowingChecker(
                 hits.add(entry.release.id)
             }
             val now = System.currentTimeMillis()
-            val due = FollowCheckPolicy.due(watches.filterNot { it.release.id in hits }, now, policy)
+            val due = FollowCheckPolicy.due(watches.filter { it.release.id !in hits &&
+                (snapshot.outcome != CacheOutcome.Available || it.release.id in searched) }, now, policy)
             val direct = if (due.isNotEmpty() && preferences.beginCheck(now, policy, background)) due else emptyList()
+            if (direct.isEmpty() && snapshot.outcome == CacheOutcome.Cooldown) {
+                diagnostics.recordCache(CacheDiagnostic(AppCache.Following, CacheOutcome.Cooldown, background = background,
+                    fallbackSearches = 0), DiagnosticOperation.FollowingCheck)
+                mutableState.value = previous
+                return previous
+            }
             mutableState.value = FollowCheckState(busy = true, total = hits.size + direct.size, done = hits.size)
             if (direct.isNotEmpty() && repository.auth.value == AuthState.Restoring) repository.restoreSession()
             var searches = 0
@@ -91,8 +108,10 @@ class FollowingChecker(
                     break
                 }
             }
-            diagnostics.recordCache(CacheDiagnostic(AppCache.Following, snapshot.outcome, hits = hits.size,
-                misses = compared - hits.size, items = candidates.size, background = background, fallbackSearches = searches),
+            val present = if (snapshot.outcome == CacheOutcome.Available) wanted.count(byName::containsKey) else 0
+            val missing = if (snapshot.outcome == CacheOutcome.Available) snapshot.missingNames ?: (wanted.size - present) else 0
+            diagnostics.recordCache(CacheDiagnostic(AppCache.Following, snapshot.outcome, hits = present,
+                misses = missing, items = candidates.size, background = background, fallbackSearches = searches),
                 DiagnosticOperation.FollowingCheck, snapshot.httpStatus)
         } finally {
             mutableState.update { it.copy(busy = false) }

@@ -315,10 +315,12 @@ internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = fal
     val subtitleLines = if (compact) 1 else 2
     val titleStyle = MaterialTheme.typography.titleMedium
     val subtitleStyle = MaterialTheme.typography.bodySmall
+    val subtitleGap = 4.dp
+    val authorGap = 2.dp
     val textHeight = with(LocalDensity.current) {
         val subtitleHeight = subtitleStyle.lineHeight.toDp()
         val authorHeight = if (compact) subtitleHeight else maxOf(24.dp, subtitleHeight)
-        titleStyle.lineHeight.toDp() * titleLines + subtitleHeight * subtitleLines + authorHeight + 8.dp
+        titleStyle.lineHeight.toDp() * titleLines + subtitleHeight * subtitleLines + authorHeight + subtitleGap + authorGap
     }
     ExpressiveCard(onClick, Modifier.fillMaxWidth().testTag("release-${release.id}"), colors = CardDefaults.cardColors(
         containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, accent, 0.06f),
@@ -332,15 +334,16 @@ internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = fal
                     modifier = Modifier.size(thumbnailSize).clip(MaterialTheme.shapes.medium).testTag("release-artwork-${release.id}"),
                     contentScale = ContentScale.Crop,
                 )
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(Modifier.weight(1f)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         AppHeading(title.name, HeadingLevel.Subsection, Modifier.weight(1f), style = titleStyle,
                             maxLines = titleLines, overflow = TextOverflow.Ellipsis)
                         if (isNew) NewReleaseBadge(release.id)
                     }
-                    if (title.subtitle.isNotBlank()) Text(title.subtitle, style = subtitleStyle,
+                    if (title.subtitle.isNotBlank()) Text(title.subtitle, Modifier.padding(top = subtitleGap), style = subtitleStyle,
                         color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = subtitleLines, overflow = TextOverflow.Ellipsis)
-                    UsernameLink(release.author, style = subtitleStyle, showAvatar = !compact, lookupIdentity = !compact)
+                    UsernameLink(release.author, Modifier.padding(top = authorGap), style = subtitleStyle,
+                        showAvatar = !compact, lookupIdentity = !compact)
                 }
             }
             ReleaseMetadataFooter(release, singleRow = true, spacing = 10.dp, listCard = true) {

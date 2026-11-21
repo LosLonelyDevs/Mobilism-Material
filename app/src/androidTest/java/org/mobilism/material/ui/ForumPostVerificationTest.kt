@@ -18,6 +18,24 @@ import org.mobilism.material.designsystem.MobilismTheme
 class ForumPostVerificationTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun openingIndicatorYieldsToTheFirstVisiblePageBeforeVerificationCompletes() {
+        val url = "https://forum.mobilism.org/viewtopic.php?t=42"
+        var loads = 0
+        lateinit var browser: WebView
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            ForumPostVerification(42, { fail("An unverified page cannot complete the check") }, {}, { context ->
+                object : WebView(context) {
+                    override fun loadUrl(url: String) { loads++ }
+                }.also { browser = it }
+            })
+        } }
+        compose.onNodeWithText("Opening verification…").assertIsDisplayed()
+        compose.runOnIdle { browser.webViewClient.onPageCommitVisible(browser, url) }
+        compose.onNodeWithText("Opening verification…").assertDoesNotExist()
+        compose.onNodeWithText("Cancel").assertIsDisplayed()
+        compose.runOnIdle { assertTrue(browser.isShown); assertEquals(1, loads) }
+    }
+
     @Test fun verifiedTopicReturnsOriginalPostAndIgnoresReplyIds() {
         var postId: Long? = null
         val page = fixture("""

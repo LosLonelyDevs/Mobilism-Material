@@ -8,7 +8,17 @@ internal object ReleaseLinks {
 
     fun topicId(url: String?) = topic(url)?.id
 
-    fun topic(url: String?): Topic? = runCatching {
+    data class Comment(val postId: Long, val topicId: Long? = null) {
+        val url: String get() = "https://forum.mobilism.org/viewtopic.php?" +
+            (topicId?.let { "t=$it&" } ?: "") + "p=$postId#p$postId"
+    }
+
+    private data class Destination(val topic: Topic?, val comment: Comment?)
+
+    fun topic(url: String?) = parse(url)?.topic
+    fun comment(url: String?) = parse(url)?.comment
+
+    private fun parse(url: String?): Destination? = runCatching {
         val uri = URI(url ?: return null)
         if (uri.scheme?.lowercase() !in setOf("https", "http") || uri.rawUserInfo != null ||
             uri.host?.lowercase() !in setOf("forum.mobilism.org", "mobilism.org", "www.mobilism.org") ||
@@ -20,6 +30,15 @@ internal object ReleaseLinks {
         }
         fun id(key: String) = params.singleOrNull { it.first == key }?.second
             ?.takeIf { it.all(Char::isDigit) }?.toLongOrNull()?.takeIf { it > 0 }
-        Topic(id("t") ?: return null, id("f"))
+        val topic = id("t")
+        if (topic == null && params.any { it.first == "t" }) return null
+        val post = id("p")
+        val anchor = uri.rawFragment?.let { Regex("p([1-9][0-9]*)").matchEntire(it)?.groupValues?.get(1)?.toLongOrNull() }
+        val postId = when {
+            params.any { it.first == "p" } -> post?.takeIf { anchor == null || anchor == it }
+            topic != null -> anchor
+            else -> null
+        }
+        Destination(topic?.let { Topic(it, id("f")) }, postId?.let { Comment(it, topic) })
     }.getOrNull()
 }

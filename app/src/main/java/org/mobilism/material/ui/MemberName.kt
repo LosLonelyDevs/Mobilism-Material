@@ -1,6 +1,7 @@
 package org.mobilism.material.ui
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
@@ -76,7 +77,9 @@ internal fun MemberName(name: String, label: String = name, modifier: Modifier =
                         }
                         MemberBadge.MajorReleaser -> Icons.Outlined.WorkspacePremium to colors.secondary
                     }
-                    Icon(icon, null, Modifier.fillMaxSize().padding(start = 3.dp).testTag("${badge.key}-badge-$name"), tint = tint)
+                    val opticalAlignment = if (badge == MemberBadge.MajorReleaser) Modifier.offset(y = (-1).dp) else Modifier
+                    Icon(icon, null, Modifier.fillMaxSize().padding(start = 3.dp).then(opticalAlignment)
+                        .testTag("${badge.key}-badge-$name"), tint = tint)
                 }
             })
     }

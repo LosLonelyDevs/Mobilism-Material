@@ -7,7 +7,6 @@ import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -19,7 +18,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
@@ -68,7 +66,7 @@ internal fun ConnectionVerification(site: VerificationSite, onDismiss: () -> Uni
                     TextButton(onClick = { openForumBrowser(context, "https://forum.mobilism.org/") }) { Text("Use forum in browser") }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    AndroidView(modifier = Modifier.fillMaxSize().clipToBounds(), factory = { viewContext -> WebView(viewContext).apply {
+                    VerificationBrowserPane(modifier = Modifier.fillMaxSize().clipToBounds(), factory = { viewContext, onPageVisible -> WebView(viewContext).apply {
                         settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(viewContext)
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
@@ -77,12 +75,11 @@ internal fun ConnectionVerification(site: VerificationSite, onDismiss: () -> Uni
                         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                         CookieManager.getInstance().setAcceptCookie(true)
                         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                        webViewClient = object : WebViewClient() {
+                        webViewClient = object : VerificationPageClient(onPageVisible, ::readPage) {
                             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
                                 request.isForMainFrame && !acceptsConnectionVerificationUrl(request.url, site)
                             override fun onFormResubmission(view: WebView, dontResend: Message, resend: Message) { dontResend.sendToTarget() }
                             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) { complete = false }
-                            override fun onPageFinished(view: WebView, url: String) { readPage(view) }
                         }
                         browser = this
                         // Use a public read, never an interrupted account action or an API session token.

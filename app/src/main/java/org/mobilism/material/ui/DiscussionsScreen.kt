@@ -149,7 +149,7 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
                                 auth = auth, onManage = { comment, action -> commentAction = action.name; managedCommentId = comment.id },
                                 onImage = { urls, index -> gallery = urls to index })
                             linkedUrl != null -> Column(Modifier.padding(20.dp)) {
-                                if (screen.loading) LoadingState("Loading announcement…", Modifier.fillMaxWidth())
+                                if (screen.loading) LoadingState(if (screen.announcementsOnly) "Loading announcement…" else "Loading discussion…", Modifier.fillMaxWidth())
                                 screen.error?.let {
                                     ErrorPanel(it, onRetry = model::loadCategories)
                                     AppTextButton("Open in browser", { openForumBrowser(context, linkedUrl) })
@@ -307,8 +307,9 @@ private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit,
     var sort by rememberSaveable(topic.key) { mutableStateOf(CommentSort()) }
     val ordered = remember(commentTree, sort) { sort.order(commentTree) }
     val commentRows = remember(ordered, collapsedComments) { CommentTree.flatten(ordered, collapsedComments.toSet()) }
-    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxSize().testTag("discussion-reader")) {
+    val list = rememberLazyListState()
+    CommentJumpList(topic.id, ordered, commentRows, collapsedComments, { collapsedComments = it }, list,
+        firstRow = { 3 }, modifier = Modifier.fillMaxSize().testTag("discussion-reader"), contentPadding = PaddingValues(20.dp)) { highlight, _ ->
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (topic.pinned) Text("Pinned discussion", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
@@ -320,7 +321,7 @@ private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit,
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 AppHeading("Original post", HeadingLevel.Subsection, style = MaterialTheme.typography.titleSmall)
-                ReleaseCommentCard(topic.originalPost, topic.browserUrl, originalPoster = topic.author, onImage = onImage)
+                ReleaseCommentCard(topic.originalPost, topic.browserUrl, originalPoster = topic.author, canCopyLink = false, onImage = onImage)
             }
         }
         item("comments-heading") {
@@ -335,7 +336,7 @@ private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit,
             CommentThreadRow(row.depth) {
                 ReleaseCommentCard(comment, topic.browserUrl, onReply = if (row.placeholder) null else ({ onReply(comment) }),
                     replyEnabled = !state.composer.posting, threadContent = row.content, earlierComment = row.placeholder,
-                    originalPoster = topic.author,
+                    originalPoster = topic.author, highlighted = highlight == comment.id, topicId = topic.id,
                     onEdit = if (canManage) ({ onManage(comment, ForumCommentAction.Edit) }) else null,
                     onDelete = if (canManage) ({ onManage(comment, ForumCommentAction.Delete) }) else null,
                     actionsEnabled = !state.composer.posting,

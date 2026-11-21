@@ -117,7 +117,7 @@ class NativeReleaseDownloadTest {
             val landingPage = server.url("/landing.apk").toString()
             val html = "<b>Download Instructions:</b><br>" + listOf(direct, wrapped, cancel, unavailable, landingPage)
                 .joinToString("<br>") { "<a href='$it'>File</a>" }
-            val release = Release(81, "Reader v1", "Fixture", null, 0, 0, 0, contentHtml = html)
+            val release = Release(81, "Pocket Reader v1.2.3 [Premium]", "Fixture", null, 0, 0, 0, contentHtml = html)
             var settings by mutableStateOf(true)
             compose.setContent { MobilismTheme(reduceMotion = reduceMotion) {
                 val prefs by store.state.collectAsState()
@@ -178,6 +178,7 @@ class NativeReleaseDownloadTest {
                     }?.notification
                     compose.waitUntil(20_000) { match() != null }
                     val notification = requireNotNull(match())
+                    assertEquals("Pocket Reader v1.2.3", notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
                     val actual = notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
                     assertTrue("Expected '$text' in '$actual' (fixture host: $hostFailure)", actual.contains(text))
                     return notification
@@ -215,11 +216,12 @@ class NativeReleaseDownloadTest {
                 compose.waitUntil(15_000) { advancing() != null }
                 capture("active")
                 runBlocking {
-                    assertFalse(ReleaseDownloads.enqueue(context, cancel, "Duplicate", tree.toString(), false) {
+                    assertFalse(ReleaseDownloads.enqueue(context, cancel, release, tree.toString(), false) {
                         error("Duplicate resolved again")
                     })
                 }
                 val progress = requireNotNull(advancing())
+                assertEquals("Pocket Reader v1.2.3", progress.notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
                 progress.notification.actions.single { it.title == "Cancel" }.actionIntent.send()
                 compose.waitUntil(10_000) { notifications.activeNotifications.none { it.key == progress.key } }
                 compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)

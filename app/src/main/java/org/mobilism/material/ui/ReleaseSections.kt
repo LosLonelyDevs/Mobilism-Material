@@ -87,23 +87,7 @@ object ReleaseSections {
         }
         ReleaseModHeuristics.classify(lines, releaseTitle, cleanUp)
         val kinds = lines.flatMap { line -> line.nodes.map { it to line.kind } }.toMap()
-        var lastKind = ReleaseSection.Description
-        fun split(node: Node): List<Pair<ReleaseSection, Node>> {
-            if (node is TextNode) {
-                lastKind = kinds[node] ?: lastKind
-                val text = replacements[node] ?: node.wholeText
-                return if (text.isEmpty()) emptyList() else listOf(lastKind to TextNode(text))
-            }
-            if (node !is Element || node.childNodeSize() == 0) return listOf(lastKind to node.clone())
-            val output = mutableListOf<Pair<ReleaseSection, Node>>()
-            node.childNodes().flatMap { split(it) }.forEach { (kind, child) ->
-                val wrapper = if (output.lastOrNull()?.first == kind) output.last().second as Element
-                    else node.shallowClone().also { output += kind to it }
-                wrapper.appendChild(child)
-            }
-            return output
-        }
-        val fragments = body.childNodes().flatMap { split(it) }
+        val fragments = splitReleaseNodes(body, ReleaseSection.Description, replacements) { kinds[it] }
         val firstModLine = lines.firstOrNull { line -> line.kind == ReleaseSection.Mod &&
             line.nodes.any { (replacements[it] ?: it.wholeText).isNotBlank() } }
         return ReleaseSection.entries.mapNotNull { kind ->
@@ -117,7 +101,7 @@ object ReleaseSections {
         }
     }
 
-    private fun lines(body: Element): List<ReleaseLine> {
+    internal fun lines(body: Element): List<ReleaseLine> {
         val result = mutableListOf<ReleaseLine>()
         val pending = mutableListOf<TextNode>()
         fun flush() {
@@ -152,4 +136,26 @@ object ReleaseSections {
         flush()
         return result
     }
+}
+
+/** Keep wrappers and links intact on both sides of a section boundary. */
+internal fun <T : Any> splitReleaseNodes(body: Element, initial: T, replacements: Map<TextNode, String> = emptyMap(),
+    group: (Node) -> T?): List<Pair<T, Node>> {
+    var current = initial
+    fun split(node: Node): List<Pair<T, Node>> {
+        current = group(node) ?: current
+        if (node is TextNode) {
+            val text = replacements[node] ?: node.wholeText
+            return if (text.isEmpty()) emptyList() else listOf(current to TextNode(text))
+        }
+        if (node !is Element || node.childNodeSize() == 0) return listOf(current to node.clone())
+        val output = mutableListOf<Pair<T, Node>>()
+        node.childNodes().flatMap(::split).forEach { (kind, child) ->
+            val wrapper = if (output.lastOrNull()?.first == kind) output.last().second as Element
+                else node.shallowClone().also { output += kind to it }
+            wrapper.appendChild(child)
+        }
+        return output
+    }
+    return body.childNodes().flatMap(::split)
 }

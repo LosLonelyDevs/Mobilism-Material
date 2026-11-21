@@ -7,9 +7,18 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import org.mobilism.material.data.ReleaseTitles
 
 class ReleaseFilesTest {
     @get:Rule val temp = TemporaryFolder()
+
+    @Test fun notificationUsesOnlyTheReleaseNameAndAvailableVersion() {
+        val release = ReleaseTitles.parse("Pocket Reader v1.2.3 build 456 [Premium]")
+        assertEquals("Pocket Reader v1.2.3", release.downloadNotificationTitle())
+        assertEquals("Pocket Reader v1.2.3", release.downloadNotificationTitle(savedName = "Pocket Reader"))
+        assertEquals("Pocket Reader", ReleaseTitles.parse("Pocket Reader [Premium]").downloadNotificationTitle())
+        assertEquals("Release download", ReleaseTitles.parse("").downloadNotificationTitle())
+    }
 
     @Test fun directFileAndAttachmentNamesSurviveSignedUrlsAndGenericMime() {
         val direct = "https://files.example/Reader.apk?signature=private"

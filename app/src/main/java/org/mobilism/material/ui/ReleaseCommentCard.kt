@@ -5,6 +5,21 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import android.content.ClipData
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import kotlinx.coroutines.launch
+import org.mobilism.material.ReleaseLinks
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +70,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.mobilism.material.data.ReleaseComment
 
+internal val LocalCommentHold = staticCompositionLocalOf<(() -> Unit)?> { null }
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRelease: ((Long) -> Unit)? = null,
@@ -63,9 +80,14 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
     threadContent: CommentContent? = null, earlierComment: Boolean = false,
     onEdit: (() -> Unit)? = null, onDelete: (() -> Unit)? = null,
     actionsEnabled: Boolean = true, originalPoster: String? = null,
+    canCopyLink: Boolean = !earlierComment && comment.id > 0, highlighted: Boolean = false,
+    topicId: Long? = null,
     onImage: (List<String>, Int) -> Unit) {
     var localExpanded by rememberSaveable(baseUrl, comment.id) { mutableStateOf(true) }
     var menu by remember(comment.id) { mutableStateOf(false) }
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val openMenu: (() -> Unit)? = if (canCopyLink) ({ menu = true }) else null
     val expanded = collapsed?.not() ?: localExpanded
     val toggle = { if (onToggleThread != null) onToggleThread() else localExpanded = !localExpanded }
     val bodyState = rememberSaveableStateHolder()
@@ -74,13 +96,20 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
     val reduced = LocalReducedMotion.current
     val isOriginalPoster = !earlierComment && !originalPoster.isNullOrBlank() &&
         originalPoster.trim().equals(comment.author.trim(), ignoreCase = true)
-    Surface(Modifier.fillMaxWidth().testTag("comment-${comment.id}"), shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    val color by animateColorAsState(
+        if (highlighted) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+        if (reduced) snap() else tween(if (highlighted) 150 else 850), label = "Linked comment",
+    )
+    Surface(Modifier.fillMaxWidth().testTag("comment-${comment.id}")
+        .then(if (highlighted) Modifier.semantics { stateDescription = "Linked comment" } else Modifier)
+        .then(if (canCopyLink) Modifier.pointerInput(comment.id) { detectTapGestures(onLongPress = { menu = true }) } else Modifier),
+        shape = MaterialTheme.shapes.large, color = color) {
         Column {
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("comment-toggle-${comment.id}")
                 .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
-                .focusOutline(interaction).clickable(interactionSource = interaction, indication = ripple(), role = Role.Button,
-                    onClickLabel = if (expanded) "Collapse comment" else "Expand comment", onClick = toggle)
+                .focusOutline(interaction).combinedClickable(interactionSource = interaction, indication = ripple(), role = Role.Button,
+                    onClickLabel = if (expanded) "Collapse comment" else "Expand comment", onClick = toggle,
+                    onLongClickLabel = "Comment options", onLongClick = openMenu)
                 .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MessageAvatar(comment.author, comment.avatar, Modifier.size(28.dp))
@@ -92,13 +121,18 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
                             if (isOriginalPoster) Modifier.semantics { stateDescription = "Original poster" } else Modifier))
                     if (comment.publishedAt > 0) CommentTimestamp(comment.publishedAt)
                 }
-                if (onEdit != null || onDelete != null) Box {
-                    AppIconButton(Icons.Outlined.MoreVert, "Comment options", { menu = true }, enabled = actionsEnabled)
-                    DropdownMenu(expanded = menu && actionsEnabled, onDismissRequest = { menu = false },
-                        shape = MaterialTheme.shapes.extraLarge) {
-                        onEdit?.let { edit -> RoundedMenuItem("Edit comment", { menu = false; edit() },
+                Box {
+                    if (onEdit != null || onDelete != null)
+                        AppIconButton(Icons.Outlined.MoreVert, "Comment options", { menu = true }, enabled = actionsEnabled)
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = MaterialTheme.shapes.extraLarge) {
+                        if (canCopyLink) RoundedMenuItem("Copy comment link", {
+                            menu = false
+                            val link = ReleaseLinks.Comment(comment.id, topicId ?: ReleaseLinks.topicId(baseUrl))
+                            scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Comment link", link.url))) }
+                        }, MaterialTheme.colorScheme.secondary, Icons.Outlined.ContentCopy)
+                        onEdit?.takeIf { actionsEnabled }?.let { edit -> RoundedMenuItem("Edit comment", { menu = false; edit() },
                             MaterialTheme.colorScheme.primary, Icons.Outlined.Edit) }
-                        onDelete?.let { delete -> RoundedMenuItem("Delete comment", { menu = false; delete() },
+                        onDelete?.takeIf { actionsEnabled }?.let { delete -> RoundedMenuItem("Delete comment", { menu = false; delete() },
                             MaterialTheme.colorScheme.error, Icons.Outlined.Delete) }
                     }
                 }
@@ -112,10 +146,10 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
                 bodyState.SaveableStateProvider("body") {
                     Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 4.dp).testTag("comment-body-${comment.id}"),
                         verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        content.quotes.forEach { quote ->
-                            QuotedReply(quote, baseUrl, onRelease)
+                        CompositionLocalProvider(LocalCommentHold provides openMenu) {
+                            content.quotes.forEach { quote -> QuotedReply(quote, baseUrl, onRelease) }
+                            if (content.html.isNotBlank()) ReleaseBody(content.html, baseUrl, onRelease)
                         }
-                        if (content.html.isNotBlank()) ReleaseBody(content.html, baseUrl, onRelease)
                         if (comment.images.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             itemsIndexed(comment.images) { index, url ->
                                 AsyncImage(url, "Open comment image ${index + 1}", Modifier.size(120.dp).clip(MaterialTheme.shapes.large)

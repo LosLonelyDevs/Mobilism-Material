@@ -17,6 +17,17 @@ class ReleaseLinksTest {
         assertEquals(123L, ReleaseLinks.topicId("https://www.mobilism.org/viewtopic.php?t=%31%32%33"))
     }
 
+    @Test fun commentPermalinksRoundTripAndRejectAmbiguousPostIds() {
+        val ref = ReleaseLinks.Comment(12747480, 6448504)
+        assertEquals(ref, ReleaseLinks.comment(ref.url))
+        assertEquals(ref, ReleaseLinks.comment("https://forum.mobilism.org/viewtopic.php?t=6448504#p12747480"))
+        assertEquals(ReleaseLinks.Comment(42), ReleaseLinks.comment("https://forum.mobilism.org/viewtopic.php?p=42#p42"))
+        listOf("p=0", "t=1&p=2&p=3", "t=1&p=2#p3", "t=1&t=2&p=3").forEach {
+            assertNull(ReleaseLinks.comment("https://forum.mobilism.org/viewtopic.php?$it"))
+        }
+        assertNull(ReleaseLinks.comment("https://example.org/viewtopic.php?p=42"))
+    }
+
     @Test fun rejectsOtherHostsAndInvalidOrAmbiguousTopics() {
         listOf(null, "https://forum.mobilism.org.evil.example/viewtopic.php?t=123",
             "https://forum.mobilism.org@evil.example/viewtopic.php?t=123",

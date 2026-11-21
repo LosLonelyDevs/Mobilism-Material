@@ -6,6 +6,19 @@ import org.junit.Test
 import org.mobilism.material.settings.DeveloperPreferences
 
 class ForumFormattingTest {
+    @Test fun descriptionPreservesBothVersionsInSmallerSecondaryText() {
+        val title = "MovieboxTV v1.2.3.1113.03 v1.18.0"
+        val block = format("<b>$title</b><br>Requirements: Android 9", cleanup = true).child(0)
+        assertTrue(styleDescriptionTitle(block, title, 0x112233, 0x445566))
+        assertEquals("MovieboxTV", block.selectFirst("font[color=#112233] big b")?.text())
+        assertEquals("v1.2.3.1113.03 · v1.18.0", block.selectFirst("font[color=#445566] small")?.text())
+        val bare = format("MovieboxTV 1.18.0", cleanup = true).child(0)
+        assertTrue(styleDescriptionTitle(bare, title, 0, 0))
+        assertEquals("1.18.0", bare.selectFirst("small")?.text())
+        val intro = format("Updates shipped in v2.0 yesterday.", cleanup = true).child(0)
+        assertFalse(styleDescriptionTitle(intro, title, 0, 0))
+    }
+
     private val base = "https://forum.mobilism.org/"
     private fun format(html: String, cleanup: Boolean = false, markdown: Boolean = false) =
         Jsoup.parseBodyFragment(ForumFormatting.format(html, base, ForumFormattingOptions(cleanup, markdown)), base).body()

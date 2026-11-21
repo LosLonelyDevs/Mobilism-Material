@@ -70,8 +70,10 @@ fun FollowingScreen(
         title = { AppHeading("Following", HeadingLevel.Page, style = MaterialTheme.typography.titleLarge) },
         navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack) },
     ) }) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(Modifier.widthIn(max = 840.dp).fillMaxSize(), contentPadding = PaddingValues(16.dp),
+        FeedRefreshContainer(check.busy, check.busy, onCheck, modifier = Modifier.padding(padding),
+            enabled = limits.followPullToRefreshEnabled && sharedCache && followed.isNotEmpty(),
+            indicatorDescription = "Checking followed apps") {
+            LazyColumn(Modifier.align(Alignment.TopCenter).widthIn(max = 840.dp).fillMaxSize(), contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 item(key = "settings") {
                     Card(shape = MaterialTheme.shapes.extraLarge, modifier = Modifier.fillMaxWidth()) {

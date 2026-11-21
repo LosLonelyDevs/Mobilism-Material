@@ -45,6 +45,23 @@ class ForumFormattingPreviewTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val base = "https://forum.mobilism.org/"
 
+    @Test fun descriptionNameAndBothVersionsHaveDistinctSizesAndColorsOnlyWhenStyled() {
+        val title = "MovieboxTV v1.2.3.1113.03 v1.18.0"
+        val html = "<b>$title</b><br>Requirements: Android 9"
+        val nameColor = android.graphics.Color.CYAN
+        val metaColor = android.graphics.Color.LTGRAY
+        val text = forumText(html, base, ForumFormattingOptions(cleanUpReleaseText = true),
+            headingColor = nameColor, requirementsColor = metaColor, descriptionTitle = title)
+        assertTrue(text.toString().startsWith("MovieboxTV\nv1.2.3.1113.03 · v1.18.0\nRequirements:"))
+        val version = text.indexOf("v1.2")
+        fun color(at: Int) = text.getSpans(at, at + 1, ForegroundColorSpan::class.java).single().foregroundColor
+        fun size(at: Int) = text.getSpans(at, at + 1, RelativeSizeSpan::class.java).single().sizeChange
+        assertEquals(nameColor, color(0))
+        assertEquals(metaColor, color(version))
+        assertTrue(size(0) > size(version))
+        assertTrue(forumText(html, base, descriptionTitle = title).startsWith(title))
+    }
+
     @Test fun nativeRendererKeepsListsLinksCodeAndSafeMarkdown() {
         val text = forumText("# Heading<br><br>**Bold**<br><br>- One<br>- Two<br><br>" +
             "3. Three<br>4. Four<br><br>[Guide](https://example.org/a)<br><br>" +
@@ -138,6 +155,31 @@ class ForumFormattingPreviewTest {
         }
         list.performScrollToKey(ReleaseSection.Changes)
         capture("05-changelog")
+    }
+
+    @Test fun styledModInfoExpandsLanguagesAndCompactsDensities() {
+        val styled = mutableStateOf(false)
+        val languages = "en, en-GB, es, es-419, fr, it, ja, zh-TW"
+        val html = "<b>Example App</b><br>Example description.<br><b>Mod info:</b><br>" +
+            "<b>◉ Premium Unlocked<br>➡ Languages:$languages<br>➡ Screen DPIs: 120dpi, 160dpi, 240dpi, 320dpi, 480dpi, 640dpi<br>Credit: Example</b>"
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            CompositionLocalProvider(LocalForumFormatting provides ForumFormattingOptions(cleanUpReleaseText = styled.value)) {
+                val release = Release(1, "Example App", "Uploader", null, 0, 0, 0, section = ContentSection.Apps, contentHtml = html)
+                ReleaseScreen(ReleaseState(release, busy = false), DebridState(), DownloadPreferences(),
+                    onBack = {}, onRetry = {}, onMoreComments = {}, watched = false, downloaded = false,
+                    onWatch = {}, onDownloaded = {}, onLike = {}, onActionMessageShown = {})
+            }
+        } }
+        compose.onNodeWithTag("release-content").performScrollToKey(ReleaseSection.Mod)
+        compose.onNodeWithText("8 locales").assertDoesNotExist()
+        compose.runOnIdle { styled.value = true }
+        compose.onNodeWithText("8 locales").assertIsDisplayed()
+        compose.onNodeWithText("120 · 160 · 240 · 320 · 480 · 640 dpi").assertIsDisplayed()
+        capture("07-mod-info")
+        compose.onNodeWithText("8 locales").performClick()
+        compose.onNodeWithText(languages).assertIsDisplayed()
+        compose.onNodeWithText("8 locales").performClick()
+        compose.onNodeWithText(languages).assertDoesNotExist()
     }
 
     @Test fun developerSwitchesPersistIndependentlyAndDisableWithDeveloperMode() {

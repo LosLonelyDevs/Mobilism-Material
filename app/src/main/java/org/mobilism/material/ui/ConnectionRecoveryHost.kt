@@ -10,7 +10,6 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
@@ -84,6 +83,7 @@ internal fun ConnectionRecoveryHost(controller: ConnectionRecoveryController,
         }
     }
     val browser = remember(attempt?.id) { attempt?.let { runCatching { createBrowser(context) }.getOrNull() } }
+    var opening by remember(browser) { mutableStateOf(true) }
     val releaseBrowser = remember(browser) {
         var released = false
         {
@@ -125,11 +125,10 @@ internal fun ConnectionRecoveryHost(controller: ConnectionRecoveryController,
         view.settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(view, true)
-        view.webViewClient = object : WebViewClient() {
+        view.webViewClient = object : VerificationPageClient({ opening = false }, { readPage() }) {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
                 request.isForMainFrame && !acceptsConnectionVerificationUrl(request.url, site)
             override fun onFormResubmission(view: WebView, dontResend: Message, resend: Message) { dontResend.sendToTarget() }
-            override fun onPageFinished(view: WebView, url: String) { readPage() }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (request.isForMainFrame) controller.finish(current.id, false)
             }
@@ -181,7 +180,9 @@ internal fun ConnectionRecoveryHost(controller: ConnectionRecoveryController,
                             TextButton({ browser.reload() }) { Text("Reload") }
                             TextButton({ openForumBrowser(context, "https://forum.mobilism.org/") }) { Text("Use forum in browser") }
                         }
-                        RecoveryBrowser(browser, true, Modifier.weight(1f).fillMaxWidth().testTag("interactive-connection-browser"))
+                        VerificationBrowserFrame(opening, Modifier.weight(1f).fillMaxWidth()) {
+                            RecoveryBrowser(browser, true, Modifier.fillMaxSize().testTag("interactive-connection-browser"))
+                        }
                     }
                 }
             }

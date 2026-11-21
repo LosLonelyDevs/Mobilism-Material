@@ -68,6 +68,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -172,7 +173,7 @@ fun ReleaseScreen(
             val folder = preferences.downloadFolder ?: throw org.mobilism.material.downloads.DownloadProblem(
                 "Choose a folder in Downloads settings.")
             requestDownloadNotifications()
-            val started = org.mobilism.material.downloads.ReleaseDownloads.enqueue(context.applicationContext, original, release.title,
+            val started = org.mobilism.material.downloads.ReleaseDownloads.enqueue(context.applicationContext, original, release,
                 folder, preferences.extractZips, direct)
             downloadsOpen = false
             org.mobilism.material.downloads.showDownloadToast(context, if (started) "Downloading…" else "Already downloading")
@@ -278,16 +279,17 @@ fun ReleaseScreen(
             if (state.busy && release == null) {
                 LoadingState("Loading release…", Modifier.align(Alignment.Center), indicatorSize = 96.dp)
             }
-            LazyColumn(
+            val list = androidx.compose.foundation.lazy.rememberLazyListState()
+            CommentJumpList(release?.id, ordered, commentRows, collapsedComments, { collapsedComments = it }, list,
+                firstRow = { list.layoutInfo.totalItemsCount - commentRows.size - 1 },
                 modifier = Modifier.widthIn(max = 840.dp).fillMaxSize().testTag("release-content"),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            ) { highlight, followingLink ->
                 if (state.busy && release != null) releaseDetailItem { LoadingState("Updating release…", Modifier.fillMaxWidth()) }
                 state.error?.let { releaseDetailItem { ErrorPanel(it, onRetry = onRetry) } }
                 if (release != null) {
-                    releaseDetailItem {
-                         ReleaseTitleHeader(release.title, release.section)
+                    releaseDetailItem(bottomPadding = 8.dp) {
+                        ReleaseTitleHeader(release.title, release.section)
                     }
                     releaseDetailItem {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -332,14 +334,19 @@ fun ReleaseScreen(
                                 if (section.changelogPlaceholder != null) {
                                     Text(section.changelogPlaceholder, style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                } else ReleaseBody(section.html, release.browserUrl ?: "https://forum.mobilism.org/", onRelease, cleanUp = true)
+                                } else if (cleanUpHeadings && section.kind == ReleaseSection.Mod) {
+                                    ModInfoContent(section.html, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
+                                } else ReleaseBody(section.html, release.browserUrl ?: "https://forum.mobilism.org/", onRelease, cleanUp = true,
+                                    descriptionTitle = release.title.takeIf { section.kind == ReleaseSection.Description })
                             }
                         }
                     }
                     if (groups.isNotEmpty() || !content?.downloadNotesHtml.isNullOrBlank()) releaseDetailItem("downloads") {
                         CollapsibleSection("${release.id}-downloads", "Downloads", Icons.Outlined.Download, theme.success,
                             compactHeaderBottom = cleanUpHeadings,
-                            headingStyle = MaterialTheme.typography.titleMedium,
+                            headingStyle = MaterialTheme.typography.titleMedium.let { style ->
+                                if (cleanUpHeadings) style.copy(fontSize = (style.fontSize.value + 1).sp) else style
+                            },
                             headingColor = if (cleanUpHeadings) releaseHeadingColor(MaterialTheme.colorScheme.onSurface, theme.success)
                                 else Color.Unspecified) {
                             content?.downloadNotesHtml?.takeIf { it.isNotBlank() }?.let {
@@ -358,7 +365,7 @@ fun ReleaseScreen(
                             else if (state.composer.draft.isNotBlank()) "Continue your comment" else "Comment"
                         val write = if (auth is AuthState.SignedIn) onWriteComment else onSignIn
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Column {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     AppHeading("Comments", HeadingLevel.Section, Modifier.weight(1f),
                                         style = if (cleanUpHeadings) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge)
@@ -378,10 +385,10 @@ fun ReleaseScreen(
                         val comment = row.comment
                         val canManage = !row.placeholder && canManageComment(comment, auth)
                         CommentThreadRow(row.depth) {
-                            ReleaseCommentCard(comment, release.browserUrl ?: "https://forum.mobilism.org/", onRelease = onRelease,
+                            ReleaseCommentCard(comment, release.browserUrl ?: "https://forum.mobilism.org/viewtopic.php?t=${release.id}", onRelease = onRelease,
                             onReply = if (row.placeholder) null else ({ if (auth is AuthState.SignedIn) onReplyToComment(comment) else onSignIn() }),
                             replyEnabled = !state.composer.posting, threadContent = row.content, earlierComment = row.placeholder,
-                            originalPoster = release.author,
+                            originalPoster = release.author, highlighted = highlight == comment.id, topicId = release.id,
                             onEdit = if (canManage) ({ commentAction = ForumCommentAction.Edit.name; managedCommentId = comment.id }) else null,
                             onDelete = if (canManage) ({ commentAction = ForumCommentAction.Delete.name; managedCommentId = comment.id }) else null,
                             actionsEnabled = !state.composer.posting,
@@ -398,6 +405,7 @@ fun ReleaseScreen(
                         when {
                             comments.error != null -> ErrorPanel(comments.error, onRetry = onMoreComments)
                             comments.busy -> LoadingState("Loading comments…", Modifier.fillMaxWidth())
+                            comments.canLoadMore && followingLink -> org.mobilism.material.designsystem.AppTextButton("Load more comments", onMoreComments)
                             comments.canLoadMore -> LaunchedEffect(comments.page) { onMoreComments() }
                             comments.items.isEmpty() -> Text("No comments yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -408,8 +416,10 @@ fun ReleaseScreen(
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.releaseDetailItem(key: Any? = null, content: @Composable () -> Unit) {
-    item(key = key) { Box(Modifier.padding(bottom = 12.dp)) { content() } }
+private fun androidx.compose.foundation.lazy.LazyListScope.releaseDetailItem(
+    key: Any? = null, bottomPadding: Dp = 12.dp, content: @Composable () -> Unit,
+) {
+    item(key = key) { Box(Modifier.padding(bottom = bottomPadding)) { content() } }
 }
 
 /** Native text bridge preserves formatted forum posts without JavaScript or a WebView. */
@@ -418,12 +428,16 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     linkColor: Color = MaterialTheme.colorScheme.primary,
     textStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge,
-    cleanUp: Boolean = false, allowMarkdown: Boolean = true, messageQuoteColor: Color = Color.Unspecified) {
+    cleanUp: Boolean = false, allowMarkdown: Boolean = true, messageQuoteColor: Color = Color.Unspecified,
+    descriptionTitle: String? = null) {
     val context = LocalContext.current
     val options = LocalForumFormatting.current.let {
         ForumFormattingOptions(cleanUp && it.cleanUpReleaseText, allowMarkdown && it.markdown)
     }
+    val currentCommentHandler = androidx.compose.runtime.rememberUpdatedState(LocalCommentLinkHandler.current)
+    val commentHold = LocalCommentHold.current
     val currentOnRelease = androidx.compose.runtime.rememberUpdatedState(onRelease)
+    val currentLinkedTopic = androidx.compose.runtime.rememberUpdatedState(LocalLinkedTopicHandler.current)
     val currentForumLinkHandler = androidx.compose.runtime.rememberUpdatedState(LocalForumLinkHandler.current)
     val currentAnnouncementHandler = androidx.compose.runtime.rememberUpdatedState(LocalAnnouncementLinkHandler.current)
     val currentDownloadHelpHandler = androidx.compose.runtime.rememberUpdatedState(LocalDownloadHelpHandler.current)
@@ -445,9 +459,9 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
     }
     val quoteGuide = MaterialTheme.colorScheme.primary.toArgb()
     val richText = remember(html, baseUrl, context, options, linkArgb, textSize, density, headingArgb, requirementsArgb,
-        messageQuoteColor, quoteGuide) {
+        messageQuoteColor, quoteGuide, descriptionTitle) {
         forumText(html, baseUrl, options, density.density, linkArgb, with(density) { textStyle.fontSize.toPx() },
-            headingColor = headingArgb, requirementsColor = requirementsArgb).apply {
+            headingColor = headingArgb, requirementsColor = requirementsArgb, descriptionTitle = descriptionTitle).apply {
             if (messageQuoteColor != Color.Unspecified) {
                 val size = with(density) { (textSize - 1f).coerceAtLeast(1f).sp.roundToPx() }
                 styleMessageQuotes(density.density, quoteGuide, messageQuoteColor.toArgb(), size)
@@ -459,6 +473,8 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
                 removeSpan(link)
                 setSpan(object : URLSpan(link.url) {
                     override fun onClick(widget: View) {
+                        val comment = org.mobilism.material.ReleaseLinks.comment(link.url)
+                        if (comment != null && currentCommentHandler.value?.invoke(comment) == true) return
                         val topic = org.mobilism.material.ReleaseLinks.topic(link.url)
                         val navigate = currentOnRelease.value
                         val forumHandler = currentForumLinkHandler.value
@@ -468,8 +484,10 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
                         if (profile != null && openProfile != null) openProfile(profile)
                         else if (topic?.id == org.mobilism.material.data.DownloadHelp.TOPIC_ID && help != null) help()
                         else if (topic?.forumId != null && currentAnnouncementHandler.value?.invoke(topic.id, topic.forumId) == true) return
+                        else if (topic != null && navigate != null) navigate(topic.id)
+                        else if (topic != null && currentLinkedTopic.value != null) currentLinkedTopic.value?.invoke(topic)
                         else if (forumHandler != null) forumHandler(link.url)
-                        else if (topic != null && navigate != null) navigate(topic.id) else openWeb(context, link.url)
+                        else openWeb(context, link.url)
                     }
                 }, start, end, flags)
             }
@@ -483,6 +501,7 @@ internal fun ReleaseBody(html: String, baseUrl: String, onRelease: ((Long) -> Un
             setOnTouchListener(ForumLinkTouchListener(this) { currentOnHold.value(it) })
         } },
         update = { view ->
+            view.setOnLongClickListener(commentHold?.let { hold -> View.OnLongClickListener { hold(); true } })
             if (view.tag !== richText) { view.text = richText; view.tag = richText }
             view.setTextColor(textColor)
             view.setLinkTextColor(linkArgb)

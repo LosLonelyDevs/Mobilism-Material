@@ -80,6 +80,7 @@ fun openWeb(context: Context, url: String): Boolean {
     return launch(context, Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE))
 }
 
+internal val LocalLinkedTopicHandler = staticCompositionLocalOf<((org.mobilism.material.ReleaseLinks.Topic) -> Unit)?> { null }
 internal val LocalForumLinkHandler = staticCompositionLocalOf<((String) -> Unit)?> { null }
 internal val LocalAnnouncementLinkHandler = staticCompositionLocalOf<((Long, Long) -> Boolean)?> { null }
 internal val LocalDownloadHelpHandler = staticCompositionLocalOf<(() -> Unit)?> { null }

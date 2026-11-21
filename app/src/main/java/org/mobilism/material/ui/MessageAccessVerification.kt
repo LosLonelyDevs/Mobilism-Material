@@ -6,7 +6,6 @@ import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -16,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import org.mobilism.material.data.VerificationSite
@@ -34,7 +32,7 @@ internal fun MessageAccessVerification(onDismiss: () -> Unit, onContinue: () -> 
                     TextButton(onClick = { CookieManager.getInstance().flush(); onContinue() },
                         modifier = Modifier.testTag("continue-message-verification")) { Text("Continue") }
                 }
-                AndroidView(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context -> WebView(context).apply {
+                VerificationBrowserPane(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context, onPageVisible -> WebView(context).apply {
                     settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(context)
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
@@ -43,7 +41,7 @@ internal fun MessageAccessVerification(onDismiss: () -> Unit, onContinue: () -> 
                     settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                    webViewClient = object : WebViewClient() {
+                    webViewClient = object : VerificationPageClient(onPageVisible) {
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
                             request.isForMainFrame && (request.method != "GET" || !acceptsMessageVerificationUrl(request.url))
                         override fun onFormResubmission(view: WebView, dontResend: Message, resend: Message) { dontResend.sendToTarget() }

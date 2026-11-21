@@ -54,6 +54,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
     private val readClient = this.client.newBuilder().retryOnConnectionFailure(true).build()
     private val feedPages = FeedPageStore(context.getSharedPreferences("release-feed-pages", Context.MODE_PRIVATE))
     private val feedLocks = Array(8) { kotlinx.coroutines.sync.Mutex() }
+    private val latestWindow = LatestFeedWindow(context.getSharedPreferences("latest-apps-window", Context.MODE_PRIVATE))
     private val searches = SearchRequestPolicy(limits = requestLimits, diagnostics = diagnostics)
     private val reads = ReadRequestPolicy(limits = requestLimits, diagnostics = diagnostics)
     private val forumReads = ReadRequestPolicy(limits = requestLimits)
@@ -88,11 +89,17 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             result.copy(items = result.items.map { it.copy(section = it.section ?: section) })
         }
         suspend fun fetch(key: String?): ReleasePage {
+            val readAt = System.currentTimeMillis() / 1000
             val array = request(path, token, emptyRecordsAsArray = true, hideAdult = hideAdult).getJSONArray("response")
             val result = parse(array)
             if (key != null) feedPages.save(key, array.toString())
-            if (section == ContentSection.Apps && order == FeedOrder.Latest)
-                onLatestApps(LatestAppsPage(result.items, page == 1 && categoryId == null, hideAdult))
+            if (section == ContentSection.Apps && order == FeedOrder.Latest) {
+                val first = page == 1 && categoryId == null
+                val baseline = if (first) runCatching {
+                    latestWindow.baseline(requestKey("latest:$token:$hideAdult"), result.items, readAt)
+                }.getOrNull() else null
+                onLatestApps(LatestAppsPage(result.items, first, hideAdult, readAt, baseline))
+            }
             return result
         }
         val firstPage = kotlin.coroutines.coroutineContext[FirstFeedPage] ?: return fetch(null)
@@ -121,15 +128,29 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         request("auth/restore", form = mapOf("email" to email.trim()))
     }
 
-    suspend fun release(id: Long, token: String?): Release {
+    suspend fun openTopic(id: Long, token: String?, directForum: Long? = null): TopicContent {
         require(id > 0)
-        return try {
-            ReleaseJson.parse(request("release/$id", token).getJSONObject("response")).also { forumPostIds.remove(id) }
-        } catch (failure: ApiFailure) {
-            // Wear releases can exist on the forum while the API excludes them.
-            if (failure.httpStatus != 400 || failure.message != "No records found.") throw failure
-            ForumReleaseParser.release(forumTopic(id), id).also { forumPostIds[id] = requireNotNull(it.likeId) }
+        if (directForum == null) {
+            try {
+                val release = ReleaseJson.parse(request("release/$id", token).getJSONObject("response"))
+                forumPostIds.remove(id)
+                return TopicContent.Catalog(release)
+            } catch (failure: ApiFailure) {
+                if (failure.httpStatus != 400 || failure.message != "No records found.") throw failure
+            }
         }
+        val content = ForumReleaseParser.linkedTopic(forumTopic(id, forumId = directForum?.takeIf { it > 0 }), id)
+        if (content is TopicContent.Catalog) forumPostIds[id] = requireNotNull(content.release.likeId)
+        return content
+    }
+
+    suspend fun linkedComment(postId: Long, topicId: Long?): LinkedCommentPage {
+        require(postId > 0 && (topicId == null || topicId > 0))
+        val url = "https://forum.mobilism.org/viewtopic.php".toHttpUrl().newBuilder()
+            .apply { topicId?.let { addQueryParameter("t", it.toString()) } }
+            .addQueryParameter("p", postId.toString()).build()
+        val html = forumReads.request(url.toString()) { readForumPage(url, client = client) }
+        return ForumReleaseParser.linkedComment(html, postId, topicId)
     }
 
     suspend fun toggleLike(release: Release, token: String): Boolean {
@@ -295,13 +316,14 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         }
     }
 
-    private suspend fun readForumPage(url: okhttp3.HttpUrl, onChallenge: suspend (ApiFailure) -> String = { throw it }): String = withContext(Dispatchers.IO) {
+    private suspend fun readForumPage(url: okhttp3.HttpUrl, client: OkHttpClient = readClient,
+        onChallenge: suspend (ApiFailure) -> String = { throw it }): String = withContext(Dispatchers.IO) {
         var userAgentChanged = false
         try {
             // Forum reads never receive the API session token.
             val request = Request.Builder().url(url)
             request.header("User-Agent", AppUserAgent.value(context))
-            readClient.newCall(request.build()).await().use { response ->
+            client.newCall(request.build()).await().use { response ->
                 userAgentChanged = AppUserAgent.response(context, response.code)
                 val source = response.body?.source() ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum returned an empty response.")
                 source.request(MAX_RESPONSE_BYTES + 1)

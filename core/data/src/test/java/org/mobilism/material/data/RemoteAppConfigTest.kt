@@ -5,6 +5,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class RemoteAppConfigTest {
+    @Test fun followingGestureFailsClosedAndCacheOverridesDoNotChangeDirectLimits() {
+        val defaults = ApiRequestLimits.Defaults
+        for (invalid in listOf(JSONObject.NULL, "true", 1, false))
+            assertFalse(ApiRequestLimits.parse(JSONObject().put("followPullToRefreshEnabled", invalid)).followPullToRefreshEnabled)
+        assertEquals(defaults, ApiRequestLimits.parse(null))
+        val json = JSONObject("""{"followPullToRefreshEnabled":true,"followCacheIntervalMinutes":30,
+            "followCacheManualCooldownMs":60000,"followCacheBatchSize":512}""")
+        assertEquals(defaults.copy(followPullToRefreshEnabled = true, followCacheIntervalMinutes = 30,
+            followCacheManualCooldownMs = 60000, followCacheBatchSize = 512), ApiRequestLimits.parse(json))
+    }
+
     @Test fun followingLimitsAcceptBoundsAndFallBackIndividuallyWithoutAProtocolBump() {
         val bounds = listOf("followBatchSize" to (1L..20L), "followAppIntervalMs" to (3_600_000L..604_800_000L),
             "followAttemptIntervalMs" to (900_000L..86_400_000L))

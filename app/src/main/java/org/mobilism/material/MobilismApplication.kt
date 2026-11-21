@@ -79,7 +79,9 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
     val followPreferences by lazy { FollowingPreferences(this) }
     val followNotifications by lazy { FollowingNotifications(this) }
     val following by lazy { FollowingChecker(library, repository, InstalledApps(this), followPreferences, followNotifications,
-        limits = { remoteControl.limits }, latestApps = { latestApps.snapshot(contentPreferences.hideAdult.value) }, diagnostics = appLogger) }
+        limits = { remoteControl.limits }, latestApps = { names ->
+            latestApps.lookup(names, contentPreferences.hideAdult.value, followPreferences::dailyLookupSeed)
+        }, diagnostics = appLogger) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val foreground = MutableStateFlow(false)
     private val visibleActivities = mutableSetOf<Any>()

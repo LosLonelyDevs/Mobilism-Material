@@ -33,12 +33,14 @@ import kotlinx.coroutines.flow.combine
 
 class MainActivity : ComponentActivity() {
     private var notificationRelease by mutableStateOf<Long?>(null)
+    private var linkedPost by mutableStateOf<Long?>(null)
     private var notificationMessage by mutableStateOf<MessageNotificationTarget?>(null)
     private var fromNotification by mutableStateOf(false)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         notificationRelease = (savedInstanceState?.getLong("pendingRelease")
             ?: releaseFrom(intent)).takeIf { it > 0 }
+        linkedPost = (savedInstanceState?.getLong("pendingPost") ?: postFrom(intent))?.takeIf { it > 0 }
         fromNotification = savedInstanceState?.getBoolean("fromNotification") ?: (intent.action != Intent.ACTION_VIEW)
         notificationMessage = savedInstanceState?.getString("pendingMessageAccount")?.let {
             MessageNotificationTarget(it, savedInstanceState.getLong("pendingMessageConversation"), savedInstanceState.getLong("pendingMessageId"))
@@ -94,7 +96,8 @@ class MainActivity : ComponentActivity() {
             }
             MobilismTheme(theme, appearance.font, appearance.reduceMotion, appearance.customFontFile) {
                 org.mobilism.material.ui.ConnectionRecoveryHost(app.connectionRecovery) {
-                    MobilismApp(app, notificationRelease, fromNotification = fromNotification, notificationMessage = notificationMessage) {
+                    MobilismApp(app, notificationRelease, fromNotification = fromNotification, notificationMessage = notificationMessage, linkedPost = linkedPost) {
+                        linkedPost = null
                         notificationRelease = null
                         notificationMessage = null
                         intent.removeExtra(FollowingNotifications.EXTRA_RELEASE)
@@ -113,6 +116,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         fromNotification = intent.action != Intent.ACTION_VIEW
         notificationRelease = releaseFrom(intent).takeIf { it > 0 }
+        linkedPost = postFrom(intent)
         notificationMessage = MessageNotifications.target(intent)
         openRemoteNotice(intent)
     }
@@ -125,6 +129,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putLong("pendingRelease", notificationRelease ?: 0)
+        outState.putLong("pendingPost", linkedPost ?: 0)
         outState.putBoolean("fromNotification", fromNotification)
         notificationMessage?.let {
             outState.putString("pendingMessageAccount", it.accountKey)
@@ -133,6 +138,8 @@ class MainActivity : ComponentActivity() {
         }
         super.onSaveInstanceState(outState)
     }
+
+    private fun postFrom(intent: Intent) = if (intent.action == Intent.ACTION_VIEW) ReleaseLinks.comment(intent.dataString)?.postId else null
 
     private fun releaseFrom(intent: Intent): Long =
         if (intent.action == Intent.ACTION_VIEW) ReleaseLinks.topicId(intent.dataString) ?: 0

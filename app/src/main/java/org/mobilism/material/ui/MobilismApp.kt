@@ -38,20 +38,29 @@ import org.mobilism.material.designsystem.LoadingState
 import org.mobilism.material.designsystem.screenMotion
 
 internal fun NavController.openReleaseTopic(id: Long) {
-    if (currentDestination?.route == "release/{id}" && currentBackStackEntry?.arguments?.getLong("id") == id) return
+    if (isCurrentTopic(id)) return
     // Each topic owns its detail ViewModel and scroll position on the back stack.
     navigate("release/$id")
 }
 
+private fun NavController.isCurrentTopic(id: Long) =
+    currentDestination?.route?.substringBefore('?') in setOf("release/{id}", "announcement/{forum}/{id}") &&
+        currentBackStackEntry?.arguments?.getLong("id") == id
+
+internal fun NavController.openForumTopic(topic: org.mobilism.material.ReleaseLinks.Topic) {
+    if (!isCurrentTopic(topic.id)) navigate("release/${topic.id}?forum=${topic.forumId ?: 0}")
+}
+
 internal fun NavController.openAnnouncement(id: Long, forum: Long, repository: org.mobilism.material.data.DefaultMobilismRepository): Boolean {
     if (!repository.isAnnouncementForum(forum)) return false
-    navigate("announcement/$forum/$id") { launchSingleTop = true }
+    if (!isCurrentTopic(id)) navigate("announcement/$forum/$id")
     return true
 }
 
 @Composable
 fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fromNotification: Boolean = true,
     notificationMessage: org.mobilism.material.messages.MessageNotificationTarget? = null,
+    linkedPost: Long? = null,
     onNotificationHandled: () -> Unit = {}) {
     val model: MobilismViewModel = viewModel(factory = viewModelFactory {
         initializer { MobilismViewModel(app, app.repository, app.appearance, app.debrid, app.library, app.contentPreferences, app.developer, app.customCategories) }
@@ -74,7 +83,7 @@ fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fro
                         LoadingState("Opening Mobilism…")
                     }
                     AuthState.SignedOut -> AccountNavigation(model, app.diagnostics)
-                    else -> MainNavigation(model, auth, notificationRelease, notificationMessage, fromNotification, onNotificationHandled, onUpdates)
+                    else -> MainNavigation(model, auth, notificationRelease, notificationMessage, fromNotification, linkedPost, onNotificationHandled, onUpdates)
                 }
             }
         }
@@ -113,7 +122,7 @@ private fun AccountNavigation(model: MobilismViewModel, diagnostics: org.mobilis
 
 @Composable
 private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificationRelease: Long?,
-    notificationMessage: org.mobilism.material.messages.MessageNotificationTarget?, fromNotification: Boolean,
+    notificationMessage: org.mobilism.material.messages.MessageNotificationTarget?, fromNotification: Boolean, linkedPost: Long?,
     onNotificationHandled: () -> Unit, onUpdates: () -> Unit) {
     val nav = rememberNavController()
     val motion = screenMotion()
@@ -150,8 +159,16 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         }
         if (auth is AuthState.SignedIn && model.discussionAfterSignIn != null) nav.navigate("discussions") { launchSingleTop = true }
     }
-    LaunchedEffect(notificationRelease) {
-        notificationRelease?.takeIf { it > 0 }?.let { id ->
+    fun openComment(post: Long, topic: Long?) {
+        val current = nav.currentBackStackEntry
+        if (current?.destination?.route == "comment/{post}?topic={topic}" && current.arguments?.getLong("post") == post) return
+        nav.navigate("comment/$post?topic=${topic ?: 0}")
+    }
+    LaunchedEffect(notificationRelease, linkedPost) {
+        if (linkedPost != null) {
+            openComment(linkedPost, notificationRelease)
+            onNotificationHandled()
+        } else notificationRelease?.takeIf { it > 0 }?.let { id ->
             if (fromNotification) nav.navigate("following") { launchSingleTop = true }
             if (id == org.mobilism.material.data.DownloadHelp.TOPIC_ID) nav.navigate("download-help") { launchSingleTop = true }
             else nav.openReleaseTopic(id)
@@ -179,6 +196,10 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         LocalForumFormatting provides ForumFormattingOptions(developer.releaseTextCleanupActive, developer.markdownSyntaxActive),
         LocalDownloadHelpHandler provides { nav.navigate("download-help") { launchSingleTop = true } },
         LocalAnnouncementLinkHandler provides { id, forum -> nav.openAnnouncement(id, forum, app.repository) },
+        LocalLinkedTopicHandler provides { topic ->
+            if (topic.forumId in forumNames) nav.openReleaseTopic(topic.id) else nav.openForumTopic(topic)
+        },
+        LocalCommentLinkHandler provides { link -> openComment(link.postId, link.topicId); true },
         LocalProfileHandler provides { reference ->
             nav.navigate("profile?user=${reference.id ?: 0}&name=${android.net.Uri.encode(reference.username.orEmpty())}") { launchSingleTop = true }
         },
@@ -342,6 +363,16 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             DiscussionsScreen(reader, auth, onBack = { nav.popBackStack() }, onSignIn = model::signInForDiscussion,
                 linkedUrl = "https://forum.mobilism.org/viewtopic.php?f=$forum&t=$id")
         }
+        composable("comment/{post}?topic={topic}", arguments = listOf(navArgument("post") { type = NavType.LongType },
+            navArgument("topic") { type = NavType.LongType; defaultValue = 0L })) { entry ->
+            val args = requireNotNull(entry.arguments)
+            val post = args.getLong("post")
+            val topic = args.getLong("topic").takeIf { it > 0 }
+            val reader: LinkedCommentViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
+                initializer { LinkedCommentViewModel { app.repository.linkedComment(post, topic) } }
+            })
+            LinkedCommentScreen(reader, post, { nav.popBackStack() }, nav::openReleaseTopic)
+        }
         composable("messages") { entry ->
             if (auth is AuthState.SignedIn) {
                 val messages: MessagesViewModel = viewModel(key = "messages-${auth.username}", viewModelStoreOwner = entry, factory = viewModelFactory {
@@ -427,15 +458,28 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 args.getString("name")?.takeIf { it.isNotBlank() })
             UserProfileScreen(reference, app.repository::profile, onBack = { nav.popBackStack() })
         }
-        composable("release/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-            val id = requireNotNull(entry.arguments).getLong("id")
+        composable("release/{id}?forum={forum}", arguments = listOf(navArgument("id") { type = NavType.LongType },
+            navArgument("forum") { type = NavType.LongType; defaultValue = -1L })) { entry ->
+            val args = requireNotNull(entry.arguments)
+            val id = args.getLong("id")
+            val forum = args.getLong("forum").takeIf { it >= 0 }
             val detail: ReleaseViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
-                initializer { ReleaseViewModel(id, model.repository, createSavedStateHandle()) }
+                initializer { ReleaseViewModel(id, model.repository, createSavedStateHandle()) { app.repository.openTopic(it, forum) } }
             })
             val state by detail.state.collectAsStateWithLifecycle()
+            val discussion = state.discussion
+            if (discussion != null) {
+                val reader: DiscussionsViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
+                    initializer { DiscussionsViewModel(app.repository, (auth as? AuthState.SignedIn)?.username,
+                        createSavedStateHandle(), linkedAnnouncement = { discussion }) }
+                })
+                DiscussionsScreen(reader, auth, onBack = { nav.popBackStack() }, onSignIn = model::signInForDiscussion,
+                    linkedUrl = discussion.topic.browserUrl)
+                return@composable
+            }
             val descriptionExpanded by app.releaseDisplay.descriptionExpanded.collectAsStateWithLifecycle()
             LaunchedEffect(state.release?.categoryId, hideAdult) {
-                if (state.release?.categoryId != null && catalog == null) model.loadCategories()
+                if (forum == null && state.release?.categoryId != null && catalog == null) model.loadCategories()
             }
             var assigningCategories by rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(state.release, developer.customCategoriesActive) {

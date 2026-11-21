@@ -24,6 +24,8 @@ import org.mobilism.material.data.ReleaseCategory
 import org.mobilism.material.data.MobilismRepository
 import org.mobilism.material.data.Release
 import org.mobilism.material.data.ReleaseComments
+import org.mobilism.material.data.TopicContent
+import org.mobilism.material.data.LinkedAnnouncement
 import org.mobilism.material.settings.AppearanceStore
 import org.mobilism.material.settings.DownloadPreferencesStore
 import org.mobilism.material.settings.NewReleaseSession
@@ -346,10 +348,13 @@ data class CommentReplyTarget(val id: Long, val author: String, val html: String
 
 data class ReleaseState(val release: Release? = null, val busy: Boolean = true, val error: ScreenError? = null,
     val comments: CommentsState = CommentsState(), val likeBusy: Boolean = false, val actionMessage: String? = null,
-    val composer: CommentComposerState = CommentComposerState(), val likeNeedsVerification: Boolean = false)
+    val composer: CommentComposerState = CommentComposerState(), val likeNeedsVerification: Boolean = false,
+    val discussion: LinkedAnnouncement? = null)
 
 class ReleaseViewModel(private val id: Long, private val repository: MobilismRepository,
-    private val savedState: SavedStateHandle) : ViewModel() {
+    private val savedState: SavedStateHandle,
+    private val openTopic: suspend (Long) -> TopicContent = { TopicContent.Catalog(repository.release(it)) },
+) : ViewModel() {
     private val mutableState = MutableStateFlow(ReleaseState(composer = CommentComposerState(
         draft = savedState["comment-draft"] ?: "",
         open = savedState["comment-open"] ?: false,
@@ -498,9 +503,13 @@ class ReleaseViewModel(private val id: Long, private val repository: MobilismRep
         job = viewModelScope.launch {
             mutableState.update { it.copy(busy = true, error = null) }
             try {
-                val release = repository.release(id)
-                mutableState.update { it.copy(release = release, busy = false) }
-                if (mutableState.value.composer.open && mutableState.value.comments.page == 0) loadComments()
+                when (val result = openTopic(id)) {
+                    is TopicContent.Catalog -> {
+                        mutableState.update { it.copy(release = result.release, discussion = null, busy = false) }
+                        if (mutableState.value.composer.open && mutableState.value.comments.page == 0) loadComments()
+                    }
+                    is TopicContent.Forum -> mutableState.update { it.copy(release = null, discussion = result.discussion, busy = false) }
+                }
             }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { mutableState.update { it.copy(busy = false, error = error.forScreen()) } }

@@ -16,10 +16,12 @@ import org.jsoup.nodes.Element
 import org.jsoup.safety.Cleaner
 import org.jsoup.safety.Safelist
 import org.mobilism.material.data.webUrlOrNull
+import org.mobilism.material.data.ContentSection
+import org.mobilism.material.data.ReleaseTitles
 
 internal fun forumText(html: String, baseUrl: String, options: ForumFormattingOptions = ForumFormattingOptions(),
     density: Float = 1f, quoteColor: Int = android.graphics.Color.GRAY, textSizePx: Float = 16f * density,
-    headingColor: Int = quoteColor, requirementsColor: Int = quoteColor): SpannableStringBuilder {
+    headingColor: Int = quoteColor, requirementsColor: Int = quoteColor, descriptionTitle: String? = null): SpannableStringBuilder {
     val allowed = Safelist.basic().addTags("tt").removeProtocols("a", "href", "ftp", "mailto")
     if (options.markdown || options.cleanUpReleaseText) allowed.addTags("h1", "h2", "h3", "h4", "h5", "h6")
     val normalized = ForumCodeBlocks.normalize(html, baseUrl)
@@ -54,12 +56,19 @@ internal fun forumText(html: String, baseUrl: String, options: ForumFormattingOp
         }
     }
     document.select("code").tagName("tt")
+    var splitTitle = false
     val cleaned = if (options.cleanUpReleaseText) {
         val safe = Cleaner(allowed).clean(document)
         safe.outputSettings().prettyPrint(false)
         // Add theme colors after sanitization so only the app supplies presentation attributes.
-        safe.select("p, h1, h2, h3, h4, h5, h6").forEach { block ->
+        val blocks = safe.select("p, h1, h2, h3, h4, h5, h6")
+        blocks.forEach { block ->
             if (block.parents().any { it.normalName() in setOf("pre", "code", "tt", "blockquote") }) return@forEach
+            if (descriptionTitle != null && block === blocks.first() && block.selectFirst("a, tt, br") == null &&
+                safe.body().text().startsWith(block.text())) {
+                splitTitle = styleDescriptionTitle(block, descriptionTitle, headingColor, requirementsColor)
+                if (splitTitle) return@forEach
+            }
             if (ReleaseSections.isAdvertisingNotice(block.text()) && block.selectFirst("tt") == null) {
                 block.tagName("p")
                 block.select("b, strong").unwrap()
@@ -95,7 +104,8 @@ internal fun forumText(html: String, baseUrl: String, options: ForumFormattingOp
                     getSpans(line.range.first, line.range.last + 1, TypefaceSpan::class.java).isEmpty() &&
                     getSpans(line.range.first, line.range.last + 1, QuoteSpan::class.java).isEmpty()
             }.map { it.range.first }.toList().asReversed().forEach { delete(it, it + 1) }
-            val titleEnd = indexOf('\n')
+            val firstEnd = indexOf('\n')
+            val titleEnd = if (splitTitle && firstEnd >= 0) indexOf('\n', firstEnd + 1) else firstEnd
             val subtitleStart = titleEnd + 2
             if (titleEnd >= 0 && subtitleStart < length && this[titleEnd + 1] == '\n' &&
                 requirementsLabel.containsMatchIn(subSequence(subtitleStart, minOf(subtitleStart + 64, length))) &&
@@ -136,6 +146,33 @@ internal fun forumText(html: String, baseUrl: String, options: ForumFormattingOp
 }
 
 private val requirementsLabel = Regex("""^(?:(?:system|android)\s+)?requirements?\s*:""", RegexOption.IGNORE_CASE)
+
+private val versionLine = Regex("""(?i)(?:v\d[\w.+-]*|\d+(?:\.\d+)+)(?:\s+v\d[\w.+-]*)*""")
+private val nextVersion = Regex("""(?i)(?<=\d)\s+(?=v\d)""")
+
+internal fun styleDescriptionTitle(block: Element, releaseTitle: String, heading: Int, secondary: Int): Boolean {
+    val text = block.text()
+    val title = ReleaseTitles.parse(block.html(), ContentSection.Apps)
+    val releaseName = ReleaseTitles.parse(releaseTitle, ContentSection.Apps).name
+    val name = if (title.version != null) title.name else {
+        if (!text.startsWith("$releaseName ", ignoreCase = true) ||
+            !versionLine.matches(text.substring(releaseName.length).trimStart())) return false
+        text.take(releaseName.length)
+    }
+    if (!text.startsWith(name)) return false
+    val versions = text.substring(name.length).trimStart(' ', '-', ':', '|')
+    val knownName = releaseName.equals(name, ignoreCase = true)
+    val titleLike = block.normalName().startsWith("h") || block.selectFirst("b, strong") != null ||
+        block.nextElementSibling()?.text()?.let(requirementsLabel::containsMatchIn) == true
+    if (!knownName && (!titleLike || !versionLine.matches(versions))) return false
+    fun color(value: Int) = "#%06x".format(java.util.Locale.ROOT, value and 0xffffff)
+    block.tagName("p").empty()
+    block.appendElement("font").attr("color", color(heading)).appendElement("big").appendElement("b").text(name)
+    block.appendElement("br")
+    block.appendElement("font").attr("color", color(secondary)).appendElement("small")
+        .text(versions.replace(nextVersion, " · "))
+    return true
+}
 
 private fun trimUrlPunctuation(value: String): String {
     var url = value

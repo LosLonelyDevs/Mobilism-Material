@@ -19,6 +19,24 @@ internal class RecentPages<K : Any, V : Any>(private val cache: AppCache, privat
         entries.keys.removeAll(matches)
     }
 
+    suspend fun find(matches: (K, V) -> Boolean): Pair<K, V>? {
+        val hit = synchronized(this) {
+            entries.entries.lastOrNull { now() - it.value.savedAt in 0 until 60_000L && matches(it.key, it.value.value) }
+                ?.let { it.key to it.value.value }
+        }
+        if (hit != null) logger.cacheLookup(cache, CacheOutcome.MemoryHit)
+        return hit
+    }
+
+    @Synchronized fun revision(): Long = generation
+
+    @Synchronized fun store(key: K, value: V, revision: Long) {
+        if (generation != revision) return
+        entries.remove(key)
+        entries[key] = Entry(value, now())
+        while (entries.size > capacity) entries.remove(entries.keys.first())
+    }
+
     fun clear() = invalidate { true }
 
     suspend fun get(key: K, fresh: Boolean, load: suspend () -> V): V =
@@ -27,15 +45,7 @@ internal class RecentPages<K : Any, V : Any>(private val cache: AppCache, privat
                 generation to entries[key]?.takeIf { !fresh && now() - it.savedAt in 0 until 60_000L }
             }
             if (!fresh) logger.cacheLookup(cache, if (entry == null) CacheOutcome.Miss else CacheOutcome.MemoryHit)
-            entry?.value ?: load().also { value ->
-                synchronized(this) {
-                    if (generation == revision) {
-                        entries.remove(key)
-                        entries[key] = Entry(value, now())
-                        while (entries.size > capacity) entries.remove(entries.keys.first())
-                    }
-                }
-            }
+            entry?.value ?: load().also { value -> store(key, value, revision) }
         }
 }
 

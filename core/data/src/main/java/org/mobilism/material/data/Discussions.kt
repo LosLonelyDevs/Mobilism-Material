@@ -36,6 +36,13 @@ data class DiscussionPage(val items: List<DiscussionTopic>, val canLoadMore: Boo
 
 data class LinkedAnnouncement(val topic: DiscussionTopic, val forumComments: CommentPage? = null)
 
+data class LinkedCommentPage(val topicId: Long, val title: String, val posts: List<ReleaseComment>)
+
+sealed interface TopicContent {
+    data class Catalog(val release: Release) : TopicContent
+    data class Forum(val discussion: LinkedAnnouncement) : TopicContent
+}
+
 interface DiscussionsRepository {
     suspend fun discussionCategories(area: DiscussionArea): List<DiscussionCategory>
     suspend fun refreshDiscussionCategories(area: DiscussionArea): List<DiscussionCategory> = discussionCategories(area)

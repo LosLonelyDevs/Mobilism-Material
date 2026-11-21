@@ -19,6 +19,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -38,6 +39,7 @@ internal val LocalReleaseAssignments = compositionLocalOf<CustomCategoryState?> 
 internal val LocalOpenReleaseCategory = compositionLocalOf<((ContentSection, FeedFilters) -> Unit)?> { null }
 
 private data class NamedCategory(val name: String, val filters: FeedFilters)
+private val chipVerticalPadding = 6.dp
 
 @Composable
 internal fun ReleaseMetadataFooter(release: Release, expanded: Boolean = false, spacing: Dp = 8.dp,
@@ -79,7 +81,7 @@ internal fun ReleaseMetadataFooter(release: Release, expanded: Boolean = false, 
                 shape = MaterialTheme.shapes.large,
                 color = container, contentColor = foreground,
             ) {
-                Box(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.padding(horizontal = 14.dp, vertical = chipVerticalPadding), contentAlignment = Alignment.Center) {
                     val style = MaterialTheme.typography.labelSmall
                     Text(category.name, style = style, fontSize = (style.fontSize.value - 1).sp,
                         maxLines = if (singleRow) 1 else if (expanded) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
@@ -94,9 +96,14 @@ internal fun ReleaseMetadataFooter(release: Release, expanded: Boolean = false, 
                 listCard -> 0.42f
                 else -> 0.34f
             }
+            val chipInset = with(LocalDensity.current) { chipVerticalPadding.roundToPx() }
+            val metadataAlignment = if (listCard) Alignment.Vertical { size, space ->
+                // Align with the painted chip edge inside its larger touch target.
+                (Alignment.CenterVertically.align(size, space) + chipInset).coerceAtMost(space - size)
+            } else Alignment.CenterVertically
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(if (listCard) 4.dp else spacing)) {
-                Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                Row(Modifier.weight(1f).align(metadataAlignment).horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(spacing), verticalAlignment = Alignment.CenterVertically) { metadata() }
                 if (categories.isNotEmpty()) Row(Modifier.widthIn(max = categoryWidth).horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)) { chips() }

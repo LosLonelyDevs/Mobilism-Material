@@ -208,10 +208,10 @@ class CustomCategoriesTest {
             val chip = compose.onNodeWithText("Photography").getUnclippedBoundsInRoot()
             val card = compose.onNodeWithTag("release-1").getUnclippedBoundsInRoot()
             assertTrue(views.left - date.right >= 9.dp && comments.left >= views.right && comments.right <= chip.left)
-            assertEquals((date.top + date.bottom).value / 2, (chip.top + chip.bottom).value / 2, 1f)
+            for (item in listOf(date, views, comments)) assertEquals(chip.bottom.value, item.bottom.value, 1f)
             assertTrue((card.bottom - chip.bottom) <= 16.dp)
             val artwork = compose.onNodeWithTag("release-artwork-1", useUnmergedTree = true).getUnclippedBoundsInRoot()
-            assertTrue(date.top - artwork.bottom in 0.dp..20.dp)
+            assertTrue(date.top - artwork.bottom in 0.dp..26.dp)
             val uploader = compose.onNode(hasText("Reader") and hasAnyAncestor(hasTestTag("release-1")),
                 useUnmergedTree = true).getUnclippedBoundsInRoot()
             val title = compose.onNode(hasText("Aloha Browser", substring = true) and hasAnyAncestor(hasTestTag("release-1")),

@@ -80,6 +80,14 @@ class WearReleaseTest {
         assertEquals("id=80", form.readUtf8())
     }
 
+    @Test fun uncataloguedDiscussionOpensWithRepliesFromTheExistingForumFallback() = runBlocking {
+        val fixture = Fixture(section = "Community")
+        val result = fixture.repository.openTopic(42) as TopicContent.Forum
+        assertEquals("Wear example v1.0", result.discussion.topic.title)
+        assertEquals(listOf(81L), result.discussion.forumComments!!.items.map { it.id })
+        assertEquals(listOf("/api-new/release/42", "/viewtopic.php"), fixture.requests.map { it.url.encodedPath })
+    }
+
     @Test fun successfulApiReleaseDoesNotFetchForum() = runBlocking {
         val fixture = Fixture(apiStatus = 200, apiBody = """{"response":{"id":42,"subject":"API release"}}""")
         assertEquals("API release", fixture.repository.release(42).title)
@@ -108,6 +116,7 @@ class WearReleaseTest {
         private val apiStatus: Int = 400,
         private val apiBody: String = """{"error":{"text":"No records found."}}""",
         private val forumStatus: Int = 200,
+        private val section: String = "Apps",
     ) {
         val requests = CopyOnWriteArrayList<Request>()
         private val prefix = "wear-test-${System.nanoTime()}-"
@@ -138,7 +147,7 @@ class WearReleaseTest {
 
         private fun topic(start: String?): String = """
             <div class='page-category-topic'><a href='viewtopic.php?f=1347&amp;t=42'>Wear example v1.0</a></div>
-            <div class='pagination'><a href='viewforum.php?f=402'>Apps</a></div>
+            <div class='pagination'><a href='viewforum.php?f=402'>$section</a></div>
         """ + if (start == "10") post(82, "Older reply") else
             post(80, """Wear description<br><span style='text-decoration: underline'>Download Instructions:</span><br>
                 <span style='font-weight: bold'>Watch APK:</span><br><a href='https://files.example.org/watch.apk'>File</a>""") +

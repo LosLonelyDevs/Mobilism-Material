@@ -31,7 +31,19 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.mobilism.material.R
 import org.mobilism.material.data.AppUserAgent
 import org.mobilism.material.data.KeystoreText
+import org.mobilism.material.data.Release
+import org.mobilism.material.data.ReleaseTitle
+import org.mobilism.material.data.ReleaseTitles
 import org.mobilism.material.data.retryAfterMillis
+
+internal fun ReleaseTitle.downloadNotificationTitle(savedName: String? = null): String {
+    // Older queued downloads may already have a section-specific name.
+    if (!savedName.isNullOrBlank() && savedName != name) return savedName
+    if (name.isBlank()) return "Release download"
+    val displayName = name.take(120)
+    val displayVersion = version.orEmpty().take(80)
+    return if (displayVersion.isBlank()) displayName else "$displayName v$displayVersion"
+}
 
 internal object ReleaseDownloads {
     const val TAG = "release-download"
@@ -39,7 +51,7 @@ internal object ReleaseDownloads {
     val transferSlot = Mutex()
     private val queueLock = Mutex()
 
-    suspend fun enqueue(context: Context, original: String, title: String, folder: String, extract: Boolean,
+    suspend fun enqueue(context: Context, original: String, release: Release, folder: String, extract: Boolean,
         directLink: suspend () -> String): Boolean = withContext(Dispatchers.IO) {
         queueLock.withLock {
             val manager = WorkManager.getInstance(context)
@@ -51,10 +63,11 @@ internal object ReleaseDownloads {
             val parsed = url.toHttpUrlOrNull()
             if (parsed == null || !parsed.isHttps || parsed.username.isNotEmpty() || parsed.password.isNotEmpty())
                 throw DownloadProblem("This link needs a browser.")
-            val label = title.take(120)
+            val title = ReleaseTitles.parse(release.title, release.section)
             val request = OneTimeWorkRequestBuilder<ReleaseDownloadWorker>()
                 .addTag(TAG)
-                .setInputData(workDataOf("link" to links.encrypt(url), "folder" to folder, "title" to label, "extract" to extract))
+                .setInputData(workDataOf("link" to links.encrypt(url), "folder" to folder, "extract" to extract,
+                    "title" to release.title.take(120), "notificationTitle" to title.downloadNotificationTitle()))
                 .build()
             manager.enqueueUniqueWork(key, ExistingWorkPolicy.KEEP, request).await()
             true
@@ -65,12 +78,15 @@ internal object ReleaseDownloads {
 class ReleaseDownloadWorker internal constructor(context: Context, params: WorkerParameters, private val http: OkHttpClient) :
     CoroutineWorker(context, params) {
     constructor(context: Context, params: WorkerParameters) : this(context, params, releaseFileClient(context))
-    private val label get() = inputData.getString("title").orEmpty()
+    private val releaseTitle get() = inputData.getString("title").orEmpty()
+    private val notificationTitle by lazy {
+        inputData.getString("notificationTitle")
+            ?: ReleaseTitles.parse(releaseTitle).downloadNotificationTitle(inputData.getString("releaseName"))
+    }
     private val notificationId = id.hashCode() or 1
     private val journal = context.getSharedPreferences("release-download-outputs", Context.MODE_PRIVATE)
     private val created = mutableListOf<Uri>()
     private var lastUpdate = 0L
-    private var fileName: String? = null
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val stage = File(applicationContext.cacheDir, "release-$id.part")
@@ -159,8 +175,7 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
                 if (response.code != 200) throw DownloadProblem("File host returned HTTP " + response.code + ".")
                 val body = response.body ?: throw DownloadProblem("The host returned an empty file.")
                 val mime = body.contentType()?.let { it.type + "/" + it.subtype }
-                val name = ReleaseFiles.name(response.request.url.toString(), response.header("Content-Disposition"), mime, label)
-                fileName = name
+                val name = ReleaseFiles.name(response.request.url.toString(), response.header("Content-Disposition"), mime, releaseTitle)
                 val source = body.source()
                 val preview = source.peek().readByteArray(if (source.request(256)) 256L else source.buffer.size)
                     .toString(Charsets.UTF_8).trimStart('\uFEFF', ' ', '\t', '\n', '\r')
@@ -203,7 +218,7 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(ReleaseDownloads.TAG, "Release downloads", NotificationManager.IMPORTANCE_LOW))
         return NotificationCompat.Builder(context, ReleaseDownloads.TAG).setSmallIcon(R.drawable.ic_app_update)
-            .setContentTitle(fileName ?: label.ifBlank { "Release download" })
+            .setContentTitle(notificationTitle)
     }
 
     private fun notification(text: String, percent: Int): ForegroundInfo {

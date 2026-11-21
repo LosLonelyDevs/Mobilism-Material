@@ -6,7 +6,6 @@ import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,7 +24,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
@@ -37,7 +35,7 @@ internal fun ForumPostVerification(topicId: Long, onVerified: (Long) -> Unit, on
     val verified by rememberUpdatedState(onVerified)
     var browser by remember { mutableStateOf<WebView?>(null) }
     var completed by remember(topicId) { mutableStateOf(false) }
-    var message by remember { mutableStateOf("Complete the forum check, then tap Continue.") }
+    var message by remember { mutableStateOf("This page closes when the forum finishes checking.") }
     fun readPost(view: WebView, reportWaiting: Boolean = false) {
         val uri = view.url?.let(Uri::parse) ?: return
         if (completed || !isForumTopic(uri, topicId)) return
@@ -49,7 +47,7 @@ internal fun ForumPostVerification(topicId: Long, onVerified: (Long) -> Unit, on
                 CookieManager.getInstance().flush()
                 verified(postId)
             }
-            else if (reportWaiting) message = "The forum check is not finished. Complete it, then tap Continue."
+            else if (reportWaiting) message = "Still checking. This page will close automatically."
         }
     }
     LaunchedEffect(browser, topicId) {
@@ -70,7 +68,7 @@ internal fun ForumPostVerification(topicId: Long, onVerified: (Long) -> Unit, on
                     TextButton(onClick = { browser?.reload() }) { Text("Reload") }
                     TextButton(onClick = { browser?.let { readPost(it, reportWaiting = true) } }) { Text("Continue") }
                 }
-                AndroidView(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context ->
+                VerificationBrowserPane(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { context, onPageVisible ->
                     createBrowser(context).apply {
                         // Browser verification needs JavaScript. Navigation stays on this forum topic.
                         settings.userAgentString = org.mobilism.material.data.AppUserAgent.value(context)
@@ -79,11 +77,9 @@ internal fun ForumPostVerification(topicId: Long, onVerified: (Long) -> Unit, on
                         settings.allowFileAccess = false
                         settings.allowContentAccess = false
                         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                        webViewClient = object : WebViewClient() {
+                        webViewClient = object : VerificationPageClient(onPageVisible, { readPost(it) }) {
                             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
                                 request.isForMainFrame && !isForumTopic(request.url, topicId)
-
-                            override fun onPageFinished(view: WebView, url: String) { readPost(view) }
                         }
                         browser = this
                         loadUrl("https://forum.mobilism.org/viewtopic.php?t=$topicId")
