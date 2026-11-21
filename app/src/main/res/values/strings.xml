@@ -40,6 +40,30 @@
     <string name="settings_experiments">Experiments</string>
     <string name="settings_developer_options">Developer options</string>
     <string name="dev_mode">Developer mode</string>
+    <string name="dev_manual_notice_checks">Manual notice checks</string>
+    <string name="dev_manual_notice_checks_summary">Show the button for testing app notices.</string>
+    <string name="opening_mobilism">Opening Mobilism…</string>
+    <string name="mobilism_name">Mobilism</string>
+    <string name="drawer_guest">Guest</string>
+    <string name="drawer_announcements">Announcements</string>
+    <string name="drawer_discussions">Discussions</string>
+    <string name="drawer_following">Following</string>
+    <string name="drawer_library">My Applications</string>
+    <string name="drawer_messages">Messages</string>
+    <string name="drawer_login">Login</string>
+    <string name="drawer_logout">Logout</string>
+    <string name="drawer_open">Open navigation drawer</string>
+    <string name="feed_search">Search releases</string>
+    <string name="feed_use_detailed">Use detailed list</string>
+    <string name="feed_use_compact">Use compact list</string>
+    <string name="feed_filters">Filters</string>
+    <string name="feed_loading">Loading releases…</string>
+    <string name="feed_more">Load more</string>
+    <string name="feed_empty">No releases found.</string>
+    <plurals name="feed_comment_count">
+        <item quantity="one">%1$d comment</item>
+        <item quantity="other">%1$d comments</item>
+    </plurals>
     <string name="dev_mode_summary">Turn off to hide these options</string>
     <string name="dev_verbose_logging">Verbose logging</string>
     <string name="dev_verbose_logging_summary">Record diagnostic details</string>
@@ -111,7 +135,6 @@
     <string name="settings_message_alerts_summary">Periodic alerts for new private messages.</string>
     <string name="settings_allow_notifications">Allow notifications</string>
     <string name="premium_accounts">Accounts</string>
-    <string name="settings_usage_details">Sends app version, Android version, manufacturer, and model once per active day. No account data or permanent device ID.</string>
     <string name="settings_title">Settings</string>
     <string name="settings_appearance_summary">Theme, font, and motion.</string>
     <string name="settings_downloads_summary">Download method, folder, architecture, and preferred hosts.</string>
@@ -119,7 +142,7 @@
     <string name="settings_premium_summary">Manage verified Premium accounts.</string>
     <string name="settings_privacy">Privacy and diagnostics</string>
     <string name="settings_usage">Anonymous usage</string>
-    <string name="settings_usage_summary">Share daily activity, device, request, and cache totals.</string>
+    <string name="settings_usage_summary">No account or personal data shared. Device diagnostics for debugging.</string>
     <string name="settings_app">App</string>
     <string name="settings_developer_summary">Diagnostics and experimental features.</string>
     <string name="settings_about">About Mobilism Material</string>
@@ -175,7 +198,7 @@
     <string name="updates_system_settings">Open Android settings and allow installs from this app, then try again.</string>
     <string name="updates_notices_checking">Checking app notices...</string>
     <string name="updates_no_notices">No matching notices for this account and version.</string>
-    <string name="updates_notices_failed">Notices couldn\'t be checked. App defaults are active.</string>
+    <string name="updates_notices_failed">Couldn\'t check app notices.</string>
     <string name="settings_updates">Updates</string>
     <string name="updates_required_summary">Update the app to continue. If a download is unavailable, return to the notice and refresh it.</string>
     <string name="updates_enable">Enable app updates</string>

@@ -44,10 +44,12 @@ class HomeTest {
 
     @Test fun drawerFillsViewportAndScrollsOnShortScreens() {
         var short by mutableStateOf(false)
+        var guest by mutableStateOf(false)
         compose.setContent { MobilismTheme(reduceMotion = true) {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (short) 1.5f else 1f)) {
                 Box(Modifier.fillMaxWidth().height(if (short) 320.dp else 800.dp).testTag("drawer-frame")) {
-                    FeedScreen(FeedState(), AuthState.SignedIn("Reader"), {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, CategoryState(), {}, {})
+                    FeedScreen(FeedState(), if (guest) AuthState.Guest else AuthState.SignedIn("Reader"),
+                        {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, CategoryState(), {}, {})
                 }
             }
         } }
@@ -59,11 +61,25 @@ class HomeTest {
             assertEquals(frame.bottom, drawer.bottom, 1f)
         }
         assertFullHeight()
+        val settings = compose.onNodeWithText(compose.activity.getString(R.string.settings_title))
+        val logout = compose.onNodeWithText(compose.activity.getString(R.string.drawer_logout))
+        val scrollable = hasAnyAncestor(hasScrollAction())
+        settings.assertIsDisplayed().assert(!scrollable)
+        logout.assertIsDisplayed().assert(!scrollable)
         capture("drawer-full-height")
         compose.runOnIdle { short = true }
         assertFullHeight()
-        compose.onNodeWithText("Logout").performScrollTo().assertIsDisplayed()
+        val settingsBounds = settings.assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val logoutBounds = logout.assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue(settingsBounds.bottom <= logoutBounds.top + 1f)
+        compose.onNodeWithText(compose.activity.getString(R.string.drawer_messages)).performScrollTo().assertIsDisplayed()
+        assertEquals(settingsBounds, settings.fetchSemanticsNode().boundsInRoot)
+        assertEquals(logoutBounds, logout.fetchSemanticsNode().boundsInRoot)
         capture("drawer-short-large-text")
+        compose.runOnIdle { guest = true }
+        logout.assertDoesNotExist()
+        compose.onNodeWithText(compose.activity.getString(R.string.drawer_login)).assert(scrollable).performScrollTo().assertIsDisplayed()
+        settings.assertIsDisplayed().assert(!scrollable)
     }
 
     @Test fun allThreeSectionsExposeHeroCollectionsAndWorkingShortcuts() {

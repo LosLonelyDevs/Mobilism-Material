@@ -72,7 +72,7 @@ The public protocol is schema 2. Clients that only understand schema 1 reject it
 1. Add your signed-in Mobilism username to a Username rule.
 2. Add the intended app version in the same ALL group.
 3. Set **Each foreground visit** while testing. Enable and publish the notice.
-4. In the app, open **Settings > Updates > Check app notices**.
+4. In **Settings > Developer options**, enable **Manual notice checks**, then tap **Check app notices**. The switch defaults to off and resets when developer mode is disabled.
 5. Disable the notice and publish again when finished.
 
 Manual notice checks run at most once every 15 seconds. Changing notice text also makes a previously dismissed notice eligible again. The test APK retains its version, so select that version when testing. Publish an actual newer APK before requiring an update for general users.

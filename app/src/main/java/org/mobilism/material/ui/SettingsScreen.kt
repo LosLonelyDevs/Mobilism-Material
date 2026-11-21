@@ -124,8 +124,6 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             item(key = "daily-usage") {
                 SettingsToggleRow(stringResource(R.string.settings_usage), stringResource(R.string.settings_usage_summary), Icons.Outlined.Insights,
                     dailyUsageEnabled, onCheckedChange = onDailyUsage)
-                Text(stringResource(R.string.settings_usage_details), Modifier.padding(horizontal = 16.dp),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             diagnostics?.let { logs -> item(key = "diagnostics") { DiagnosticLogsCard(logs) } }
             item("app-section") { SettingsSectionLabel(stringResource(R.string.settings_app)) }
@@ -210,7 +208,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
             if (!account.configured || signingInAgain) {
               if (account.provider != DebridProvider.RealDebrid) {
                 val mobilism = account.provider == DebridProvider.Mobilism
-                val service = if (mobilism) "Mobilism" else account.provider.label
+                val service = if (mobilism) stringResource(R.string.mobilism_name) else account.provider.label
                 SettingsSubtitle(if (mobilism) stringResource(R.string.premium_mobilism_summary)
                     else stringResource(R.string.premium_other_summary))
                 OutlinedTextField(

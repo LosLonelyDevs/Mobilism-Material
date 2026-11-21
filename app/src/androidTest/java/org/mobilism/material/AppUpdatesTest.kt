@@ -60,6 +60,7 @@ class AppUpdatesTest {
         compose.onNodeWithText("Update available").assertIsDisplayed()
         compose.onNodeWithText("Download").performClick()
         compose.onNodeWithText("Updates").assertIsDisplayed()
+        compose.onNodeWithText(compose.activity.getString(R.string.updates_check_notices)).assertDoesNotExist()
         compose.waitUntil { downloads == 1 && updater.state.value.progress == 42 }
         compose.onNodeWithText("42% downloaded").performScrollTo().assertIsDisplayed()
         capture("app-updates-progress.png")

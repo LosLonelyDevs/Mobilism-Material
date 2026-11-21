@@ -16,6 +16,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalAutofillManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
@@ -29,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import org.mobilism.material.MobilismApplication
+import org.mobilism.material.R
 import org.mobilism.material.data.AuthState
 import org.mobilism.material.data.DiscussionCategory
 import org.mobilism.material.data.DiscussionTopic
@@ -81,7 +83,7 @@ fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fro
                 key(auth) {
                     when (auth) {
                         AuthState.Restoring -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            LoadingState("Opening Mobilism…")
+                            LoadingState(stringResource(R.string.opening_mobilism))
                         }
                         AuthState.SignedOut -> AccountNavigation(model, app.diagnostics)
                         else -> MainNavigation(model, auth, notificationRelease, notificationMessage, fromNotification, linkedPost, onNotificationHandled, onUpdates)
@@ -425,7 +427,16 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onVerboseLogging = model.developer::setVerboseLogging,
                 onDisable = model.developer::disable, onBack = { nav.popBackStack() },
                 onCustomCategories = model.developer::setCustomCategoriesEnabled,
-                onMarkdownSyntax = model.developer::setMarkdownSyntax)
+                onMarkdownSyntax = model.developer::setMarkdownSyntax,
+                onManualNoticeChecks = model.developer::setManualNoticeChecks,
+                onCheckNotices = {
+                    app.remoteControl.refresh(force = true)
+                    when {
+                        app.remoteControl.notice.value != null -> null
+                        app.remoteControl.hasConfiguration -> R.string.updates_no_notices
+                        else -> R.string.updates_notices_failed
+                    }
+                })
         }
         composable("categories/{section}") { entry ->
             LaunchedEffect(developer.customCategoriesActive) {

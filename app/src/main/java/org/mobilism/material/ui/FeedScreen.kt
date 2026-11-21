@@ -68,6 +68,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -153,11 +155,11 @@ fun FeedScreen(
         drawerState = drawer,
         drawerContent = {
             ModalDrawerSheet(Modifier.fillMaxHeight().testTag("navigation-drawer")) {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    AppHeading("Mobilism", HeadingLevel.Page, Modifier.padding(24.dp), style = MaterialTheme.typography.headlineMedium)
+                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                    AppHeading(stringResource(R.string.mobilism_name), HeadingLevel.Page, Modifier.padding(24.dp), style = MaterialTheme.typography.headlineMedium)
                     if (auth is AuthState.SignedIn) UsernameLink(auth.username, Modifier.padding(horizontal = 24.dp),
                         onOpen = { scope.launch { drawer.close() } })
-                    else Text("Guest", Modifier.padding(horizontal = 24.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    else Text(stringResource(R.string.drawer_guest), Modifier.padding(horizontal = 24.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Alphabetical.sorted(ContentSection.entries) { it.label }.forEach { section ->
                         val style = section.style()
                         val interaction = remember { MutableInteractionSource() }
@@ -176,53 +178,48 @@ fun FeedScreen(
                     }
                     HorizontalDivider(Modifier.padding(16.dp))
                     NavigationDrawerItem(
-                        label = { Text("Announcements") }, selected = false,
+                        label = { Text(stringResource(R.string.drawer_announcements)) }, selected = false,
                         icon = { Icon(Icons.Outlined.Campaign, null, tint = theme.featured) },
                         onClick = { scope.launch { drawer.close() }; onAnnouncements() },
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
                     val discussionsInteraction = remember { MutableInteractionSource() }
                     NavigationDrawerItem(
-                        label = { Text("Discussions") }, selected = false,
+                        label = { Text(stringResource(R.string.drawer_discussions)) }, selected = false,
                         icon = { Icon(Icons.Outlined.ChatBubbleOutline, null, tint = theme.reading) },
                         onClick = { scope.launch { drawer.close() }; onDiscussions() },
                         interactionSource = discussionsInteraction,
                         modifier = Modifier.padding(horizontal = 12.dp).focusOutline(discussionsInteraction),
                     )
                     NavigationDrawerItem(
-                        label = { Text("Following") }, selected = false,
+                        label = { Text(stringResource(R.string.drawer_following)) }, selected = false,
                         icon = { Icon(Icons.Outlined.Bookmarks, null, tint = theme.success) },
                         onClick = { scope.launch { drawer.close() }; onFollowing() },
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
                     NavigationDrawerItem(
-                        label = { Text("My Applications") }, selected = false,
+                        label = { Text(stringResource(R.string.drawer_library)) }, selected = false,
                         icon = { Icon(Icons.Outlined.PhoneAndroid, null, tint = theme.featured) },
                         onClick = { scope.launch { drawer.close() }; onLibrary() },
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
                     if (auth is AuthState.SignedIn) NavigationDrawerItem(
-                        label = { Text("Messages") }, selected = false,
+                        label = { Text(stringResource(R.string.drawer_messages)) }, selected = false,
                         icon = { Icon(Icons.Outlined.MailOutline, null, tint = theme.reading) },
                         onClick = { scope.launch { drawer.close() }; onMessages() },
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
-                    val settingsInteraction = remember { MutableInteractionSource() }
-                    NavigationDrawerItem(
-                        label = { Text("Settings") }, selected = false,
-                        icon = { Icon(Icons.Outlined.Settings, null, tint = theme.personalization) },
-                        onClick = { scope.launch { drawer.close() }; onSettings() },
-                        interactionSource = settingsInteraction,
-                        modifier = Modifier.padding(horizontal = 12.dp).focusOutline(settingsInteraction),
-                    )
-                    val logoutInteraction = remember { MutableInteractionSource() }
-                    NavigationDrawerItem(
-                        label = { Text(if (auth is AuthState.Guest) "Login" else "Logout") }, selected = false,
-                        icon = { Icon(Icons.AutoMirrored.Outlined.ExitToApp, null) }, onClick = onSignOut,
-                        interactionSource = logoutInteraction,
-                        modifier = Modifier.padding(horizontal = 12.dp).focusOutline(logoutInteraction),
-                    )
+                    if (auth is AuthState.Guest) DrawerAccountAction(stringResource(R.string.drawer_login), onSignOut)
                 }
+                val settingsInteraction = remember { MutableInteractionSource() }
+                NavigationDrawerItem(
+                    label = { Text(stringResource(R.string.settings_title)) }, selected = false,
+                    icon = { Icon(Icons.Outlined.Settings, null, tint = theme.personalization) },
+                    onClick = { scope.launch { drawer.close() }; onSettings() },
+                    interactionSource = settingsInteraction,
+                    modifier = Modifier.padding(horizontal = 12.dp).focusOutline(settingsInteraction),
+                )
+                if (auth !is AuthState.Guest) DrawerAccountAction(stringResource(R.string.drawer_logout), onSignOut)
             }
         },
     ) {
@@ -235,12 +232,12 @@ fun FeedScreen(
                         AppHeading(state.section.label, HeadingLevel.Page, style = MaterialTheme.typography.titleLarge,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     },
-                    navigationIcon = { AppIconButton(Icons.Outlined.Menu, "Open navigation drawer", { scope.launch { drawer.open() } }) },
+                    navigationIcon = { AppIconButton(Icons.Outlined.Menu, stringResource(R.string.drawer_open), { scope.launch { drawer.open() } }) },
                     actions = {
-                        AppIconButton(Icons.Outlined.Search, "Search releases", onSearch)
+                        AppIconButton(Icons.Outlined.Search, stringResource(R.string.feed_search), onSearch)
                         if (tab != BrowseTab.Home) AppIconToggleButton(Icons.Outlined.ViewHeadline,
-                            if (compact) "Use detailed list" else "Use compact list", compact, sectionStyle.accent, onCompact)
-                        AppIconButton(Icons.Outlined.FilterList, "Filters", openFilters)
+                            stringResource(if (compact) R.string.feed_use_detailed else R.string.feed_use_compact), compact, sectionStyle.accent, onCompact)
+                        AppIconButton(Icons.Outlined.FilterList, stringResource(R.string.feed_filters), openFilters)
                     },
                     scrollBehavior = scroll,
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -287,14 +284,14 @@ fun FeedScreen(
                                             isNew = state.order == FeedOrder.Latest && release.id in state.newReleaseIds) { onRelease(release.id) }
                                     }
                                     if (state.busy && !state.refreshing)
-                                        item(key = "loading") { LoadingState("Loading releases…", Modifier.fillMaxWidth()) }
+                                        item(key = "loading") { LoadingState(stringResource(R.string.feed_loading), Modifier.fillMaxWidth()) }
                                     if (!state.busy && state.awaitingMore && state.error == null && state.canLoadMore)
-                                        item(key = "continue") { AppTextButton("Load more", onMore, Modifier.fillMaxWidth()) }
+                                        item(key = "continue") { AppTextButton(stringResource(R.string.feed_more), onMore, Modifier.fillMaxWidth()) }
                                     state.error?.let { error -> item(key = "error") {
                                         ErrorPanel(error, onRetry = if (state.items.isEmpty()) onRefresh else onMore)
                                     } }
                                     if (!state.busy && state.error == null && state.items.isEmpty() && !state.canLoadMore) item(key = "empty") {
-                                        Text("No releases found.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge)
+                                        Text(stringResource(R.string.feed_empty), Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge)
                                     }
                                 }
                             }
@@ -349,14 +346,26 @@ internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = fal
             ReleaseMetadataFooter(release, singleRow = true, spacing = 10.dp, listCard = true) {
                 ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
                 ReleaseViewCount(release.views, numberOnly = true)
-                if (release.replies > 0) Row(Modifier.clearAndSetSemantics {
-                    contentDescription = if (release.replies == 1L) "1 comment" else "${release.replies} comments"
-                },
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
-                    Text(release.replies.toString(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                if (release.replies > 0) {
+                    val comments = pluralStringResource(R.plurals.feed_comment_count,
+                        release.replies.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), release.replies)
+                    Row(Modifier.clearAndSetSemantics { contentDescription = comments },
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
+                        Text(release.replies.toString(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun DrawerAccountAction(label: String, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    NavigationDrawerItem(
+        label = { Text(label) }, selected = false,
+        icon = { Icon(Icons.AutoMirrored.Outlined.ExitToApp, null) }, onClick = onClick,
+        interactionSource = interaction, modifier = Modifier.padding(horizontal = 12.dp).focusOutline(interaction),
+    )
 }

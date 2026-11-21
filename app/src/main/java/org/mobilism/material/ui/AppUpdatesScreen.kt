@@ -34,7 +34,7 @@ import org.mobilism.material.updates.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AppUpdatesScreen(checker: AppUpdateChecker, updater: AppUpdateViewModel, onBack: () -> Unit,
-    requiredBuild: Int? = null, onCheckNotices: (() -> Unit)? = null) {
+    requiredBuild: Int? = null) {
     val resources = LocalResources.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -77,7 +77,7 @@ internal fun AppUpdatesScreen(checker: AppUpdateChecker, updater: AppUpdateViewM
         })
     }) { insets ->
         AppUpdateSettings(checker, updater::downloadAndInstall, Modifier.fillMaxSize().padding(insets),
-            state, ::requestInstall, updater::cancel, requiredBuild = requiredBuild, onCheckNotices = onCheckNotices)
+            state, ::requestInstall, updater::cancel, requiredBuild = requiredBuild)
     }
 }
 
@@ -85,8 +85,7 @@ internal fun AppUpdatesScreen(checker: AppUpdateChecker, updater: AppUpdateViewM
 internal fun AppUpdateSettings(checker: AppUpdateChecker, onDownload: (AppRelease) -> Unit,
     modifier: Modifier = Modifier,
     install: UpdateInstallState = UpdateInstallState(), onInstall: () -> Unit = {}, onCancel: () -> Unit = {},
-    openUrl: (String) -> Unit = LocalUriHandler.current::openUri, requiredBuild: Int? = null,
-    onCheckNotices: (() -> Unit)? = null) {
+    openUrl: (String) -> Unit = LocalUriHandler.current::openUri, requiredBuild: Int? = null) {
     val state by checker.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var browserError by remember { mutableStateOf(false) }
@@ -111,10 +110,6 @@ internal fun AppUpdateSettings(checker: AppUpdateChecker, onDownload: (AppReleas
                 Modifier.clickable(enabled = !state.checking && !install.busy && !install.installRequested, role = Role.Button) {
                     scope.launch { checker.check() }
                 })
-        }
-        if (onCheckNotices != null) item("check-notices") {
-            SettingsRow(stringResource(R.string.updates_check_notices), stringResource(R.string.updates_check_notices_summary), Icons.Outlined.Campaign,
-                Modifier.clickable(enabled = !install.busy && !install.installRequested, role = Role.Button, onClick = onCheckNotices))
         }
         if (state.checking || state.checked || state.available != null || state.error != null ||
             install.message != null || browserError) item("status") {
@@ -171,7 +166,6 @@ internal fun AppUpdateSettings(checker: AppUpdateChecker, onDownload: (AppReleas
 internal fun AppUpdateHost(checker: AppUpdateChecker, updater: AppUpdateViewModel,
     remoteControl: org.mobilism.material.remote.RemoteControlStore,
     changelog: AppChangelog?, onChangelogDismiss: () -> Unit, content: @Composable (() -> Unit) -> Unit) {
-    val resources = LocalResources.current
     val update by checker.state.collectAsStateWithLifecycle()
     val installing by updater.state.collectAsStateWithLifecycle()
     var showUpdates by rememberSaveable { mutableStateOf(false) }
@@ -187,15 +181,7 @@ internal fun AppUpdateHost(checker: AppUpdateChecker, updater: AppUpdateViewMode
             }
         }
         if (showUpdates) AppUpdatesScreen(checker, updater, onBack = { showUpdates = false },
-            requiredBuild = notice?.takeIf { it.required }?.requiredVersionCode, onCheckNotices = {
-                scope.launch {
-                    updater.notice(resources.getString(R.string.updates_notices_checking))
-                    remoteControl.refresh(force = true)
-                    if (remoteControl.notice.value != null) showUpdates = false
-                    else updater.notice(if (remoteControl.hasConfiguration) resources.getString(R.string.updates_no_notices)
-                        else resources.getString(R.string.updates_notices_failed))
-                }
-            })
+            requiredBuild = notice?.takeIf { it.required }?.requiredVersionCode)
     }
     if (notice != null && !showUpdates) {
         val current = checkNotNull(notice)

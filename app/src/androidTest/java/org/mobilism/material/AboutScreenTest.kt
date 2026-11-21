@@ -34,6 +34,7 @@ class AboutScreenTest {
         compose.activity.getSharedPreferences("material-developer", android.content.Context.MODE_PRIVATE).edit().clear().commit()
         val developer = org.mobilism.material.settings.DeveloperPreferencesStore(compose.activity)
         val repository = DebridRepository(compose.activity)
+        var manualChecks = 0
         compose.setContent {
             var page by remember { mutableStateOf("settings") }
             val state by developer.state.collectAsState()
@@ -45,7 +46,8 @@ class AboutScreenTest {
                     onEnableDeveloperMode = developer::unlock)
                 else if (page == "developer") org.mobilism.material.ui.DeveloperOptionsScreen(state,
                     developer::setVerboseLogging, developer::disable,
-                    onBack = { page = "settings" })
+                    onBack = { page = "settings" }, onManualNoticeChecks = developer::setManualNoticeChecks,
+                    onCheckNotices = { manualChecks++; R.string.updates_no_notices })
                 else SettingsScreen(DebridState(), repository, onAppearance = {}, onDownloads = {}, onBack = {},
                     onAbout = { page = "about" }, developer = state, onDeveloperOptions = { page = "developer" })
             }
@@ -81,6 +83,21 @@ class AboutScreenTest {
             compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
         }
         compose.onNodeWithText("Verbose logging").assertIsOff().performClick().assertIsOn()
+        val gate = compose.activity.getString(R.string.dev_manual_notice_checks)
+        val action = compose.activity.getString(R.string.updates_check_notices)
+        compose.onNodeWithText(gate).performScrollTo().assertIsOff()
+        compose.onNodeWithText(action).assertDoesNotExist()
+        compose.onNodeWithText(gate).performClick()
+        compose.runOnIdle {
+            assertEquals(0, manualChecks)
+            assertTrue(org.mobilism.material.settings.DeveloperPreferencesStore(compose.activity).state.value.manualNoticeChecks)
+        }
+        compose.onNodeWithText(action).performScrollTo().performClick()
+        compose.onNodeWithText(compose.activity.getString(R.string.updates_no_notices)).assertIsDisplayed()
+        compose.runOnIdle { assertEquals(1, manualChecks) }
+        compose.onNodeWithText(gate).performClick()
+        compose.onNodeWithText(action).assertDoesNotExist()
+        compose.onNodeWithText(gate).performClick()
         compose.onNodeWithText("Experimental premium services").assertDoesNotExist()
         compose.onNodeWithText("Diagnostic logs").assertDoesNotExist()
         compose.onNodeWithText("Developer mode").performScrollTo().assertIsOn().performClick()
@@ -91,6 +108,7 @@ class AboutScreenTest {
             val restored = org.mobilism.material.settings.DeveloperPreferencesStore(compose.activity).state.value
             assertFalse(restored.enabled)
             assertFalse(restored.verboseLogging)
+            assertFalse(restored.manualNoticeChecks)
             assertTrue(restored.debridEnabled)
         }
         compose.onNodeWithText("About Mobilism Material").performClick()
