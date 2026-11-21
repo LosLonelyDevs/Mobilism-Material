@@ -4,12 +4,11 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
@@ -19,7 +18,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import org.mobilism.material.designsystem.AppSurface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -29,6 +27,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import org.mobilism.material.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
@@ -39,7 +41,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import org.mobilism.material.BuildConfig
 import org.mobilism.material.designsystem.AppIconButton
-import org.mobilism.material.designsystem.ExpressiveCard
 
 internal const val REPOSITORY_URL = "https://github.com/LosLonelyDevs/Mobilism-Material"
 private const val DEVELOPER_UNLOCK_TAPS = 10
@@ -48,6 +49,7 @@ private const val DEVELOPER_UNLOCK_TAPS = 10
 @Composable
 fun AboutScreen(onBack: () -> Unit, openRepository: ((String) -> Unit)? = null,
     developerMode: Boolean = false, onEnableDeveloperMode: () -> Unit = {}) {
+    val resources = LocalResources.current
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     var iconTaps by rememberSaveable(developerMode) { mutableIntStateOf(0) }
@@ -60,29 +62,28 @@ fun AboutScreen(onBack: () -> Unit, openRepository: ((String) -> Unit)? = null,
     }
     val notes = remember { BuildConfig.RELEASE_NOTES.lines().filter(String::isNotBlank) }
     Scaffold(topBar = {
-        TopAppBar(title = { AppHeading("About", HeadingLevel.Page) }, navigationIcon = {
-            AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack)
+        TopAppBar(title = { AppHeading(stringResource(R.string.settings_about_title), HeadingLevel.Page) }, navigationIcon = {
+            AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.action_back), onBack)
         })
     }) { insets ->
-        LazyColumn(Modifier.padding(insets), contentPadding = PaddingValues(20.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        SettingsList(Modifier.padding(insets)) {
             item {
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Image(icon, contentDescription = "Mobilism Material icon", modifier = Modifier.size(112.dp)
+                Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Image(icon, contentDescription = stringResource(R.string.about_icon), modifier = Modifier.size(80.dp)
                         .clip(androidx.compose.foundation.shape.CircleShape)
                         .clickable {
                             val message = if (developerMode) {
-                                "Developer mode is already on"
+                                resources.getString(R.string.dev_already_enabled)
                             } else {
                                 iconTaps++
                                 if (iconTaps >= DEVELOPER_UNLOCK_TAPS) {
                                     iconTaps = 0
                                     onEnableDeveloperMode()
-                                    "Developer mode enabled"
+                                    resources.getString(R.string.dev_enabled)
                                 } else if (iconTaps >= DEVELOPER_UNLOCK_TAPS - 2) {
                                     val remaining = DEVELOPER_UNLOCK_TAPS - iconTaps
-                                    "$remaining more ${if (remaining == 1) "tap" else "taps"} to enable developer mode"
+                                    resources.getQuantityString(R.plurals.about_developer_taps, remaining, remaining)
                                 } else null
                             }
                             if (message != null) {
@@ -91,41 +92,29 @@ fun AboutScreen(onBack: () -> Unit, openRepository: ((String) -> Unit)? = null,
                                 feedback[0]?.show()
                             }
                         })
-                    AppHeading("Mobilism Material", HeadingLevel.Page,
-                        style = MaterialTheme.typography.headlineLarge.copy(textAlign = TextAlign.Center))
+                    AppHeading(stringResource(R.string.app_name), HeadingLevel.Page,
+                        style = MaterialTheme.typography.headlineSmall.copy(textAlign = TextAlign.Center))
                     Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.extraLarge) {
-                        Text("v${BuildConfig.VERSION_NAME}", Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        Text(stringResource(R.string.settings_version, BuildConfig.VERSION_NAME), Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                             style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                     Text(BuildConfig.ABOUT_DESCRIPTION, textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            item {
-                AppSurface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                    Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        AppHeading("What's new", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                        notes.forEach { note ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                if (note.startsWith("- ")) Text("•", color = MaterialTheme.colorScheme.primary)
-                                Text(note.removePrefix("- "), style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface)
-                            }
-                        }
-                    }
+            item { SettingsSectionLabel(stringResource(R.string.about_whats_new)) }
+            items(notes) { note ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (note.startsWith("- ")) Text("•", color = MaterialTheme.colorScheme.primary)
+                    Text(note.removePrefix("- "), style = MaterialTheme.typography.bodyMedium)
                 }
             }
+            item { SettingsSectionLabel(stringResource(R.string.about_links)) }
             item {
-                ExpressiveCard(onClick = { (openRepository ?: uriHandler::openUri)(REPOSITORY_URL) }, modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Icon(Icons.Outlined.Code, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            AppHeading("GitHub", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-                            SettingsSubtitle("Source code, releases, and issues")
-                        }
-                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, tint = MaterialTheme.colorScheme.primary)
-                    }
+                SettingsRow(stringResource(R.string.about_github), stringResource(R.string.about_github_summary), Icons.Outlined.Code,
+                    Modifier.clickable(role = Role.Button) { (openRepository ?: uriHandler::openUri)(REPOSITORY_URL) }) {
+                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, null)
                 }
             }
         }

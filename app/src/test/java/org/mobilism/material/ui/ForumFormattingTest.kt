@@ -23,15 +23,12 @@ class ForumFormattingTest {
     private fun format(html: String, cleanup: Boolean = false, markdown: Boolean = false) =
         Jsoup.parseBodyFragment(ForumFormatting.format(html, base, ForumFormattingOptions(cleanup, markdown)), base).body()
 
-    @Test fun defaultsLeaveOriginalHtmlByteForByteAndDeveloperModeGatesBothOptions() {
+    @Test fun plainFormattingPreservesHtmlAndDeveloperModeGatesMarkdown() {
         val html = "<b>Title</b><br>-One<br>**Literal**<br>https://example.org/file_name"
         assertEquals(html, ForumFormatting.format(html, base, ForumFormattingOptions()))
-        assertFalse(DeveloperPreferences().releaseTextCleanupActive)
         assertFalse(DeveloperPreferences().markdownSyntaxActive)
-        val disabled = DeveloperPreferences(releaseTextCleanup = true, markdownSyntax = true)
-        assertFalse(disabled.releaseTextCleanupActive)
+        val disabled = DeveloperPreferences(markdownSyntax = true)
         assertFalse(disabled.markdownSyntaxActive)
-        assertTrue(disabled.copy(enabled = true).releaseTextCleanupActive)
         assertTrue(disabled.copy(enabled = true).markdownSyntaxActive)
     }
 

@@ -6,9 +6,8 @@ import kotlinx.coroutines.flow.asStateFlow
 
 data class DeveloperPreferences(val enabled: Boolean = false, val verboseLogging: Boolean = false,
     val debridEnabled: Boolean = true, val customCategoriesEnabled: Boolean = false,
-    val releaseTextCleanup: Boolean = false, val markdownSyntax: Boolean = false) {
+    val markdownSyntax: Boolean = false) {
     val customCategoriesActive: Boolean get() = enabled && customCategoriesEnabled
-    val releaseTextCleanupActive: Boolean get() = enabled && releaseTextCleanup
     val markdownSyntaxActive: Boolean get() = enabled && markdownSyntax
 }
 
@@ -19,7 +18,6 @@ class DeveloperPreferencesStore(context: Context) {
         verboseLogging = enabled && preferences.getBoolean("verbose-logging", false),
         debridEnabled = preferences.getBoolean("debrid-enabled", true),
         customCategoriesEnabled = preferences.getBoolean("custom-categories-enabled", false),
-        releaseTextCleanup = preferences.getBoolean("release-text-cleanup", false),
         markdownSyntax = preferences.getBoolean("markdown-syntax", false)))
     val state = mutableState.asStateFlow()
 
@@ -39,10 +37,6 @@ class DeveloperPreferencesStore(context: Context) {
         if (mutableState.value.enabled) save(mutableState.value.copy(customCategoriesEnabled = enabled))
     }
 
-    fun setReleaseTextCleanup(enabled: Boolean) {
-        if (mutableState.value.enabled) save(mutableState.value.copy(releaseTextCleanup = enabled))
-    }
-
     fun setMarkdownSyntax(enabled: Boolean) {
         if (mutableState.value.enabled) save(mutableState.value.copy(markdownSyntax = enabled))
     }
@@ -51,7 +45,6 @@ class DeveloperPreferencesStore(context: Context) {
         preferences.edit().remove("unlocked").putBoolean("enabled", value.enabled)
             .putBoolean("verbose-logging", value.verboseLogging).putBoolean("debrid-enabled", value.debridEnabled)
             .putBoolean("custom-categories-enabled", value.customCategoriesEnabled)
-            .putBoolean("release-text-cleanup", value.releaseTextCleanup)
             .putBoolean("markdown-syntax", value.markdownSyntax).apply()
         mutableState.value = value
     }

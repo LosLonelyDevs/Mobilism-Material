@@ -229,6 +229,9 @@ private fun DiscussionCategories(state: DiscussionsState, onArea: (DiscussionAre
 @Composable
 private fun DiscussionTopics(state: DiscussionsState, onTopic: (DiscussionTopic) -> Unit, onMore: (Boolean) -> Unit,
     onQuery: (String) -> Unit, onSearch: () -> Unit, onClear: () -> Unit) {
+    val announcements = state.announcementsOnly || state.category?.section == "Announcements" || state.category?.id == 13L
+    val cardPadding = if (announcements) PaddingValues(start = 16.dp, top = 20.dp, end = 16.dp, bottom = 4.dp)
+        else PaddingValues(20.dp)
     Column(Modifier.fillMaxSize()) {
         AppSearchField(state.query, onQuery, "Search topics",
             if (state.category?.id == 12L) "Search all discussions" else "Search this forum", onSearch,
@@ -247,7 +250,7 @@ private fun DiscussionTopics(state: DiscussionsState, onTopic: (DiscussionTopic)
                 items(state.topics.items, key = { it.key }) { topic ->
                     val preview = remember(topic.contentHtml) { Jsoup.parse(topic.contentHtml).text() }
                     ExpressiveCard({ onTopic(topic) }, Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(Modifier.padding(cardPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text(topic.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary,
                                 fontSize = (MaterialTheme.typography.titleMedium.fontSize.value + 1).sp,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -256,28 +259,34 @@ private fun DiscussionTopics(state: DiscussionsState, onTopic: (DiscussionTopic)
                                 color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.testTag("discussion-preview:${topic.key}"))
                             Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    UsernameLink(topic.author, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
-                                    DiscussionDate(topic.activityAt)
-                                }
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                                        Text("${topic.replies} replies", Modifier.weight(1f, fill = false),
-                                            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text("${topic.views} views", Modifier.weight(1f, fill = false),
-                                            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                if (announcements) {
+                                    UsernameLink(topic.author, style = MaterialTheme.typography.labelMedium)
+                                    SingleLineMetadataRow(10.dp, listCard = true, metadata = {
+                                        ReleasePostDate(topic.activityAt, textStyle = MaterialTheme.typography.labelSmall)
+                                        MetadataCount(Icons.Outlined.ChatBubbleOutline, topic.replies.toString(),
+                                            if (topic.replies == 1L) "1 reply" else "${topic.replies} replies", MaterialTheme.colorScheme.primary)
+                                        MetadataCount(Icons.Outlined.Visibility, topic.views.toString(),
+                                            if (topic.views == 1L) "1 view" else "${topic.views} views", LocalAppTheme.current.featured)
+                                    }) {
+                                        if (topic.pinned) Box(Modifier.padding(top = 12.dp)) { PinnedBadge() }
                                     }
-                                    if (topic.pinned) Surface(color = MaterialTheme.colorScheme.tertiaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer, shape = MaterialTheme.shapes.small) {
-                                        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Outlined.PushPin, null, Modifier.size(14.dp))
-                                            Text("Pinned", style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                                } else {
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically) {
+                                        UsernameLink(topic.author, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+                                        DiscussionDate(topic.activityAt)
+                                    }
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                            Text("${topic.replies} replies", Modifier.weight(1f, fill = false),
+                                                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text("${topic.views} views", Modifier.weight(1f, fill = false),
+                                                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         }
+                                        if (topic.pinned) PinnedBadge()
                                     }
                                 }
                             }
@@ -298,6 +307,18 @@ private fun DiscussionTopics(state: DiscussionsState, onTopic: (DiscussionTopic)
 }
 
 @Composable
+private fun PinnedBadge() {
+    Surface(color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer, shape = MaterialTheme.shapes.small) {
+        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.PushPin, null, Modifier.size(14.dp))
+            Text("Pinned", style = MaterialTheme.typography.labelMedium, maxLines = 1)
+        }
+    }
+}
+
+@Composable
 private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit, onReply: (ReleaseComment) -> Unit,
     auth: AuthState, onManage: (ReleaseComment, ForumCommentAction) -> Unit,
     onImage: (List<String>, Int) -> Unit) {
@@ -308,32 +329,35 @@ private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit,
     val ordered = remember(commentTree, sort) { sort.order(commentTree) }
     val commentRows = remember(ordered, collapsedComments) { CommentTree.flatten(ordered, collapsedComments.toSet()) }
     val list = rememberLazyListState()
+    // The opening card already has 12 dp of padding around its content.
+    val pageInset = Modifier.padding(horizontal = 12.dp)
     CommentJumpList(topic.id, ordered, commentRows, collapsedComments, { collapsedComments = it }, list,
-        firstRow = { 3 }, modifier = Modifier.fillMaxSize().testTag("discussion-reader"), contentPadding = PaddingValues(20.dp)) { highlight, _ ->
+        firstRow = { 3 }, modifier = Modifier.fillMaxSize().testTag("discussion-reader"),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 20.dp)) { highlight, _ ->
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (topic.pinned) Text("Pinned discussion", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Column(pageInset, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 AppHeading(topic.title, HeadingLevel.Section, style = MaterialTheme.typography.headlineMedium)
-                Text("${topic.replies} replies · ${topic.views} views", style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (topic.pinned) PinnedBadge()
+                    Text("${topic.replies} replies · ${topic.views} views", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                AppHeading("Original post", HeadingLevel.Subsection, style = MaterialTheme.typography.titleSmall)
-                ReleaseCommentCard(topic.originalPost, topic.browserUrl, originalPoster = topic.author, canCopyLink = false, onImage = onImage)
-            }
+            ReleaseCommentCard(topic.originalPost, topic.browserUrl, originalPoster = topic.author, openingPost = true,
+                canCopyLink = false, onImage = onImage)
         }
         item("comments-heading") {
-            Column {
+            Column(pageInset) {
                 AppHeading("Comments", HeadingLevel.Section, style = MaterialTheme.typography.titleMedium)
-                CommentSortMenu(sort, topic.replies.toLong()) { sort = sort.select(it) }
+                CommentSortMenu(sort, maxOf(topic.replies, state.comments.items.size.toLong())) { sort = sort.select(it) }
             }
         }
         items(commentRows, key = { it.comment.id }) { row ->
             val comment = row.comment
             val canManage = !row.placeholder && canManageComment(comment, auth)
-            CommentThreadRow(row.depth) {
+            CommentThreadRow(row.depth, pageInset) {
                 ReleaseCommentCard(comment, topic.browserUrl, onReply = if (row.placeholder) null else ({ onReply(comment) }),
                     replyEnabled = !state.composer.posting, threadContent = row.content, earlierComment = row.placeholder,
                     originalPoster = topic.author, highlighted = highlight == comment.id, topicId = topic.id,
@@ -347,18 +371,18 @@ private fun DiscussionReader(state: DiscussionsState, onMore: (Boolean) -> Unit,
                     }, onImage = onImage)
             }
         }
-        if (state.comments.busy) item { LoadingState("Loading comments…", Modifier.fillMaxWidth()) }
-        state.comments.error?.let { item { ErrorPanel(it, onRetry = { onMore(false) }) } }
+        if (state.comments.busy) item { LoadingState("Loading comments…", pageInset.fillMaxWidth()) }
+        state.comments.error?.let { item { ErrorPanel(it, pageInset, onRetry = { onMore(false) }) } }
         if (!state.comments.busy && state.comments.error == null) {
-            if (state.comments.canLoadMore) item { AppTextButton("Load more comments", { onMore(false) }, Modifier.fillMaxWidth()) }
-            else if (state.comments.items.isEmpty()) item { DiscussionEmpty("Start the conversation", "Be the first to comment on this topic.") }
+            if (state.comments.canLoadMore) item { AppTextButton("Load more comments", { onMore(false) }, pageInset.fillMaxWidth()) }
+            else if (state.comments.items.isEmpty()) item { DiscussionEmpty("Start the conversation", "Be the first to comment on this topic.", pageInset) }
         }
     }
 }
 
 @Composable
-private fun DiscussionEmpty(title: String, detail: String) {
-    AppSurface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainer) {
+private fun DiscussionEmpty(title: String, detail: String, modifier: Modifier = Modifier) {
+    AppSurface(modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
             Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

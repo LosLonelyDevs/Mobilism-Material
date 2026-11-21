@@ -1,5 +1,7 @@
 package org.mobilism.material.ui
 
+import androidx.compose.ui.res.stringResource
+import org.mobilism.material.R
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
@@ -53,10 +55,10 @@ internal fun MessageNotificationSetting(app: MobilismApplication) {
     var allowed by remember { mutableStateOf(app.messageNotifications.allowed()) }
     val request = rememberMessageNotificationPermission(app) { allowed = app.messageNotifications.allowed() }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { allowed = app.messageNotifications.allowed() }
-    SettingsToggleRow("Message notifications", "Periodic alerts for new private messages.", Icons.Outlined.Notifications,
-        enabled, { value ->
-            app.messageAlerts.setEnabled(value)
-            if (value && !allowed) request()
-        })
-    if (enabled && !allowed) AppTextButton("Allow notifications", request)
+    SettingsToggleRow(stringResource(R.string.settings_message_alerts), stringResource(R.string.settings_message_alerts_summary), Icons.Outlined.Notifications,
+        enabled) { value ->
+        app.messageAlerts.setEnabled(value)
+        if (value && !allowed) request()
+    }
+    if (enabled && !allowed) AppTextButton(stringResource(R.string.settings_allow_notifications), request)
 }

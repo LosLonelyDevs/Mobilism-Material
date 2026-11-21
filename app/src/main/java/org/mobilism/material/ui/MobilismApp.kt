@@ -76,14 +76,16 @@ fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fro
         changelog = null
     }) { onUpdates ->
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            // Auth boundaries discard the previous account's navigation and screen state.
-            key(auth) {
-                when (auth) {
-                    AuthState.Restoring -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        LoadingState("Opening Mobilism…")
+            DownloadCompletionHost {
+                // Auth boundaries discard the previous account's navigation and screen state.
+                key(auth) {
+                    when (auth) {
+                        AuthState.Restoring -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            LoadingState("Opening Mobilism…")
+                        }
+                        AuthState.SignedOut -> AccountNavigation(model, app.diagnostics)
+                        else -> MainNavigation(model, auth, notificationRelease, notificationMessage, fromNotification, linkedPost, onNotificationHandled, onUpdates)
                     }
-                    AuthState.SignedOut -> AccountNavigation(model, app.diagnostics)
-                    else -> MainNavigation(model, auth, notificationRelease, notificationMessage, fromNotification, linkedPost, onNotificationHandled, onUpdates)
                 }
             }
         }
@@ -193,7 +195,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             openCategoryFeed = true
             if (nav.currentDestination?.route != "feed") nav.popBackStack("feed", false)
         },
-        LocalForumFormatting provides ForumFormattingOptions(developer.releaseTextCleanupActive, developer.markdownSyntaxActive),
+        LocalForumFormatting provides ForumFormattingOptions(appearance.releaseTextCleanup, developer.markdownSyntaxActive),
         LocalDownloadHelpHandler provides { nav.navigate("download-help") { launchSingleTop = true } },
         LocalAnnouncementLinkHandler provides { id, forum -> nav.openAnnouncement(id, forum, app.repository) },
         LocalLinkedTopicHandler provides { topic ->
@@ -423,7 +425,6 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onVerboseLogging = model.developer::setVerboseLogging,
                 onDisable = model.developer::disable, onBack = { nav.popBackStack() },
                 onCustomCategories = model.developer::setCustomCategoriesEnabled,
-                onReleaseTextCleanup = model.developer::setReleaseTextCleanup,
                 onMarkdownSyntax = model.developer::setMarkdownSyntax)
         }
         composable("categories/{section}") { entry ->

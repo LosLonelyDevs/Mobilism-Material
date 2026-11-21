@@ -33,10 +33,12 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import org.mobilism.material.R
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -51,6 +53,7 @@ fun CollapsibleSection(
 ) {
     var localExpanded by rememberSaveable(id, initiallyExpanded) { mutableStateOf(initiallyExpanded) }
     val isExpanded = expanded ?: localExpanded
+    val expansionDescription = stringResource(if (isExpanded) R.string.state_expanded else R.string.state_collapsed)
     val compact = isExpanded && compactHeaderBottom
     val rotation by animateFloatAsState(if (isExpanded) 180f else 0f,
         MaterialTheme.motionScheme.fastSpatialSpec(), label = "section chevron")
@@ -61,7 +64,7 @@ fun CollapsibleSection(
         Column {
             Row(
                 Modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 64.dp)
-                    .semantics { stateDescription = if (isExpanded) "Expanded" else "Collapsed" }
+                    .semantics { stateDescription = expansionDescription }
                     .clickable(role = Role.Button, onClick = {
                         if (onExpandedChange != null) onExpandedChange(!isExpanded) else localExpanded = !isExpanded
                     }).padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = if (compact) 8.dp else 20.dp),

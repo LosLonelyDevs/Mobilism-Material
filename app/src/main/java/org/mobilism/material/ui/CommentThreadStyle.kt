@@ -61,9 +61,9 @@ internal fun Modifier.commentRail(depth: Int = 1, railWidth: Dp = 2.dp): Modifie
 }
 
 @Composable
-internal fun CommentThreadRow(depth: Int, content: @Composable () -> Unit) {
+internal fun CommentThreadRow(depth: Int, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val indent = (depth.coerceIn(0, 6) * 8).dp
-    Box(Modifier.fillMaxWidth().padding(start = indent)
+    Box(modifier.fillMaxWidth().padding(start = indent)
         .then(if (depth > 0) Modifier.commentRail(depth, 4.dp).padding(start = 4.dp) else Modifier)) {
         content()
     }

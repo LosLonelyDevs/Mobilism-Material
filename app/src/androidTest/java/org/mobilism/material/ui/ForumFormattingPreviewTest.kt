@@ -159,7 +159,11 @@ class ForumFormattingPreviewTest {
 
     @Test fun styledModInfoExpandsLanguagesAndCompactsDensities() {
         val styled = mutableStateOf(false)
-        val languages = "en, en-GB, es, es-419, fr, it, ja, zh-TW"
+        val languages = "af, am, ar, as, az, be, bg, bn, bs, ca, cs, da, de, el, en, en-AU, en-CA, " +
+            "en-GB, en-IN, en-XC, es, es-419, es-ES, es-US, et, eu, fa, fi, fil, fr, fr-CA, gl, gu, " +
+            "hi, hr, hu, hy, in, is, it, iw, ja, ka, kk, km, kn, ko, ky, lo, lt, lv, mk, ml, mn, mr, " +
+            "ms, my, nb, ne, nl, or, pa, pl, pt, pt-BR, pt-PT, ro, ru, si, sk, sl, sq, sr, sr-Latn, " +
+            "sv, sw, ta, te, th, tl, tr, uk, ur, uz, vi, zh, zh-CN, zh-HK, zh-TW, zu"
         val html = "<b>Example App</b><br>Example description.<br><b>Mod info:</b><br>" +
             "<b>◉ Premium Unlocked<br>➡ Languages:$languages<br>➡ Screen DPIs: 120dpi, 160dpi, 240dpi, 320dpi, 480dpi, 640dpi<br>Credit: Example</b>"
         compose.setContent { MobilismTheme(reduceMotion = true) {
@@ -171,18 +175,19 @@ class ForumFormattingPreviewTest {
             }
         } }
         compose.onNodeWithTag("release-content").performScrollToKey(ReleaseSection.Mod)
-        compose.onNodeWithText("8 locales").assertDoesNotExist()
+        val localeCount = compose.onNodeWithText("90 locales")
+        localeCount.assertDoesNotExist()
         compose.runOnIdle { styled.value = true }
-        compose.onNodeWithText("8 locales").assertIsDisplayed()
+        localeCount.assertIsDisplayed()
         compose.onNodeWithText("120 · 160 · 240 · 320 · 480 · 640 dpi").assertIsDisplayed()
         capture("07-mod-info")
-        compose.onNodeWithText("8 locales").performClick()
+        localeCount.performClick()
         compose.onNodeWithText(languages).assertIsDisplayed()
-        compose.onNodeWithText("8 locales").performClick()
+        localeCount.performClick()
         compose.onNodeWithText(languages).assertDoesNotExist()
     }
 
-    @Test fun developerSwitchesPersistIndependentlyAndDisableWithDeveloperMode() {
+    @Test fun markdownRemainsInDeveloperOptionsAndRequiresDeveloperMode() {
         val target = InstrumentationRegistry.getInstrumentation().targetContext
         val name = "formatting-test-${System.nanoTime()}"
         val context = object : ContextWrapper(target) {
@@ -191,26 +196,21 @@ class ForumFormattingPreviewTest {
         }
         try {
             val store = DeveloperPreferencesStore(context)
-            store.setReleaseTextCleanup(true)
             store.setMarkdownSyntax(true)
-            assertFalse(store.state.value.releaseTextCleanup)
             assertFalse(store.state.value.markdownSyntax)
             store.unlock()
             compose.setContent { MobilismTheme(reduceMotion = true) {
                 val state by store.state.collectAsState()
                 DeveloperOptionsScreen(state, store::setVerboseLogging, store::disable, {},
-                    onReleaseTextCleanup = store::setReleaseTextCleanup, onMarkdownSyntax = store::setMarkdownSyntax)
+                    onMarkdownSyntax = store::setMarkdownSyntax)
             } }
-            compose.onNodeWithText("Clean up release text").performScrollTo().performClick()
-            assertTrue(store.state.value.releaseTextCleanupActive)
+            compose.onNodeWithText("Format release text").assertDoesNotExist()
             assertFalse(store.state.value.markdownSyntaxActive)
             compose.onNodeWithText("Enable Markdown syntax").performScrollTo().performClick()
             compose.onNodeWithText("Enable Markdown syntax").assertIsDisplayed()
             assertTrue(DeveloperPreferencesStore(context).state.value.markdownSyntaxActive)
-            assertTrue(DeveloperPreferencesStore(context).state.value.releaseTextCleanupActive)
             capture("06-developer-options")
             compose.runOnIdle { store.disable() }
-            assertFalse(DeveloperPreferencesStore(context).state.value.releaseTextCleanupActive)
             assertFalse(DeveloperPreferencesStore(context).state.value.markdownSyntaxActive)
         } finally { target.deleteSharedPreferences(name) }
     }

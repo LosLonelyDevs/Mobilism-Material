@@ -28,8 +28,29 @@ class ModInfoFieldsTest {
         assertFalse((result.first() as ModInfoPart.Languages).expandable)
     }
 
+    @Test fun usesTheListStructureAcrossLinesAndPreservesUnfamiliarEntries() {
+        val known = listOf("en", "fr", "de", "it", "ja", "ko", "es", "pt-BR", "zh-HK")
+        for (unfamiliar in listOf("zz-ZZ", "Example (Northern)", "b+sr+Latn", "Custom (A & B)")) {
+            val html = "<b>Languages: en, $unfamiliar,<br>" + known.drop(1).joinToString(", ") +
+                "<br>Screen DPIs: 320, 480</b>"
+            val result = parts(html)
+            assertEquals(ModInfoPart.Languages(listOf("en", unfamiliar) + known.drop(1)), result.first())
+            assertEquals(ModInfoPart.Densities(listOf("320", "480")), result.last())
+        }
+        val mostlyUnlisted = listOf("en", "zz-ZZ", "b+qz+Latn", "Example (Northern)", "Example Language")
+        assertEquals(ModInfoPart.Languages(mostlyUnlisted),
+            parts("Languages: " + mostlyUnlisted.joinToString(", ")).single())
+        assertEquals(ModInfoPart.Languages(listOf("zz-Latn", "qx-ZZ", "b+qz+Latn", "qz_US")),
+            parts("Locales: zz-Latn, qx-ZZ<br>b+qz+Latn, qz_US").single())
+        val wrapped = parts("Languages: " + known.joinToString(",&nbsp;") +
+            ",<br>b+sr+Latn,<br>This app has no advertisements")
+        assertEquals(ModInfoPart.Languages(known + "b+sr+Latn"), wrapped.first())
+        assertEquals("This app has no advertisements", Jsoup.parse((wrapped.last() as ModInfoPart.Body).html).text())
+    }
+
     @Test fun keepsProseQuotesCodeAndLinkedValuesIntact() {
-        listOf("Languages: you can do this", "Screen density: 120dpi on old phones", "<pre>Languages: en, de</pre>",
+        listOf("Languages: you can do this", "Languages: we can do it", "Languages: English, choose another in settings",
+            "Screen density: 120dpi on old phones", "<pre>Languages: en, de</pre>",
             "<blockquote>Screen DPIs: 120, 480</blockquote>", "<b>Locales:</b> <a href='/guide'>fr</a>").forEach {
             assertTrue(it, parts(it).isEmpty())
         }

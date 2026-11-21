@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="font_geist" translatable="false">Geist</string>
+    <string name="font_alata" translatable="false">Alata</string>
+    <string name="font_atkinson_hyperlegible" translatable="false">Atkinson Hyperlegible</string>
+    <string name="font_ibm_plex_sans" translatable="false">IBM Plex Sans</string>
+    <string name="font_system_sans_serif">System sans serif</string>
+    <string name="font_custom">Custom font</string>
+</resources>

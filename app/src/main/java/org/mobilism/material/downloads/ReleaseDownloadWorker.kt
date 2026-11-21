@@ -22,6 +22,8 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.security.MessageDigest
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -50,6 +52,15 @@ internal object ReleaseDownloads {
     val links = KeystoreText("mobilism-release-downloads-v1")
     val transferSlot = Mutex()
     private val queueLock = Mutex()
+    private val completed = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val completions = completed.asSharedFlow()
+
+    fun announceCompletion(context: Context, title: String) {
+        val message = "Download complete · $title"
+        if (completed.subscriptionCount.value == 0 || !completed.tryEmit(message)) {
+            showDownloadToast(context, message)
+        }
+    }
 
     suspend fun enqueue(context: Context, original: String, release: Release, folder: String, extract: Boolean,
         directLink: suspend () -> String): Boolean = withContext(Dispatchers.IO) {
@@ -234,7 +245,8 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
 
     private fun notifyResult(message: String, target: Uri? = null) {
         val context = applicationContext
-        showDownloadToast(context, if (target == null) message else "Download complete", long = target == null)
+        if (target == null) showDownloadToast(context, message, long = true)
+        else ReleaseDownloads.announceCompletion(context, notificationTitle)
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED) return
         runCatching {

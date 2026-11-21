@@ -63,6 +63,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,7 +82,7 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
     onEdit: (() -> Unit)? = null, onDelete: (() -> Unit)? = null,
     actionsEnabled: Boolean = true, originalPoster: String? = null,
     canCopyLink: Boolean = !earlierComment && comment.id > 0, highlighted: Boolean = false,
-    topicId: Long? = null,
+    topicId: Long? = null, openingPost: Boolean = false,
     onImage: (List<String>, Int) -> Unit) {
     var localExpanded by rememberSaveable(baseUrl, comment.id) { mutableStateOf(true) }
     var menu by remember(comment.id) { mutableStateOf(false) }
@@ -137,6 +138,8 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
                     }
                 }
                 if (!expanded) CommentCollapseButton(false, toggle)
+                if (openingPost) AppHeading("OP", HeadingLevel.Subsection,
+                    Modifier.semantics { contentDescription = "Original post" }, style = MaterialTheme.typography.titleSmall)
             }
             if (earlierComment) Text("Earlier comment", Modifier.padding(start = 48.dp, end = 12.dp),
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

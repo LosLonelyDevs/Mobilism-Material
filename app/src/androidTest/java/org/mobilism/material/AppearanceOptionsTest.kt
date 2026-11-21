@@ -32,6 +32,42 @@ class AppearanceOptionsTest {
         File(compose.activity.filesDir, "fonts").deleteRecursively()
     }
 
+    @Test fun releaseCleanupDefaultsOnAndKeepsTheAppearanceChoiceAcrossRestarts() = runBlocking {
+        val store = AppearanceStore(compose.activity)
+        store.load()
+        render(store)
+        val toggle = compose.onNodeWithText("Format release text").performScrollTo()
+        toggle.assertIsOn()
+        val compactLabel = compose.onNodeWithText("Compact lists", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val formatLabel = compose.onNodeWithText("Format release text", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        assertEquals(compactLabel.left, formatLabel.left)
+        val section = compose.onNodeWithText(compose.activity.getString(R.string.appearance_releases), useUnmergedTree = true)
+        section.assert(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.Heading))
+        assertEquals(section.getUnclippedBoundsInRoot().left, compactLabel.left)
+        capture("release-text-cleanup")
+        toggle.performClick().assertIsOff()
+        assertFalse(AppearanceStore(compose.activity).state.value.releaseTextCleanup)
+    }
+
+    @Test fun savedDeveloperCleanupCarriesOverOnce() = runBlocking {
+        val prefix = "cleanup-test-${System.nanoTime()}-"
+        val context = object : android.content.ContextWrapper(compose.activity) {
+            override fun getSharedPreferences(name: String, mode: Int) = super.getSharedPreferences(prefix + name, mode)
+        }
+        try {
+            context.getSharedPreferences("material-developer", 0).edit().putBoolean("release-text-cleanup", false).commit()
+            val migrated = AppearanceStore(context)
+            assertFalse(migrated.state.value.releaseTextCleanup)
+            migrated.setReleaseTextCleanup(true)
+            migrated.load()
+            assertTrue(migrated.state.value.releaseTextCleanup)
+            assertTrue(AppearanceStore(context).state.value.releaseTextCleanup)
+        } finally {
+            compose.activity.deleteSharedPreferences(prefix + "material-developer")
+            compose.activity.deleteSharedPreferences(prefix + "material-appearance")
+        }
+    }
+
     @Test fun amoledBlackIsSelectableAndPersists() = runBlocking {
         val store = AppearanceStore(compose.activity)
         store.load()
@@ -155,9 +191,11 @@ class AppearanceOptionsTest {
         compose.waitForIdle()
         val directory = File(compose.activity.getExternalFilesDir(null), "appearance-checks").apply { mkdirs() }
         File(directory, "$name.png").outputStream().use {
-            val bitmap = if (name.startsWith("theme-picker")) {
-                compose.onNodeWithTag("theme-options").onParent().captureToImage().asAndroidBitmap()
-            } else checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+            val bitmap = when {
+                name == "release-text-cleanup" -> compose.onRoot().captureToImage().asAndroidBitmap()
+                name.startsWith("theme-picker") -> compose.onNodeWithTag("theme-options").onParent().captureToImage().asAndroidBitmap()
+                else -> checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+            }
             bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
         }
     }

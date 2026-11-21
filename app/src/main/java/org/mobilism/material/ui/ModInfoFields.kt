@@ -14,15 +14,19 @@ internal sealed interface ModInfoPart {
 }
 
 internal object ModInfoFields {
-    private val label = Regex("""(?ix)^[\s\p{So}\p{Cf}\uFE0F•·*➜→»▸–—-]*
+    private val label = Regex("""(?isx)^[\s\p{So}\p{Cf}\uFE0F•·*➜→»▸–—-]*
         ((?:supported\s+)?(?:languages?|locales?)|(?:supported\s+)?(?:screen\s+)?(?:dpis?|densit(?:y|ies)))
         \s*(?:[:：=]\s*|\s*[-–—]\s+|$)(.*)$""")
     private val separators = Regex("""\s*[,;/|·]\s*""")
     private val localeCode = Regex("""(?i)[a-z]{2,3}(?:[-_][a-z0-9]{2,8})*""")
+    private val androidLocale = Regex("""(?i)b\+[a-z]{2,3}(?:\+[a-z0-9]{2,8})*""")
+    private val unlistedLanguage = Regex("""[\p{L}\p{M}][\p{L}\p{M}0-9_+’'-]*(?: \p{Lu}[\p{L}\p{M}’'-]*)*(?: \([\p{L}\p{M} -]+\)| \[[\p{L}\p{M} -]+])?""")
+    private val whitespace = Regex("""\s+""")
     private val density = Regex("""(?i)(\d{2,4})\s*(?:dpi)?""")
     private val languageCodes by lazy {
+        // Android can omit APK locale codes such as Tagalog (tl, tgl) from its ISO language list.
         Locale.getISOLanguages().flatMap { code -> listOfNotNull(code, runCatching { Locale.forLanguageTag(code).isO3Language }.getOrNull()) }
-            .toSet() + setOf("iw", "in", "ji", "fil", "und")
+            .toSet() + setOf("iw", "in", "ji", "fil", "tl", "tgl", "und")
     }
 
     private fun isLocale(value: String) = localeCode.matches(value) &&
@@ -30,6 +34,15 @@ internal object ModInfoFields {
     private val languageNames by lazy {
         Locale.getAvailableLocales().flatMap { listOf(it.getDisplayLanguage(Locale.ENGLISH), it.getDisplayLanguage(it)) }
             .mapTo(mutableSetOf()) { it.lowercase(Locale.ROOT) }
+    }
+    private fun knownLanguage(value: String) = isLocale(value) || value.lowercase(Locale.ROOT) in languageNames
+    private fun qualifiedLocale(value: String) = androidLocale.matches(value) ||
+        (('-' in value || '_' in value) && localeCode.matches(value))
+
+    private fun looksLikeLanguageList(entries: List<String>): Boolean {
+        val familiar = entries.count(::knownLanguage)
+        if (familiar == 0) return entries.size > 1 && entries.all(::qualifiedLocale)
+        return familiar > entries.size - familiar || entries.all { knownLanguage(it) || unlistedLanguage.matches(it) }
     }
     private val protectedTags = setOf("a", "pre", "tt", "code", "blockquote", "ol", "table")
 
@@ -57,8 +70,10 @@ internal object ModInfoFields {
                 val next = lines[index]
                 val text = next.text.trim()
                 if (!continuation && !separators.containsMatchIn(text)) break
-                if (!plain(next)) break
+                if (!plain(next) || (languages && (':' in text || '：' in text))) break
                 val more = values(text, languages) ?: break
+                if (languages && more.none(::knownLanguage) && !more.all(::qualifiedLocale) &&
+                    (!continuation || !more.all(unlistedLanguage::matches))) break
                 entries += more
                 nodes += next.nodes
                 index++
@@ -66,6 +81,7 @@ internal object ModInfoFields {
             }
             if (entries.isEmpty()) continue
             val distinct = entries.distinctBy { it.lowercase(Locale.ROOT) }
+            if (languages && !looksLikeLanguageList(distinct)) continue
             fields += if (languages) ModInfoPart.Languages(distinct) else ModInfoPart.Densities(distinct)
             nodes.forEach { groupByNode[it] = fields.size }
         }
@@ -103,18 +119,16 @@ internal object ModInfoFields {
     private fun values(raw: String, languages: Boolean): List<String>? {
         val text = raw.trim().trimEnd(',', ';', '/', '|', '·').trimEnd()
         if (text.isEmpty()) return null
-        val parts = separators.split(text)
+        val parts = separators.split(text).map(String::trim)
         if (!languages) {
             return parts.flatMap { it.split(Regex("""\s+(?=\d)""")) }.map {
                 density.matchEntire(it)?.groupValues?.get(1) ?: return null
             }
         }
-        return parts.flatMap { entry ->
-            when {
-                isLocale(entry) -> listOf(entry)
-                entry.lowercase(Locale.ROOT) in languageNames -> listOf(entry)
-                else -> entry.split(Regex("""\s+""")).takeIf { it.size > 1 && it.all(::isLocale) } ?: return null
-            }
+        return parts.filter { it.isNotBlank() }.flatMap { entry ->
+            if (localeCode.matches(entry) || entry.lowercase(Locale.ROOT) in languageNames) return@flatMap listOf(entry)
+            val words = entry.split(whitespace)
+            if (words.size > 1 && words.all(localeCode::matches) && words.count(::isLocale) > words.size / 2) words else listOf(entry)
         }
     }
 }

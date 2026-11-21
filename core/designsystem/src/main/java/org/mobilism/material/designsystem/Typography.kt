@@ -1,18 +1,19 @@
 package org.mobilism.material.designsystem
 
+import androidx.annotation.StringRes
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import java.io.File
 
-enum class AppFont(val title: String) {
-    Geist("Geist"),
-    Alata("Alata"),
-    AtkinsonHyperlegible("Atkinson Hyperlegible"),
-    IbmPlexSans("IBM Plex Sans"),
-    System("System sans serif"),
-    Custom("Custom font"),
+enum class AppFont(@param:StringRes val titleRes: Int) {
+    Geist(R.string.font_geist),
+    Alata(R.string.font_alata),
+    AtkinsonHyperlegible(R.string.font_atkinson_hyperlegible),
+    IbmPlexSans(R.string.font_ibm_plex_sans),
+    System(R.string.font_system_sans_serif),
+    Custom(R.string.font_custom),
 }
 
 val Geist = FontFamily(

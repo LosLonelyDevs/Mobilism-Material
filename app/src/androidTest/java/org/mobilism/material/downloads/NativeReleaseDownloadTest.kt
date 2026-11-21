@@ -42,6 +42,7 @@ import org.mobilism.material.data.DebridRepository
 import org.mobilism.material.data.Release
 import org.mobilism.material.designsystem.MobilismTheme
 import org.mobilism.material.settings.DownloadPreferencesStore
+import org.mobilism.material.ui.DownloadCompletionHost
 import org.mobilism.material.ui.ReleaseScreen
 import org.mobilism.material.ui.ReleaseState
 import org.mobilism.material.ui.DownloadSettingsScreen
@@ -120,11 +121,13 @@ class NativeReleaseDownloadTest {
             val release = Release(81, "Pocket Reader v1.2.3 [Premium]", "Fixture", null, 0, 0, 0, contentHtml = html)
             var settings by mutableStateOf(true)
             compose.setContent { MobilismTheme(reduceMotion = reduceMotion) {
-                val prefs by store.state.collectAsState()
-                if (settings) DownloadSettingsScreen(prefs, store, repository, onBack = {})
-                else ReleaseScreen(ReleaseState(release, busy = false), DebridState(), prefs, onBack = {}, onRetry = {},
-                    onMoreComments = {}, watched = false, downloaded = false, onWatch = {}, onDownloaded = {},
-                    onLike = {}, onActionMessageShown = {})
+                DownloadCompletionHost {
+                    val prefs by store.state.collectAsState()
+                    if (settings) DownloadSettingsScreen(prefs, store, repository, onBack = {})
+                    else ReleaseScreen(ReleaseState(release, busy = false), DebridState(), prefs, onBack = {}, onRetry = {},
+                        onMoreComments = {}, watched = false, downloaded = false, onWatch = {}, onDownloaded = {},
+                        onLike = {}, onActionMessageShown = {})
+                }
             } }
             try {
                 compose.onNodeWithText("Internal downloader").assertHeightIsAtLeast(48.dp).performClick()
@@ -187,10 +190,14 @@ class NativeReleaseDownloadTest {
                     .setHeader("Content-Disposition", "attachment; filename=\"Reader.apk\"").setBody(Buffer().write(apk)))
                 tap(direct)
                 assertNotNull(resultContaining("Saved to your folder").contentIntent)
+                val completed = "Download complete · Pocket Reader v1.2.3"
+                compose.onNodeWithText(completed).assertIsDisplayed()
                 capture("saved")
+                compose.waitUntil(12_000) { compose.onAllNodesWithText(completed).fetchSemanticsNodes().isEmpty() }
                 server.enqueue(MockResponse().setBody(Buffer().write(archive)))
                 tap(wrapped)
                 assertNotNull(resultContaining("Extracted 2 files").contentIntent)
+                compose.onNodeWithText(completed).assertIsDisplayed()
                 val resolver = context.contentResolver
                 val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
                 val names = mutableListOf<String>()

@@ -106,12 +106,14 @@ class AppUpdatesTest {
         compose.onNodeWithText("App content").assertDoesNotExist()
         compose.onNodeWithText("Later").assertDoesNotExist()
         capture("required-update-notice.png")
+        waitForNoticeAction("Open updates")
         compose.onNodeWithText("Open updates").performClick()
         compose.onNodeWithText("Updates").assertIsDisplayed()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Update required").assertIsDisplayed()
         compose.onNodeWithText("App content").assertDoesNotExist()
         config = RemoteAppConfig(); time += 15_000
+        waitForNoticeAction("Refresh notice")
         compose.onNodeWithText("Refresh notice").performClick()
         compose.waitUntil { remote.notice.value == null }
         compose.onNodeWithText("App content").assertIsDisplayed()
@@ -129,6 +131,7 @@ class AppUpdatesTest {
         compose.onNodeWithText("Service notice").assertIsDisplayed()
         compose.onNodeWithText("A short message. Read more").assertIsDisplayed()
         capture("informational-notice.png")
+        waitForNoticeAction("Got it")
         compose.onNodeWithText("Got it").performClick()
         compose.onNodeWithText("Service notice").assertDoesNotExist()
         compose.onNodeWithText("App content").assertIsDisplayed()
@@ -246,6 +249,12 @@ class AppUpdatesTest {
                 AppUpdateSettings(checker, { open(requireNotNull(it.apkUrl)) }, modifier = Modifier.safeDrawingPadding())
             }
         } }
+    }
+
+    private fun waitForNoticeAction(label: String) {
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasText(label) and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     private fun capture(name: String = "app-update-check.png") {

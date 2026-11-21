@@ -254,19 +254,24 @@ class ReleaseCommentTest {
         fixture.repository.continueAsGuest()
         var signIn = false
         var cleanUp by androidx.compose.runtime.mutableStateOf(false)
+        var replies by androidx.compose.runtime.mutableLongStateOf(0L)
         compose.setContent { MobilismTheme(reduceMotion = true) {
             androidx.compose.runtime.CompositionLocalProvider(LocalForumFormatting provides ForumFormattingOptions(cleanUpReleaseText = cleanUp)) {
-                ReleaseScreen(ReleaseState(release = Release(42, "Sample release", "Author", null, 1, 0, 0), busy = false,
+                ReleaseScreen(ReleaseState(release = Release(42, "Sample release", "Author", null, 1, replies, 0), busy = false,
                     comments = CommentsState(canLoadMore = false)), DebridState(), DownloadPreferences(),
                     onBack = {}, onRetry = {}, onMoreComments = {}, watched = false, downloaded = false,
                     onWatch = {}, onDownloaded = {}, onLike = {}, onActionMessageShown = {}, onSignIn = { signIn = true })
             }
         } }
         compose.onNodeWithText("Sign in to comment").performScrollTo().performClick()
+        compose.onNodeWithTag("comment-sort").assertDoesNotExist()
         assertTrue(signIn)
         compose.runOnIdle { signIn = false; cleanUp = true }
         val action = compose.onNodeWithContentDescription("Sign in to comment").performScrollTo()
-        compose.onNodeWithText("0 comments").assertExists()
+        compose.onNodeWithText("0 comments").assertDoesNotExist()
+        compose.onNodeWithTag("comment-sort").assertDoesNotExist()
+        compose.runOnIdle { replies = 1L }
+        compose.onNodeWithText("1 comment").assertIsDisplayed()
         compose.onNodeWithTag("comment-sort").performClick()
         compose.onNodeWithText("Threads").performClick()
         compose.onNodeWithTag("comment-sort").performClick()

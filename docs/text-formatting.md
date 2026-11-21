@@ -1,10 +1,10 @@
 # Optional text formatting
 
-Developer options has two independent switches. Both default off, and disabling Developer mode disables their effects.
+Settings > Appearance includes **Format release text**, enabled by default. An existing saved cleanup preference carries over. **Enable Markdown syntax** is a separate switch in Developer options. Markdown defaults off and requires Developer mode.
 
 | Switch | Scope | Behavior |
 | --- | --- | --- |
-| Clean up release text | Description, What's new, Mod info, and download notes | Add paragraph spacing, recognize short headings, and turn repeated dash or symbol markers into hanging bullet lists. |
+| Format release text | Description, What's new, Mod info, and download notes | Add paragraph spacing, recognize short headings, and turn repeated dash or symbol markers into hanging bullet lists. |
 | Enable Markdown syntax | Release text, forum announcements/discussions, comments, and quoted replies | Render CommonMark headings, emphasis, lists, links, blockquotes, and code alongside existing forum HTML. |
 
 With both enabled, Markdown runs first. Cleanup preserves its structured lists, headings, quotes, and code. Private messages retain their existing rendering.
@@ -23,4 +23,4 @@ Formatting skips documents over 200,000 characters or with more than 32 nested e
 
 `-PofflineFormattingPreview=true` gives debug builds the separate `.formattingpreview` application ID. For fixture instrumentation, also pass `-PofflineFixtureRunner=true` to skip WorkManager startup. The offline screenshots run in an isolated `Application` with local fixtures.
 
-`ForumFormattingPreviewTest` exercises the toggles and native text spans. It captures original, cleanup, Markdown, combined, changelog, and settings views using the app's actual theme, release cards, and text renderer. Preview content is reconstructed from supplied screenshots or synthetic Markdown, not fetched forum pages.
+`AppearanceOptionsTest` checks the default, persistence, and migration of the cleanup switch. `ForumFormattingPreviewTest` checks Markdown and the release renderer with local fixtures.

@@ -60,9 +60,11 @@ class ReleaseDownloadsTest {
     @Test fun styledReleaseUsesARegularChangelogNoteAndHeavierDownloadGroupTitle() {
         var styled by mutableStateOf(true)
         val sample = release.copy(contentHtml = "<p>What's new:</p><strong>No changelog</strong><br>" +
-            "<b>Download Instructions:</b><br><b>arm64-v8a:</b><br><a href='$link'>Download</a>")
+            "<b>Download Instructions:</b><br><b>arm64-v8a:</b><br><a href='$link'>Download</a><br>" +
+            "Trouble downloading? Read <a href='${org.mobilism.material.data.DownloadHelp.URL}'>This</a>.")
         compose.setContent { MobilismTheme(reduceMotion = true) {
-            CompositionLocalProvider(LocalForumFormatting provides ForumFormattingOptions(cleanUpReleaseText = styled)) { Page(sample) }
+            CompositionLocalProvider(LocalForumFormatting provides ForumFormattingOptions(cleanUpReleaseText = styled),
+                org.mobilism.material.ui.LocalDownloadHelpHandler provides {}) { Page(sample) }
         } }
         fun style(label: String): androidx.compose.ui.text.TextStyle {
             val layouts = mutableListOf<TextLayoutResult>()
@@ -75,8 +77,12 @@ class ReleaseDownloadsTest {
         org.junit.Assert.assertTrue(note.fontSize.value < header.fontSize.value)
         org.junit.Assert.assertEquals(FontWeight.Normal, note.fontWeight)
         org.junit.Assert.assertEquals(FontWeight.SemiBold, style("arm64-v8a").fontWeight)
+        fun helpToGroupGap() = compose.onNodeWithText("arm64-v8a", useUnmergedTree = true).getUnclippedBoundsInRoot().top -
+            compose.onNodeWithTag("download-help-action").getUnclippedBoundsInRoot().bottom
+        val styledGap = helpToGroupGap()
         compose.runOnIdle { styled = false }
         org.junit.Assert.assertNotEquals(FontWeight.SemiBold, style("arm64-v8a").fontWeight)
+        org.junit.Assert.assertTrue(styledGap < helpToGroupGap())
     }
 
     @Test fun descriptionChoiceCarriesToTheNextReleaseAndCanBeExpandedAgain() {

@@ -24,6 +24,9 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import org.mobilism.material.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -62,6 +65,7 @@ internal fun rememberDownloadNotificationRequest(): () -> Unit {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ReleaseTransferSettings(state: DownloadPreferences, store: DownloadPreferencesStore) {
+    val resources = LocalResources.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val requestDownloadNotifications = rememberDownloadNotificationRequest()
@@ -90,17 +94,17 @@ internal fun ReleaseTransferSettings(state: DownloadPreferences, store: Download
                 store.useInternal(uri.toString())
                 error = null
             } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-            catch (_: Exception) { error = "Choose a folder that allows files to be created." }
+            catch (_: Exception) { error = resources.getString(R.string.download_writable_folder) }
         }
     }
     fun chooseFolder() {
         val initial = current?.let { DocumentsContract.buildDocumentUriUsingTree(it, DocumentsContract.getTreeDocumentId(it)) }
         try { picker.launch(initial) }
-        catch (_: android.content.ActivityNotFoundException) { error = "No folder picker is available on this device." }
+        catch (_: android.content.ActivityNotFoundException) { error = resources.getString(R.string.download_no_picker) }
     }
-    AppSurface(modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(4.dp)) {
-        SettingsToggleRow("Internal downloader", if (state.internalDownloads) "Save release files to your selected folder."
-            else "Open release links in your external browser.", Icons.Outlined.Download, state.internalDownloads) { enabled ->
+    Column(Modifier.fillMaxWidth()) {
+        SettingsToggleRow(stringResource(R.string.download_internal), if (state.internalDownloads) stringResource(R.string.download_internal_summary)
+            else stringResource(R.string.download_external_summary), Icons.Outlined.Download, state.internalDownloads) { enabled ->
             if (enabled) chooseFolder() else store.useBrowser()
         }
         val motion = MaterialTheme.motionScheme
@@ -108,15 +112,15 @@ internal fun ReleaseTransferSettings(state: DownloadPreferences, store: Download
             enter = expandVertically(motion.defaultSpatialSpec()) + fadeIn(motion.fastEffectsSpec()),
             exit = shrinkVertically(motion.defaultSpatialSpec()) + fadeOut(motion.fastEffectsSpec())) {
             Column {
-                SettingsNavigationRow("Download folder", folderLabel.orEmpty().ifBlank { "Selected folder" }, Icons.Outlined.Folder, ::chooseFolder)
-                SettingsToggleRow("Extract ZIP files", "Save extracted files directly into your download folder.",
-                    Icons.Outlined.FolderZip, state.extractZips, store::extractZips)
+                SettingsNavigationRow(stringResource(R.string.download_folder), folderLabel.orEmpty().ifBlank { stringResource(R.string.download_selected_folder) }, Icons.Outlined.Folder, ::chooseFolder)
+                SettingsToggleRow(stringResource(R.string.download_extract_zip), stringResource(R.string.download_extract_zip_summary),
+                    Icons.Outlined.FolderZip, state.extractZips, onCheckedChange = store::extractZips)
                 val notifications = remember(context) { context.getSystemService(NotificationManager::class.java) }
                 fun blocked() = !notifications.areNotificationsEnabled() ||
                     notifications.getNotificationChannel(ReleaseDownloads.TAG)?.importance == NotificationManager.IMPORTANCE_NONE
                 var notificationsBlocked by remember { mutableStateOf(blocked()) }
                 LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { notificationsBlocked = blocked() }
-                if (notificationsBlocked) AppTextButton("Allow download notifications", {
+                if (notificationsBlocked) AppTextButton(stringResource(R.string.download_allow_notifications), {
                     val settings = if (notifications.areNotificationsEnabled()) Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
                         .putExtra(Settings.EXTRA_CHANNEL_ID, ReleaseDownloads.TAG) else Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
                     context.startActivity(settings.putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
@@ -125,5 +129,5 @@ internal fun ReleaseTransferSettings(state: DownloadPreferences, store: Download
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(12.dp)
             .semantics { liveRegion = LiveRegionMode.Polite }) }
-    } }
+    }
 }

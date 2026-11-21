@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import org.mobilism.material.R
 import org.mobilism.material.designsystem.AppFont
 import org.mobilism.material.designsystem.ThemeCatalog
 import org.mobilism.material.designsystem.ThemeDefinition
@@ -24,6 +25,7 @@ data class AppearanceState(
     val customFontFile: File? = null,
     val customFontName: String? = null,
     val compactFeed: Boolean = false,
+    val releaseTextCleanup: Boolean = true,
 ) {
     val themes: List<ThemeDefinition> get() = ThemeCatalog.builtIn + customThemes
     val theme: ThemeDefinition get() = ThemeCatalog.resolve(themeId, customThemes)
@@ -33,7 +35,7 @@ class AppearanceStore(private val context: Context) {
     private val preferences = context.getSharedPreferences("material-appearance", Context.MODE_PRIVATE)
     private val directory = File(context.filesDir, "themes")
     private val fontDirectory = File(context.filesDir, "fonts")
-    private val mutableState = MutableStateFlow(AppearanceState())
+    private val mutableState = MutableStateFlow(AppearanceState(releaseTextCleanup = restoreReleaseTextCleanup()))
     val state = mutableState.asStateFlow()
 
     suspend fun load() = withContext(Dispatchers.IO) {
@@ -44,7 +46,7 @@ class AppearanceStore(private val context: Context) {
             ?.let { File(fontDirectory, it) }
             ?.takeIf { it.isFile && it.length() in 1..MAX_FONT_BYTES && validFont(it) }
         val savedFont = AppFont.entries.firstOrNull { it.name == preferences.getString("font", null) } ?: AppFont.Geist
-        mutableState.value = AppearanceState(
+        mutableState.update { it.copy(
             themeId = preferences.getString("theme", ThemeCatalog.default.id) ?: ThemeCatalog.default.id,
             font = if (savedFont == AppFont.Custom && customFont == null) AppFont.Geist else savedFont,
             reduceMotion = preferences.getBoolean("reduce-motion", false),
@@ -52,7 +54,21 @@ class AppearanceStore(private val context: Context) {
             customFontFile = customFont,
             customFontName = preferences.getString("font-name", null).takeIf { customFont != null },
             compactFeed = preferences.getBoolean("compact-feed", false),
-        )
+        ) }
+    }
+
+    private fun restoreReleaseTextCleanup(): Boolean {
+        if (preferences.contains(RELEASE_TEXT_CLEANUP)) return preferences.getBoolean(RELEASE_TEXT_CLEANUP, true)
+        val developer = context.getSharedPreferences("material-developer", Context.MODE_PRIVATE)
+        if (!developer.contains(RELEASE_TEXT_CLEANUP)) return true
+        val saved = developer.getBoolean(RELEASE_TEXT_CLEANUP, true)
+        preferences.edit().putBoolean(RELEASE_TEXT_CLEANUP, saved).apply()
+        return saved
+    }
+
+    fun setReleaseTextCleanup(enabled: Boolean) {
+        preferences.edit().putBoolean(RELEASE_TEXT_CLEANUP, enabled).apply()
+        mutableState.update { it.copy(releaseTextCleanup = enabled) }
     }
 
     fun selectTheme(theme: ThemeDefinition) {
@@ -72,10 +88,10 @@ class AppearanceStore(private val context: Context) {
     }
 
     suspend fun importFont(uri: Uri) = withContext(Dispatchers.IO) {
-        check(fontDirectory.isDirectory || fontDirectory.mkdirs()) { "Could not save the font." }
+        check(fontDirectory.isDirectory || fontDirectory.mkdirs()) { context.getString(R.string.appearance_font_save_error) }
         val file = File.createTempFile("font-", ".font", fontDirectory)
         try {
-            val input = context.contentResolver.openInputStream(uri) ?: error("Could not open the font.")
+            val input = context.contentResolver.openInputStream(uri) ?: error(context.getString(R.string.appearance_font_open_error))
             input.use { stream ->
                 file.outputStream().use { output ->
                     val buffer = ByteArray(8192)
@@ -84,20 +100,20 @@ class AppearanceStore(private val context: Context) {
                         val read = stream.read(buffer)
                         if (read == -1) break
                         total += read
-                        require(total <= MAX_FONT_BYTES) { "Choose a font smaller than 10 MB." }
+                        require(total <= MAX_FONT_BYTES) { context.getString(R.string.appearance_font_size_error) }
                         output.write(buffer, 0, read)
                     }
                 }
             }
-            require(validFont(file)) { "Choose a valid TTF, OTF or TTC font." }
+            require(validFont(file)) { context.getString(R.string.appearance_font_format_error) }
             val name = runCatching {
                 context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
                     if (cursor.moveToFirst()) cursor.getString(0) else null
                 }
             }.getOrNull()?.substringBeforeLast('.')?.filterNot { it.isISOControl() }?.trim()?.take(80)
-                ?.takeIf { it.isNotEmpty() } ?: "Custom font"
+                ?.takeIf { it.isNotEmpty() }
             check(preferences.edit().putString("font-file", file.name).putString("font-name", name)
-                .putString("font", AppFont.Custom.name).commit()) { "Could not save the font." }
+                .putString("font", AppFont.Custom.name).commit()) { context.getString(R.string.appearance_font_save_error) }
             mutableState.update { it.copy(font = AppFont.Custom, customFontFile = file, customFontName = name) }
             // A new filename keeps Compose's font cache from reusing the previous upload.
             fontDirectory.listFiles().orEmpty().filter { it != file }.forEach { it.delete() }
@@ -115,7 +131,10 @@ class AppearanceStore(private val context: Context) {
         signatures.any { it.toList() == header } && Typeface.Builder(file).build() != null
     }.getOrDefault(false)
 
-    private companion object { const val MAX_FONT_BYTES = 10L * 1024 * 1024 }
+    private companion object {
+        const val MAX_FONT_BYTES = 10L * 1024 * 1024
+        const val RELEASE_TEXT_CLEANUP = "release-text-cleanup"
+    }
 
     fun reduceMotion(reduced: Boolean) {
         preferences.edit().putBoolean("reduce-motion", reduced).apply()
@@ -129,13 +148,13 @@ class AppearanceStore(private val context: Context) {
             while (true) {
                 val read = stream.read(buffer)
                 if (read == -1) break
-                require(bytes.size() + read <= 64 * 1024) { "Theme exceeds 64 KiB." }
+                require(bytes.size() + read <= 64 * 1024) { context.getString(R.string.appearance_theme_size_error) }
                 bytes.write(buffer, 0, read)
             }
             bytes.toByteArray().toString(Charsets.UTF_8)
-        } ?: error("The theme file could not be opened.")
+        } ?: error(context.getString(R.string.appearance_theme_open_error))
         val theme = ThemeCatalog.parse(json)
-        check(directory.exists() || directory.mkdirs()) { "Could not create the theme folder." }
+        check(directory.exists() || directory.mkdirs()) { context.getString(R.string.appearance_theme_folder_error) }
         val file = AtomicFile(File(directory, "${theme.id}.json"))
         val output = file.startWrite()
         try {

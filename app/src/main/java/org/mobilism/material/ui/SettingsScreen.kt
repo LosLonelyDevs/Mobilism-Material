@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.activity.compose.BackHandler
@@ -22,7 +21,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -51,6 +49,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import org.mobilism.material.R
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -101,44 +103,38 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
         return
     }
     Scaffold(topBar = {
-        TopAppBar(title = { AppHeading("Settings", HeadingLevel.Page) }, navigationIcon = {
-            AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack)
+        TopAppBar(title = { AppHeading(stringResource(R.string.settings_title), HeadingLevel.Page) }, navigationIcon = {
+            AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.action_back), onBack)
         })
     }) { insets ->
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.padding(insets),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            item("preferences-section") { SettingsSectionLabel("Preferences") }
-            item("appearance") { SettingsNavigationRow("Appearance", "Theme, font, and motion.", Icons.Outlined.Palette, onAppearance) }
+        SettingsList(Modifier.padding(insets), state = listState) {
+            item("preferences-section") { SettingsSectionLabel(stringResource(R.string.settings_preferences)) }
+            item("appearance") { SettingsNavigationRow(stringResource(R.string.appearance_title), stringResource(R.string.settings_appearance_summary), Icons.Outlined.Palette, onAppearance) }
             messageNotifications?.let { setting -> item("message-notifications") { setting() } }
             item("landing-page") { LandingPageSetting(landingPage, onLandingPage) }
             item("content") { ContentVisibilitySetting(hideAdult, onHideAdult) }
-            item("downloads-section") { SettingsSectionLabel("Downloads") }
-            item("downloads") { SettingsNavigationRow("Downloads", "Download method, folder, architecture, and preferred hosts.",
+            item("downloads-section") { SettingsSectionLabel(stringResource(R.string.settings_downloads)) }
+            item("downloads") { SettingsNavigationRow(stringResource(R.string.settings_downloads), stringResource(R.string.settings_downloads_summary),
                 Icons.Outlined.Download, onDownloads) }
             if (developer.debridEnabled) item("premium") {
-                SettingsNavigationRow("Premium", "Manage verified Premium accounts.", Icons.Outlined.WorkspacePremium,
+                SettingsNavigationRow(stringResource(R.string.settings_premium), stringResource(R.string.settings_premium_summary), Icons.Outlined.WorkspacePremium,
                     onClick = { premiumOpen = true })
             }
-            item("privacy-section") { SettingsSectionLabel("Privacy and diagnostics") }
+            item("privacy-section") { SettingsSectionLabel(stringResource(R.string.settings_privacy)) }
             item(key = "daily-usage") {
-                SettingsToggleRow("Anonymous usage", "Share daily activity, device, request, and cache totals.", Icons.Outlined.Insights,
-                    dailyUsageEnabled, onDailyUsage)
-                Text("Sends app version, Android version, manufacturer, and model once per active day. " +
-                    "No account data or permanent device ID.", Modifier.padding(horizontal = 16.dp),
+                SettingsToggleRow(stringResource(R.string.settings_usage), stringResource(R.string.settings_usage_summary), Icons.Outlined.Insights,
+                    dailyUsageEnabled, onCheckedChange = onDailyUsage)
+                Text(stringResource(R.string.settings_usage_details), Modifier.padding(horizontal = 16.dp),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             diagnostics?.let { logs -> item(key = "diagnostics") { DiagnosticLogsCard(logs) } }
-            item("app-section") { SettingsSectionLabel("App") }
+            item("app-section") { SettingsSectionLabel(stringResource(R.string.settings_app)) }
             item(key = "app-updates") { AppUpdatesEntry(onUpdates) }
             if (developer.enabled) item(key = "developer") {
-                SettingsNavigationRow("Developer options", "Diagnostics and experimental features.", Icons.Outlined.Code, onDeveloperOptions)
+                SettingsNavigationRow(stringResource(R.string.settings_developer_options), stringResource(R.string.settings_developer_summary), Icons.Outlined.Code, onDeveloperOptions)
             }
             item(key = "about") {
-                SettingsNavigationRow("About Mobilism Material", "v${org.mobilism.material.BuildConfig.VERSION_NAME}",
+                SettingsNavigationRow(stringResource(R.string.settings_about), stringResource(R.string.settings_version, org.mobilism.material.BuildConfig.VERSION_NAME),
                     Icons.Outlined.Info, onAbout)
             }
         }
@@ -147,21 +143,21 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
 
 @Composable
 internal fun ContentVisibilitySetting(hideAdult: Boolean, onHideAdult: (Boolean) -> Unit) {
-    SettingsToggleRow("Hide 18+ content", "Hide adult releases while browsing.", Icons.Outlined.VisibilityOff,
-        hideAdult, onHideAdult)
+    SettingsToggleRow(stringResource(R.string.settings_hide_adult), stringResource(R.string.settings_hide_adult_summary), Icons.Outlined.VisibilityOff,
+        hideAdult, onCheckedChange = onHideAdult)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PremiumSettingsScreen(state: DebridState, repository: DebridRepository, preferredHosts: Set<String>, onBack: () -> Unit) {
     Scaffold(topBar = {
-        TopAppBar(title = { AppHeading("Premium", HeadingLevel.Page) }, navigationIcon = {
-            AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack)
+        TopAppBar(title = { AppHeading(stringResource(R.string.settings_premium), HeadingLevel.Page) }, navigationIcon = {
+            AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.action_back), onBack)
         })
     }) { insets ->
-        LazyColumn(Modifier.padding(insets), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item { SettingsSubtitle("Checkmarks show Premium support.") }
+        SettingsList(Modifier.padding(insets)) {
+            item { SettingsSectionLabel(stringResource(R.string.premium_accounts)) }
+            item { SettingsSubtitle(stringResource(R.string.premium_support_summary), Modifier.padding(horizontal = 16.dp)) }
             items(Alphabetical.sorted(state.accounts) { it.provider.label }
                 .sortedBy { it.provider != DebridProvider.Mobilism }, key = { it.provider }) { account ->
                 DebridAccountCard(account, repository, state, preferredHosts)
@@ -172,6 +168,7 @@ private fun PremiumSettingsScreen(state: DebridState, repository: DebridReposito
 
 @Composable
 private fun DebridAccountCard(account: DebridAccount, repository: DebridRepository, debrid: DebridState, preferredHosts: Set<String>) {
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
@@ -193,16 +190,16 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
             try { block() }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: org.mobilism.material.data.DebridException) { error = ScreenError(failure.message.orEmpty()) }
-            catch (_: Exception) { error = ScreenError("The account could not be updated. Please try again.") }
+            catch (_: Exception) { error = ScreenError(resources.getString(R.string.premium_update_error)) }
             finally { working = false }
         }
     }
-    AppSurface(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    AppSurface(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 if (account.configured) Icon(
                     if (account.validated) Icons.Outlined.CheckCircle else Icons.Outlined.Info,
-                    if (account.validated) "Account verified" else "Account needs verification",
+                    if (account.validated) stringResource(R.string.premium_verified) else stringResource(R.string.premium_needs_verification),
                     tint = if (account.validated) theme.success else MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(end = 12.dp).size(24.dp),
                 )
@@ -214,18 +211,18 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
               if (account.provider != DebridProvider.RealDebrid) {
                 val mobilism = account.provider == DebridProvider.Mobilism
                 val service = if (mobilism) "Mobilism" else account.provider.label
-                SettingsSubtitle(if (mobilism) "Sign in with your Mobilism username and Premium password."
-                    else "Sign in once; encrypted credentials renew expired Premium sessions.")
+                SettingsSubtitle(if (mobilism) stringResource(R.string.premium_mobilism_summary)
+                    else stringResource(R.string.premium_other_summary))
                 OutlinedTextField(
                     value = username, onValueChange = { if (it.length <= 256) username = it },
-                    label = { Text("$service username") }, singleLine = true, enabled = !busy,
+                    label = { Text(stringResource(R.string.premium_username, service)) }, singleLine = true, enabled = !busy,
                     keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
                     modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Username },
                     shape = MaterialTheme.shapes.large,
                 )
                 OutlinedTextField(
                     value = password, onValueChange = { if (it.length <= 4096) password = it },
-                    label = { Text(if (mobilism) "Mobilism Premium password" else "$service password") }, singleLine = true, enabled = !busy,
+                    label = { Text(if (mobilism) stringResource(R.string.premium_mobilism_password) else stringResource(R.string.premium_password, service)) }, singleLine = true, enabled = !busy,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Password },
@@ -241,13 +238,13 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                     } },
                     enabled = username.isNotBlank() && password.isNotEmpty() && !busy,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Sign in to ${account.provider.label}") }
+                ) { Text(stringResource(R.string.premium_sign_in, account.provider.label)) }
               } else {
-              Text("No key saved", color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Text(stringResource(R.string.premium_no_key), color = MaterialTheme.colorScheme.onSurfaceVariant)
               OutlinedTextField(
                 value = key, onValueChange = { if (it.length <= 4096) key = it },
-                label = { Text(account.provider.label + " API key") },
-                placeholder = { Text("Enter your API key") },
+                label = { Text(stringResource(R.string.premium_api_key, account.provider.label)) },
+                placeholder = { Text(stringResource(R.string.premium_key_hint)) },
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth(),
@@ -257,11 +254,11 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                 onClick = { perform { repository.saveKey(account.provider, key); key = "" } },
                 enabled = key.isNotBlank() && !busy,
                 modifier = Modifier.fillMaxWidth(),
-              ) { Text("Verify and save") }
+              ) { Text(stringResource(R.string.premium_verify_save)) }
               }
             }
             if (account.configured && !account.validated && account.provider == DebridProvider.MegaDebrid && !signingInAgain) {
-                ExpressiveButton({ signingInAgain = true }, enabled = !busy) { Text("Sign in again") }
+                ExpressiveButton({ signingInAgain = true }, enabled = !busy) { Text(stringResource(R.string.premium_sign_in_again)) }
             }
             if (account.configured) Row(
                 Modifier.fillMaxWidth(),
@@ -276,7 +273,7 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ),
                 ) {
-                    Icon(Icons.Outlined.Refresh, "Verify account and refresh hosts")
+                    Icon(Icons.Outlined.Refresh, stringResource(R.string.premium_refresh))
                 }
                 DebridHostMenu(account, debrid, preferredHosts, Modifier.weight(1f))
                 FilledTonalIconButton(
@@ -287,10 +284,10 @@ private fun DebridAccountCard(account: DebridAccount, repository: DebridReposito
                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     ),
                 ) {
-                    Icon(Icons.Outlined.DeleteOutline, "Remove account")
+                    Icon(Icons.Outlined.DeleteOutline, stringResource(R.string.premium_remove))
                 }
             }
-            if (busy) LoadingState("Checking account and hosts…", Modifier.fillMaxWidth())
+            if (busy) LoadingState(stringResource(R.string.premium_checking), Modifier.fillMaxWidth())
             error?.let { ErrorPanel(it) }
             account.error?.let { ErrorPanel(ScreenError(it)) }
         }
@@ -309,10 +306,11 @@ private fun DebridHostMenu(account: DebridAccount, debrid: DebridState, preferre
         if (expanded) 180f else 0f,
         MaterialTheme.motionScheme.fastSpatialSpec(), label = "host menu chevron",
     )
+    val expansionLabel = stringResource(if (expanded) R.string.state_expanded else R.string.state_collapsed)
     Box(modifier, contentAlignment = Alignment.Center) {
         ExpressiveButton(
             { expanded = !expanded },
-            Modifier.fillMaxWidth().semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
+            Modifier.fillMaxWidth().semantics { stateDescription = expansionLabel },
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -320,7 +318,7 @@ private fun DebridHostMenu(account: DebridAccount, debrid: DebridState, preferre
             ),
         ) {
             val count = hosts.size
-            Text("$count Mobilism ${if (count == 1) "host" else "hosts"}", Modifier.weight(1f, fill = false),
+            Text(pluralStringResource(R.plurals.premium_mobilism_hosts, count, count), Modifier.weight(1f, fill = false),
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             Icon(Icons.Outlined.ExpandMore, null, Modifier.padding(start = 4.dp).size(20.dp).rotate(rotation))
         }
@@ -334,11 +332,11 @@ private fun DebridHostMenu(account: DebridAccount, debrid: DebridState, preferre
             ) {
                 Column(Modifier.verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
                     Text(
-                        "Supported Mobilism hosts", Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        stringResource(R.string.premium_supported_hosts), Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                         style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
                     )
                     if (hosts.isEmpty()) Text(
-                        if (account.busy) "Loading hosts…" else "No matching hosts. Try Refresh hosts.",
+                        if (account.busy) stringResource(R.string.premium_loading_hosts) else stringResource(R.string.premium_hosts_empty),
                         Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                         style = MaterialTheme.typography.bodyMedium,
                     )

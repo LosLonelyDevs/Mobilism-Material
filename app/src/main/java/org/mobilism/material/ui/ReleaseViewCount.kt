@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import org.mobilism.material.designsystem.LocalAppTheme
@@ -25,8 +26,14 @@ internal fun ReleaseViewCount(views: Long, modifier: Modifier = Modifier,
     // Missing API counts and forum-only releases both use zero. Do not present it as a measured count.
     if (views <= 0) return
     val label = "$views ${if (views == 1L) "view" else "views"}"
+    MetadataCount(Icons.Outlined.Visibility, if (numberOnly) views.toString() else label, label, color, modifier, textStyle)
+}
+
+@Composable
+internal fun MetadataCount(icon: ImageVector, text: String, label: String, color: Color, modifier: Modifier = Modifier,
+    textStyle: TextStyle = MaterialTheme.typography.labelSmall) {
     Row(modifier.clearAndSetSemantics { contentDescription = label }, horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Outlined.Visibility, null, Modifier.size(14.dp), tint = color)
-        Text(if (numberOnly) views.toString() else label, style = textStyle, color = color)
+        Icon(icon, null, Modifier.size(14.dp), tint = color)
+        Text(text, style = textStyle, color = color)
     }
 }

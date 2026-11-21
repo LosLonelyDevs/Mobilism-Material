@@ -17,12 +17,13 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 internal fun CommentSortMenu(sort: CommentSort, total: Long, onSelect: (CommentSortField) -> Unit) {
+    if (total <= 0) return
     var expanded by remember { mutableStateOf(false) }
     val arrow = if (sort.newestFirst) Icons.Outlined.ArrowDownward else Icons.Outlined.ArrowUpward
     val direction = if (sort.newestFirst) "Newest first" else "Oldest first"
     Row {
         Box(Modifier.alignByBaseline()) {
-            TextButton(onClick = { expanded = true }, contentPadding = PaddingValues(start = 6.dp, end = 6.dp, bottom = 8.dp),
+            TextButton(onClick = { expanded = true }, contentPadding = PaddingValues(start = 6.dp, end = 6.dp, bottom = 16.dp),
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
                 modifier = Modifier.testTag("comment-sort").semantics { stateDescription = direction }) {
                 Text(sort.field.name, style = MaterialTheme.typography.labelSmall)

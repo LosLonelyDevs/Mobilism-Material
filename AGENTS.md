@@ -27,6 +27,13 @@ words and use a neutral perspective.
 Keep the saved landing page separate from current browsing. Fresh installs open
 Apps > Home; preserve an existing saved section until a landing page is chosen.
 
+## Android strings
+Put all new or updated user-facing app text in the owning module's
+`res/values/strings.xml`. When editing an Android source or layout file, move
+its existing hardcoded English UI text into string resources in the same change.
+Include accessibility labels, errors, and notifications. Use placeholders for
+dynamic text and plurals for counts. Preserve user content and stable IDs.
+
 ## Request volume and app controls
 Preserve request pacing, bounded pagination, caches, failure cooldowns, and server
 `Retry-After`. Reuse release metadata already loaded; never fetch each row's details

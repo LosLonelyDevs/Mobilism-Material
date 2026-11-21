@@ -96,15 +96,7 @@ internal fun ReleaseMetadataFooter(release: Release, expanded: Boolean = false, 
                 listCard -> 0.42f
                 else -> 0.34f
             }
-            val chipInset = with(LocalDensity.current) { chipVerticalPadding.roundToPx() }
-            val metadataAlignment = if (listCard) Alignment.Vertical { size, space ->
-                // Align with the painted chip edge inside its larger touch target.
-                (Alignment.CenterVertically.align(size, space) + chipInset).coerceAtMost(space - size)
-            } else Alignment.CenterVertically
-            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(if (listCard) 4.dp else spacing)) {
-                Row(Modifier.weight(1f).align(metadataAlignment).horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(spacing), verticalAlignment = Alignment.CenterVertically) { metadata() }
+            SingleLineMetadataRow(spacing, listCard, metadata) {
                 if (categories.isNotEmpty()) Row(Modifier.widthIn(max = categoryWidth).horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)) { chips() }
             }
@@ -116,5 +108,21 @@ internal fun ReleaseMetadataFooter(release: Release, expanded: Boolean = false, 
             if (categories.isNotEmpty()) FlowRow(Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) { chips() }
         }
+    }
+}
+
+@Composable
+internal fun SingleLineMetadataRow(spacing: Dp, listCard: Boolean, metadata: @Composable () -> Unit,
+    trailing: @Composable () -> Unit) {
+    val chipInset = with(LocalDensity.current) { chipVerticalPadding.roundToPx() }
+    val metadataAlignment = if (listCard) Alignment.Vertical { size, space ->
+        // Align with the painted chip edge inside its larger touch target.
+        (Alignment.CenterVertically.align(size, space) + chipInset).coerceAtMost(space - size)
+    } else Alignment.CenterVertically
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (listCard) 4.dp else spacing)) {
+        Row(Modifier.weight(1f).align(metadataAlignment).horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(spacing), verticalAlignment = Alignment.CenterVertically) { metadata() }
+        trailing()
     }
 }

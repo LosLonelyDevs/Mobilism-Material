@@ -288,7 +288,7 @@ fun ReleaseScreen(
                 if (state.busy && release != null) releaseDetailItem { LoadingState("Updating release…", Modifier.fillMaxWidth()) }
                 state.error?.let { releaseDetailItem { ErrorPanel(it, onRetry = onRetry) } }
                 if (release != null) {
-                    releaseDetailItem(bottomPadding = 8.dp) {
+                    releaseDetailItem(bottomPadding = 4.dp) {
                         ReleaseTitleHeader(release.title, release.section)
                     }
                     releaseDetailItem {
@@ -349,14 +349,18 @@ fun ReleaseScreen(
                             },
                             headingColor = if (cleanUpHeadings) releaseHeadingColor(MaterialTheme.colorScheme.onSurface, theme.success)
                                 else Color.Unspecified) {
-                            content?.downloadNotesHtml?.takeIf { it.isNotBlank() }?.let {
-                                DownloadNotes(it, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
-                            }
-                            groups.forEach { group ->
-                                ReleaseDownloadGroup(release.id, group, release.browserUrl ?: "https://forum.mobilism.org/",
-                                    debrid, downloadRequests, onResolveDownload, downloadOpened,
-                                    onCopied = { snackbar.showSnackbar("Link copied") }, onRelease = onRelease,
-                                    downloadFile = downloadFile)
+                            Column(verticalArrangement = Arrangement.spacedBy(if (cleanUpHeadings) 0.dp else 12.dp)) {
+                                content?.downloadNotesHtml?.takeIf { it.isNotBlank() }?.let {
+                                    DownloadNotes(it, release.browserUrl ?: "https://forum.mobilism.org/", onRelease)
+                                }
+                                if (groups.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    groups.forEach { group ->
+                                        ReleaseDownloadGroup(release.id, group, release.browserUrl ?: "https://forum.mobilism.org/",
+                                            debrid, downloadRequests, onResolveDownload, downloadOpened,
+                                            onCopied = { snackbar.showSnackbar("Link copied") }, onRelease = onRelease,
+                                            downloadFile = downloadFile)
+                                    }
+                                }
                             }
                         }
                     }
@@ -372,7 +376,7 @@ fun ReleaseScreen(
                                     if (cleanUpHeadings) AppIconButton(Icons.Outlined.ChatBubbleOutline, label, write,
                                         Modifier.testTag("write-comment"))
                                 }
-                                CommentSortMenu(sort, release.replies) { sort = sort.select(it) }
+                                CommentSortMenu(sort, maxOf(release.replies, state.comments.items.size.toLong())) { sort = sort.select(it) }
                             }
                             if (!cleanUpHeadings) ExpressiveButton(write, Modifier.fillMaxWidth().testTag("write-comment"),
                                 colors = ButtonDefaults.filledTonalButtonColors()) {
