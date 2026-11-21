@@ -1,6 +1,7 @@
 export const PAGES = [
   { id: 'overview', href: '/', label: 'Overview', icon: 'home' },
   { id: 'app-usage', href: '/app-usage', label: 'App usage', icon: 'chart' },
+  { id: 'following-cache', href: '/following-cache', label: 'Following cache', icon: 'cache' },
   { id: 'app-controls', href: '/app-controls', label: 'App controls', icon: 'controls' },
 ];
 
@@ -8,6 +9,7 @@ export function canAccess(user, page) {
   if (!user) return false;
   if (page === 'account') return true;
   if (page === 'users') return user.isAdmin === true;
+  if (page === 'following-cache' && user.isAdmin) return true;
   return PAGES.some(item => item.id === page) && (user.isOwner === true || user.pages?.includes(page));
 }
 

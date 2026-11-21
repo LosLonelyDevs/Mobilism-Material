@@ -1,22 +1,7 @@
       <div class="admin-heading">
         <div><h1>Usage</h1><p>Active Mobilism clients and the versions they report.</p></div>
-        <div class="usage-period"><span id="period-label">Report dates (UTC)</span>
-          <button id="choose-dates" type="button" aria-haspopup="dialog" aria-controls="date-calendar" aria-labelledby="period-label choose-dates"></button>
-        </div>
+        <!-- report-calendar -->
       </div>
-      <dialog id="date-calendar" class="date-calendar" aria-labelledby="calendar-title" aria-describedby="calendar-hint">
-        <h2 id="calendar-title">Report dates</h2>
-        <p id="calendar-hint">Choose one day, or two dates for a range.</p>
-        <div class="calendar-nav">
-          <button id="prev-month" type="button" aria-label="Previous month">‹</button>
-          <strong id="calendar-month" aria-live="polite"></strong>
-          <button id="next-month" type="button" aria-label="Next month">›</button>
-        </div>
-        <div class="calendar-week" aria-hidden="true"><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span></div>
-        <div id="calendar-days" class="calendar-days" role="group" aria-labelledby="calendar-month"></div>
-        <p id="calendar-selection" aria-live="polite"></p>
-        <div class="calendar-actions"><button id="cancel-dates" type="button">Cancel</button><button id="apply-dates" type="button" class="primary">Apply</button></div>
-      </dialog>
       <div id="dashboard-error" class="admin-notice" role="alert" hidden></div>
 <p id="loading" class="admin-loading" role="status">Loading activity…</p>
       <div id="report" hidden>
@@ -57,15 +42,6 @@
           <div class="admin-panel-heading"><h2 id="cache-title">Cache hit rates</h2></div>
           <div class="admin-traffic-scroll" tabindex="0" role="region" aria-label="Cache hit rates"><table class="admin-traffic-table"><thead><tr><th scope="col">Cache</th><th scope="col">Hits</th><th scope="col">Misses</th><th scope="col">Hit rate</th></tr></thead><tbody id="cache-rows"></tbody></table></div>
           <p id="cache-empty" class="admin-zero-note">No cache lookups reported for this period.</p>
-          <p class="admin-footnote">Following counts each app compared with a usable Vercel snapshot. Unavailable snapshots and skipped apps are excluded.</p>
-        </section>
-        <section id="follow-rankings" class="admin-panel" aria-labelledby="follow-title" hidden>
-          <div class="admin-panel-heading"><h2 id="follow-title">Followed apps</h2></div>
-          <table class="admin-traffic-table"><thead><tr><th scope="col">Most followed</th><th scope="col" id="follow-unit">Reporting devices</th></tr></thead><tbody id="most-followed"></tbody></table>
-          <p id="follow-empty" class="admin-zero-note">No followed apps reported for this period.</p>
-          <table class="admin-traffic-table"><thead><tr><th scope="col">Most cache misses</th><th scope="col">Misses</th></tr></thead><tbody id="most-missed"></tbody></table>
-          <p id="miss-empty" class="admin-zero-note">No app-level misses reported for this period.</p>
-          <p class="admin-footnote">Each device counts once per requested app per UTC day. A miss is a requested app name absent from a fresh cache.</p>
         </section>
         <details class="admin-panel admin-details">
           <summary>Device and app version details</summary>

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { createHandler } from '../api/latest-apps.js';
-import { createHandler as statsHandler } from '../api/stats.js';
+import { createHandler as followingHandler } from '../api/following-cache.js';
 import { randomUUID } from 'node:crypto';
 
 const now = 1900000000;
@@ -59,9 +59,9 @@ test('one lookup counts each requesting device once per app and only absent visi
   assert.equal((await named(apps, false, async () => { throw new Error(); })).statusCode, 503);
   assert.deepEqual(await counts(), before);
   const res = { setHeader() {}, end(value) { this.body = JSON.parse(value); } };
-  await statsHandler(query, () => '', () => new Date(now * 1000), () => true,
-    async () => ({ versions: [{ version: '0.1.24', versionCode: 25, prerelease: false }] }))(
-    { method: 'GET', url: '/api/stats?group=period&from=' + day + '&to=' + day, headers: {} }, res);
+  await followingHandler(query, () => true,
+    async () => ({ versions: [{ version: '0.1.24', versionCode: 25, prerelease: false }] }), () => new Date(now * 1000))(
+    { method: 'GET', url: '/api/following-cache?from=' + day + '&to=' + day, headers: {} }, res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.followRankings.find(row => row.missRank === 1).name, 'Absent');
   assert.ok(res.body.followRankings.every(row => row.followers === '2'));

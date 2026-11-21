@@ -16,7 +16,7 @@ Usage and traffic receipts and aggregates update in one atomic SQL statement. Co
 
 Daily batches also carry cache hits and misses. App usage shows the hit rate for each cache as total hits divided by total lookups in the selected dates.
 
-- **Followed apps on Vercel** counts a hit when the fresh cache has a visible entry for the requested app name. A miss means that name was absent. A present entry can still require a direct search if its version is too old or incompatible. Outages, stale snapshots and skipped checks contribute neither. The App usage rankings count named cache lookups separately from the anonymous daily report.
+- **Following cache** at `/following-cache` counts a hit when the fresh cache has a visible entry for the requested app name. A miss means that name was absent. A present entry can still require a direct search if its version is too old or incompatible. Outages, stale snapshots and skipped checks contribute neither. The rankings count named cache lookups separately from the anonymous daily report.
 - **Member avatars and badges** counts a lookup as a hit when memory or disk supplies member metadata, including an avatar with badges still unknown.
 - **Search results** and **Forum API reads** count lookups of cached responses. Forced refreshes and reads without caching are excluded from read-cache totals.
 - **Release lists** count saved source pages reused by Home and Latest/Top. Latest expires after five minutes and Top after 15. Local filters run again on the saved data.

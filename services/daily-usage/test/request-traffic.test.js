@@ -6,6 +6,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { cleanReports, recordReport } from '../lib/database.js';
 import { DAY, readReport, utcDay, validateReport } from '../lib/protocol.js';
 import { createHandler as statsHandler } from '../api/stats.js';
+import { createHandler as followingHandler } from '../api/following-cache.js';
 import { createHandler as pingHandler } from '../api/ping.js';
 import { groupRequestTraffic, requestEndpoints, requestMethods, validateRequestTraffic } from '../public/request-traffic.js';
 
@@ -50,8 +51,12 @@ test('cache-only days share a receipt across retries and report weighted totals'
     async () => ({ versions: [{ version: '0.1.24', prerelease: false, versionCode: 25 }] }));
   const res = { setHeader() {}, end(body) { this.body = JSON.parse(body); } };
   await handler({ method: 'GET', url: `/api/stats?group=period&from=${dateAgo(2)}&to=${dateAgo(0)}`, headers: {} }, res);
-  assert.deepEqual(res.body.cacheUsage, [{ cache: 'FollowingBackground', hits: '3', misses: '7' }]);
+  assert.deepEqual(res.body.cacheUsage, []);
+  assert.equal('followRankings' in res.body, false);
   assert.deepEqual(res.body.requestTraffic, []);
+  await followingHandler(query, () => true, async () => ({ versions: [{ version: '0.1.24', prerelease: false, versionCode: 25 }] }))(
+    { method: 'GET', url: `/api/following-cache?from=${dateAgo(2)}&to=${dateAgo(0)}`, headers: {} }, res);
+  assert.deepEqual(res.body.cacheUsage, [{ cache: 'FollowingBackground', hits: '3', misses: '7' }]);
 });
 
 test('old clients remain valid and traffic rejects private or unbounded input', async () => {

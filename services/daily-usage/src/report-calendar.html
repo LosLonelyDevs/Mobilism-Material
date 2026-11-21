@@ -1,0 +1,16 @@
+  <div class="usage-period"><span id="period-label">Report dates (UTC)</span>
+    <button id="choose-dates" type="button" aria-haspopup="dialog" aria-controls="date-calendar" aria-labelledby="period-label choose-dates"></button>
+  </div>
+<dialog id="date-calendar" class="date-calendar" aria-labelledby="calendar-title" aria-describedby="calendar-hint">
+  <h2 id="calendar-title">Report dates</h2>
+  <p id="calendar-hint">Choose one day, or two dates for a range.</p>
+  <div class="calendar-nav">
+    <button id="prev-month" type="button" aria-label="Previous month">‹</button>
+    <strong id="calendar-month" aria-live="polite"></strong>
+    <button id="next-month" type="button" aria-label="Next month">›</button>
+  </div>
+  <div class="calendar-week" aria-hidden="true"><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span></div>
+  <div id="calendar-days" class="calendar-days" role="group" aria-labelledby="calendar-month"></div>
+  <p id="calendar-selection" aria-live="polite"></p>
+  <div class="calendar-actions"><button id="cancel-dates" type="button">Cancel</button><button id="apply-dates" type="button" class="primary">Apply</button></div>
+</dialog>

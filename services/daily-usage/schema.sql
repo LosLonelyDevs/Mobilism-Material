@@ -106,10 +106,18 @@ CREATE TABLE IF NOT EXISTS dashboard_users (
     is_admin boolean NOT NULL DEFAULT false,
     pages text[] NOT NULL DEFAULT '{}',
     auth_version integer NOT NULL DEFAULT 1,
-    CHECK (pages <@ ARRAY['overview', 'app-usage', 'app-controls']::text[]),
+    CONSTRAINT dashboard_users_pages_v2 CHECK (pages <@ ARRAY['overview', 'app-usage', 'app-controls', 'following-cache']::text[]),
     CHECK (id <> 'owner' OR (is_admin AND pages @> ARRAY['overview', 'app-usage', 'app-controls']::text[]))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS dashboard_users_username ON dashboard_users (lower(username));
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_constraint WHERE conrelid = 'dashboard_users'::regclass AND conname = 'dashboard_users_pages_v2') THEN
+        ALTER TABLE dashboard_users DROP CONSTRAINT dashboard_users_pages_check,
+            ADD CONSTRAINT dashboard_users_pages_v2 CHECK (pages <@ ARRAY['overview', 'app-usage', 'app-controls', 'following-cache']::text[]);
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS dashboard_sessions (
     nonce text PRIMARY KEY,

@@ -31,6 +31,7 @@ const paths = {
   arrow: 'M5 12h14m-6-6 6 6-6 6', plus: 'M12 5v14M5 12h14',
   close: 'm6 6 12 12M6 18 18 6', info: 'M12 11v6M12 7h.01',
   chart: 'M4 4v16h16M8 15v-4m5 4V7m5 8V4',
+  cache: 'M4 6c0-4 16-4 16 0s-16 4-16 0Zm0 0v12c0 4 16 4 16 0V6M4 12c0 4 16 4 16 0',
   controls: 'M4 7h7m4 0h5M4 17h3m4 0h9M11 4v6M7 14v6',
   home: 'm3 10 9-7 9 7v10h-6v-6H9v6H3Z',
   users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8M16 3.13a4 4 0 0 1 0 7.75',

@@ -7,6 +7,7 @@ import { resolve, extname, sep } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { createHandler as sessionHandler } from '../api/admin-session.js';
 import { createHandler as statsHandler } from '../api/stats.js';
+import { createHandler as followingHandler } from '../api/following-cache.js';
 import { createHandler as configHandler } from '../api/app-config.js';
 import { createHandler as controlHandler } from '../api/control-config.js';
 import { createHandler as releasesHandler } from '../api/releases.js';
@@ -45,6 +46,7 @@ const catalog = async () => ({
 });
 const releases = releasesHandler(catalog, access);
 const stats = statsHandler(query, () => '', () => new Date(), access, catalog);
+const following = followingHandler(query, access, catalog);
 if (futureFollowing) {
   const day = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   for (const endpoint of ['api/search', 'api/release', 'api/releases', 'forum/topic', 'images']) {
@@ -70,7 +72,7 @@ http.createServer(async (req, res) => {
     if (dashboardPreview && path === '/api/admin-session' && req.method === 'GET') {
       res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ authenticated: true, ...previewUser })); return;
     }
-    const handler = { '/api/admin-session': session, '/api/stats': stats, '/api/app-config': config, '/api/control-config': control, '/api/releases': releases,
+    const handler = { '/api/admin-session': session, '/api/stats': stats, '/api/following-cache': following, '/api/app-config': config, '/api/control-config': control, '/api/releases': releases,
       '/api/users': users, '/api/account': account }[path];
     if (handler) {
       const chunks = []; let length = 0;
@@ -79,7 +81,7 @@ http.createServer(async (req, res) => {
       await handler(req, res);
       return;
     }
-    const route = ['/', '/index.html', '/app-usage', '/app-usage/', '/app-controls', '/app-controls/', '/users', '/users/', '/account', '/account/'].includes(path);
+    const route = ['/', '/index.html', '/following-cache', '/following-cache/', '/app-usage', '/app-usage/', '/app-controls', '/app-controls/', '/users', '/users/', '/account', '/account/'].includes(path);
     const file = resolve(staticRoot, route ? 'index.html' : `.${path}`);
     if (!file.startsWith(resolve(staticRoot) + sep) || req.method !== 'GET') { res.writeHead(404); res.end(); return; }
     res.setHeader('Cache-Control', 'no-store');

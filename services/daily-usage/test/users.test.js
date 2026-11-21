@@ -8,6 +8,7 @@ import { createHandler as usersHandler } from '../api/users.js';
 import { createHandler as accountHandler } from '../api/account.js';
 import { createHandler as statsHandler } from '../api/stats.js';
 import { createHandler as controlsHandler } from '../api/control-config.js';
+import { createHandler as followingHandler } from '../api/following-cache.js';
 import { createHandler as releasesHandler } from '../api/releases.js';
 import { encodeBase32, totp } from '../lib/admin-auth.js';
 import { sessionUser } from '../lib/access.js';
@@ -108,9 +109,9 @@ test('app-controls grant permits saving fields without admin status or app-usage
   assert.equal((await call(statsHandler(query, () => '', () => new Date(time), access), { method: 'GET', cookie })).statusCode, 403);
 });
 
-test('admin status grants only user management; owner remains protected from other admins', async () => {
+test('admin status grants Following cache and user management; owner remains protected', async () => {
   const user = await createUser([], true), { cookie, user: auth } = await signIn(user);
-  assert.deepEqual(navigation(auth).map(item => item.id), ['users', 'account']);
+  assert.deepEqual(navigation(auth).map(item => item.id), ['following-cache', 'users', 'account']);
   assert.equal((await call(users, { method: 'GET', cookie })).statusCode, 200);
   assert.equal((await call(users, { method: 'DELETE', cookie, body: { id: 'owner', version: 1 } })).statusCode, 403);
   assert.equal((await call(users, { method: 'DELETE', cookie, body: { id: user.id, version: 1 } })).statusCode, 403);
@@ -119,6 +120,32 @@ test('admin status grants only user management; owner remains protected from oth
   time += 30000;
   const demoted = await signIn(user);
   assert.equal((await call(users, { method: 'GET', cookie: demoted.cookie })).statusCode, 403);
+  assert.equal(canAccess(demoted.user, 'following-cache'), false);
+});
+
+test('Following cache has its own grant and owns the pull switch across concurrent config edits', async () => {
+  const following = followingHandler(query, access, async () => ({ versions: [{ version: '0.1.24', prerelease: false, versionCode: 25 }] }));
+  const controls = controlsHandler(query, access);
+  const general = await signIn(await createUser(['app-usage', 'app-controls']));
+  const editor = await signIn(await createUser(['following-cache'], false, 'cache-editor'));
+  const read = (handler, cookie) => call(handler, { method: 'GET', cookie });
+  const put = (handler, cookie, body) => call(handler, { method: 'PUT', cookie, body });
+  const toggle = { revision: 0, enabled: true };
+  assert.equal((await read(following, general.cookie)).statusCode, 403);
+  assert.equal((await put(following, general.cookie, toggle)).statusCode, 403);
+  assert.equal((await read(controls, editor.cookie)).statusCode, 403);
+  const initial = (await read(controls, general.cookie)).body;
+  assert.deepEqual((await read(following, editor.cookie)).body.pullToRefresh, { revision: 0, enabled: false });
+  assert.equal((await call(following, { method: 'PUT', origin: 'https://elsewhere.example', cookie: editor.cookie, body: toggle })).statusCode, 403);
+  assert.equal((await put(following, editor.cookie, { ...toggle, limits: {} })).statusCode, 400);
+  assert.deepEqual((await put(following, editor.cookie, toggle)).body, { revision: 1, enabled: true });
+  assert.equal((await put(following, editor.cookie, toggle)).statusCode, 409);
+  assert.equal((await put(controls, general.cookie, initial)).statusCode, 409);
+  const current = (await read(controls, general.cookie)).body;
+  assert.equal('followPullToRefreshEnabled' in current.limits, false);
+  assert.equal((await put(controls, general.cookie, { ...current, limits: { followPullToRefreshEnabled: false } })).statusCode, 403);
+  assert.equal((await put(controls, general.cookie, { ...current, limits: {} })).statusCode, 200);
+  assert.equal((await read(following, editor.cookie)).body.pullToRefresh.enabled, true);
 });
 
 test('access changes revoke sessions and pending challenges; stale edits and deleted users cannot restore access', async () => {

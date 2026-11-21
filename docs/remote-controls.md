@@ -139,7 +139,9 @@ batch after 15 minutes by default. Each search reads page one. A Mobilism error
 ends the batch and server `Retry-After` still applies. With 20 cache misses,
 five direct searches every six hours take about a day to cover the list.
 
-The dashboard can ship before the next app release. The Following section stays
+Admins and users explicitly granted **Following cache** can view its reports and
+manage pull-to-refresh at `/following-cache`. The switch defaults to off.
+The other request thresholds live under **App controls**. The Following section stays
 hidden until the verified release catalog contains a stable v0.1.24 or newer.
 Vercel lookup controls can be prepared ahead of that release.
 Once available, it displays **Requires v0.1.24 or later.** Drafts, prereleases,

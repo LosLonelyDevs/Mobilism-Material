@@ -1,6 +1,11 @@
 .usage-page .admin-stats { grid-template-columns: 1.3fr repeat(2, minmax(0, 1fr)); }
 .usage-page .admin-heading { flex-wrap: wrap; }
 .usage-page [hidden] { display: none !important; }
+.following-report > button { margin-bottom: 16px; }
+.following-report .admin-panel h2 { margin: 0 0 12px; font-size: 17px; }
+.following-report .admin-panel p { color: var(--admin-muted); }
+.following-report .admin-traffic-table td:first-child { white-space: normal; overflow-wrap: anywhere; }
+.following-report .admin-traffic-table th { white-space: normal; }
 .usage-period { display: grid; gap: 6px; }
 .usage-period > span { font-size: 12px; color: var(--admin-muted); }
 .usage-page #choose-dates { min-height: 46px; padding: 10px 16px; font-weight: 600; }

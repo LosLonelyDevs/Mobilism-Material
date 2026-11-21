@@ -123,23 +123,7 @@ function renderSnapshot() {
   $('empty').hidden = rows.length > 0;
   $('request-traffic').hidden = !data.trafficAvailable;
   $('cache-usage').hidden = !data.trafficAvailable;
-  $('follow-rankings').hidden = !data.trafficAvailable;
   if (data.trafficAvailable) {
-    const rankings = (data.followRankings || []).filter(entry => rangeView || entry.day === selectedDay);
-    $('follow-unit').textContent = rangeView ? 'Device-days' : 'Reporting devices';
-    for (const [body, empty, rank, count] of [
-      ['most-followed', 'follow-empty', 'followRank', 'followers'],
-      ['most-missed', 'miss-empty', 'missRank', 'misses'],
-    ]) {
-      const top = rankings.filter(entry => entry[rank] <= 10 && BigInt(entry[count]) > 0n).sort((a, b) => a[rank] - b[rank]);
-      $(body).replaceChildren(...top.map(entry => {
-        const row = document.createElement('tr'), label = text('th', '', entry.name);
-        label.scope = 'row';
-        row.append(label, text('td', '', number(entry[count])));
-        return row;
-      }));
-      $(empty).hidden = top.length > 0;
-    }
     const caches = (data.cacheUsage || []).filter(entry => rangeView || entry.day === selectedDay);
     $('cache-rows').replaceChildren(...caches.map(entry => {
       const row = document.createElement('tr');

@@ -5,6 +5,12 @@ import { authorize, sessionUser } from '../lib/access.js';
 import { respond } from '../lib/protocol.js';
 import { validateConfig } from '../public/config-schema.js';
 
+function controlsView(config) {
+  const limits = { ...config.limits };
+  delete limits.followPullToRefreshEnabled;
+  return { ...config, limits };
+}
+
 export function createHandler(database = query, session = req => sessionUser(req, { database })) {
   return async (req, res) => {
     if (!await authorize(req, res, 'app-controls', session)) return;
@@ -13,7 +19,7 @@ export function createHandler(database = query, session = req => sessionUser(req
       return respond(res, 405, { error: 'Use GET or PUT' });
     }
     if (req.method === 'GET') {
-      try { return respond(res, 200, await readConfig(database)); }
+      try { return respond(res, 200, controlsView(await readConfig(database))); }
       catch { return respond(res, 503, { error: 'Configuration unavailable' }); }
     }
     if (!sameOrigin(req)) return respond(res, 403, { error: 'Request denied' });
@@ -25,12 +31,15 @@ export function createHandler(database = query, session = req => sessionUser(req
       if (typeof body !== 'string') body = JSON.stringify(body);
       if (!body || Buffer.byteLength(body) > 65536) return respond(res, 413, { error: 'Configuration too large' });
       config = validateConfig(JSON.parse(body));
-      if (Buffer.byteLength(JSON.stringify(publicConfig(config))) > 65536)
-        return respond(res, 413, { error: 'Audience configuration too large. Use fewer usernames or notices.' });
+      if ('followPullToRefreshEnabled' in config.limits) return respond(res, 403, { error: 'Manage pull-to-refresh on the Following cache page.' });
     } catch (error) { return respond(res, 400, { error: error instanceof SyntaxError ? 'Invalid JSON' : error.message }); }
     try {
+      const current = await readConfig(database);
+      if ('followPullToRefreshEnabled' in current.limits) config.limits.followPullToRefreshEnabled = current.limits.followPullToRefreshEnabled;
+      if (Buffer.byteLength(JSON.stringify(publicConfig(config))) > 65536)
+        return respond(res, 413, { error: 'Audience configuration too large. Use fewer usernames or notices.' });
       const saved = await saveConfig(database, config);
-      return saved ? respond(res, 200, saved) : respond(res, 409, { error: 'Configuration changed elsewhere. Reload before publishing.' });
+      return saved ? respond(res, 200, controlsView(saved)) : respond(res, 409, { error: 'Configuration changed elsewhere. Reload before publishing.' });
     } catch { return respond(res, 503, { error: 'Could not publish. Try again.' }); }
   };
 }

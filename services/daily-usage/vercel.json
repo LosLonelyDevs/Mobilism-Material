@@ -3,6 +3,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/following-cache", "destination": "/index.html" },
+    { "source": "/following-cache/", "destination": "/index.html" },
     { "source": "/app-usage", "destination": "/index.html" },
     { "source": "/app-controls", "destination": "/index.html" },
     { "source": "/app-usage/", "destination": "/index.html" },

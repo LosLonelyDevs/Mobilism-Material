@@ -20,7 +20,7 @@ An entry expires 24 hours after its last sighting. It can disappear sooner when 
 
 ## Dashboard sign-in
 
-The landing page shows an overview with links to **App usage** at `/app-usage` and **App controls** at `/app-controls`. App Controls uses AHFU components for notices, audience rules, schedules, and API thresholds. See [Remote app controls](../../docs/remote-controls.md) and [component notes](../../docs/dashboard-components.md). Apply `schema.sql` before deploying this feature.
+The overview links to each page the user can access. **App usage** lives at `/app-usage`. **Following cache** at `/following-cache` shows hit rates, most followed apps, cache misses, and the pull-to-refresh switch. Admins have access automatically. Grant other accounts this page from Users. **App controls** at `/app-controls` manages notices and API thresholds. See [Remote app controls](../../docs/remote-controls.md) and [component notes](../../docs/dashboard-components.md). Apply `schema.sql` before deployment.
 
 The Overview’s App usage card shows today’s client share by app version. Each card uses its destination’s page permission.
 

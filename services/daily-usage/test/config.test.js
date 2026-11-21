@@ -132,7 +132,7 @@ test('all API overrides reject invalid bounds and accept shipped defaults', () =
 test('upstream policy thresholds round-trip through the protected editor and public endpoint', async () => {
   const limits = Object.fromEntries(limitFields.map(([key, , fallback]) => [key, fallback]));
   Object.assign(limits, { readSpacingMs: 2000, readConcurrency: 1, messagePollIntervalMs: 180000,
-    memberLookupSpacingMs: 5000, debridRefreshIntervalMs: 60000, followPullToRefreshEnabled: true });
+    memberLookupSpacingMs: 5000, debridRefreshIntervalMs: 60000 });
   const saved = await call(adminHandler(query, () => true), { method: 'PUT', body: { ...defaultConfig(), limits } });
   assert.equal(saved.statusCode, 200);
   assert.deepEqual((await call(publicHandler(query))).body.limits, limits);

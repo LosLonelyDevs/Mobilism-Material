@@ -3,12 +3,14 @@ import { createRoot } from 'react-dom/client';
 import { api, today } from './api';
 import { Button, Card, Heading, HStack, Icon, InputField, Link, Notice, Skeleton, Text, TextPairing, VStack, Help } from './ui';
 import Controls from './controls';
+import FollowingCache from './following-cache';
 import Users from './users';
 import Account from './account';
 import VersionShare from './version-share';
 import { canAccess, navigation, PAGES } from '../public/access';
 import { mountUsage } from './usage';
 import usageMarkup from './usage.html?raw';
+import calendarMarkup from './report-calendar.html?raw';
 import './app.css';
 
 const routes = [...PAGES, { id: 'users', href: '/users', label: 'Users', icon: 'users' },
@@ -102,8 +104,13 @@ function Overview({ user }) {
           <div className="destination-metrics"><div><span className="metric-value">{active ?? <Skeleton width={60} height={38} />}</span><span className="muted">Live notices</span></div><div><span className="metric-value">{config ? Object.keys(config.limits).length : '…'}</span><span className="muted">API overrides</span></div></div>}
         <span className="destination-action">Manage app controls <Icon name="arrow" size={17} /></span>
       </Card></a>}
+      {canAccess(user, 'following-cache') && <a href="/following-cache" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
+        <div className="destination-top"><span className="destination-icon"><Icon name="cache" size={26} /></span><Icon name="arrow" /></div>
+        <Heading level={2}>Following cache</Heading><Text>Cache hit rates, most followed apps, and pull-to-refresh.</Text>
+        <span className="destination-action">View Following cache <Icon name="arrow" size={17} /></span>
+      </Card></a>}
     </div>
-    {!showUsage && !showControls ? <Card><Text>No app pages are assigned to your account.</Text><Link href="/account">Open My account</Link></Card> :
+    {!showUsage && !showControls && !canAccess(user, 'following-cache') ? <Card><Text>No app pages are assigned to your account.</Text><Link href="/account">Open My account</Link></Card> :
       <div className="overview-note"><Help label="About these metrics">{[showUsage && 'Activity counts installations active on the current UTC date.', showControls && 'A live notice can still target only selected accounts or builds.'].filter(Boolean).join(' ')}</Help><span>Today’s snapshot</span></div>}
   </div>;
 }
@@ -111,7 +118,7 @@ function Overview({ user }) {
 function Usage() {
   const root = useRef(null);
   useEffect(() => mountUsage(root.current, () => window.dispatchEvent(new Event('admin-expired'))), []);
-  return <div ref={root} className="admin-dashboard usage-page" dangerouslySetInnerHTML={{ __html: usageMarkup }} />;
+  return <div ref={root} className="admin-dashboard usage-page" dangerouslySetInnerHTML={{ __html: usageMarkup.replace('<!-- report-calendar -->', calendarMarkup) }} />;
 }
 
 function App() {
@@ -140,6 +147,7 @@ function App() {
     {error && <Notice variant="danger">{error}</Notice>}
     {!allowed ? <VStack gap={16}><Heading level={1}>{route ? 'Access denied' : 'Page not found'}</Heading><Text>{route ? 'You do not have access to this page.' : 'This page does not exist.'}</Text><Link href={allowedRoutes[0].href}>Open an available page</Link></VStack>
       : path === '/' ? <Overview user={auth} /> : path === '/app-usage' ? <Usage /> : path === '/app-controls' ? <Controls />
+        : path === '/following-cache' ? <FollowingCache />
         : path === '/users' ? <Users currentUser={auth} onSignedOut={signedOut} /> : <Account user={auth} onSignedOut={signedOut} />}
   </main></>;
 }

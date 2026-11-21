@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { Button, Card, Heading, InputField, Modal, Notice, Switch, Text } from './ui';
-import { PAGES } from '../public/access';
+import { canAccess, PAGES } from '../public/access';
 import './users.css';
 
 export function CopyValue({ label, value }) {
@@ -18,8 +18,8 @@ export function CopyValue({ label, value }) {
 function Permissions({ value, onChange, disabled = false }) {
   return <fieldset className="permissions" disabled={disabled}><legend>Role and page access</legend>
     <Switch label="Admin" checked={value.isAdmin} disabled={disabled} onChange={e => onChange({ ...value, isAdmin: e.target.checked })} />
-    <Text>Admins can manage other users. Page access includes editing.</Text>
-    {PAGES.map(page => <Switch key={page.id} label={page.label} checked={value.pages.includes(page.id)} disabled={disabled}
+    <Text>Admins can manage users and the Following cache. Page access includes editing.</Text>
+    {PAGES.map(page => <Switch key={page.id} label={page.label} checked={value.pages.includes(page.id) || (value.isAdmin && page.id === 'following-cache')} disabled={disabled || (value.isAdmin && page.id === 'following-cache')}
       onChange={e => onChange({ ...value, pages: e.target.checked ? [...value.pages, page.id] : value.pages.filter(id => id !== page.id) })} />)}
     <Text>Every user can open My account.</Text>
   </fieldset>;
@@ -65,7 +65,7 @@ export default function Users({ currentUser, onSignedOut }) {
     {status && <div role="status"><Notice>{status}</Notice></div>}
     {!users ? <Text>Loading users…</Text> : <div className="user-list">{users.map(user => <Card key={user.id} style={{ borderRadius: 24 }}>
       <div className="user-row"><div><Heading level={2}>{user.username}</Heading><Text>{user.isOwner ? 'Owner · Protected admin' : user.isAdmin ? 'Admin' : 'User'}</Text>
-        <p className="muted">{user.pages.map(id => PAGES.find(page => page.id === id)?.label).join(' · ') || 'My account only'}{user.isAdmin ? ' · User management' : ''}</p></div>
+        <p className="muted">{PAGES.filter(page => canAccess(user, page.id)).map(page => page.label).join(' · ') || 'My account only'}{user.isAdmin ? ' · User management' : ''}</p></div>
       {user.isOwner ? <span className="owner-badge">Cannot be deleted or restricted</span> : <div className="user-actions">
         <Button onClick={() => { setError(''); setCreated(false); setDraft({ ...user }); }}>Edit access</Button>
         {user.id !== currentUser.id && <Button onClick={() => { setError(''); setDeleting(user); }}>Delete</Button>}
