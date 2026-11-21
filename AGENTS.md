@@ -18,9 +18,13 @@ Keep sensitive details out of release notes.
 Keep new changelog entries within 40 words, including Unreleased. Version headings
 and bullet markers do not count. `:app:testDebugUnitTest` enforces the limit.
 Published entries through 0.1.16 keep their existing text.
-Use `SettingsSubtitle` for Settings section subtitles: shared bodyMedium sizing,
-at most 10 words, one sentence, and two lines. Describe Premium indicators with
-checkmarks so the copy works across themes.
+Omit settings descriptions when the label is clear. This applies to settings
+controls anywhere in the app, including Following. Never write a paragraph or
+stack descriptions under a control. When a description is needed, use
+`SettingsSubtitle` and keep it to one visible line, at most 10 words. A longer
+description requires the owner's explicit approval for that specific instance.
+Check the rendered text before shipping. Shorten or remove any new copy that
+wraps. Describe Premium indicators with checkmarks so the copy works across themes.
 Keep the About description, sourced from README's second paragraph, within 25
 words and use a neutral perspective.
 Keep the saved landing page separate from current browsing. Fresh installs open

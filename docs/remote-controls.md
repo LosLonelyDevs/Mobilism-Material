@@ -122,26 +122,26 @@ apps per batch (`followBatchSize`), the minimum interval per app
 (`followAppIntervalMs`), and the minimum interval between attempts
 (`followAttemptIntervalMs`). Defaults stay at five apps, six hours, and 15 minutes.
 These limits apply to both manual and background checks, oldest checks first.
-The app displays the effective limits. Changing limits does not reset check history.
+Changing limits preserves check history.
 
 **Following on Vercel** controls the automatic interval, apps per background request,
 manual cooldown, and pull-to-refresh gesture. The gesture defaults off. Save the
-switch to enable it on compatible clients. Check now and pull share one cooldown
-and check the whole watchlist in one request. Background checks rotate through
+switch to enable it on compatible clients. Pulling checks the whole watchlist in
+one request, subject to the manual cooldown. Background checks rotate through
 larger lists. A batch size of zero disables cache reads and contributions.
 Users can select a slower schedule or turn background checks off.
 
 Each check compares followed apps against one shared snapshot. If there is no
 usable match or Vercel is unavailable, the existing direct-search budget applies.
 Background direct searches still run at most once per six hours, or less often
-if the user selected a longer interval. Check now can start another eligible
+if the user selected a longer interval. A pull can start another eligible
 batch after 15 minutes by default. Each search reads page one. A Mobilism error
 ends the batch and server `Retry-After` still applies. With 20 cache misses,
 five direct searches every six hours take about a day to cover the list.
 
-Admins and users explicitly granted **Following cache** can view its reports and
+Admins and users explicitly granted **Cache** can view its reports and
 manage pull-to-refresh at `/following-cache`. The switch defaults to off.
-The other request thresholds live under **App controls**. The Following section stays
+The other request thresholds live under **Controls**. The Following section stays
 hidden until the verified release catalog contains a stable v0.1.24 or newer.
 Vercel lookup controls can be prepared ahead of that release.
 Once available, it displays **Requires v0.1.24 or later.** Drafts, prereleases,

@@ -16,14 +16,15 @@ Usage and traffic receipts and aggregates update in one atomic SQL statement. Co
 
 Daily batches also carry cache hits and misses. App usage shows the hit rate for each cache as total hits divided by total lookups in the selected dates.
 
-- **Following cache** at `/following-cache` counts a hit when the fresh cache has a visible entry for the requested app name. A miss means that name was absent. A present entry can still require a direct search if its version is too old or incompatible. Outages, stale snapshots and skipped checks contribute neither. The rankings count named cache lookups separately from the anonymous daily report.
+- **Cache** at `/following-cache` counts named lookups as they arrive. Today includes the current partial UTC day. A returned app is a hit. An absent name in a fresh snapshot is a miss. When the feed is stale, only individually confirmed hits count. Filtered entries and failed requests count as neither. The rate uses the period with both hit and miss tracking. Device reports arrive after each UTC day ends.
+- Both rankings show the version in the cache now. The cache keeps one release per normalized app name, selected by post date. A cached version can still require a direct search for a compatible update. Eligible clients contribute exact matches from those existing searches in batches.
 - **Member avatars and badges** counts a lookup as a hit when memory or disk supplies member metadata, including an avatar with badges still unknown.
 - **Search results** and **Forum API reads** count lookups of cached responses. Forced refreshes and reads without caching are excluded from read-cache totals.
 - **Release lists** count saved source pages reused by Home and Latest/Top. Latest expires after five minutes and Top after 15. Local filters run again on the saved data.
 - **Inbox** and **Release comments** count first pages reused in memory within 60 seconds. Private message bodies stay out of persistent cache storage.
 - **Mobilism images** counts successful loads from memory or disk as hits and successful network loads as misses. Diagnostic logs distinguish memory and disk.
 
-Export **Settings > Diagnostic logs** and search for `FollowingCheck` to see the snapshot outcome, usable items, matched and missed apps, and actual fallback search attempts. The `background` flag distinguishes scheduled checks from Check now. `CacheContribution` records feed submissions. Verbose logging also includes individual member, search, and read cache outcomes. Anonymous reports contain counts only.
+Export **Settings > Diagnostic logs** and search for `FollowingCheck` to see the snapshot outcome, usable items, matched and missed apps, and actual fallback search attempts. The `background` flag distinguishes scheduled checks from manual checks such as pull-to-refresh. `CacheContribution` records feed submissions. Verbose logging also includes individual member, search, and read cache outcomes. Anonymous reports contain counts only.
 
 These are anonymous reporting-client counts, not server-wide traffic or real-time logs. Current-day totals arrive on a later foreground daily report. Inactive clients, opt-outs, offline delivery, capped buckets, storage failure, and incorrect clocks can omit data. The service cannot authenticate individual request counts from a public client.
 

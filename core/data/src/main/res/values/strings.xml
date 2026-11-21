@@ -1,0 +1,17 @@
+<resources>
+    <string name="login_response_missing">The server did not return a login session. Please try again.</string>
+    <string name="original_post_missing">The forum did not return the original post. Try again later.</string>
+    <string name="like_unconfirmed">The server did not confirm the thumbs-up state.</string>
+    <string name="forum_empty">The forum returned an empty response.</string>
+    <string name="forum_oversize">The forum response was too large.</string>
+    <string name="forum_http_status">The forum could not load this page (HTTP %1$d).</string>
+    <string name="network_disabled">Network access is disabled for Mobilism. Enable Network in app permissions.</string>
+    <string name="api_empty">The server returned an empty response.</string>
+    <string name="api_oversize">The server response was too large.</string>
+    <string name="api_unreadable">The server returned an unreadable response.</string>
+    <string name="login_rejected">Login was rejected. Check your username and password.</string>
+    <string name="session_expired">Your session has expired. Sign in again.</string>
+    <string name="rate_limited">Mobilism is limiting requests. Wait a moment and try again.</string>
+    <string name="http_status">Mobilism could not complete the request (HTTP %1$d).</string>
+    <string name="network_blocked">Network access is blocked. Check Mobilism\'s app permissions.</string>
+</resources>

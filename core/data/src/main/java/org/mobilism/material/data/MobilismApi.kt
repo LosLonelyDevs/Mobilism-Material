@@ -68,7 +68,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         val result = request("auth/login", form = mapOf("username" to username, "password" to password))
         val token = result.optString("access_token")
         if (token.isBlank() || token == "null") throw ApiFailure(
-            FailureKind.InvalidResponse, "The server did not return a login session. Please try again.",
+            FailureKind.InvalidResponse, context.getString(R.string.login_response_missing),
         )
         return Session(username, token, result.optString("refresh_token").takeUnless { it.isBlank() || it == "null" },
             result.optLong("id").takeIf { it > 0 })
@@ -159,11 +159,11 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         val postId = release.likeId?.takeIf { it > 0 }
             ?: likePostIds.getLong(release.id.toString(), 0).takeIf { it > 0 }
             ?: ReleaseLikes.postId(forumTopic(release.id))
-            ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum did not return the original post. Try again later.")
+            ?: throw ApiFailure(FailureKind.InvalidResponse, context.getString(R.string.original_post_missing))
         likePostIds.edit().putLong(release.id.toString(), postId).apply()
         val response = request("post/like", token, mapOf("id" to postId.toString())).getJSONObject("response")
         return ReleaseLikes.liked(response)
-            ?: throw ApiFailure(FailureKind.InvalidResponse, "The server did not confirm the thumbs-up state.")
+            ?: throw ApiFailure(FailureKind.InvalidResponse, context.getString(R.string.like_unconfirmed))
     }
 
     // This is a forum guide, not a release in the app catalog.
@@ -325,9 +325,9 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             request.header("User-Agent", AppUserAgent.value(context))
             client.newCall(request.build()).await().use { response ->
                 userAgentChanged = AppUserAgent.response(context, response.code)
-                val source = response.body?.source() ?: throw ApiFailure(FailureKind.InvalidResponse, "The forum returned an empty response.")
+                val source = response.body?.source() ?: throw ApiFailure(FailureKind.InvalidResponse, context.getString(R.string.forum_empty))
                 source.request(MAX_RESPONSE_BYTES + 1)
-                if (source.buffer.size > MAX_RESPONSE_BYTES) throw ApiFailure(FailureKind.InvalidResponse, "The forum response was too large.")
+                if (source.buffer.size > MAX_RESPONSE_BYTES) throw ApiFailure(FailureKind.InvalidResponse, context.getString(R.string.forum_oversize))
                 val html = source.readUtf8()
                 val challenged = NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", html,
                     VerificationSite.Forum)?.kind == FailureKind.Challenge
@@ -335,7 +335,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                 if (!response.isSuccessful || challenged) {
                     NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", html,
                         VerificationSite.Forum)?.let { throw it }
-                    throw ApiFailure(FailureKind.Server, "The forum could not load this page (HTTP ${response.code}).", response.code)
+                    throw ApiFailure(FailureKind.Server, context.getString(R.string.forum_http_status, response.code), response.code)
                 }
                 html
             }
@@ -362,7 +362,11 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         })
         return JSONObject(searches.request(key) {
             reads.checkAllowed()
-            performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead = false, emptySuccess = emptySuccess).toString()
+            val at = System.currentTimeMillis() / 1000
+            val result = performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead = false, emptySuccess = emptySuccess)
+            kotlin.coroutines.coroutineContext[FollowSearchObservation]?.observed(at, hideAdult,
+                (result.optJSONArray("releases")?.length() ?: 0) >= PAGE_SIZE)
+            result.toString()
         })
     }
 
@@ -382,7 +386,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.INTERNET) != PackageManager.PERMISSION_GRANTED) {
                 diagnostics.record(DiagnosticEvent(DiagnosticSource.Forum, operation, DiagnosticPhase.Failed,
                     failure = DiagnosticFailure.Permission))
-                throw ApiFailure(FailureKind.Permission, "Network access is disabled for Mobilism. Enable Network in app permissions.")
+                throw ApiFailure(FailureKind.Permission, context.getString(R.string.network_disabled))
             }
             val url = BASE_URL.resolve(path)!!.newBuilder().apply {
                 if (hideAdult) addQueryParameter("no_adult", "1")
@@ -422,11 +426,11 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                 result.use { response ->
                     userAgentChanged = AppUserAgent.response(context, response.code)
                     if (path == "search" && !response.isSuccessful) searches.retryAfter(response.header("Retry-After"))
-                    val body = response.body ?: throw ApiFailure(FailureKind.InvalidResponse, "The server returned an empty response.")
+                    val body = response.body ?: throw ApiFailure(FailureKind.InvalidResponse, context.getString(R.string.api_empty))
                     val source = body.source()
                     source.request(MAX_RESPONSE_BYTES + 1)
                     if (source.buffer.size > MAX_RESPONSE_BYTES) throw ApiFailure(
-                        FailureKind.InvalidResponse, "The server response was too large.",
+                        FailureKind.InvalidResponse, context.getString(R.string.api_oversize),
                     )
                     val text = source.readUtf8()
                     val challenged = NetworkFailures.response(response.code, response.header("cf-mitigated") == "challenge", text)
@@ -438,7 +442,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                         if (emptySuccess && response.isSuccessful && (text.isBlank() || text.trim() == "null")) JSONObject()
                         else JSONObject(text)
                     } catch (_: JSONException) {
-                        throw ApiFailure(FailureKind.InvalidResponse, "The server returned an unreadable response.")
+                        throw ApiFailure(FailureKind.InvalidResponse, context.getString(R.string.api_unreadable))
                     }
                     // Comments use HTTP 400 for an empty page, including the end of pagination.
                     if (emptyRecordsAsArray && response.code == 400 && json.optJSONObject("error")?.optString("text") == "No records found.") {
@@ -451,10 +455,10 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                             else -> FailureKind.Server
                         }
                         val fallback = when (kind) {
-                            FailureKind.Credentials -> "Login was rejected. Check your username and password."
-                            FailureKind.Session -> "Your session has expired. Sign in again."
-                            else -> if (response.code == 429) "Mobilism is limiting requests. Wait a moment and try again."
-                                else "Mobilism could not complete the request (HTTP ${response.code})."
+                            FailureKind.Credentials -> context.getString(R.string.login_rejected)
+                            FailureKind.Session -> context.getString(R.string.session_expired)
+                            else -> if (response.code == 429) context.getString(R.string.rate_limited)
+                                else context.getString(R.string.http_status, response.code)
                         }
                         val message = json.optJSONObject("error")?.optString("text")
                             ?.takeIf { it.isNotBlank() && !it.contains('<') }?.take(240) ?: fallback
@@ -482,7 +486,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             } catch (_: SecurityException) {
                 diagnostics.record(DiagnosticEvent(DiagnosticSource.Forum, operation, DiagnosticPhase.Failed,
                     failure = DiagnosticFailure.Permission))
-                throw ApiFailure(FailureKind.Permission, "Network access is blocked. Check Mobilism's app permissions.")
+                throw ApiFailure(FailureKind.Permission, context.getString(R.string.network_blocked))
             } catch (failure: IOException) {
                 diagnostics.record(DiagnosticEvent(DiagnosticSource.Forum, operation, DiagnosticPhase.Failed,
                     failure = NetworkFailures.category(failure)))

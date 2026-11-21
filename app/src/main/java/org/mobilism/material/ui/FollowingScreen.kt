@@ -20,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -27,7 +29,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.milliseconds
+import org.mobilism.material.R
 import org.mobilism.material.data.*
 import org.mobilism.material.designsystem.*
 import org.mobilism.material.following.*
@@ -42,10 +44,10 @@ fun FollowingScreen(
 ) {
     val context = LocalContext.current
     val sharedCache = limits.followCacheBatchSize > 0 && org.mobilism.material.BuildConfig.DAILY_USAGE_ENDPOINT.isNotBlank()
-    val intervalMinutes = maxOf(preferences.intervalHours * 60, if (sharedCache)
-        limits.followCacheIntervalMinutes.toLong() else org.mobilism.material.following.FollowCheckPolicy.MIN_BACKGROUND_INTERVAL_HOURS * 60)
     val theme = LocalAppTheme.current
     val snackbar = remember { SnackbarHostState() }
+    val unfollowedLabel = stringResource(R.string.follow_unfollowed)
+    val undoLabel = stringResource(R.string.action_undo)
     val scope = rememberCoroutineScope()
     var allowed by remember { mutableStateOf(notifications.allowed()) }
     var frequencyMenu by remember { mutableStateOf(false) }
@@ -67,26 +69,23 @@ fun FollowingScreen(
         onLink(entry.release.id, app?.packageName); linkEntry = null
     }) }
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = { TopAppBar(
-        title = { AppHeading("Following", HeadingLevel.Page, style = MaterialTheme.typography.titleLarge) },
-        navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack) },
+        title = { AppHeading(stringResource(R.string.drawer_following), HeadingLevel.Page, style = MaterialTheme.typography.titleLarge) },
+        navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.action_back), onBack) },
     ) }) { padding ->
         FeedRefreshContainer(check.busy, check.busy, onCheck, modifier = Modifier.padding(padding),
             enabled = limits.followPullToRefreshEnabled && sharedCache && followed.isNotEmpty(),
-            indicatorDescription = "Checking followed apps") {
+            indicatorDescription = stringResource(R.string.follow_checking_apps)) {
             LazyColumn(Modifier.align(Alignment.TopCenter).widthIn(max = 840.dp).fillMaxSize(), contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 item(key = "settings") {
                     Card(shape = MaterialTheme.shapes.extraLarge, modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            AppHeading("Update checks", HeadingLevel.Section, style = MaterialTheme.typography.titleMedium)
+                            AppHeading(stringResource(R.string.follow_update_checks), HeadingLevel.Section, style = MaterialTheme.typography.titleMedium)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("Background checks", style = MaterialTheme.typography.titleSmall)
-                                    Text("About every ${(intervalMinutes * 60_000).milliseconds}. Android may delay checks to save battery.", style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
+                                val label = stringResource(R.string.follow_background_checks)
+                                Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                                 Switch(preferences.backgroundChecks, settings::background,
-                                    modifier = Modifier.semantics { contentDescription = "Background checks" })
+                                    modifier = Modifier.semantics { contentDescription = label })
                             }
                             Box {
                                 FilledTonalButton(onClick = { frequencyMenu = true }, enabled = preferences.backgroundChecks) {
@@ -103,11 +102,8 @@ fun FollowingScreen(
                                 }
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("New version notifications", style = MaterialTheme.typography.titleSmall)
-                                    Text("One alert per version. Tap it to open the release.", style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
+                                val label = stringResource(R.string.follow_notifications)
+                                Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                                 Switch(preferences.notifications && allowed, { enabled ->
                                     if (!enabled) settings.notifications(false)
                                     else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
@@ -117,34 +113,31 @@ fun FollowingScreen(
                                         allowed = notifications.allowed()
                                         if (allowed) onCheck() else openNotificationSettings()
                                     }
-                                }, modifier = Modifier.semantics { contentDescription = "New version notifications" })
+                                }, modifier = Modifier.semantics { contentDescription = label })
                             }
-                            if (!allowed) TextButton(onClick = openNotificationSettings) { Text("Notification settings") }
-                            Button(onClick = onCheck, enabled = followed.isNotEmpty() && !check.busy, modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Outlined.Refresh, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
-                                Text(if (check.busy) "Checking ${check.done} of ${check.total}…" else "Check now")
+                            if (!allowed) TextButton(onClick = openNotificationSettings) { Text(stringResource(R.string.follow_notification_settings)) }
+                            if (check.busy) {
+                                Text(stringResource(R.string.follow_check_progress, check.done, check.total), style = MaterialTheme.typography.bodySmall)
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large))
                             }
-                            Text("Follow as many apps as you like. " +
-                                (if (sharedCache) "We check the shared Latest list first. " else "") +
-                                "Direct Mobilism searches check up to ${limits.followBatchSize} at a time, oldest due first. " +
-                                "Check now can start another batch after ${limits.followAttemptIntervalMs.milliseconds}. " +
-                                "Each app is eligible for direct search again after ${limits.followAppIntervalMs.milliseconds}.",
-                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            if (check.busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large))
-                            if (!check.busy && check.total > 0) Text("Checked ${check.done} of ${check.total}" +
-                                if (check.failed > 0) " · ${check.failed} failed. Try again." else "",
+                            if (!check.busy && check.total > 0) Text(
+                                if (check.failed > 0) stringResource(R.string.follow_check_failed, check.done, check.total, check.failed)
+                                else stringResource(R.string.follow_check_complete, check.done, check.total),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (check.failed > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
                 error?.let { item { ErrorPanel(it, onRetry = onCheck) } }
-                if (followed.isEmpty()) item { Text("Open an Apps release and choose Follow app. New versions will appear here.", Modifier.padding(16.dp)) }
+                if (followed.isEmpty()) item { Text(stringResource(R.string.follow_empty), Modifier.padding(16.dp)) }
                 items(followed, key = { it.release.id }) { entry ->
                     val device = FollowingVersions.matchingInstalled(entry, installed)
                     FollowingCard(entry, device, onRelease, onLink = { linkEntry = entry }, onUnfollow = {
                         store.watch(entry.release, false)
-                        scope.launch { if (snackbar.showSnackbar("App unfollowed", "Undo") == SnackbarResult.ActionPerformed) store.restore(entry) }
+                        scope.launch {
+                            if (snackbar.showSnackbar(unfollowedLabel, undoLabel) == SnackbarResult.ActionPerformed)
+                                store.restore(entry)
+                        }
                     })
                 }
             }
@@ -152,10 +145,10 @@ fun FollowingScreen(
     }
 }
 
+@Composable
 private fun followIntervalLabel(hours: Long): String = when (hours) {
-    0L -> "Automatic"
-    1L -> "Every hour"
-    else -> "Every $hours hours"
+    0L -> stringResource(R.string.follow_automatic)
+    else -> pluralStringResource(R.plurals.follow_every_hours, hours.toInt(), hours)
 }
 
 @Composable
@@ -169,32 +162,34 @@ private fun FollowingCard(entry: LibraryEntry, installed: InstalledVersion?, onR
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 AsyncImage(entry.release.thumbnail, null, Modifier.size(56.dp).clip(MaterialTheme.shapes.medium))
                 AppHeading(title.name, HeadingLevel.Subsection, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                AppIconButton(Icons.Outlined.BookmarkRemove, "Unfollow ${title.name}", onUnfollow)
+                AppIconButton(Icons.Outlined.BookmarkRemove, stringResource(R.string.follow_unfollow_app, title.name), onUnfollow)
             }
-            Text(installed?.let { "Installed: ${it.version} (build ${it.versionCode})" }
-                ?: if (entry.linkedPackage != null || ReleaseVersions.packageName(entry.release) != null) "Not found on this device" else "Installed app not linked",
+            Text(installed?.let { stringResource(R.string.follow_installed_version, it.version, it.versionCode) }
+                ?: stringResource(if (entry.linkedPackage != null || ReleaseVersions.packageName(entry.release) != null) R.string.follow_not_found else R.string.follow_not_linked),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
-            Text("Latest found: " + (latest?.version?.let { "v$it" } ?: "Version not detected") +
-                (latest?.build?.let { " (build $it)" } ?: ""), style = MaterialTheme.typography.bodyMedium)
+            val version = latest?.version?.let { stringResource(R.string.follow_version, it) } ?: stringResource(R.string.follow_no_version)
+            Text(latest?.build?.let { stringResource(R.string.follow_latest_build, version, it) }
+                ?: stringResource(R.string.follow_latest, version), style = MaterialTheme.typography.bodyMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ReleaseViewCount((result.latest ?: entry.release).views)
                 ReleasePostDate((result.latest ?: entry.release).publishedAt)
             }
-            if (installed == null) Text("Tracking the followed release: " + (title.version?.let { "v$it" } ?: "Unknown version"),
+            if (installed == null) Text(stringResource(R.string.follow_tracking_version,
+                title.version?.let { stringResource(R.string.follow_version, it) } ?: stringResource(R.string.follow_unknown_version)),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (!result.comparable) Text("This version couldn't be compared automatically.", style = MaterialTheme.typography.bodySmall)
+            if (!result.comparable) Text(stringResource(R.string.follow_cannot_compare), style = MaterialTheme.typography.bodySmall)
             result.update?.let { update ->
                 Button({ onRelease(update.id) }, Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = theme.success, contentColor = theme.onSuccess)) {
-                    Icon(Icons.Outlined.NewReleases, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("View update")
+                    Icon(Icons.Outlined.NewReleases, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.follow_view_update))
                 }
             }
             FilledTonalButton(onClick = onLink) { Icon(Icons.Outlined.Link, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
-                Text(if (installed == null) "Link installed app" else "Change linked app") }
+                Text(stringResource(if (installed == null) R.string.follow_link_app else R.string.follow_change_app)) }
             entry.checkError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             entry.checkedAt?.let { time ->
-                Text((if (result.update == null && result.comparable) "No newer matching release found · " else "Checked · ") +
-                    DateUtils.getRelativeTimeSpanString(time, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS),
+                Text(stringResource(if (result.update == null && result.comparable) R.string.follow_no_newer_release else R.string.follow_checked_at,
+                    DateUtils.getRelativeTimeSpanString(time, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -207,16 +202,16 @@ private fun InstalledAppSheet(apps: List<InstalledVersion>, onDismiss: () -> Uni
     var query by remember { mutableStateOf("") }
     ModalBottomSheet(onDismissRequest = onDismiss, shape = MaterialTheme.shapes.extraLarge) {
         Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            AppHeading("Link installed app", HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
-            OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("Find an app") }, singleLine = true,
+            AppHeading(stringResource(R.string.follow_link_app), HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
+            OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.follow_find_app)) }, singleLine = true,
                 shape = MaterialTheme.shapes.extraLarge, leadingIcon = { Icon(Icons.Outlined.Search, null) })
-            FilledTonalButton(onClick = { onChoose(null) }) { Text("Match automatically") }
+            FilledTonalButton(onClick = { onChoose(null) }) { Text(stringResource(R.string.follow_match_automatically)) }
             LazyColumn(Modifier.heightIn(max = 480.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(Alphabetical.sorted(apps.filter { it.name.contains(query, true) || it.packageName.contains(query, true) }) { it.name }, key = { it.packageName }) { app ->
                     ExpressiveCard({ onChoose(app) }, Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(app.name, style = MaterialTheme.typography.titleSmall)
-                            Text("${app.version} · ${app.packageName}", style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.follow_package_version, app.version, app.packageName), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }

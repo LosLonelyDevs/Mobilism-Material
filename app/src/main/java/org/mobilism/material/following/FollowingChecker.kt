@@ -17,6 +17,8 @@ class FollowingChecker(
     private val limits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
     private val latestApps: suspend (List<String>) -> LatestAppsSnapshot = { LatestAppsSnapshot(CacheOutcome.Unconfigured) },
     private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
+    private val publishMatches: suspend (LatestAppsPage) -> Unit = {},
+    private val searchError: () -> String,
 ) {
     private val mutex = Mutex()
     private val mutableState = MutableStateFlow(FollowCheckState())
@@ -88,25 +90,39 @@ class FollowingChecker(
                 diagnostics.recordCache(CacheDiagnostic(AppCache.Following, CacheOutcome.Cooldown, background = background,
                     fallbackSearches = 0), DiagnosticOperation.FollowingCheck)
                 mutableState.value = previous
-                return previous
+                return FollowCheckState()
             }
             mutableState.value = FollowCheckState(busy = true, total = hits.size + direct.size, done = hits.size)
             if (direct.isNotEmpty() && repository.auth.value == AuthState.Restoring) repository.restoreSession()
             var searches = 0
+            val observations = mutableListOf<LatestAppsPage>()
             for (original in direct) {
                 val entry = library.state.value.firstOrNull { it.watched && it.release.id == original.release.id } ?: continue
                 try {
                     searches++
-                    val results = repository.search(ReleaseTitles.parse(entry.release.title).name, SearchScope.Apps, 1).items
+                    val observation = FollowSearchObservation()
+                    val page = withContext(observation) {
+                        repository.search(ReleaseTitles.parse(entry.release.title).name, SearchScope.Apps, 1)
+                    }
                     refreshInstalled()
-                    applyResult(entry, FollowingVersions.matchingInstalled(entry, installed.value), results)
+                    applyResult(entry, FollowingVersions.matchingInstalled(entry, installed.value), page.items)
                     mutableState.update { it.copy(done = it.done + 1) }
+                    if (enabled) observation.contribution(entry.release, page)?.let(observations::add)
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) {
-                    library.failed(entry, "Couldn't check for updates. Try again.")
+                    library.failed(entry, searchError())
                     mutableState.update { it.copy(failed = it.failed + 1) }
                     break
                 }
+            }
+            // A slow search batch can outlast the endpoint's two-minute upload window.
+            val cutoff = System.currentTimeMillis() / 1000 - 115
+            for (pages in observations.filter { it.readAt >= cutoff }.groupBy { it.adultFiltered }.values) {
+                val matches = pages.flatMap { it.releases }.distinctBy { it.id }
+                try {
+                    publishMatches(pages.first().copy(releases = matches, readAt = pages.minOf { it.readAt }))
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { /* The fallback search already updated the device. */ }
             }
             val present = if (snapshot.outcome == CacheOutcome.Available) wanted.count(byName::containsKey) else 0
             val missing = if (snapshot.outcome == CacheOutcome.Available) snapshot.missingNames ?: (wanted.size - present) else 0

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="follow_search_error">Couldn\'t check for updates. Try again.</string>
     <string name="app_name">Mobilism Material</string>
     <string name="action_back">Back</string>
     <string name="state_selected">Selected</string>
@@ -48,6 +49,41 @@
     <string name="drawer_announcements">Announcements</string>
     <string name="drawer_discussions">Discussions</string>
     <string name="drawer_following">Following</string>
+    <string name="follow_update_checks">Update checks</string>
+    <string name="follow_background_checks">Background checks</string>
+    <string name="follow_notifications">New version notifications</string>
+    <string name="follow_notification_settings">Notification settings</string>
+    <string name="follow_checking_apps">Checking followed apps</string>
+    <string name="follow_check_progress">Checking %1$d of %2$d…</string>
+    <string name="follow_check_complete">Checked %1$d of %2$d</string>
+    <string name="follow_check_failed">Checked %1$d of %2$d · %3$d failed. Try again.</string>
+    <string name="follow_empty">Open an Apps release and choose Follow app. New versions will appear here.</string>
+    <string name="follow_unfollowed">App unfollowed</string>
+    <string name="action_undo">Undo</string>
+    <string name="follow_automatic">Automatic</string>
+    <plurals name="follow_every_hours">
+        <item quantity="one">Every hour</item>
+        <item quantity="other">Every %1$d hours</item>
+    </plurals>
+    <string name="follow_unfollow_app">Unfollow %1$s</string>
+    <string name="follow_installed_version">Installed: %1$s (build %2$d)</string>
+    <string name="follow_not_found">Not found on this device</string>
+    <string name="follow_not_linked">Installed app not linked</string>
+    <string name="follow_version">v%1$s</string>
+    <string name="follow_no_version">Version not detected</string>
+    <string name="follow_latest_build">Latest found: %1$s (build %2$s)</string>
+    <string name="follow_latest">Latest found: %1$s</string>
+    <string name="follow_tracking_version">Tracking the followed release: %1$s</string>
+    <string name="follow_unknown_version">Unknown version</string>
+    <string name="follow_cannot_compare">This version couldn\'t be compared automatically.</string>
+    <string name="follow_view_update">View update</string>
+    <string name="follow_link_app">Link installed app</string>
+    <string name="follow_change_app">Change linked app</string>
+    <string name="follow_no_newer_release">No newer matching release found · %1$s</string>
+    <string name="follow_checked_at">Checked · %1$s</string>
+    <string name="follow_find_app">Find an app</string>
+    <string name="follow_match_automatically">Match automatically</string>
+    <string name="follow_package_version">%1$s · %2$s</string>
     <string name="drawer_library">My Applications</string>
     <string name="drawer_messages">Messages</string>
     <string name="drawer_login">Login</string>

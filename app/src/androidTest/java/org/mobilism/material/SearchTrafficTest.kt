@@ -18,7 +18,7 @@ import org.mobilism.material.following.*
 
 @RunWith(AndroidJUnit4::class)
 class SearchTrafficTest {
-    private class Fixture(private val code: Int = 200) {
+    private class Fixture(private val code: Int = 200, private val searchBody: String = """{"releases":[]}""") {
         private val base = InstrumentationRegistry.getInstrumentation().targetContext
         private val prefix = "search-traffic-${UUID.randomUUID()}"
         val context = object : ContextWrapper(base) {
@@ -34,14 +34,15 @@ class SearchTrafficTest {
                 if (!login) { assertTrue(request.url.encodedPath.endsWith("/search")); calls++ }
                 Response.Builder().request(request).protocol(Protocol.HTTP_1_1).message("Fixture")
                     .code(if (login) 200 else code)
-                    .body((if (login) """{"access_token":"fixture-account"}""" else """{"releases":[]}""").toResponseBody()).build()
+                    .body((if (login) """{"access_token":"fixture-account"}""" else searchBody).toResponseBody()).build()
             }.build())
         val library = AppLibraryStore(context)
         val cacheEvents = mutableListOf<DiagnosticEvent>()
-        fun checker(limits: ApiRequestLimits = ApiRequestLimits.Defaults, latest: suspend () -> List<Release> = { emptyList() }) =
+        fun checker(limits: ApiRequestLimits = ApiRequestLimits.Defaults, latest: suspend () -> List<Release> = { emptyList() },
+            publish: suspend (LatestAppsPage) -> Unit = {}) =
             FollowingChecker(library, repository, InstalledApps(context), FollowingPreferences(context), FollowingNotifications(context),
                 limits = { limits }, latestApps = { LatestAppsSnapshot(CacheOutcome.Available, latest()) },
-                diagnostics = DiagnosticLogger { cacheEvents.add(it) })
+                diagnostics = DiagnosticLogger { cacheEvents.add(it) }, publishMatches = publish, searchError = { "Fixture failure" })
         fun followApps() {
             ('A'..'L').forEachIndexed { index, letter ->
                 library.watch(Release(index + 1L, "Fixture $letter v1.0", "", null, 1, 0, 0, section = ContentSection.Apps), true)
@@ -87,6 +88,34 @@ class SearchTrafficTest {
         assertEquals(1, fixture.calls)
     }
 
+    @Test fun anExistingFallbackFillsTheNextDevicesCacheWithoutAnotherSearch() = runBlocking {
+        val fixture = Fixture(searchBody = """{"releases":[
+            {"id":61,"subject":"Fixture A v2.0","date":1700000061,"name":"Example"},
+            {"id":62,"subject":"Fixture A Reader v3.0","date":1700000062,"name":"Example"},
+            {"id":63,"subject":"Fixture B v1.5","date":1700000063,"name":"Example"}]}""")
+        val first = Release(1, "Fixture A v1.0", "", null, 1, 0, 0, section = ContentSection.Apps)
+        val second = first.copy(id = 2, title = "Fixture B v1.0")
+        val batch = mutableListOf<LatestAppsPage>()
+        listOf(first, second).forEach { fixture.library.watch(it, true) }
+        val result = fixture.checker(publish = { batch.add(it) }).check()
+        assertEquals(2, result.done)
+        assertEquals(2, fixture.calls)
+        val contribution = batch.single()
+        assertFalse(contribution.firstPage)
+        assertFalse(contribution.adultFiltered)
+        assertEquals(setOf(61L, 63L), contribution.releases.map { it.id }.toSet())
+        val next = Fixture()
+        next.library.watch(first, true)
+        assertEquals(1, next.checker(latest = { contribution.releases }).check().done)
+        assertEquals(0, next.calls)
+        assertEquals(61L, next.library.state.value.single().update?.id)
+
+        val cached = FollowSearchObservation()
+        val page = kotlinx.coroutines.withContext(cached) { fixture.repository.search("Fixture A", SearchScope.Apps, 1) }
+        assertNull(cached.contribution(first, page))
+        assertEquals(2, fixture.calls)
+    }
+
     @Test fun manualChecksUseOneWholeListLookupAndOnlyFiveSearchesOnCacheFailure() = runBlocking {
         val fixture = Fixture()
         fixture.followApps()
@@ -96,7 +125,7 @@ class SearchTrafficTest {
             limits = { ApiRequestLimits.Defaults.copy(followCacheBatchSize = 2) }, latestApps = { names ->
                 requests.add(names)
                 throw java.io.IOException("Fixture outage")
-            })
+            }, searchError = { "Fixture failure" })
         assertEquals(5, checker.check().done)
         checker.check()
         assertEquals(12, requests.single().size)
