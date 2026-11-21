@@ -1,6 +1,13 @@
 const maxNames = 512;
 const receiptFormat = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 export const appKey = name => name.normalize('NFKC').trim().toLowerCase().replace(/\s+/gu, ' ');
+export const cacheLifetime = 86400;
+
+export async function visibleSnapshot(database, now) {
+  const [row] = await database('SELECT items, observed_at FROM latest_apps_cache WHERE singleton');
+  const items = (row?.items ?? []).filter(item => !item.hiddenAt && (item.lastSeen ?? item.postedAt) > now - cacheLifetime);
+  return { observedAt: Number(row?.observed_at ?? 0), items };
+}
 
 export function parseLookup(body) {
   if (Object.keys(body).some(k => !['apps', 'adultFiltered', 'day'].includes(k)) ||
@@ -27,24 +34,27 @@ export async function lookup(database, apps, adultFiltered, now, clientDay) {
         coalesce(jsonb_agg(item->>'key'), '[]') AS keys
       FROM jsonb_array_elements(items) item WHERE item->>'key' = ANY ($1::text[])
         AND NOT (item ? 'hiddenAt') AND coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $3
-    ) available WHERE singleton`, [keys, adultFiltered, now - 86400]);
+    ) available WHERE singleton`, [keys, adultFiltered, now - cacheLifetime]);
   if (!row) throw new Error();
   const observedAt = Number(row.observed_at);
   const matches = new Set(row.keys);
   const fresh = observedAt > 0 && now - observedAt >= -300 && now - observedAt <= 21600;
   const day = new Date(now * 1000).toISOString().slice(0, 10);
-  const counts = apps.map(app => ({ ...app, miss: fresh && !matches.has(app.key) ? 1 : 0 }));
+  const returned = new Set(row.matches.map(item => item.key));
+  const counts = apps.map(app => ({ ...app, hit: fresh && returned.has(app.key) ? 1 : 0,
+    miss: fresh && !matches.has(app.key) ? 1 : 0 }));
   try {
     await database(`WITH input AS (
-        SELECT * FROM jsonb_to_recordset($1::jsonb) AS a(key text, name text, receipt uuid, miss int)
+        SELECT * FROM jsonb_to_recordset($1::jsonb) AS a(key text, name text, receipt uuid, hit int, miss int)
       ), first_today AS (
         INSERT INTO follow_lookup_receipts(day, receipt) SELECT $2::date, receipt FROM input WHERE $3::boolean
         ORDER BY receipt ON CONFLICT DO NOTHING RETURNING receipt
-      ) INSERT INTO daily_followed_apps(day, app_key, name, followers, misses)
-        SELECT $2::date, key, name, (f.receipt IS NOT NULL)::int, miss FROM input LEFT JOIN first_today f USING(receipt)
-        WHERE f.receipt IS NOT NULL OR miss > 0 ORDER BY key
+      ) INSERT INTO daily_followed_apps(day, app_key, name, followers, misses, hits, measured_misses)
+        SELECT $2::date, key, name, (f.receipt IS NOT NULL)::int, miss, hit, miss FROM input LEFT JOIN first_today f USING(receipt)
+        WHERE f.receipt IS NOT NULL OR hit > 0 OR miss > 0 ORDER BY key
         ON CONFLICT (day, app_key) DO UPDATE SET followers = daily_followed_apps.followers + excluded.followers,
-          misses = daily_followed_apps.misses + excluded.misses`, [JSON.stringify(counts), day, day === clientDay]);
+          misses = daily_followed_apps.misses + excluded.misses, hits = daily_followed_apps.hits + excluded.hits,
+          measured_misses = daily_followed_apps.measured_misses + excluded.measured_misses`, [JSON.stringify(counts), day, day === clientDay]);
   } catch { /* A statistics write must never turn a cache hit into a Mobilism search. */ }
   return { observedAt, misses: counts.filter(app => app.miss).length,
     items: row.matches.map(({ id, title, name, version, postedAt, author, adultFiltered }) =>

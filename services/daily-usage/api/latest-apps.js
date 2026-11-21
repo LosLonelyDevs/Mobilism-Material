@@ -1,9 +1,8 @@
 import { query } from '../lib/database.js';
 import { respond } from '../lib/protocol.js';
-import { appKey, lookup, parseLookup } from '../lib/follow-lookup.js';
+import { appKey, cacheLifetime, lookup, parseLookup, visibleSnapshot } from '../lib/follow-lookup.js';
 
 const fields = ['id', 'title', 'name', 'version', 'postedAt', 'author'];
-const lifetime = 24 * 60 * 60;
 const confirmAfter = 10 * 60;
 const maxUploadDelay = 2 * 60;
 const text = (value, max) => typeof value === 'string' && value.length > 0 && value.length <= max &&
@@ -85,16 +84,15 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
   return async (req, res) => {
     if (req.method === 'GET') {
       try {
-        const [row] = await database('SELECT items, observed_at FROM latest_apps_cache WHERE singleton');
         const now = clock();
-        const visible = (row?.items || []).filter(item => !item.hiddenAt && (item.lastSeen ?? item.postedAt) > now - lifetime);
+        const { observedAt, items: visible } = await visibleSnapshot(database, now);
         const items = visible.map(item => Object.fromEntries([...fields, 'adultFiltered'].map(key => [key, item[key]])));
-        const ttl = Math.min(60, ...visible.map(item => (item.lastSeen ?? item.postedAt) + lifetime - now));
+        const ttl = Math.min(60, ...visible.map(item => (item.lastSeen ?? item.postedAt) + cacheLifetime - now));
         res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=' + ttl);
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Cache-Control', 'public, max-age=' + ttl);
         res.statusCode = 200;
-        return res.end(JSON.stringify({ observedAt: Number(row?.observed_at || 0), items }));
+        return res.end(JSON.stringify({ observedAt, items }));
       } catch { return respond(res, 503, { error: 'Cache unavailable' }); }
     }
     if (req.method !== 'POST') {
@@ -123,7 +121,7 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
       const seen = Object.fromEntries((dated ? ids : []).map(id => [id, true]));
       const safe = Object.fromEntries((adultFiltered ? ids : []).map(id => [id, true]));
       await database(updatePage, [JSON.stringify(items), firstPage ? at : 0, JSON.stringify(seen), at,
-        now - lifetime, JSON.stringify(anchors), JSON.stringify(missing), confirmAfter, JSON.stringify(safe)]);
+        now - cacheLifetime, JSON.stringify(anchors), JSON.stringify(missing), confirmAfter, JSON.stringify(safe)]);
       return respond(res, 200, { accepted: true });
     } catch { return respond(res, 503, { error: 'Cache unavailable' }); }
   };

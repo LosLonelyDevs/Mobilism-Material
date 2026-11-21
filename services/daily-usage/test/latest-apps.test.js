@@ -63,10 +63,44 @@ test('one lookup counts each requesting device once per app and only absent visi
     async () => ({ versions: [{ version: '0.1.24', versionCode: 25, prerelease: false }] }), () => new Date(now * 1000))(
     { method: 'GET', url: '/api/following-cache?from=' + day + '&to=' + day, headers: {} }, res);
   assert.equal(res.statusCode, 200);
+  assert.equal(res.body.cachedApps, 2);
+  assert.deepEqual(res.body.lookups, { hits: '4', misses: '3', measuredMisses: '3' });
+  assert.equal(res.body.followRankings.find(row => row.name === 'APP 1').cachedVersion, '1.1');
+  assert.equal(res.body.followRankings.find(row => row.name === 'Absent').cachedVersion, null);
   assert.equal(res.body.followRankings.find(row => row.missRank === 1).name, 'Absent');
   assert.ok(res.body.followRankings.every(row => row.followers === '2'));
   for (const invalid of [[], [...apps, { name: '  app 1  ', receipt: randomUUID() }], [{...apps[0], username: 'extra'}],
     [{ name: 'Test', receipt: 'invalid' }]]) assert.equal((await named(invalid)).statusCode, 400);
+});
+
+test('a search contribution fills a miss and dates include the current partial UTC day', async () => {
+  const apps = [{ name: 'Facebook', receipt: randomUUID() }];
+  await post([item(1)], true);
+  assert.equal((await named(apps)).body.misses, 1);
+  const upload = data => call('POST', { items: [data], ids: [data.id], readAt: now, firstPage: false, adultFiltered: true });
+  await upload(item(2, 'Facebook'));
+  await upload({ ...item(3, 'Facebook'), title: 'Facebook v2.0', version: '2.0' });
+  await upload(item(2, 'Facebook'));
+  const next = await named(apps, true);
+  assert.equal(next.body.misses, 0);
+  assert.deepEqual(next.body.items.map(item => item.version), ['2.0']);
+  const yesterday = new Date((now - 86400) * 1000).toISOString().slice(0, 10);
+  await query('INSERT INTO daily_followed_apps(day, app_key, name, followers, misses) VALUES ($1,$2,$2,1,5)', [yesterday, 'older']);
+  const report = async (from, to, at = now) => {
+    const res = { setHeader() {}, end(value) { this.body = JSON.parse(value); } };
+    await followingHandler(query, () => true, async () => ({ versions: [{ version: '0.1.25', versionCode: 26, prerelease: false }] }),
+      () => new Date(at * 1000))({ method: 'GET', url: '/api/following-cache?from=' + from + '&to=' + to }, res);
+    assert.equal(res.statusCode, 200);
+    return res.body;
+  };
+  assert.deepEqual((await report(day, day)).lookups, { hits: '1', misses: '1', measuredMisses: '1' });
+  const range = await report(yesterday, day);
+  assert.deepEqual(range.lookups, { hits: '1', misses: '6', measuredMisses: '1' });
+  assert.equal(range.cachedApps, 2);
+  assert.equal(range.followRankings.find(r => r.name === 'Facebook').cachedVersion, '2.0');
+  await query("UPDATE latest_apps_cache SET items = jsonb_set(items, '{0,hiddenAt}', to_jsonb($1::bigint))", [now]);
+  assert.equal((await report(yesterday, yesterday)).cachedApps, 1);
+  assert.equal((await report(yesterday, day, now + 86400)).cachedApps, 0);
 });
 
 test('two comparable gaps ten minutes apart hide a topic until a newer sighting', async () => {

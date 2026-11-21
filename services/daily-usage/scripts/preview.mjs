@@ -54,8 +54,13 @@ if (futureFollowing) {
   }
   await query(`INSERT INTO daily_cache_usage VALUES ($1, '0.1.24', 25, 'FollowingBackground', 90, 10),
     ($1, '0.1.24', 25, 'FollowingManual', 6, 4)`, [day]);
-  await query(`INSERT INTO daily_followed_apps VALUES ($1, 'calendar', 'Calendar', 12, 0),
-    ($1, 'photo editor', 'Photo Editor', 8, 5)`, [day]);
+  await query(`INSERT INTO daily_followed_apps (day, app_key, name, followers, misses, hits, measured_misses)
+    VALUES ($1, 'calendar', 'Calendar', 12, 0, 19, 0), ($1, 'photo editor', 'Photo Editor', 8, 5, 3, 5),
+    ($1::date + 1, 'calendar', 'Calendar', 2, 1, 3, 1), ($1::date + 1, 'photo editor', 'Photo Editor', 1, 2, 0, 2)`, [day]);
+  const at = Math.floor(Date.now() / 1000);
+  await query('UPDATE latest_apps_cache SET items = $1::jsonb, observed_at = $2 WHERE singleton',
+    [JSON.stringify([{ key: 'calendar', id: 1, name: 'Calendar', title: 'Calendar v2.1', version: '2.1',
+      postedAt: at, author: 'Example', adultFiltered: true }]), at]);
 }
 const users = usersHandler({ database: query, env }), account = accountHandler({ database: query, env });
 await userStore(query, env).ensureOwner();

@@ -90,24 +90,24 @@ function Overview({ user }) {
     <div className="overview-grid">
       {showUsage && <a href="/app-usage" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
         <div className="destination-top"><span className="destination-icon"><Icon name="chart" size={26} /></span><Icon name="arrow" /></div>
-        <Heading level={2}>App usage</Heading><Text>Activity, versions, and devices.</Text>
+        <Heading level={2}>Usage</Heading><Text>Activity, versions, and devices.</Text>
         {stats?.error ? <Notice variant="danger">{stats.error.message}</Notice> : <>
           <div className="destination-metrics"><div><span className="metric-value">{count === undefined ? <Skeleton width={90} height={38} /> : new Intl.NumberFormat().format(count)}</span><span className="muted">Active today</span></div><div><span className="metric-value">{usage ? new Set(usage.breakdown.map(r => r.appVersion)).size : '…'}</span><span className="muted">App versions</span></div></div>
           {usage && <VersionShare rows={usage.breakdown} />}
         </>}
-        <span className="destination-action">View app usage <Icon name="arrow" size={17} /></span>
-      </Card></a>}
-      {showControls && <a href="/app-controls" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
-        <div className="destination-top"><span className="destination-icon violet"><Icon name="controls" size={26} /></span><Icon name="arrow" /></div>
-        <Heading level={2}>App controls</Heading><Text>Notices, updates, and API limits.</Text>
-        {settings?.error ? <Notice variant="danger">{settings.error.message}</Notice> :
-          <div className="destination-metrics"><div><span className="metric-value">{active ?? <Skeleton width={60} height={38} />}</span><span className="muted">Live notices</span></div><div><span className="metric-value">{config ? Object.keys(config.limits).length : '…'}</span><span className="muted">API overrides</span></div></div>}
-        <span className="destination-action">Manage app controls <Icon name="arrow" size={17} /></span>
+        <span className="destination-action">View usage <Icon name="arrow" size={17} /></span>
       </Card></a>}
       {canAccess(user, 'following-cache') && <a href="/following-cache" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
         <div className="destination-top"><span className="destination-icon"><Icon name="cache" size={26} /></span><Icon name="arrow" /></div>
-        <Heading level={2}>Following cache</Heading><Text>Cache hit rates, most followed apps, and pull-to-refresh.</Text>
-        <span className="destination-action">View Following cache <Icon name="arrow" size={17} /></span>
+        <Heading level={2}>Cache</Heading><Text>Cache hit rates, most followed apps, and pull-to-refresh.</Text>
+        <span className="destination-action">View cache <Icon name="arrow" size={17} /></span>
+      </Card></a>}
+      {showControls && <a href="/app-controls" className="destination-card"><Card style={{ borderRadius: 24, height: '100%' }}>
+        <div className="destination-top"><span className="destination-icon violet"><Icon name="controls" size={26} /></span><Icon name="arrow" /></div>
+        <Heading level={2}>Controls</Heading><Text>Notices, updates, and API limits.</Text>
+        {settings?.error ? <Notice variant="danger">{settings.error.message}</Notice> :
+          <div className="destination-metrics"><div><span className="metric-value">{active ?? <Skeleton width={60} height={38} />}</span><span className="muted">Live notices</span></div><div><span className="metric-value">{config ? Object.keys(config.limits).length : '…'}</span><span className="muted">API overrides</span></div></div>}
+        <span className="destination-action">Manage controls <Icon name="arrow" size={17} /></span>
       </Card></a>}
     </div>
     {!showUsage && !showControls && !canAccess(user, 'following-cache') ? <Card><Text>No app pages are assigned to your account.</Text><Link href="/account">Open My account</Link></Card> :

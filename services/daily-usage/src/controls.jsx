@@ -95,7 +95,7 @@ export default function Controls() {
     finally { if (id === generation.current) setBusy(false); }
   }
   return <Box className="page controls-page">
-    <header className="page-heading"><div><span className="eyebrow">ADMIN</span><Heading level={1}>App controls</Heading></div><div className="heading-meta"><Chip label={published ? `Revision ${published.revision}` : 'Loading'} size="small" /><Help label="About app controls">Changes stay in draft until published. Apps refresh within five minutes. Missing, invalid, offline, or expired configuration uses the hardcoded app defaults.</Help></div></header>
+    <header className="page-heading"><div><span className="eyebrow">ADMIN</span><Heading level={1}>Controls</Heading></div><div className="heading-meta"><Chip label={published ? `Revision ${published.revision}` : 'Loading'} size="small" /><Help label="About controls">Changes stay in draft until published. Apps refresh within five minutes. Missing, invalid, offline, or expired configuration uses the hardcoded app defaults.</Help></div></header>
     <div className="controls-topbar"><Tabs value={tab} onChange={setTab} items={[{ key: 'notices', label: `Notices (${draft.notices.length})` }, { key: 'api', label: 'API controls' }]} /><Action icon="refresh" label="Reload published configuration" disabled={busy} onClick={() => dirty ? setConfirmReload(true) : load()} /></div>
     {tab === 'api' && <div className="api-control-tabs"><Tabs value={apiTab} onChange={setApiTab} items={[{ key: 'limits', label: 'Limits' }, { key: 'headers', label: 'User-Agent' }]} /></div>}
     <div className="control-feedback" aria-live="polite">{error && <Notice variant="danger">{error}</Notice>}{status && <Notice variant="success">{status}</Notice>}</div>

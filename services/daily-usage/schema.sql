@@ -56,6 +56,11 @@ CREATE TABLE IF NOT EXISTS daily_followed_apps (
     PRIMARY KEY (day, app_key)
 );
 
+-- Older rows recorded misses only. Keep those totals without guessing historical hits.
+ALTER TABLE daily_followed_apps
+    ADD COLUMN IF NOT EXISTS hits bigint NOT NULL DEFAULT 0 CHECK (hits >= 0),
+    ADD COLUMN IF NOT EXISTS measured_misses bigint NOT NULL DEFAULT 0 CHECK (measured_misses >= 0);
+
 CREATE TABLE IF NOT EXISTS follow_lookup_receipts (
     day date NOT NULL,
     receipt uuid NOT NULL,

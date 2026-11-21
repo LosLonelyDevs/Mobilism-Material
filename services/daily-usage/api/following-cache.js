@@ -5,16 +5,21 @@ import { readConfig, saveConfig, publicConfig } from '../lib/app-config.js';
 import { DAY, respond, utcDay, validDay } from '../lib/protocol.js';
 import { releaseCatalog } from '../lib/releases.js';
 import { requestBody } from '../lib/request-body.js';
+import { visibleSnapshot } from '../lib/follow-lookup.js';
 import { followingControlsAvailable } from '../public/limit-availability.js';
 
 const ranks = `WITH totals AS (
-  SELECT app_key, min(name) AS name, sum(followers) AS followers, sum(misses) AS misses
+  SELECT app_key, min(name) AS name, sum(followers) AS followers, sum(misses) AS misses,
+    sum(hits) AS hits, sum(measured_misses) AS measured_misses
   FROM daily_followed_apps WHERE day BETWEEN $1::date AND $2::date GROUP BY app_key
 ), ranked AS (
   SELECT *, row_number() OVER (ORDER BY followers DESC, app_key) AS follow_rank,
     row_number() OVER (ORDER BY misses DESC, app_key) AS miss_rank FROM totals
-) SELECT name, followers::text, misses::text, follow_rank::int AS "followRank", miss_rank::int AS "missRank"
-  FROM ranked WHERE (follow_rank <= 10 AND followers > 0) OR (miss_rank <= 10 AND misses > 0)`;
+) SELECT coalesce(sum(hits),0)::text AS hits, coalesce(sum(misses),0)::text AS misses,
+  coalesce(sum(measured_misses),0)::text AS "measuredMisses",
+  coalesce(jsonb_agg(jsonb_build_object('key', app_key, 'name', name, 'followers', followers::text, 'misses', misses::text,
+    'followRank', follow_rank, 'missRank', miss_rank)) FILTER (WHERE (follow_rank <= 10 AND followers > 0)
+    OR (miss_rank <= 10 AND misses > 0)), '[]') AS rankings FROM ranked`;
 
 const rates = `SELECT cache, sum(hits)::text AS hits, sum(misses)::text AS misses FROM daily_cache_usage
   WHERE day BETWEEN $1::date AND $2::date AND cache IN ('FollowingBackground', 'FollowingManual') GROUP BY cache ORDER BY cache`;
@@ -31,12 +36,17 @@ export function createHandler(database = query, session = req => sessionUser(req
       const available = followingControlsAvailable(await catalog());
       if (req.method === 'GET') {
         const params = new URL(req.url, 'https://usage.invalid').searchParams;
-        const today = utcDay(now()), from = params.get('from') ?? today, to = params.get('to') ?? today;
+        const asOf = now(), today = utcDay(asOf), from = params.get('from') ?? today, to = params.get('to') ?? today;
         if (!validDay(from) || !validDay(to) || from > to || to > today || new Date(to) - new Date(from) > 364 * DAY)
           return respond(res, 400, { error: 'Invalid date range' });
         if (!available) return respond(res, 200, { available: false });
-        const [cacheUsage, followRankings, config] = await Promise.all([database(rates, [from, to]), database(ranks, [from, to]), readConfig(database)]);
-        return respond(res, 200, { available, from, to, cacheUsage, followRankings, pullToRefresh: setting(config) });
+        const [cacheUsage, [totals], snapshot, config] = await Promise.all([database(rates, [from, to]), database(ranks, [from, to]),
+          visibleSnapshot(database, Math.floor(asOf.getTime() / 1000)), readConfig(database)]);
+        const versions = new Map(snapshot.items.map(item => [item.key, item.version]));
+        const { rankings, ...lookups } = totals;
+        const followRankings = rankings.map(({ key, ...row }) => ({ ...row, cachedVersion: versions.get(key) ?? null }));
+        return respond(res, 200, { available, from, to, asOf: asOf.toISOString(), cachedApps: versions.size,
+          cacheUsage, lookups, followRankings, pullToRefresh: setting(config) });
       }
       if (!available) return respond(res, 409, { error: 'Requires stable v0.1.24 or later.' });
       const body = requestBody(req, res, respond);

@@ -18,7 +18,7 @@ export function CopyValue({ label, value }) {
 function Permissions({ value, onChange, disabled = false }) {
   return <fieldset className="permissions" disabled={disabled}><legend>Role and page access</legend>
     <Switch label="Admin" checked={value.isAdmin} disabled={disabled} onChange={e => onChange({ ...value, isAdmin: e.target.checked })} />
-    <Text>Admins can manage users and the Following cache. Page access includes editing.</Text>
+    <Text>Admins can manage Users and Cache. Page access includes editing.</Text>
     {PAGES.map(page => <Switch key={page.id} label={page.label} checked={value.pages.includes(page.id) || (value.isAdmin && page.id === 'following-cache')} disabled={disabled || (value.isAdmin && page.id === 'following-cache')}
       onChange={e => onChange({ ...value, pages: e.target.checked ? [...value.pages, page.id] : value.pages.filter(id => id !== page.id) })} />)}
     <Text>Every user can open My account.</Text>

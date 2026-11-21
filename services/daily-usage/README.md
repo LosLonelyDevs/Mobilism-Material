@@ -10,11 +10,11 @@ The repository Actions variable `DAILY_USAGE_ENDPOINT` supplies future release b
 
 ## Shared Latest Apps cache
 
-`POST /api/latest-apps` accepts up to 20 public release summaries from an Apps > Latest page the client already loaded. Contributions respect the app's usage-sharing opt-out. Neon keeps the 500 most recently posted unique app names, with the release title, version, topic ID, posting time, and uploader. An older page cannot move a newer entry backwards.
+`POST /api/latest-apps` accepts up to 20 public release summaries the client already loaded. Clients contribute pages from Apps > Latest. Newer clients also contribute exact matches from successful Following fallback searches. Only a first-page Latest feed can mark the whole snapshot fresh. Contributions respect the app's usage-sharing opt-out. Neon keeps the 500 most recently posted unique app names, with the release title, version, topic ID, posting time, and uploader. An older result cannot replace a newer release.
 
 `POST /api/latest-apps` also accepts a Following lookup. One request returns matching public release records for up to 512 distinct app names. Larger manual lists use one shared `GET` snapshot and match locally. The service never calls Mobilism. Android uses its normal search budget when it cannot confirm a version. A snapshot older than six hours is stale.
 
-App usage ranks each app by installations that requested it per UTC day and by lookups for names absent from a fresh cache. Visibility filters can hide a result without counting it as missing. Each installation generates a separate receipt per app and day. Receipts expire separately from the daily totals and contain no account or app name. Only named lookups contribute. Apply `schema.sql` before deploying.
+The Cache page counts named lookups as they arrive, including the current partial UTC day. Rankings show requesting installations per app per UTC day and lookups for missing names. The inventory count and versions show the current snapshot. Visibility filters can hide a result without counting it as missing. Each installation generates a separate receipt per app and day. Receipts expire separately from the daily totals and contain no account or app name. Apply `schema.sql` before deploying.
 
 An entry expires 24 hours after its last sighting. It can disappear sooner when two comparable first-page reads at least ten minutes apart both show its old neighbors with the topic missing between them. Scrolling off the page is insufficient. A later sighting restores it. Expiry and removal use existing feed reads.
 
