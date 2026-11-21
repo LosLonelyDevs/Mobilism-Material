@@ -187,6 +187,9 @@ jobs:
       - name: Check screenshot files
         run: python scripts/check-readme-screenshots.py
       - name: Publish README screenshots
+        if: >-
+          github.event_name == 'workflow_dispatch' ||
+          !contains(github.event.workflow_run.head_commit.message, 'README-Screenshots: supplied')
         env:
           APP_VERSION: ${{ needs.check.outputs.version }}
         run: |
