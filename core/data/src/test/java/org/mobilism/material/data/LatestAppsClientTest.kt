@@ -20,8 +20,8 @@ class LatestAppsClientTest {
                 .body(JSONObject().put("observedAt", now).put("items", org.json.JSONArray()).toString().toResponseBody()).build()
         }.build(), now = { now })
         val names = (1..30).map { "App $it" } + "APP 1"
-        suspend fun receipts(): List<String> {
-            assertEquals(CacheOutcome.Available, client.lookup(names, true) { "daily secret $it" }.outcome)
+        suspend fun receipts(background: Boolean? = null): List<String> {
+            assertEquals(CacheOutcome.Available, client.lookup(names, true, background) { "daily secret $it" }.outcome)
             val body = Buffer().also { requests.last().body!!.writeTo(it) }.readUtf8()
             assertFalse(body.contains("daily secret"))
             val apps = JSONObject(body).getJSONArray("apps")
@@ -29,10 +29,13 @@ class LatestAppsClientTest {
             return (0 until apps.length()).map { apps.getJSONObject(it).getString("receipt") }
         }
         val first = receipts()
+        assertNull(requests.last().header("X-Following-Check"))
         assertEquals(30, first.toSet().size)
-        assertEquals(first, receipts())
+        assertEquals(first, receipts(true))
+        assertEquals("background", requests.last().header("X-Following-Check"))
         now += 86400
-        assertTrue(first.intersect(receipts().toSet()).isEmpty())
+        assertTrue(first.intersect(receipts(false).toSet()).isEmpty())
+        assertEquals("manual", requests.last().header("X-Following-Check"))
         assertEquals(3, requests.size)
         client.lookup((1..513).map { "App $it" }, true) { error("Snapshot needs no receipt") }
         assertEquals(4, requests.size)

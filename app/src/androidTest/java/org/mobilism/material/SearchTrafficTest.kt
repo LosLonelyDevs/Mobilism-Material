@@ -41,7 +41,7 @@ class SearchTrafficTest {
         fun checker(limits: ApiRequestLimits = ApiRequestLimits.Defaults, latest: suspend () -> List<Release> = { emptyList() },
             publish: suspend (LatestAppsPage) -> Unit = {}) =
             FollowingChecker(library, repository, InstalledApps(context), FollowingPreferences(context), FollowingNotifications(context),
-                limits = { limits }, latestApps = { LatestAppsSnapshot(CacheOutcome.Available, latest()) },
+                limits = { limits }, latestApps = { _, _ -> LatestAppsSnapshot(CacheOutcome.Available, latest()) },
                 diagnostics = DiagnosticLogger { cacheEvents.add(it) }, publishMatches = publish, searchError = { "Fixture failure" })
         fun followApps() {
             ('A'..'L').forEachIndexed { index, letter ->
@@ -122,7 +122,8 @@ class SearchTrafficTest {
         val requests = mutableListOf<List<String>>()
         val checker = FollowingChecker(fixture.library, fixture.repository, InstalledApps(fixture.context),
             FollowingPreferences(fixture.context), FollowingNotifications(fixture.context),
-            limits = { ApiRequestLimits.Defaults.copy(followCacheBatchSize = 2) }, latestApps = { names ->
+            limits = { ApiRequestLimits.Defaults.copy(followCacheBatchSize = 2) }, latestApps = { names, background ->
+                assertFalse(background)
                 requests.add(names)
                 throw java.io.IOException("Fixture outage")
             }, searchError = { "Fixture failure" })

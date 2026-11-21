@@ -26,7 +26,7 @@ export function parseLookup(body) {
   });
 }
 
-export async function lookup(database, apps, adultFiltered, now, clientDay) {
+export async function lookup(database, apps, adultFiltered, now, clientDay, mode) {
   const keys = apps.map(app => app.key);
   const [row] = await database(`SELECT observed_at, available.* FROM latest_apps_cache
     CROSS JOIN LATERAL (
@@ -53,13 +53,22 @@ export async function lookup(database, apps, adultFiltered, now, clientDay) {
       ), first_today AS (
         INSERT INTO follow_lookup_receipts(day, receipt) SELECT $2::date, receipt FROM input WHERE $3::boolean
         ORDER BY receipt ON CONFLICT DO NOTHING RETURNING receipt
-      ) INSERT INTO daily_followed_apps(day, app_key, name, followers, misses, hits, measured_misses, other_lookups)
-        SELECT $2::date, key, name, (f.receipt IS NOT NULL)::int, miss, hit, miss, 1 - hit - miss
+      ) INSERT INTO daily_followed_apps(day, app_key, name, followers, misses, hits, measured_misses, other_lookups,
+          background_hits, background_misses, manual_hits, manual_misses, last_requested_at)
+        SELECT $2::date, key, name, (f.receipt IS NOT NULL)::int, miss, hit, miss, 1 - hit - miss,
+          CASE WHEN $4::text = 'background' THEN hit ELSE 0 END, CASE WHEN $4 = 'background' THEN miss ELSE 0 END,
+          CASE WHEN $4 = 'manual' THEN hit ELSE 0 END, CASE WHEN $4 = 'manual' THEN miss ELSE 0 END, $5::bigint
         FROM input LEFT JOIN first_today f USING(receipt) ORDER BY key
         ON CONFLICT (day, app_key) DO UPDATE SET followers = daily_followed_apps.followers + excluded.followers,
           misses = daily_followed_apps.misses + excluded.misses, hits = daily_followed_apps.hits + excluded.hits,
           measured_misses = daily_followed_apps.measured_misses + excluded.measured_misses,
-          other_lookups = daily_followed_apps.other_lookups + excluded.other_lookups`, [JSON.stringify(counts), day, day === clientDay]);
+          other_lookups = daily_followed_apps.other_lookups + excluded.other_lookups,
+          background_hits = daily_followed_apps.background_hits + excluded.background_hits,
+          background_misses = daily_followed_apps.background_misses + excluded.background_misses,
+          manual_hits = daily_followed_apps.manual_hits + excluded.manual_hits,
+          manual_misses = daily_followed_apps.manual_misses + excluded.manual_misses,
+          last_requested_at = greatest(daily_followed_apps.last_requested_at, excluded.last_requested_at)`,
+      [JSON.stringify(counts), day, day === clientDay, mode, now]);
   } catch { /* A statistics write must never turn a cache hit into a Mobilism search. */ }
   return { observedAt, misses: counts.filter(app => app.miss).length,
     items: items.map(({ id, title, name, version, postedAt, author, adultFiltered }) =>

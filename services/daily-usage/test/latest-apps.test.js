@@ -18,10 +18,10 @@ const query = async (sql, values) => (await db.query(sql, values)).rows;
 const item = (id, name = 'App ' + id) => ({
   id, name, title: name + ' v1.1', version: '1.1', postedAt: now - 2000 + id, author: 'Uploader'
 });
-async function call(method, body, database = query, time = now) {
+async function call(method, body, database = query, time = now, headers = {}) {
   const res = { headers: {}, setHeader(key, value) { this.headers[key] = value; },
     end(value) { this.body = JSON.parse(value); } };
-  await createHandler(database, () => time)({ method, headers: { 'content-type': 'application/json' }, body }, res);
+  await createHandler(database, () => time)({ method, headers: { 'content-type': 'application/json', ...headers }, body }, res);
   return res;
 }
 const post = (items, firstPage = false, adultFiltered = false) => call('POST', { firstPage, adultFiltered, items });
@@ -88,6 +88,17 @@ test('each ranking includes its own top 20 apps without truncating lookup totals
   assert.equal(rows.find(row => row.missRank === 20).name, 'App 20');
   assert.ok(!rows.some(row => row.name === 'App 21'));
   assert.equal(res.body.lookups.misses, '861');
+  assert.deepEqual(res.body.recentApps, []);
+  const batch = Array.from({ length: 17 }, (_, i) => ({ name: 'App ' + (i + 1), receipt: randomUUID() }));
+  await named(batch);
+  await named([batch[16]], false, query, now + 20);
+  await named([batch[16]], false, query, now + 10);
+  await followingHandler(query, () => true,
+    async () => ({ versions: [{ version: '0.1.24', versionCode: 25, prerelease: false }] }), () => new Date((now + 20) * 1000))(
+    { method: 'GET', url: '/api/following-cache', headers: {} }, res);
+  assert.equal(res.body.recentApps.length, 15);
+  assert.equal(new Set(res.body.recentApps.map(row => row.name)).size, 15);
+  assert.deepEqual(res.body.recentApps[0], { name: 'App 17', requestedAt: now + 20, cachedVersion: null });
 });
 
 test('a search contribution fills a miss and dates include the current partial UTC day', async () => {
@@ -113,8 +124,18 @@ test('a search contribution fills a miss and dates include the current partial U
   assert.deepEqual((await report(day, day)).lookups, { hits: '1', misses: '1', measuredMisses: '1' });
   const range = await report(yesterday, day);
   assert.deepEqual(range.lookups, { hits: '1', misses: '6', measuredMisses: '1' });
+  assert.deepEqual(range.todayLookups, { hits: '1', misses: '1', measuredMisses: '1',
+    backgroundHits: '0', backgroundMisses: '0', manualHits: '0', manualMisses: '0' });
+  const names = { apps: [...apps, { name: 'Missing', receipt: randomUUID() }], adultFiltered: true, day };
+  for (const mode of ['background', 'manual', 'unknown']) {
+    assert.equal((await call('POST', names, query, now, { 'x-following-check': mode })).statusCode, 200);
+  }
+  assert.deepEqual((await report(yesterday, day)).todayLookups, { hits: '4', misses: '4', measuredMisses: '4',
+    backgroundHits: '1', backgroundMisses: '1', manualHits: '1', manualMisses: '1' });
+  assert.equal((await report(yesterday, yesterday)).todayLookups, null);
   assert.equal(range.cachedApps, 2);
   assert.equal(range.followRankings.find(r => r.name === 'Facebook').cachedVersion, '2.0');
+  assert.deepEqual(range.catalog, [{ name: 'Facebook', version: '2.0' }, { name: 'App 1', version: '1.1' }]);
   assert.equal(range.followRankings.find(r => r.name === 'Facebook').totalLookups, '2');
   assert.equal(range.followRankings.find(r => r.name === 'older').totalLookups, '5');
   await query("UPDATE latest_apps_cache SET items = jsonb_set(items, '{0,hiddenAt}', to_jsonb($1::bigint))", [now]);

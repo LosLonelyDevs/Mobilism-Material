@@ -1,7 +1,7 @@
 export const PAGES = [
   { id: 'overview', href: '/', label: 'Overview', icon: 'home' },
   { id: 'app-usage', href: '/app-usage', label: 'Usage', icon: 'chart' },
-  { id: 'following-cache', href: '/following-cache', label: 'Cache', icon: 'cache' },
+  { id: 'following-cache', href: '/following-cache', label: 'Cache', title: 'Followed App Cache', icon: 'cache' },
   { id: 'app-controls', href: '/app-controls', label: 'Controls', icon: 'controls' },
 ];
 

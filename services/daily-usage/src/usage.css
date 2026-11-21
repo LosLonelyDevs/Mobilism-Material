@@ -2,12 +2,19 @@
 .usage-page .admin-heading { flex-wrap: wrap; }
 .usage-page [hidden] { display: none !important; }
 .following-report > button { margin-bottom: 16px; }
+.following-report .admin-heading > div:first-child { min-width: 0; max-width: 100%; }
+.following-report .admin-heading p { font-size: clamp(12px, 3.4vw, 14px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .following-report .admin-panel h2 { margin: 0 0 12px; font-size: 17px; }
 .following-report .admin-panel p { color: var(--admin-muted); }
+.following-report .lookup-period { font-size: 0.8125rem; }
 .following-report .admin-traffic-table td:first-child { white-space: normal; overflow-wrap: anywhere; }
 .following-report .admin-traffic-table th { white-space: normal; }
 .cache-rankings :is(th, td):nth-child(n + 2) { text-align: center; vertical-align: middle; }
 .following-report .cache-rankings td:nth-child(2) { white-space: normal; overflow-wrap: anywhere; }
+.following-report .recent-apps td:last-child { white-space: normal; }
+@media (max-width: 480px) {
+  .following-report .admin-traffic-table :is(th, td) { padding: 10px 5px; }
+}
 .usage-period { display: grid; gap: 6px; }
 .usage-period > span { font-size: 12px; color: var(--admin-muted); }
 .usage-page #choose-dates { min-height: 46px; padding: 10px 16px; font-weight: 600; }

@@ -17,7 +17,7 @@ const routes = [...PAGES, { id: 'users', href: '/users', label: 'Users', icon: '
   { id: 'account', href: '/account', label: 'My account', icon: 'account' }];
 const path = window.location.pathname.replace(/\/$/, '') || '/';
 const route = routes.find(item => item.href === path);
-document.title = `${route?.label || 'Not found'} · Mobilism Material`;
+document.title = `${route?.title || route?.label || 'Not found'} · Mobilism Material`;
 
 function Login({ initialStage, onSignedIn, initialError = '', retryAfter = 0 }) {
   const [stage, setStage] = useState(initialStage || 'password');
@@ -147,7 +147,7 @@ function App() {
     {error && <Notice variant="danger">{error}</Notice>}
     {!allowed ? <VStack gap={16}><Heading level={1}>{route ? 'Access denied' : 'Page not found'}</Heading><Text>{route ? 'You do not have access to this page.' : 'This page does not exist.'}</Text><Link href={allowedRoutes[0].href}>Open an available page</Link></VStack>
       : path === '/' ? <Overview user={auth} /> : path === '/app-usage' ? <Usage /> : path === '/app-controls' ? <Controls />
-        : path === '/following-cache' ? <FollowingCache />
+        : path === '/following-cache' ? <FollowingCache title={route.title} />
         : path === '/users' ? <Users currentUser={auth} onSignedOut={signedOut} /> : <Account user={auth} onSignedOut={signedOut} />}
   </main></>;
 }

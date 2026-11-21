@@ -74,7 +74,7 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
             DiagnosticOperation.CacheContribution, status)
     }
 
-    suspend fun lookup(names: List<String>, hideAdult: Boolean, dailySeed: (String) -> String): LatestAppsSnapshot {
+    suspend fun lookup(names: List<String>, hideAdult: Boolean, background: Boolean? = null, dailySeed: (String) -> String): LatestAppsSnapshot {
         val url = endpoint ?: return LatestAppsSnapshot(CacheOutcome.Unconfigured)
         val unique = names.distinctBy(::latestAppKey)
         // Very large libraries still fit in one read of the bounded shared snapshot.
@@ -88,7 +88,9 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
             apps.put(JSONObject().put("name", name).put("receipt", receipt.toString()))
         }
         val body = JSONObject().put("apps", apps).put("adultFiltered", hideAdult).put("day", day)
-        return read(Request.Builder().url(url).post(body.toString().toRequestBody("application/json".toMediaType())).build(), hideAdult)
+        val request = Request.Builder().url(url).post(body.toString().toRequestBody("application/json".toMediaType()))
+        if (background != null) request.header("X-Following-Check", if (background) "background" else "manual")
+        return read(request.build(), hideAdult)
     }
 
     suspend fun snapshot(hideAdult: Boolean): LatestAppsSnapshot {

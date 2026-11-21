@@ -79,8 +79,9 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
     val followPreferences by lazy { FollowingPreferences(this) }
     val followNotifications by lazy { FollowingNotifications(this) }
     val following by lazy { FollowingChecker(library, repository, InstalledApps(this), followPreferences, followNotifications,
-        limits = { remoteControl.limits }, latestApps = { names ->
-            latestApps.lookup(names, contentPreferences.hideAdult.value, followPreferences::dailyLookupSeed)
+        limits = { remoteControl.limits }, latestApps = { names, background ->
+            latestApps.lookup(names, contentPreferences.hideAdult.value, background.takeIf { dailyUsage.enabled.value },
+                followPreferences::dailyLookupSeed)
         }, diagnostics = appLogger, searchError = { getString(R.string.follow_search_error) }, publishMatches = { page ->
             if (dailyUsage.enabled.value && remoteControl.limits.followCacheBatchSize > 0) latestApps.publish(page)
         }) }

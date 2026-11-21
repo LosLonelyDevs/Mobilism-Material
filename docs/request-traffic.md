@@ -16,8 +16,10 @@ Usage and traffic receipts and aggregates update in one atomic SQL statement. Co
 
 Daily batches also carry cache hits and misses. App usage shows the hit rate for each cache as total hits divided by total lookups in the selected dates.
 
-- **Cache** at `/following-cache` counts named lookups as they arrive. Today includes the current partial UTC day. A returned app is a hit. An absent name in a fresh snapshot is a miss. When the feed is stale, only individually confirmed hits count. Filtered entries and failed requests count as neither. The rate uses the period with both hit and miss tracking. Device reports arrive after each UTC day ends.
+- **Cache** at `/following-cache` counts named lookups as they arrive. Today includes the current partial UTC day. A returned app is a hit. An absent name in a fresh snapshot is a miss. When the feed is stale, only individually confirmed hits count. Filtered entries and failed requests count as neither. The rate uses the period with both hit and miss tracking.
+- Device reports show today's live total for all clients. Clients that support check labels send background or manual on the same lookup when anonymous usage is enabled. Those rows are subsets of today's total. Earlier dates use completed device reports.
 - Each ranking shows up to 20 apps and their current cached versions. The cache keeps one release per normalized app name, selected by post date. A cached version can still require a direct search for a compatible update. Starting with v0.1.26, phones with usage reporting enabled share confirmed matches from those searches.
+- The recent list shows the last 15 distinct app names requested during the selected dates. Cache search checks the current snapshot and shows up to five matching names and versions.
 - **Member avatars and badges** counts a lookup as a hit when memory or disk supplies member metadata, including an avatar with badges still unknown.
 - **Search results** and **Forum API reads** count lookups of cached responses. Forced refreshes and reads without caching are excluded from read-cache totals.
 - **Release lists** count saved source pages reused by Home and Latest/Top. Latest expires after five minutes and Top after 15. Local filters run again on the saved data.

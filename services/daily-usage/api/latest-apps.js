@@ -115,7 +115,11 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
       }
     } catch { return respond(res, 400, { error: 'Invalid Latest page' }); }
     try {
-      if (requested) return respond(res, 200, await lookup(database, requested, body.adultFiltered, now, body.day));
+      if (requested) {
+        const mode = req.headers?.['x-following-check'];
+        return respond(res, 200, await lookup(database, requested, body.adultFiltered, now, body.day,
+          mode === 'background' || mode === 'manual' ? mode : null));
+      }
       const { items, ids, at, dated, anchors, missing, adultFiltered } = page;
       for (const item of items) if (anchors[item.id]) item.anchors = anchors[item.id];
       const seen = Object.fromEntries((dated ? ids : []).map(id => [id, true]));

@@ -15,7 +15,7 @@ class FollowingChecker(
     private val library: AppLibraryStore, private val repository: MobilismRepository,
     private val device: InstalledApps, private val preferences: FollowingPreferences, private val notifications: FollowingNotifications,
     private val limits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
-    private val latestApps: suspend (List<String>) -> LatestAppsSnapshot = { LatestAppsSnapshot(CacheOutcome.Unconfigured) },
+    private val latestApps: suspend (List<String>, Boolean) -> LatestAppsSnapshot = { _, _ -> LatestAppsSnapshot(CacheOutcome.Unconfigured) },
     private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
     private val publishMatches: suspend (LatestAppsPage) -> Unit = {},
     private val searchError: () -> String,
@@ -54,7 +54,7 @@ class FollowingChecker(
             val previous = mutableState.value
             mutableState.value = FollowCheckState(busy = true)
             val snapshot = if (!readCache) LatestAppsSnapshot(if (enabled) CacheOutcome.Cooldown else CacheOutcome.Disabled)
-                else try { latestApps(requested) }
+                else try { latestApps(requested, background) }
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { LatestAppsSnapshot(CacheOutcome.Failed) }
             val candidates = snapshot.releases
