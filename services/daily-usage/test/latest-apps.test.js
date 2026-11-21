@@ -74,6 +74,22 @@ test('one lookup counts each requesting device once per app and only absent visi
     [{ name: 'Test', receipt: 'invalid' }]]) assert.equal((await named(invalid)).statusCode, 400);
 });
 
+test('each ranking includes its own top 20 apps without truncating lookup totals', async () => {
+  await query(`INSERT INTO daily_followed_apps (day, app_key, name, followers, misses)
+    SELECT $1::date, 'app' || n, 'App ' || n, n, 42 - n FROM generate_series(1,41) AS n`, [day]);
+  const res = { setHeader() {}, end(value) { this.body = JSON.parse(value); } };
+  await followingHandler(query, () => true,
+    async () => ({ versions: [{ version: '0.1.24', versionCode: 25, prerelease: false }] }), () => new Date(now * 1000))(
+    { method: 'GET', url: '/api/following-cache', headers: {} }, res);
+  assert.equal(res.statusCode, 200);
+  const rows = res.body.followRankings;
+  assert.equal(rows.length, 40);
+  assert.equal(rows.find(row => row.followRank === 20).name, 'App 22');
+  assert.equal(rows.find(row => row.missRank === 20).name, 'App 20');
+  assert.ok(!rows.some(row => row.name === 'App 21'));
+  assert.equal(res.body.lookups.misses, '861');
+});
+
 test('a search contribution fills a miss and dates include the current partial UTC day', async () => {
   const apps = [{ name: 'Facebook', receipt: randomUUID() }];
   await post([item(1)], true);

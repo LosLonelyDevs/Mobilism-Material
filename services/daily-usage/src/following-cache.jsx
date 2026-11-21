@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, today } from './api';
-import { percentage } from '../public/metrics';
+import { followingRankingLimit, percentage } from '../public/metrics';
 import { Button, Notice, Switch } from './ui';
 import { mountUsageCalendar } from './usage-calendar';
 import calendarMarkup from './report-calendar.html?raw';
@@ -10,10 +10,10 @@ const number = value => BigInt(value).toLocaleString();
 const rate = (count, total) => total ? percentage(count, total) + '%' : '—';
 
 function Rankings({ rows, title, rank, count, displayCount = count, label }) {
-  const sorted = rows.filter(row => row[rank] <= 10 && BigInt(row[count]) > 0n)
+  const sorted = rows.filter(row => row[rank] <= followingRankingLimit && BigInt(row[count]) > 0n)
     .sort((a, b) => a[rank] - b[rank]);
   return <section className="admin-panel"><h2>{title}</h2>
-    {sorted.length ? <table className="admin-traffic-table"><thead><tr><th>App</th><th>Current cached version</th><th>{label}</th></tr></thead>
+    {sorted.length ? <table className="admin-traffic-table cache-rankings"><thead><tr><th>App</th><th>Current cached version</th><th>{label}</th></tr></thead>
       <tbody>{sorted.map(row => <tr key={row[rank]}><td>{row.name}</td><td>{row.cachedVersion ?? 'Not cached'}</td>
         <td>{BigInt(row[displayCount]) > 0n ? number(row[displayCount]) : '—'}</td></tr>)}</tbody></table>
       : <p className="muted">No apps reported for these dates.</p>}
@@ -74,8 +74,10 @@ export default function FollowingCache() {
         <Rankings rows={report.followRankings} title="Most followed apps" rank="followRank" count="followers" displayCount="totalLookups" label="Total lookups" />
         <Rankings rows={report.followRankings} title="Most missed apps" rank="missRank" count="misses" label="Missing lookups" />
         <section className="admin-panel"><h2>Device reports</h2>
-          <p>Phones report background and manual checks after each UTC day ends.</p>
-          <table className="admin-traffic-table"><thead><tr><th>Check</th><th>Hits</th><th>Misses</th><th>Hit rate</th><th>Miss rate</th></tr></thead><tbody>
+          {report.from === report.asOf.slice(0, 10) ?
+            <p>Today’s counts arrive when people next open the app after midnight UTC. Select a past date to see uploaded reports.</p> :
+            !report.cacheUsage.length ? <p>No phones have reported Following checks for the selected dates.</p> :
+            <table className="admin-traffic-table"><thead><tr><th>Check</th><th>Hits</th><th>Misses</th><th>Hit rate</th><th>Miss rate</th></tr></thead><tbody>
             {[['FollowingBackground', 'Background'], ['FollowingManual', 'Manual']].map(([key, label]) => {
               const row = report.cacheUsage.find(item => item.cache === key);
               if (!row) return <tr key={key}><td>{label}</td><td colSpan={4}>No reports yet</td></tr>;
@@ -83,7 +85,7 @@ export default function FollowingCache() {
               return <tr key={key}><td>{label}</td><td>{number(hits)}</td><td>{number(misses)}</td>
                 <td>{rate(hits, total)}</td><td>{rate(misses, total)}</td></tr>;
             })}
-          </tbody></table>
+          </tbody></table>}
         </section>
         <section className="admin-panel"><h2>Following controls</h2>
           <Switch label="Allow pull-to-refresh" disabled={saving} checked={report.pullToRefresh.enabled} onChange={changeSetting} />

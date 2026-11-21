@@ -1,5 +1,7 @@
 import { compareVersions } from './audience.js';
 
+export const followingRankingLimit = 20;
+
 export function percentage(count, total) {
   const value = BigInt(count), denominator = BigInt(total);
   return denominator > 0n ? Number((value * 1000n + denominator / 2n) / denominator) / 10 : 0;

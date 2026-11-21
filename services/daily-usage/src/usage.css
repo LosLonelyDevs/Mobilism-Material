@@ -6,6 +6,8 @@
 .following-report .admin-panel p { color: var(--admin-muted); }
 .following-report .admin-traffic-table td:first-child { white-space: normal; overflow-wrap: anywhere; }
 .following-report .admin-traffic-table th { white-space: normal; }
+.cache-rankings :is(th, td):nth-child(n + 2) { vertical-align: middle; }
+.following-report .cache-rankings td:nth-child(2) { white-space: normal; overflow-wrap: anywhere; }
 .usage-period { display: grid; gap: 6px; }
 .usage-period > span { font-size: 12px; color: var(--admin-muted); }
 .usage-page #choose-dates { min-height: 46px; padding: 10px 16px; font-weight: 600; }

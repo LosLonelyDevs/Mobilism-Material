@@ -7,6 +7,7 @@ import { releaseCatalog } from '../lib/releases.js';
 import { requestBody } from '../lib/request-body.js';
 import { visibleSnapshot } from '../lib/follow-lookup.js';
 import { followingControlsAvailable } from '../public/limit-availability.js';
+import { followingRankingLimit } from '../public/metrics.js';
 
 const ranks = `WITH totals AS (
   SELECT app_key, min(name) AS name, sum(followers) AS followers, sum(misses) AS misses,
@@ -19,8 +20,8 @@ const ranks = `WITH totals AS (
   coalesce(sum(measured_misses),0)::text AS "measuredMisses",
   coalesce(jsonb_agg(jsonb_build_object('key', app_key, 'name', name, 'followers', followers::text, 'misses', misses::text,
     'totalLookups', (hits + misses + other_lookups)::text, 'followRank', follow_rank, 'missRank', miss_rank))
-    FILTER (WHERE (follow_rank <= 10 AND followers > 0)
-    OR (miss_rank <= 10 AND misses > 0)), '[]') AS rankings FROM ranked`;
+    FILTER (WHERE (follow_rank <= $3 AND followers > 0)
+    OR (miss_rank <= $3 AND misses > 0)), '[]') AS rankings FROM ranked`;
 
 const rates = `SELECT cache, sum(hits)::text AS hits, sum(misses)::text AS misses FROM daily_cache_usage
   WHERE day BETWEEN $1::date AND $2::date AND cache IN ('FollowingBackground', 'FollowingManual') GROUP BY cache ORDER BY cache`;
@@ -41,7 +42,7 @@ export function createHandler(database = query, session = req => sessionUser(req
         if (!validDay(from) || !validDay(to) || from > to || to > today || new Date(to) - new Date(from) > 364 * DAY)
           return respond(res, 400, { error: 'Invalid date range' });
         if (!available) return respond(res, 200, { available: false });
-        const [cacheUsage, [totals], snapshot, config] = await Promise.all([database(rates, [from, to]), database(ranks, [from, to]),
+        const [cacheUsage, [totals], snapshot, config] = await Promise.all([database(rates, [from, to]), database(ranks, [from, to, followingRankingLimit]),
           visibleSnapshot(database, Math.floor(asOf.getTime() / 1000)), readConfig(database)]);
         const versions = new Map(snapshot.items.map(item => [item.key, item.version]));
         const { rankings, ...lookups } = totals;
