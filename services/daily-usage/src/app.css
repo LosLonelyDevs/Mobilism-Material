@@ -183,6 +183,9 @@ input::-webkit-calendar-picker-indicator { opacity: .85; }
   .destination-card > div > div { padding: 24px !important; }
   .destination-top { margin-bottom: 20px; }
   .destination-metrics { padding: 24px 0; }
+  .following-report .destination-metrics { gap: 12px 6px; justify-content: space-between; }
+  .following-report .destination-metrics .metric-value { min-height: 0; font-size: clamp(18px, 5vw, 26px); }
+  .following-report .destination-metrics .muted { font-size: 12px; }
   .workspace-heading { gap: 8px; }
   .workspace-heading > div { min-width: 0; }
   .workspace-heading button { font-size: 12px !important; }

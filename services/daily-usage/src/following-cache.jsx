@@ -7,6 +7,7 @@ import calendarMarkup from './report-calendar.html?raw';
 
 const calendarHtml = { __html: calendarMarkup };
 const number = value => BigInt(value).toLocaleString();
+const rate = (count, total) => total ? percentage(count, total) + '%' : '—';
 
 function Rankings({ rows, title, rank, count, label }) {
   const sorted = rows.filter(row => row[rank] <= 10 && BigInt(row[count]) > 0n)
@@ -26,11 +27,11 @@ function LookupSummary({ report }) {
   return <section className="admin-panel"><h2>Cache lookups</h2>
     <p>{partial ? `Includes today through ${time} UTC.` : 'Selected UTC dates.'}</p>
     <div className="destination-metrics">
-      {[[number(report.cachedApps), 'Apps in cache now'], [number(hits), 'Hits'], [number(misses), 'Misses'],
-        [total ? percentage(hits, total) + '%' : '—', 'Hit rate']].map(([value, label]) =>
+      {[[number(report.cachedApps), 'Cached apps'], [number(hits), 'Hits'], [number(misses), 'Misses'],
+        [rate(hits, total), 'Hit rate'], [rate(measured, total), 'Miss rate']].map(([value, label]) =>
         <div key={label}><span className="metric-value">{value}</span><span className="muted">{label}</span></div>)}
     </div>
-    {misses > measured && <p className="muted">{number(misses - measured)} misses predate hit tracking and are excluded from the rate.</p>}
+    {misses > measured && <p className="muted">{number(misses - measured)} misses predate hit tracking and are excluded from both rates.</p>}
   </section>;
 }
 
@@ -73,13 +74,13 @@ export default function FollowingCache() {
         <Rankings rows={report.followRankings} title="Most missed apps" rank="missRank" count="misses" label="Missing lookups" />
         <section className="admin-panel"><h2>Device reports</h2>
           <p>Phones report background and manual checks after each UTC day ends.</p>
-          <table className="admin-traffic-table"><thead><tr><th>Check</th><th>Hits</th><th>Misses</th><th>Hit rate</th></tr></thead><tbody>
+          <table className="admin-traffic-table"><thead><tr><th>Check</th><th>Hits</th><th>Misses</th><th>Hit rate</th><th>Miss rate</th></tr></thead><tbody>
             {[['FollowingBackground', 'Background'], ['FollowingManual', 'Manual']].map(([key, label]) => {
               const row = report.cacheUsage.find(item => item.cache === key);
-              if (!row) return <tr key={key}><td>{label}</td><td colSpan={3}>No reports yet</td></tr>;
+              if (!row) return <tr key={key}><td>{label}</td><td colSpan={4}>No reports yet</td></tr>;
               const hits = BigInt(row.hits), misses = BigInt(row.misses), total = hits + misses;
               return <tr key={key}><td>{label}</td><td>{number(hits)}</td><td>{number(misses)}</td>
-                <td>{total ? percentage(hits, total) + '%' : 'No reports'}</td></tr>;
+                <td>{rate(hits, total)}</td><td>{rate(misses, total)}</td></tr>;
             })}
           </tbody></table>
         </section>
