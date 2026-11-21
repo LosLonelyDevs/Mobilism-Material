@@ -3,12 +3,13 @@ package org.mobilism.material.updates
 import androidx.lifecycle.ViewModelStore
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.Executors
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
@@ -23,15 +24,20 @@ import org.mobilism.material.data.AppRelease
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppUpdateViewModelTest {
     @get:Rule val folder = TemporaryFolder()
+    private val main = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
     private val store = ViewModelStore()
     private val bytes = "test update".toByteArray()
     private val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     private val release = AppRelease("99.0.0", "https://example.org", "https://example.org/update.apk", bytes.size.toLong(), hash)
 
-    @Before fun setUp() { Dispatchers.setMain(UnconfinedTestDispatcher()) }
-    @After fun tearDown() { store.clear(); Dispatchers.resetMain() }
+    @Before fun setUp() { Dispatchers.setMain(main) }
+    @After fun tearDown() {
+        runBlocking(main) { store.clear() }
+        Dispatchers.resetMain()
+        main.close()
+    }
 
-    @Test fun oneDownloadSurvivesRepeatedActionsAndInstallationRequestIsConsumedOnce() = runBlocking {
+    @Test fun oneDownloadSurvivesRepeatedActionsAndInstallationRequestIsConsumedOnce() = runBlocking(main) {
         val started = CompletableDeferred<Unit>()
         val finish = CompletableDeferred<Unit>()
         var downloads = 0
@@ -58,7 +64,7 @@ class AppUpdateViewModelTest {
         assertTrue(model.consumeInstallRequest())
     }
 
-    @Test fun cancellationStopsTheDownloadWithoutOpeningTheInstaller() = runBlocking {
+    @Test fun cancellationStopsTheDownloadWithoutOpeningTheInstaller() = runBlocking(main) {
         val started = CompletableDeferred<Unit>()
         val model = AppUpdateViewModel(File(folder.root, "update.apk"), { _, _ -> }) { _, _, _ ->
             started.complete(Unit)
@@ -73,7 +79,7 @@ class AppUpdateViewModelTest {
         assertNull(model.fileForInstall())
     }
 
-    @Test fun rejectsInvalidPackagesAndRechecksSavedFilesBeforeInstallation() = runBlocking {
+    @Test fun rejectsInvalidPackagesAndRechecksSavedFilesBeforeInstallation() = runBlocking(main) {
         val invalidFile = File(folder.root, "invalid.apk")
         val invalid = AppUpdateViewModel(invalidFile, { _, _ -> error("Wrong signing key") }) { _, file, _ -> file.writeBytes(bytes) }
         store.put("invalid", invalid)
