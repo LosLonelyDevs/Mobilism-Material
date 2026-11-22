@@ -30,6 +30,7 @@ import org.mobilism.material.data.AppReleaseUpdates
 import org.mobilism.material.designsystem.MobilismTheme
 import org.mobilism.material.ui.AppUpdateSettings
 import org.mobilism.material.ui.AppUpdateHost
+import org.mobilism.material.ui.LocalChangelogLoader
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -78,10 +79,15 @@ class AppUpdatesTest {
         val updater = AppUpdateViewModel(File(compose.activity.cacheDir, "unused-ui-test.apk"), { _, _ -> })
         runBlocking { checker.check(automatic = true) }
         compose.setContent { MobilismTheme(reduceMotion = true) {
-            var notes by remember { mutableStateOf(AppChangelog("0.1.18", listOf("First change.", "Second change.")) as AppChangelog?) }
-            AppUpdateHost(checker, updater, remember { RemoteControlStore({ RemoteAppConfig() }) }, notes, { notes = null }) { }
+            var notes by remember { mutableStateOf<AppChangelog?>(AppChangelog("0.1.18")) }
+            CompositionLocalProvider(LocalChangelogLoader provides {
+                throw IOException("Offline fixture")
+            }) {
+                AppUpdateHost(checker, updater, remember { RemoteControlStore({ RemoteAppConfig() }) }, notes, { notes = null }) { }
+            }
         } }
         compose.onNodeWithText("What's new").assertIsDisplayed()
+        compose.onNodeWithText(compose.activity.getString(R.string.changelog_fallback)).assertIsDisplayed()
         compose.onNodeWithText("Update available").assertDoesNotExist()
         capture("app-changelog-modal.png")
         compose.onNodeWithText("Got it").performClick()

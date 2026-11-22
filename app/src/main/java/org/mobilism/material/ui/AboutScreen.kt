@@ -4,11 +4,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
@@ -60,7 +58,7 @@ fun AboutScreen(onBack: () -> Unit, openRepository: ((String) -> Unit)? = null,
     val icon = remember(context) {
         context.packageManager.getApplicationIcon(context.packageName).toBitmap(256, 256).asImageBitmap()
     }
-    val notes = remember { BuildConfig.RELEASE_NOTES.lines().filter(String::isNotBlank) }
+    val notes = rememberChangelogNotes(BuildConfig.VERSION_NAME)
     Scaffold(topBar = {
         TopAppBar(title = { AppHeading(stringResource(R.string.settings_about_title), HeadingLevel.Page) }, navigationIcon = {
             AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.action_back), onBack)
@@ -103,12 +101,8 @@ fun AboutScreen(onBack: () -> Unit, openRepository: ((String) -> Unit)? = null,
                 }
             }
             item { SettingsSectionLabel(stringResource(R.string.about_whats_new)) }
-            items(notes) { note ->
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (note.startsWith("- ")) Text("•", color = MaterialTheme.colorScheme.primary)
-                    Text(note.removePrefix("- "), style = MaterialTheme.typography.bodyMedium)
-                }
+            item {
+                AppChangelogNotes(notes, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             }
             item { SettingsSectionLabel(stringResource(R.string.about_links)) }
             item {

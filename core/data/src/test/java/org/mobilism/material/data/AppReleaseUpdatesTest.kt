@@ -1,11 +1,42 @@
 package org.mobilism.material.data
 
 import java.io.IOException
+import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 
 class AppReleaseUpdatesTest {
+    @Test fun reopenedChangelogReadsEditsForTheInstalledTag() = runBlocking {
+        var html = "<ul><li>First <strong>note</strong></li><li>Second &amp; third</li></ul>"
+        var tag = "v0.1.18"
+        var status = 200
+        val api = AppReleaseUpdates(OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            assertEquals("https://api.github.com/repos/LosLonelyDevs/Mobilism-Material/releases/tags/v0.1.18", request.url.toString())
+            assertEquals("application/vnd.github.html+json", request.header("Accept"))
+            assertEquals("no-cache", request.header("Cache-Control"))
+            val json = JSONObject().put("tag_name", tag).put("body_html", html)
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(status).message("Fixture")
+                .body(json.toString().toResponseBody()).build()
+        }.build())
+        assertEquals(listOf("First note", "Second & third"), api.notesFor("0.1.18"))
+        html = "<p>Edited after publication.</p>"
+        assertEquals(listOf("Edited after publication."), api.notesFor("0.1.18"))
+        html = ""
+        assertTrue(api.notesFor("0.1.18").isEmpty())
+        html = "<p>Different release.</p>"
+        tag = "v0.1.19"
+        assertTrue(api.notesFor("0.1.18").isEmpty())
+        tag = "v0.1.18"
+        status = 403
+        assertTrue(api.notesFor("0.1.18").isEmpty())
+    }
+
     @Test fun comparesStableVersionNumbersWithoutDowngrades() {
         assertTrue(AppVersions.newer("v0.1.100", "0.1.17"))
         assertTrue(AppVersions.newer("1.0.0", "0.99.999"))

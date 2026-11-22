@@ -277,6 +277,8 @@
         <item quantity="other">%1$d Mobilism hosts</item>
     </plurals>
     <string name="about_whats_new">What\'s new</string>
+    <string name="changelog_fallback">Various improvements and bug fixes</string>
+    <string name="changelog_got_it">Got it</string>
     <string name="about_links">Links</string>
     <string name="about_github">GitHub</string>
     <string name="about_github_summary">Source code, releases, and issues</string>

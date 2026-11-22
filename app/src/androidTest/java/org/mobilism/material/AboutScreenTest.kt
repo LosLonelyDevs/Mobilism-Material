@@ -1,6 +1,7 @@
 package org.mobilism.material
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
@@ -19,6 +20,7 @@ import org.mobilism.material.data.DebridRepository
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.designsystem.MobilismTheme
 import org.mobilism.material.ui.AboutScreen
+import org.mobilism.material.ui.LocalChangelogLoader
 import org.mobilism.material.ui.REPOSITORY_URL
 import org.mobilism.material.ui.SettingsScreen
 
@@ -126,13 +128,18 @@ class AboutScreenTest {
         }
     }
 
-    @Test fun opensAboutFromLastSettingsCardAndShowsBuildReleaseNotes() {
+    @Test fun opensAboutFromLastSettingsCardAndShowsPublishedReleaseNotes() {
         val repository = DebridRepository(compose.activity)
         val opened = mutableListOf<String>()
+        val note = "Updated release notes from GitHub."
+        val versions = mutableListOf<String>()
         compose.setContent {
             var about by remember { mutableStateOf(false) }
             MobilismTheme(reduceMotion = true) {
-                if (about) AboutScreen(onBack = { about = false }, openRepository = { opened += it })
+                if (about) CompositionLocalProvider(LocalChangelogLoader provides { version ->
+                    versions += version
+                    listOf(note)
+                }) { AboutScreen(onBack = { about = false }, openRepository = { opened += it }) }
                 else SettingsScreen(DebridState(), repository, onAppearance = {}, onDownloads = {}, onBack = {},
                     onAbout = { about = true })
             }
@@ -147,12 +154,14 @@ class AboutScreenTest {
         compose.onNodeWithText("Mobilism Material").assertIsDisplayed()
         compose.onNodeWithText("v${BuildConfig.VERSION_NAME}").assertIsDisplayed()
         compose.onNodeWithText(BuildConfig.ABOUT_DESCRIPTION).assertIsDisplayed()
-        val note = BuildConfig.RELEASE_NOTES.lines().first { it.startsWith("- ") }.removePrefix("- ")
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(note))
         compose.onNodeWithText(note).assertIsDisplayed()
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("GitHub"))
         compose.onNodeWithText("GitHub").assertIsDisplayed().performClick()
-        compose.runOnIdle { assertEquals(listOf(REPOSITORY_URL), opened) }
+        compose.runOnIdle {
+            assertEquals(listOf(REPOSITORY_URL), opened)
+            assertEquals(listOf(BuildConfig.VERSION_NAME), versions)
+        }
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Settings").assertIsDisplayed()
     }

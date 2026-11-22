@@ -7,6 +7,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import org.jsoup.Jsoup
 
 data class AppRelease(
     val version: String,
@@ -47,9 +48,33 @@ class AppReleaseUpdates(private val client: OkHttpClient = AppHttp.builder()
         }
     }
 
+    suspend fun notesFor(version: String): List<String> = withContext(Dispatchers.IO) {
+        if (AppVersions.parts(version) == null) return@withContext emptyList()
+        val tag = "v" + version.removePrefix("v")
+        val request = Request.Builder().url("$RELEASES_URL/tags/$tag")
+            .header("Accept", "application/vnd.github.html+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("Cache-Control", "no-cache").build()
+        val call = client.newCall(request)
+        call.timeout().timeout(5, TimeUnit.SECONDS)
+        call.execute().use { response ->
+            if (!response.isSuccessful) return@use emptyList()
+            val source = response.body?.source() ?: return@use emptyList()
+            if (source.request(256 * 1024L + 1)) return@use emptyList()
+            val json = JSONObject(source.readUtf8())
+            if (json.optString("tag_name") != tag || json.optBoolean("draft") || json.optBoolean("prerelease"))
+                return@use emptyList()
+            val html = json.opt("body_html") as? String ?: return@use emptyList()
+            Jsoup.parseBodyFragment(html).body().children().flatMap { block ->
+                if (block.normalName() in setOf("ul", "ol")) block.children() else listOf(block)
+            }.map { it.text() }.filter { it.isNotBlank() }
+        }
+    }
+
     companion object {
         const val REPOSITORY_URL = "https://github.com/LosLonelyDevs/Mobilism-Material"
-        const val API_URL = "https://api.github.com/repos/LosLonelyDevs/Mobilism-Material/releases/latest"
+        private const val RELEASES_URL = "https://api.github.com/repos/LosLonelyDevs/Mobilism-Material/releases"
+        const val API_URL = "$RELEASES_URL/latest"
 
         internal fun parse(json: JSONObject): AppRelease {
             val tag = json.getString("tag_name")

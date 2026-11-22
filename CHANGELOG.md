@@ -4,6 +4,7 @@
 
 ## 0.1.27
 
+- Note: you may need to login to premium accounts again. Check in settings
 - Followed apps page improvements
 - Various improvements and bug fixes
 

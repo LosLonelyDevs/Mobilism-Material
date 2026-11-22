@@ -4,13 +4,10 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AppChangelogTest {
-    private val notes = "- First change.\n- Second change."
-
     @Test fun showsInstalledReleaseOnceIncludingWhenVersionsWereSkipped() {
-        assertEquals(listOf("First change.", "Second change."), AppChangelog.pending("0.1.20", "0.1.18", notes)?.bullets)
-        assertNotNull(AppChangelog.pending("0.1.20", null, notes))
-        assertNull(AppChangelog.pending("0.1.20", "0.1.20", notes))
-        assertNull(AppChangelog.pending("0.1.19", "0.1.20", notes))
-        assertNull(AppChangelog.pending("0.1.20", "0.1.18", ""))
+        assertEquals("0.1.20", AppChangelog.pending("0.1.20", "0.1.18")?.version)
+        assertNotNull(AppChangelog.pending("0.1.20", null))
+        assertNull(AppChangelog.pending("0.1.20", "0.1.20"))
+        assertNull(AppChangelog.pending("0.1.19", "0.1.20"))
     }
 }
