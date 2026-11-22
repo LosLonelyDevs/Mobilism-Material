@@ -1,10 +1,11 @@
 import { query } from '../lib/database.js';
 import { respond } from '../lib/protocol.js';
-import { appKey, cacheLifetime, lookup, parseLookup, visibleSnapshot } from '../lib/follow-lookup.js';
+import { appKey, cacheLifetime, latestFeedSize, lookup, parseLookup, visibleSnapshot } from '../lib/follow-lookup.js';
 
 const fields = ['id', 'title', 'name', 'version', 'postedAt', 'author'];
 const confirmAfter = 10 * 60;
 const maxUploadDelay = 2 * 60;
+export const catalogCapacity = 1000;
 const text = (value, max) => typeof value === 'string' && value.length > 0 && value.length <= max &&
   value.trim() === value && !/[\u0000-\u001f\u007f]/u.test(value);
 
@@ -69,15 +70,30 @@ const updatePage = `
     ), candidates AS (
       SELECT item, 0 AS priority FROM updated
       UNION ALL SELECT item, 1 FROM jsonb_array_elements($1::jsonb) AS item
+    ), unique_apps AS (
+      SELECT DISTINCT ON (item->>'key') item, item->>'key' AS app_key,
+        (item->>'postedAt')::bigint AS posted, (item->>'id')::bigint AS id
+      FROM candidates
+      WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $5::bigint
+      ORDER BY item->>'key', posted DESC, id DESC, priority
+    ), ranked AS (
+      SELECT *, row_number() OVER (ORDER BY posted DESC, id DESC, app_key) AS position FROM unique_apps
+    ), demand AS (
+      SELECT app_key, sum((hits + misses + other_lookups) *
+        CASE WHEN day = $10::date THEN 1 ELSE $11::numeric END) AS requests,
+        max(last_requested_at) AS last_request
+      FROM daily_followed_apps
+      WHERE day BETWEEN $10::date - 1 AND $10::date AND last_requested_at > $5::bigint
+        AND app_key IN (SELECT app_key FROM ranked WHERE position > ${latestFeedSize})
+      GROUP BY app_key
+    ), followed AS (
+      SELECT position FROM ranked LEFT JOIN demand USING (app_key)
+      WHERE position > ${latestFeedSize}
+      ORDER BY requests DESC NULLS LAST, last_request DESC NULLS LAST, position
+      LIMIT ${catalogCapacity - latestFeedSize}
     )
-    SELECT coalesce(jsonb_agg(item ORDER BY posted DESC, id DESC), '[]'::jsonb) FROM (
-      SELECT * FROM (
-        SELECT DISTINCT ON (item->>'key') item, (item->>'postedAt')::bigint AS posted, (item->>'id')::bigint AS id
-        FROM candidates
-        WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $5::bigint
-        ORDER BY item->>'key', posted DESC, id DESC, priority
-      ) unique_apps ORDER BY posted DESC, id DESC LIMIT 500
-    ) newest
+    SELECT coalesce(jsonb_agg(item ORDER BY position), '[]'::jsonb) FROM ranked
+    WHERE position <= ${latestFeedSize} OR position IN (SELECT position FROM followed)
   ), observed_at = greatest(observed_at, $2::bigint) WHERE singleton`;
 
 export function createHandler(database = query, clock = () => Math.floor(Date.now() / 1000)) {
@@ -85,7 +101,7 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
     if (req.method === 'GET') {
       try {
         const now = clock();
-        const { observedAt, items: visible } = await visibleSnapshot(database, now);
+        const { observedAt, items: visible } = await visibleSnapshot(database, now, true);
         const items = visible.map(item => Object.fromEntries([...fields, 'adultFiltered'].map(key => [key, item[key]])));
         const ttl = Math.min(60, ...visible.map(item => (item.lastSeen ?? item.postedAt) + cacheLifetime - now));
         res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=' + ttl);
@@ -128,8 +144,12 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
       for (const item of items) if (anchors[item.id]) item.anchors = anchors[item.id];
       const seen = Object.fromEntries((dated ? ids : []).map(id => [id, true]));
       const safe = Object.fromEntries((adultFiltered ? ids : []).map(id => [id, true]));
+      // Approximate a rolling day using existing daily counts. Midnight preserves yesterday's demand.
+      const today = new Date(now * 1000).toISOString().slice(0, 10);
+      const yesterdayWeight = 1 - (now % 86400) / 86400;
       await database(updatePage, [JSON.stringify(items), firstPage ? at : 0, JSON.stringify(seen), at,
-        now - cacheLifetime, JSON.stringify(anchors), JSON.stringify(missing), confirmAfter, JSON.stringify(safe)]);
+        now - cacheLifetime, JSON.stringify(anchors), JSON.stringify(missing), confirmAfter, JSON.stringify(safe),
+        today, yesterdayWeight]);
       return respond(res, 200, { accepted: true });
     } catch { return respond(res, 503, { error: 'Cache unavailable' }); }
   };

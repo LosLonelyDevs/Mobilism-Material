@@ -2,9 +2,12 @@ const maxNames = 512;
 const receiptFormat = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 export const appKey = name => name.normalize('NFKC').trim().toLowerCase().replace(/\s+/gu, ' ');
 export const cacheLifetime = 86400;
+export const latestFeedSize = 500;
+const verificationLifetime = 21600;
 
-export async function visibleSnapshot(database, now) {
-  const [row] = await database('SELECT items, observed_at FROM latest_apps_cache WHERE singleton');
+export async function visibleSnapshot(database, now, latestOnly = false) {
+  const itemsColumn = latestOnly ? `jsonb_path_query_array(items, '$[0 to ${latestFeedSize - 1}]') AS items` : 'items';
+  const [row] = await database(`SELECT ${itemsColumn}, observed_at FROM latest_apps_cache WHERE singleton`);
   const items = (row?.items ?? []).filter(item => !item.hiddenAt && (item.lastSeen ?? item.postedAt) > now - cacheLifetime);
   return { observedAt: Number(row?.observed_at ?? 0), items };
 }
@@ -30,18 +33,20 @@ export async function lookup(database, apps, adultFiltered, now, clientDay, mode
   const keys = apps.map(app => app.key);
   const [row] = await database(`SELECT observed_at, available.* FROM latest_apps_cache
     CROSS JOIN LATERAL (
-      SELECT coalesce(jsonb_agg(item) FILTER (WHERE NOT $2::boolean OR (item->>'adultFiltered')::boolean), '[]') AS matches,
+      SELECT coalesce(jsonb_agg(item ORDER BY position) FILTER (WHERE (NOT $2::boolean OR (item->>'adultFiltered')::boolean)
+        AND (position <= ${latestFeedSize} OR (item->>'lastSeen')::bigint >= $4)), '[]') AS matches,
         coalesce(jsonb_agg(item->>'key'), '[]') AS keys
-      FROM jsonb_array_elements(items) item WHERE item->>'key' = ANY ($1::text[])
+      FROM jsonb_array_elements(items) WITH ORDINALITY AS entry(item, position) WHERE item->>'key' = ANY ($1::text[])
         AND NOT (item ? 'hiddenAt') AND coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $3
-    ) available WHERE singleton`, [keys, adultFiltered, now - cacheLifetime]);
+    ) available WHERE singleton`, [keys, adultFiltered, now - cacheLifetime, now - verificationLifetime]);
   if (!row) throw new Error();
   const feedObservedAt = Number(row.observed_at);
   const matches = new Set(row.keys);
-  const isFresh = at => at > 0 && now - at >= -300 && now - at <= 21600;
+  const isFresh = at => at > 0 && now - at >= -300 && now - at <= verificationLifetime;
   const fresh = isFresh(feedObservedAt);
   // A recent sighting confirms that specific app even when nobody has opened Latest recently.
-  const items = fresh ? row.matches : row.matches.filter(item => isFresh(item.lastSeen));
+  // Released clients accept at most 500 results even when they ask for 512 names.
+  const items = (fresh ? row.matches : row.matches.filter(item => isFresh(item.lastSeen))).slice(0, latestFeedSize);
   const observedAt = fresh || !items.length ? feedObservedAt : Math.min(...items.map(item => item.lastSeen));
   const day = new Date(now * 1000).toISOString().slice(0, 10);
   const returned = new Set(items.map(item => item.key));

@@ -2,7 +2,8 @@ import { after, before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
-import { createHandler } from '../api/latest-apps.js';
+import { catalogCapacity, createHandler } from '../api/latest-apps.js';
+import { latestFeedSize, visibleSnapshot } from '../lib/follow-lookup.js';
 import { createHandler as followingHandler } from '../api/following-cache.js';
 import { randomUUID } from 'node:crypto';
 
@@ -213,6 +214,8 @@ test('concurrent overlapping pages keep the newest 500 unique apps in post order
   assert.equal(result.body.items.length, 500);
   assert.deepEqual(result.body.items[0], { ...item(800, 'APP 520'), adultFiltered: false });
   assert.equal(result.body.items.at(-1).id, 21);
+  assert.equal((await visibleSnapshot(query, now)).items.length, 520);
+  assert.equal((await named([{ name: 'App 1', receipt: randomUUID() }])).body.items[0].id, 1);
   assert.equal(result.body.observedAt, now);
   assert.match(result.headers['Vercel-CDN-Cache-Control'], /s-maxage/);
   await post([item(800, 'APP 520')], false, true);
@@ -220,17 +223,60 @@ test('concurrent overlapping pages keep the newest 500 unique apps in post order
   assert.equal((await call('GET')).body.items[0].adultFiltered, true);
 });
 
-test('migration widens an existing 200-app cache without losing its entries', async () => {
+test('a verified older release fills a named miss and displaces the least requested app', async () => {
+  const catalog = Array.from({ length: catalogCapacity }, (_, i) => {
+    const record = item(i + 1);
+    return { ...record, key: record.name.toLowerCase(), postedAt: now - i - 1, lastSeen: now, adultFiltered: true };
+  });
+  await query('UPDATE latest_apps_cache SET items = $1, observed_at = $2', [JSON.stringify(catalog), now]);
+  await query(`INSERT INTO daily_followed_apps(day, app_key, name, followers, misses, hits, last_requested_at)
+    SELECT $1::date, 'app ' || id, 'App ' || id, 1, 0,
+      CASE WHEN id = $3 THEN 1 WHEN id = $3::int - 1 THEN 0 ELSE 8 END, $4::bigint
+    FROM generate_series($2::int, $3::int) id`, [day, latestFeedSize + 1, catalogCapacity, now - 60]);
+  // Yesterday's demand still protects a release that has seen no hits today.
+  const midnight = Date.parse(day + 'T00:00:00Z') / 1000;
+  await query(`INSERT INTO daily_followed_apps(day, app_key, name, followers, misses, last_requested_at)
+    VALUES ($1::date - 1, $2, $3, 1, 50, $4)`, [day, 'app ' + (catalogCapacity - 1),
+    'App ' + (catalogCapacity - 1), midnight - 60]);
+
+  const original = { ...item(catalogCapacity + 1, 'Longtime Reader'), postedAt: now - 60 * 86400 };
+  const requested = [{ name: original.name, receipt: randomUUID() }];
+  assert.equal((await named(requested)).body.misses, 1);
+  assert.equal((await named(requested)).body.misses, 1);
+  const upload = candidate => call('POST', { firstPage: false, adultFiltered: false, readAt: now,
+    ids: [candidate.id], items: [candidate] });
+  assert.equal((await upload(original)).statusCode, 200);
+  const secondPhone = await named([{ name: original.name.toUpperCase(), receipt: randomUUID() }]);
+  assert.deepEqual(secondPhone.body.items, [{ ...original, adultFiltered: false }]);
+  assert.equal(secondPhone.body.misses, 0);
+  assert.equal((await named(requested, true)).body.items.length, 0);
+  const catalogAfter = await visibleSnapshot(query, now);
+  assert.equal(catalogAfter.items.length, catalogCapacity);
+  assert.ok(!catalogAfter.items.some(app => app.id === catalogCapacity));
+  assert.ok(catalogAfter.items.some(app => app.id === catalogCapacity - 1));
+  assert.deepEqual((await call('GET')).body.items.map(app => app.id), catalog.slice(0, latestFeedSize).map(app => app.id));
+
+  const allRequested = catalog.slice(0, 512).map(app => ({ name: app.name, receipt: randomUUID() }));
+  assert.equal((await named(allRequested)).body.items.length, latestFeedSize);
+
+  await upload({ ...original, id: original.id + 1, postedAt: original.postedAt - 10, version: '0.9' });
+  assert.equal((await named(requested)).body.items[0].id, original.id);
+  await feed([1], [], now + 21601);
+  assert.equal((await named(requested, false, query, now + 21601)).body.items.length, 0);
+  assert.ok(!(await visibleSnapshot(query, now + 86400)).items.some(app => app.id === original.id));
+});
+
+test('migration widens an existing 500-app cache without losing its entries', async () => {
   await post([item(1)], true);
   await db.exec(`ALTER TABLE latest_apps_cache DROP CONSTRAINT latest_apps_cache_items_check,
-    ADD CONSTRAINT latest_apps_cache_items_check CHECK (jsonb_array_length(items) <= 200)`);
+    ADD CONSTRAINT latest_apps_cache_items_check CHECK (jsonb_array_length(items) <= 500)`);
   await db.exec(await readFile(new URL('../schema.sql', import.meta.url), 'utf8'));
   const { body } = await call('GET');
   assert.equal(body.items[0].id, 1);
   assert.equal(body.observedAt, now);
   const fill = count => query("UPDATE latest_apps_cache SET items = (SELECT jsonb_agg('{}'::jsonb) FROM generate_series(1, $1::int))", [count]);
-  await fill(500);
-  await assert.rejects(fill(501), /latest_apps_cache_items_check/);
+  await fill(catalogCapacity);
+  await assert.rejects(fill(catalogCapacity + 1), /latest_apps_cache_items_check/);
 });
 
 test('later pages alone cannot claim freshness and invalid reports cannot alter the index', async () => {
