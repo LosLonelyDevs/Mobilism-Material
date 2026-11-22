@@ -14,10 +14,11 @@
         <section class="admin-panel" aria-labelledby="trend-title">
           <div class="admin-panel-heading"><h2 id="trend-title">Daily reporting clients</h2></div>
           <div class="admin-trend">
-            <div class="admin-chart-summary" aria-live="polite"><strong><span id="chart-total">0</span> <span>reporting clients</span></strong><span id="chart-day" class="admin-date-pill"></span></div>
+            <div class="admin-chart-summary" aria-live="polite"><strong><span id="chart-total">0</span> <span id="chart-unit">reporting clients</span></strong><span id="chart-day" class="admin-date-pill"></span></div>
             <div class="admin-chart-plot" aria-hidden="true"><div class="admin-chart-axis"><span id="peak">0</span><span>0</span></div><div id="chart" class="admin-chart"></div></div>
             <div class="admin-chart-range"><span id="range-start"></span><span id="range-end"></span></div>
             <label class="admin-chart-control" for="chart-slider"><span>Explore a day <span aria-hidden="true">↔</span></span><input id="chart-slider" type="range" min="0" max="13" value="13" step="1"></label>
+            <ul id="chart-versions" class="chart-versions" aria-label="App version counts for the selected day"></ul>
             <button id="view-day" type="button" hidden>View this day’s breakdown</button>
           </div>
           <p id="zero-note" class="admin-zero-note" hidden>No reports in this range yet. Activity appears as opted-in installations check in.</p>
@@ -26,28 +27,30 @@
           <section class="admin-panel" aria-labelledby="version-title"><div class="admin-panel-heading"><h2 id="version-title">App versions</h2><span class="share-basis"></span></div><div id="version-shares"></div></section>
           <section class="admin-panel" aria-labelledby="android-title"><div class="admin-panel-heading"><h2 id="android-title">Android versions</h2><span class="share-basis"></span></div><div id="android-shares"></div></section>
         </div>
-        <section class="admin-panel" aria-labelledby="device-share-title">
-          <div class="admin-panel-heading admin-device-heading"><h2 id="device-share-title">Devices</h2><div id="device-groups" class="admin-range-group" aria-label="Group devices"><button data-group="models" aria-pressed="true">Model</button><button data-group="brands" aria-pressed="false">Manufacturer</button></div></div>
-          <div id="device-shares" class="admin-device-shares"></div>
+        <details class="admin-panel admin-details" open>
+          <summary>Devices</summary>
+          <div id="device-groups" class="admin-range-group" aria-label="Group devices"><button data-group="models" aria-pressed="true">Model</button><button data-group="brands" aria-pressed="false">Manufacturer</button></div>
+          <div class="admin-traffic-scroll" tabindex="0" role="region" aria-label="Reporting devices"><table id="device-shares" class="admin-traffic-table" aria-label="Reporting devices"></table></div>
+          <p id="device-shares-empty" class="admin-zero-note" hidden>No reports for this period.</p>
           <button id="show-devices" class="text-button" aria-expanded="false" hidden>Show all devices</button>
-        </section>
-        <section id="request-traffic" class="admin-panel" aria-labelledby="traffic-title" hidden>
-          <div class="admin-panel-heading"><h2 id="traffic-title">Endpoint requests</h2><span id="traffic-version"></span></div>
+        </details>
+        <details id="request-traffic" class="admin-panel admin-details" open hidden>
+          <summary>Endpoint requests</summary>
+          <span id="traffic-version" class="admin-device-meta"></span>
           <p id="traffic-summary" class="admin-snapshot" aria-live="polite"></p>
-          <div class="admin-traffic-scroll" tabindex="0" role="region" aria-label="Endpoint request totals"><table class="admin-traffic-table"><thead><tr><th scope="col">Endpoint</th><th scope="col">Requests</th><th scope="col">Success</th><th scope="col">Redirects</th><th scope="col">Other 4xx</th><th scope="col">429</th><th scope="col">5xx</th><th scope="col">Network errors</th><th scope="col">Average time</th></tr></thead><tbody id="traffic-rows"></tbody></table></div>
+          <div class="admin-traffic-scroll" tabindex="0" role="region" aria-label="Endpoint request totals"><table id="traffic-table" class="admin-traffic-table" aria-label="Endpoint request totals"></table></div>
           <p id="traffic-empty" class="admin-zero-note" hidden>No completed-day request reports yet. Totals arrive when reporting installations next open the app.</p>
           <p class="admin-footnote">Native Mobilism API, forum, and image attempts from reporting installations. Retries count; cache hits, WebViews, external hosts, and connection failures before an HTTP attempt do not. Times end at response headers and are capped at five minutes. UTC totals can arrive up to fourteen days late. These are not server-wide totals.</p>
-        </section>
-        <section id="cache-usage" class="admin-panel" aria-labelledby="cache-title" hidden>
-          <div class="admin-panel-heading"><h2 id="cache-title">Cache hit rates</h2></div>
-          <div class="admin-traffic-scroll" tabindex="0" role="region" aria-label="Cache hit rates"><table class="admin-traffic-table"><thead><tr><th scope="col">Cache</th><th scope="col">Hits</th><th scope="col">Misses</th><th scope="col">Hit rate</th></tr></thead><tbody id="cache-rows"></tbody></table></div>
+        </details>
+        <details id="cache-usage" class="admin-panel admin-details" open hidden>
+          <summary>Cache hit rates</summary>
+          <div class="admin-traffic-scroll" tabindex="0" role="region" aria-label="Cache hit rates"><table id="cache-table" class="admin-traffic-table" aria-label="Cache hit rates"></table></div>
           <p id="cache-empty" class="admin-zero-note">No cache lookups reported for this period.</p>
-        </section>
+        </details>
         <details class="admin-panel admin-details">
           <summary>Device and app version details</summary>
           <div class="admin-panel-heading"><h2 id="devices-title">Devices & app versions</h2><span id="device-date"></span></div>
-          <div class="admin-device-labels" aria-hidden="true"><span>Device</span><span>App version</span><span id="detail-unit"></span></div>
-          <div id="devices"></div>
+          <div class="admin-traffic-scroll" tabindex="0" role="region" aria-label="Device and app version details"><table id="devices" class="admin-traffic-table" aria-label="Device and app version details"></table></div>
           <div id="empty" class="admin-empty" hidden><h3>No reports for this period</h3></div>
         </details>
         <p class="admin-footnote">Only opted-in installations report activity. Reinstalls and separate devices can count separately. Reports can arrive up to seven days late.</p>

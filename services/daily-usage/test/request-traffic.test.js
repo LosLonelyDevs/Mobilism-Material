@@ -138,6 +138,8 @@ test('traffic stats stay hidden before the supported stable release and group by
 test('period stats combine repeated dimensions and endpoints while retaining zero-filled daily totals', async () => {
   await recordReport(query, report([bucket(), { ...bucket(), day: dateAgo(2) }]));
   await recordReport(query, { ...report([]), day: dateAgo(2) });
+  await recordReport(query, { ...report([]), day: dateAgo(2), model: 'Another model' });
+  await recordReport(query, { ...report([]), day: dateAgo(2), appVersion: '0.1.23', versionCode: 24 });
   await recordReport(query, { ...report([]), day: dateAgo(3) });
   const versions = [{ version: '0.1.24', versionCode: 25, prerelease: false }];
   const handler = statsHandler(query, () => '', () => new Date(), () => true, async () => ({ versions }));
@@ -145,8 +147,12 @@ test('period stats combine repeated dimensions and endpoints while retaining zer
   await handler({ method: 'GET', url: `/api/stats?from=${dateAgo(2)}&to=${dateAgo(0)}&group=period`, headers: {} }, res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.latestStable, '0.1.24');
-  assert.deepEqual(res.body.daily.map(row => row.devices), ['1', '0', '1']);
-  assert.equal(res.body.breakdown.length, 1);
-  assert.equal(res.body.breakdown[0].devices, '2');
+  assert.deepEqual(res.body.daily.map(row => row.devices), ['3', '0', '1']);
+  assert.deepEqual(res.body.daily.map(row => row.versions), [
+    [{ appVersion: '0.1.23', devices: '1' }, { appVersion: '0.1.24', devices: '2' }], [],
+    [{ appVersion: '0.1.24', devices: '1' }],
+  ]);
+  assert.equal(res.body.breakdown.length, 3);
+  assert.equal(res.body.breakdown.reduce((sum, row) => sum + Number(row.devices), 0), 4);
   assert.deepEqual(res.body.requestTraffic, [{ endpoint: 'api/search', method: 'POST', counts: ['24', '2', '4', '6', '8', '10'], durationMs: '5400' }]);
 });

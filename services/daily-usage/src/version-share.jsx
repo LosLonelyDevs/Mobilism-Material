@@ -1,7 +1,6 @@
 import React from 'react';
-import { groupUsage } from '../public/metrics';
+import { groupUsage, versionColor } from '../public/metrics';
 
-const accents = ['var(--primary)', 'var(--md-sys-color-secondary)', 'var(--success)', 'var(--warning)', 'var(--info)', 'var(--danger)'];
 const number = new Intl.NumberFormat();
 
 export default function VersionShare({ rows }) {
@@ -10,11 +9,11 @@ export default function VersionShare({ rows }) {
 
   const total = versions.reduce((sum, version) => sum + version.devices, 0n);
   let clients = 0n;
-  const slices = versions.map((version, index) => {
+  const slices = versions.map(version => {
     const start = Number(clients) / Number(total) * 100;
     clients += version.devices;
     const end = Number(clients) / Number(total) * 100;
-    const color = accents[index] ?? `hsl(${Math.round(index * 137.508) % 360} 56% 69%)`;
+    const color = versionColor(version.key);
     return { ...version, color, stop: `${color} ${start}% ${end}%` };
   });
   return <figure className="version-share">

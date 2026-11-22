@@ -97,7 +97,9 @@ test('statistics require a separate strong token and include daily totals and di
     headers: { authorization: `Bearer ${token}` } });
   assert.equal(result.statusCode, 200);
   assert.equal(result.headers['Cache-Control'], 'no-store');
-  assert.deepEqual(result.body.daily, [{ day: dateAgo(1), devices: '0' }, { day: today(), devices: '2' }]);
+  assert.deepEqual(result.body.daily, [{ day: dateAgo(1), devices: '0', versions: [] }, { day: today(), devices: '2', versions: [
+    { appVersion: '0.1.17', devices: '1' }, { appVersion: '0.1.18', devices: '1' },
+  ] }]);
   assert.equal(result.body.breakdown.length, 2);
   assert.ok(result.body.breakdown.every(row => !('pingId' in row)));
   assert.equal((await call(handler, { method: 'GET', url: '/api/stats?from=bad',

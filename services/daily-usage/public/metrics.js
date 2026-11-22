@@ -2,6 +2,12 @@ import { compareVersions } from './audience.js';
 
 export const followingRankingLimit = 20;
 
+export function versionColor(version) {
+  let hash = 0;
+  for (const char of version) hash = (Math.imul(31, hash) + char.charCodeAt(0)) >>> 0;
+  return `hsl(${Math.round(hash * 137.508) % 360} 64% 67%)`;
+}
+
 export function percentage(count, total) {
   const value = BigInt(count), denominator = BigInt(total);
   return denominator > 0n ? Number((value * 1000n + denominator / 2n) / denominator) / 10 : 0;

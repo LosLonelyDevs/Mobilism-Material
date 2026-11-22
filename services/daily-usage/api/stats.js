@@ -11,7 +11,7 @@ const usageByDay = `SELECT day::text, ${dimensions}, devices::text FROM daily_us
 // Both groupings see the same reports even if a new ping arrives during the query.
 const usageByPeriod = `SELECT day::text, ${dimensions}, sum(devices)::text AS devices FROM daily_usage
   WHERE day BETWEEN $1::date AND $2::date
-  GROUP BY GROUPING SETS ((day), (app_version, version_code, android_api, manufacturer, model))
+  GROUP BY GROUPING SETS ((day, app_version), (app_version, version_code, android_api, manufacturer, model))
   ORDER BY day, app_version, version_code, android_api, manufacturer, model`;
 const requestsByPeriod = `SELECT endpoint, method, json_build_array(sum(successes)::text, sum(redirects)::text,
   sum(client_errors)::text, sum(rate_limited)::text, sum(server_errors)::text, sum(network_errors)::text) AS counts,
@@ -38,16 +38,22 @@ export function createHandler(database = query, token = () => process.env.STATS_
         new Date(to) - new Date(from) > 364 * DAY) return respond(res, 400, { error: 'Invalid date range' });
     try {
       const rows = await database(period ? usageByPeriod : usageByDay, [from, to]);
-      const totals = new Map();
+      const versionsByDay = new Map();
       const breakdown = [];
       for (const row of rows) {
-        if (row.day) totals.set(row.day, (totals.get(row.day) || 0n) + BigInt(row.devices));
+        if (row.day) {
+          const versions = versionsByDay.get(row.day) ?? new Map();
+          versions.set(row.appVersion, (versions.get(row.appVersion) ?? 0n) + BigInt(row.devices));
+          versionsByDay.set(row.day, versions);
+        }
         if (!period || row.day === null) breakdown.push(row);
       }
       const daily = [];
       for (let date = new Date(from); date <= new Date(to); date = new Date(date.getTime() + DAY)) {
         const day = utcDay(date);
-        daily.push({ day, devices: (totals.get(day) || 0n).toString() });
+        const versions = Array.from(versionsByDay.get(day) ?? [], ([appVersion, count]) => ({ appVersion, devices: count.toString() }));
+        const devices = versions.reduce((sum, version) => sum + BigInt(version.devices), 0n);
+        daily.push({ day, devices: devices.toString(), versions });
       }
       const releases = await catalog().catch(() => null);
       const trafficAvailable = supportsMinimumVersion(releases, requestTrafficMinimumVersion);

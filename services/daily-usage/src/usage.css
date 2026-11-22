@@ -44,6 +44,13 @@
 .date-calendar button:disabled { opacity: .35; cursor: default; }
 .calendar-actions { justify-content: flex-end; margin-top: 16px; }
 .usage-page .admin-chart { gap: min(8px, var(--bar-gap)); }
+.usage-page .admin-chart-track { cursor: pointer; }
+.usage-page .admin-chart-bar { display: flex; flex-direction: column-reverse; overflow: hidden; border-radius: 3px 3px 0 0; background: transparent; }
+.usage-page .admin-chart-bar > span { flex-basis: 0; min-height: 0; }
+.usage-page .chart-versions { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; padding: 0; color: var(--admin-muted); font-size: 12px; }
+.usage-page .chart-versions li { display: flex; align-items: center; gap: 6px; }
+.usage-page .chart-versions strong { color: var(--admin-text); font-variant-numeric: tabular-nums; }
+.usage-page .admin-chart-summary { flex-wrap: wrap; }
 .usage-page .admin-stat-total { display: grid; }
 .usage-page .admin-stat > span:last-child { align-self: end; font-size: 12px; }
 .usage-page #view-day { margin-top: 12px; }
@@ -61,26 +68,27 @@
 .usage-page .admin-share-track { height: 7px; border-radius: 999px; background: var(--admin-surface-high); overflow: hidden; }
 .usage-page .admin-share-track > span { display: block; height: 100%; background: var(--admin-primary); border-radius: inherit; transition: width 300ms cubic-bezier(.2,.8,.2,1); }
 .usage-page #android-shares .admin-share-track > span { background: var(--md-sys-color-secondary); }
-.usage-page #device-shares .admin-share-track > span { background: var(--success); }
-.usage-page .admin-device-shares { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; }
 .usage-page #show-devices { margin-top: 12px; }
+.usage-page #device-groups { margin-bottom: 12px; }
+.usage-page .admin-traffic-table thead th { padding-block: 0; }
+.usage-page .admin-traffic-table thead button { padding: 2px; color: var(--admin-muted); background: transparent; border: 0; border-radius: 4px; font: inherit; white-space: nowrap; }
+.usage-page .admin-traffic-table thead button:focus-visible { outline-offset: -2px; }
+.usage-page .admin-traffic-table thead button::after { content: '↕' / ''; margin-inline-start: 4px; }
+.usage-page .admin-traffic-table [aria-sort] button { color: var(--admin-primary); }
+.usage-page .admin-traffic-table [aria-sort=ascending] button::after { content: '↑' / ''; }
+.usage-page .admin-traffic-table [aria-sort=descending] button::after { content: '↓' / ''; }
+.usage-page .admin-traffic-table tbody th { border-top: 1px solid var(--admin-outline); }
+.usage-page .admin-traffic-table .admin-device-name { white-space: normal; min-width: 9em; }
 
 .usage-page .admin-details > summary { cursor: pointer; min-height: 48px; display: flex; align-items: center; gap: 12px; color: var(--admin-primary); font-size: 14px; }
 .usage-page .admin-details > summary::before { content: '+'; font-size: 22px; }
 .usage-page .admin-details[open] > summary::before { content: '−'; }
 .usage-page .admin-details[open] > summary { margin-bottom: 16px; }
-.usage-page .admin-device-labels, .usage-page .admin-device-row { grid-template-columns: minmax(0, 1fr) minmax(150px, .3fr) 108px; }
-.usage-page .admin-device-row { border-radius: 8px; }
-.usage-page .admin-device-row:first-child { border-radius: 20px 20px 8px 8px; }
-.usage-page .admin-device-row:last-child { border-radius: 8px 8px 20px 20px; }
-.usage-page .admin-device-row:only-child { border-radius: 20px; }
 
 @media (max-width: 720px) {
   .usage-page .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .usage-page .admin-breakdowns, .usage-page .admin-device-shares { grid-template-columns: minmax(0, 1fr); }
+  .usage-page .admin-breakdowns { grid-template-columns: minmax(0, 1fr); }
   .usage-page .admin-breakdowns { gap: 0; }
-  .usage-page .admin-device-heading { flex-direction: column; align-items: stretch; }
-  .usage-page .admin-device-row { grid-template-columns: minmax(0, 1fr) auto; }
 }
 
 @media (max-width: 380px) {
