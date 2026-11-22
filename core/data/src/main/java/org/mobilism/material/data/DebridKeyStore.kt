@@ -12,12 +12,14 @@ internal class DebridKeyStore(context: Context) {
         return secrets.decrypt(value)
     }
 
-    fun write(provider: DebridProvider, value: String) {
+    fun owner(provider: DebridProvider): String? = preferences.getString(provider.name + "-owner", null)
+
+    fun write(provider: DebridProvider, value: String, owner: String) {
         val encrypted = secrets.encrypt(value)
-        check(preferences.edit().putString(provider.name, encrypted).commit()) { "The key could not be saved." }
+        check(preferences.edit().putString(provider.name, encrypted).putString(provider.name + "-owner", owner).commit()) { "The key could not be saved." }
     }
 
     fun remove(provider: DebridProvider) {
-        check(preferences.edit().remove(provider.name).commit()) { "The key could not be removed." }
+        check(preferences.edit().remove(provider.name).remove(provider.name + "-owner").commit()) { "The key could not be removed." }
     }
 }

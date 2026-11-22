@@ -76,7 +76,7 @@ class DebridDownloadsTest {
         compose.runOnIdle { assertEquals(listOf(direct), opened); assertEquals(1, downloads) }
     }
 
-    @Test fun failureWaitsForExplicitOriginalHostChoice() {
+    @Test fun failedResolutionOpensOriginalHostOnce() {
         val opened = mutableListOf<String>()
         var downloads = 0
         compose.setContent { MobilismTheme(reduceMotion = true) {
@@ -85,13 +85,19 @@ class DebridDownloadsTest {
                 openLink = { opened += it; true }, onCopied = {})
         } }
         compose.onNodeWithText("Example host").performClick()
-        compose.onNodeWithText("The host is temporarily unavailable.").assertIsDisplayed()
-        compose.runOnIdle { assertTrue(opened.isEmpty()); assertEquals(0, downloads) }
-        compose.onNodeWithText("Cancel").performClick()
-        compose.runOnIdle { assertTrue(opened.isEmpty()) }
-        compose.onNodeWithText("Example host").performClick()
-        compose.onNodeWithText("Open original host").performClick()
         compose.runOnIdle { assertEquals(listOf(original), opened); assertEquals(1, downloads) }
+    }
+
+    @Test fun unsupportedApkOpensOriginalEvenWithDownloaderEnabled() {
+        val opened = mutableListOf<String>()
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            DownloadLinkRow(DownloadLink(direct), verified, onOpened = {},
+                resolveLink = { error("Unexpected resolution") }, openLink = { opened += it; true },
+                downloadFile = { _, _ -> error("Unexpected native download") }, onCopied = {})
+        } }
+        compose.onNodeWithTag("premium-download-check", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("download:$direct").performClick()
+        compose.runOnIdle { assertEquals(listOf(direct), opened) }
     }
 
     @Test fun premiumInternalDownloadShowsOnlyTheDownloadAndCopyActions() {

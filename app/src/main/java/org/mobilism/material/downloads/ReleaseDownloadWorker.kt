@@ -33,10 +33,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.mobilism.material.R
 import org.mobilism.material.data.AppHttp
 import org.mobilism.material.data.KeystoreText
+import org.mobilism.material.data.PremiumDownloadAccess
 import org.mobilism.material.data.Release
 import org.mobilism.material.data.ReleaseTitle
 import org.mobilism.material.data.ReleaseTitles
 import org.mobilism.material.data.retryAfterMillis
+import org.mobilism.material.ui.forumBrowserIntent
 
 internal fun ReleaseTitle.downloadNotificationTitle(fallback: String, savedName: String? = null): String {
     // Older queued downloads may already have a section-specific name.
@@ -63,21 +65,25 @@ internal object ReleaseDownloads {
     }
 
     suspend fun enqueue(context: Context, original: String, release: Release, folder: String, extract: Boolean,
-        directLink: suspend () -> String): Boolean = withContext(Dispatchers.IO) {
+        owner: String, directLink: suspend () -> String): Boolean = withContext(Dispatchers.IO) {
         queueLock.withLock {
+            val access = PremiumDownloadAccess(context)
+            if (!access.permits(owner, original)) throw DownloadProblem(context.getString(R.string.download_premium_required))
             val manager = WorkManager.getInstance(context)
             val digest = MessageDigest.getInstance("SHA-256").digest(original.toByteArray())
             val key = TAG + digest.joinToString("") { "%02x".format(it) }
             if (manager.getWorkInfosForUniqueWorkFlow(key).first().any { !it.state.isFinished }) return@withLock false
             ReleaseFolder(context, Uri.parse(folder)).requireWritable()
             val url = directLink()
+            if (!access.permits(owner, original)) throw DownloadProblem(context.getString(R.string.download_premium_required))
             val parsed = url.toHttpUrlOrNull()
             if (parsed == null || !parsed.isHttps || parsed.username.isNotEmpty() || parsed.password.isNotEmpty())
                 throw DownloadProblem(context.getString(R.string.download_link_needs_browser))
             val title = ReleaseTitles.parse(release.title, release.section)
             val request = OneTimeWorkRequestBuilder<ReleaseDownloadWorker>()
                 .addTag(TAG)
-                .setInputData(workDataOf("link" to links.encrypt(url), "folder" to folder, "extract" to extract,
+                .setInputData(workDataOf("link" to links.encrypt(url), "owner" to links.encrypt(owner),
+                    "original" to links.encrypt(original), "folder" to folder, "extract" to extract,
                     "title" to release.title.take(120), "notificationTitle" to title.downloadNotificationTitle(context.getString(R.string.download_title))))
                 .build()
             manager.enqueueUniqueWork(key, ExistingWorkPolicy.KEEP, request).await()
@@ -110,12 +116,20 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
                 // A stopped worker can be redelivered. Never repeat the host request automatically.
                 rollback()
                 if (runAttemptCount > 0) throw DownloadProblem(applicationContext.getString(R.string.download_interrupted))
+                val owner = inputData.getString("owner")?.let(ReleaseDownloads.links::decrypt).orEmpty()
+                val original = inputData.getString("original")?.let(ReleaseDownloads.links::decrypt).orEmpty()
+                val access = PremiumDownloadAccess(applicationContext)
+                suspend fun requireAccount() {
+                    if (!access.permits(owner, original)) throw DownloadProblem(applicationContext.getString(R.string.download_premium_required))
+                }
+                requireAccount()
                 val tree = Uri.parse(requireNotNull(inputData.getString("folder")))
                 val folder = ReleaseFolder(applicationContext, tree)
                 folder.requireWritable()
                 setForeground(notification(applicationContext.getString(R.string.download_downloading), -1))
                 val url = ReleaseDownloads.links.decrypt(requireNotNull(inputData.getString("link")))
                 val name = fetch(url, stage)
+                requireAccount()
                 status(applicationContext.getString(R.string.download_saving), -1, true)
                 val job = currentCoroutineContext().job
                 fun save(filename: String, input: InputStream) {
@@ -265,8 +279,10 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
             val result = notificationBuilder().setContentText(message)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message)).setAutoCancel(true)
                 .setSubText(context.getString(if (target == null) R.string.download_failed else R.string.download_complete))
-            if (target != null) {
-                result.setContentIntent(PendingIntent.getActivity(context, notificationId, savedReleaseIntent(context, target),
+            val destination = target?.let { savedReleaseIntent(context, it) } ?: inputData.getString("original")
+                ?.let(ReleaseDownloads.links::decrypt)?.let(::forumBrowserIntent)
+            if (destination != null) {
+                result.setContentIntent(PendingIntent.getActivity(context, notificationId, destination,
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
             }
             context.getSystemService(NotificationManager::class.java).notify("release-result", notificationId, result.build())

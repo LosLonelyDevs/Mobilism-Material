@@ -39,6 +39,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.data.DebridRepository
+import org.mobilism.material.data.AuthState
+import org.mobilism.material.data.DefaultMobilismRepository
+import org.mobilism.material.data.DebridProvider
 import org.mobilism.material.data.Release
 import org.mobilism.material.designsystem.MobilismTheme
 import org.mobilism.material.settings.DownloadPreferencesStore
@@ -73,10 +76,25 @@ class NativeReleaseDownloadTest {
         val store = DownloadPreferencesStore(preferencesContext)
         val args = InstrumentationRegistry.getArguments()
         val reduceMotion = args.getString("downloadMotion") != "full"
-        val repository = DebridRepository(context, OkHttpClient.Builder().addInterceptor { chain ->
+        val forumUser = AuthState.SignedIn("Fixture")
+        val accountClient = OkHttpClient.Builder().addInterceptor { chain ->
+            val payload = when {
+                chain.request().url.encodedPath.endsWith("/auth/login") -> """{"access_token":"fixture-session"}"""
+                chain.request().url.host == "mblservices.org" ->
+                    """<form name="transload"><input name="link"/><input name="premium_acc"/></form>"""
+                chain.request().url.encodedPath.endsWith("/filehosts.xml") ->
+                    """<supported-filehosts><host url="files.example"/></supported-filehosts>"""
+                else -> error("Unexpected fixture request")
+            }
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("Fixture")
-                .body("<supported-filehosts/>".toResponseBody()).build()
-        }.build())
+                .body(payload.toResponseBody()).build()
+        }.build()
+        val forum = DefaultMobilismRepository(context, client = accountClient)
+        val repository = DebridRepository(context, accountClient)
+        runBlocking {
+            forum.signIn(forumUser.username, "fixture")
+            repository.connectMobilism("SeparatePremiumLogin", "fixture-premium")
+        }
         fun capture(name: String) {
             if (args.getString("downloadScreenshots") == "true") {
                 compose.waitForIdle()
@@ -111,11 +129,11 @@ class NativeReleaseDownloadTest {
             server.start()
             val apk = zip("AndroidManifest.xml" to "fixture".toByteArray(), "classes.dex" to ByteArray(400_000))
             val archive = zip("nested/Reader.apk" to apk, "notes.txt" to "notes".toByteArray())
-            val direct = server.url("/release.apk").toString()
-            val wrapped = server.url("/release.zip").toString()
-            val cancel = server.url("/cancel.apk").toString()
-            val unavailable = server.url("/unavailable.apk").toString()
-            val landingPage = server.url("/landing.apk").toString()
+            val direct = "https://files.example/release.apk"
+            val wrapped = "https://files.example/release.zip"
+            val cancel = "https://files.example/cancel.apk"
+            val unavailable = "https://files.example/unavailable.apk"
+            val landingPage = "https://files.example/landing.apk"
             val html = "<b>Download Instructions:</b><br>" + listOf(direct, wrapped, cancel, unavailable, landingPage)
                 .joinToString("<br>") { "<a href='$it'>File</a>" }
             val release = Release(81, "Pocket Reader v1.2.3 [Premium]", "Fixture", null, 0, 0, 0, contentHtml = html)
@@ -123,8 +141,10 @@ class NativeReleaseDownloadTest {
             compose.setContent { MobilismTheme(reduceMotion = reduceMotion) {
                 DownloadCompletionHost {
                     val prefs by store.state.collectAsState()
-                    if (settings) DownloadSettingsScreen(prefs, store, repository, onBack = {})
-                    else ReleaseScreen(ReleaseState(release, busy = false), DebridState(), prefs, onBack = {}, onRetry = {},
+                    val debrid by repository.state.collectAsState()
+                    if (settings) DownloadSettingsScreen(prefs, store, repository, onBack = {}, auth = forumUser)
+                    else ReleaseScreen(ReleaseState(release, busy = false), debrid, prefs, onBack = {}, onRetry = {}, auth = forumUser,
+                        onResolveDownload = { server.url(requireNotNull(Uri.parse(it).path)).toString() },
                         onMoreComments = {}, watched = false, downloaded = false, onWatch = {}, onDownloaded = {},
                         onLike = {}, onActionMessageShown = {})
                 }
@@ -223,7 +243,7 @@ class NativeReleaseDownloadTest {
                 compose.waitUntil(15_000) { advancing() != null }
                 capture("active")
                 runBlocking {
-                    assertFalse(ReleaseDownloads.enqueue(context, cancel, release, tree.toString(), false) {
+                    assertFalse(ReleaseDownloads.enqueue(context, cancel, release, tree.toString(), false, forumUser.username) {
                         error("Duplicate resolved again")
                     })
                 }
@@ -235,7 +255,7 @@ class NativeReleaseDownloadTest {
                 assertEquals(3, server.requestCount)
                 server.enqueue(MockResponse().setHeader("Content-Type", "text/html").setBody("<html>Sign in</html>"))
                 tap(landingPage)
-                assertNull(resultContaining("host returned a webpage").contentIntent)
+                assertNotNull(resultContaining("host returned a webpage").contentIntent)
                 server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "60"))
                 tap(unavailable)
                 resultContaining("HTTP 429")
@@ -254,6 +274,10 @@ class NativeReleaseDownloadTest {
                 assertNull(request.getHeader("Authorization"))
                 assertNull(request.getHeader("Cookie"))
             } finally {
+                runBlocking {
+                    repository.removeKey(DebridProvider.Mobilism)
+                    forum.signOut()
+                }
                 if (context.contentResolver.persistedUriPermissions.any { it.uri == tree }) {
                     val root = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
                     DocumentsContract.deleteDocument(context.contentResolver, root)

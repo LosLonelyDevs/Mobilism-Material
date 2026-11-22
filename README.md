@@ -45,7 +45,7 @@ Screenshots use sample data. CI refreshes them on version bumps and screenshot t
 - Browse Apps, Books, and Games. Filter by category or date and see what's new since your last visit.
 - Follow the apps you care about and get notified when someone posts a newer version.
 - Read what changed, check the mod info, and jump straight to downloads. Release pages put each in its own section.
-- Put your preferred file hosts first. Use Mobilism Premium, Real-Debrid, or MegaDebrid to download directly to a folder you choose. The optional in-app downloader can unpack ZIP, RAR, and 7z files there too.
+- Connect Mobilism Premium, Real-Debrid, or MegaDebrid to download from supported hosts and unpack archives into your chosen folder. Other file links open in your browser.
 - Reply to comments, join forum discussions, and send private messages. You can share a link to a specific reply or turn on alerts for incoming messages.
 - Pick a theme, match your wallpaper colors, or use AMOLED Black. You can also change the font and reduce motion.
 

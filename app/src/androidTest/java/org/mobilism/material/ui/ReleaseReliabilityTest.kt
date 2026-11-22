@@ -59,17 +59,13 @@ class ReleaseReliabilityTest {
         capture("settings-diagnostics")
     }
 
-    @Test fun loginOffersLogExportBeforeSignIn() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val directory = File(context.cacheDir, "login-test-logs")
-        directory.deleteRecursively()
-        val logs = DiagnosticLogStore(directory, { true })
+    @Test fun signedOutOffersOnlyAccountEntryPoints() {
         compose.setContent { MobilismTheme(reduceMotion = true) {
-            LoginScreen(LoginState(), { _, _ -> }, {}, {}, {}, diagnostics = logs)
+            LoginScreen(LoginState(), { _, _ -> }, {}, {})
         } }
-        compose.onNodeWithText("Export logs").performScrollTo().performClick()
-        compose.onNodeWithText("No logs yet. Reproduce the issue and try again.").assertExists()
-        capture("login-diagnostics")
+        compose.onNodeWithText("Login").assertExists()
+        compose.onNodeWithText("Continue as guest").assertDoesNotExist()
+        compose.onNodeWithText("Export logs").assertDoesNotExist()
     }
 
     private fun capture(name: String) {

@@ -20,7 +20,6 @@ import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -48,16 +47,15 @@ import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.AppTextButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.LoadingState
-import org.mobilism.material.designsystem.LocalAppTheme
+import androidx.compose.ui.res.stringResource
+import org.mobilism.material.R
 
 @Composable
 fun LoginScreen(
     state: LoginState,
     onSignIn: (String, String) -> Unit,
-    onGuest: () -> Unit,
     onRegister: () -> Unit,
     onForgot: () -> Unit,
-    diagnostics: org.mobilism.material.settings.DiagnosticLogStore? = null,
 ) {
     var username by rememberSaveable { mutableStateOf("") }
     // Password intentionally does not enter SavedStateHandle or saved instance state.
@@ -78,11 +76,11 @@ fun LoginScreen(
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 Column(Modifier.padding(top = 48.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppHeading("Mobilism", HeadingLevel.Page, style = MaterialTheme.typography.displayMedium)
-                    Text("Your source for apps & books", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    AppHeading(stringResource(R.string.mobilism_name), HeadingLevel.Page, style = MaterialTheme.typography.displayMedium)
+                    Text(stringResource(R.string.login_tagline), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 OutlinedTextField(
-                    value = username, onValueChange = { username = it }, label = { Text("Username") },
+                    value = username, onValueChange = { username = it }, label = { Text(stringResource(R.string.login_username)) },
                     leadingIcon = { Icon(Icons.Outlined.Person, null, tint = MaterialTheme.colorScheme.primary) },
                     enabled = !state.busy, singleLine = true,
                     modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Username },
@@ -91,7 +89,7 @@ fun LoginScreen(
                     keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Next) }),
                 )
                 OutlinedTextField(
-                    value = password, onValueChange = { password = it }, label = { Text("Password") },
+                    value = password, onValueChange = { password = it }, label = { Text(stringResource(R.string.login_password)) },
                     leadingIcon = { Icon(Icons.Outlined.Lock, null, tint = MaterialTheme.colorScheme.secondary) },
                     enabled = !state.busy, singleLine = true,
                     modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Password },
@@ -102,23 +100,19 @@ fun LoginScreen(
                     trailingIcon = {
                         AppIconButton(
                             if (showPassword) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                            if (showPassword) "Hide password" else "Show password", { showPassword = !showPassword },
+                            stringResource(if (showPassword) R.string.login_hide_password else R.string.login_show_password), { showPassword = !showPassword },
                         )
                     },
                 )
                 state.error?.let { ErrorPanel(it) }
                 ExpressiveButton(submit, Modifier.fillMaxWidth(), enabled = !state.busy) {
-                    Text(if (state.busy) "Signing in…" else "Login")
+                    Text(stringResource(if (state.busy) R.string.login_busy else R.string.drawer_login))
                 }
-                if (state.busy) LoadingState("Connecting to Mobilism", Modifier.fillMaxWidth())
-                ExpressiveButton(onGuest, Modifier.fillMaxWidth(), enabled = !state.busy,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer)) { Text("Continue as guest") }
+                if (state.busy) LoadingState(stringResource(R.string.login_connecting), Modifier.fillMaxWidth())
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    AppTextButton("Forgot password?", onForgot, enabled = !state.busy)
-                    AppTextButton("Register", onRegister, enabled = !state.busy)
+                    AppTextButton(stringResource(R.string.login_forgot_password), onForgot, enabled = !state.busy)
+                    AppTextButton(stringResource(R.string.login_register), onRegister, enabled = !state.busy)
                 }
-                diagnostics?.let { DiagnosticLogsCard(it) }
             }
         }
     }

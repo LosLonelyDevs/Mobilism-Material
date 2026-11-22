@@ -40,13 +40,14 @@ class FeedTrafficTest {
         }
         val requests = Collections.synchronizedList(mutableListOf<Request>())
         val repository = DefaultMobilismRepository(context, client = OkHttpClient.Builder().addInterceptor { chain ->
-            requests += chain.request()
+            val signIn = chain.request().url.encodedPath.endsWith("/auth/login")
+            if (!signIn) requests += chain.request()
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("Fixture")
-                .body("""{"response":[]}""".toResponseBody()).build()
+                .body((if (signIn) """{"access_token":"fixture"}""" else """{"response":[]}""").toResponseBody()).build()
         }.build())
 
         suspend fun model(source: MobilismRepository = repository): MobilismViewModel {
-            repository.continueAsGuest()
+            repository.signIn("ForumUser", "fixture")
             return withContext(Dispatchers.Main) {
                 MobilismViewModel(context, source, AppearanceStore(context), DebridRepository(context), AppLibraryStore(context))
             }

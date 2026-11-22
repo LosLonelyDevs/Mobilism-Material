@@ -1,5 +1,7 @@
 package org.mobilism.material.ui
 
+import org.mobilism.material.R
+import org.mobilism.material.data.hasPremiumAccount
 import android.content.ClipData
 import android.graphics.Typeface
 import android.text.method.LinkMovementMethod
@@ -98,7 +100,7 @@ fun ReleaseScreen(
     onWatch: (Boolean) -> Unit, onDownloaded: (Boolean) -> Unit,
     onLike: () -> Unit, onActionMessageShown: () -> Unit,
     onResolveDownload: suspend (String) -> String = {
-        throw org.mobilism.material.data.DebridException("Debrid is not available. Try again.")
+        throw IllegalStateException()
     },
     auth: AuthState = AuthState.Guest, onSignIn: () -> Unit = {},
     onWriteComment: () -> Unit = {}, onEditComment: (String) -> Unit = {},
@@ -114,6 +116,7 @@ fun ReleaseScreen(
     val theme = LocalAppTheme.current
     val cleanUpHeadings = LocalForumFormatting.current.cleanUpReleaseText
     val context = LocalContext.current
+    val resources = LocalResources.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
@@ -137,8 +140,8 @@ fun ReleaseScreen(
             ForumPostVerification(release.id, onLikePostVerified, onDismissLikeVerification)
         } else {
             LaunchedEffect(release.id) {
-                val result = snackbar.showSnackbar("Verify forum access to give this release a thumbs up.",
-                    actionLabel = "Verify", withDismissAction = true, duration = SnackbarDuration.Long)
+                val result = snackbar.showSnackbar(resources.getString(R.string.release_verify_like),
+                    actionLabel = resources.getString(R.string.release_verify), withDismissAction = true, duration = SnackbarDuration.Long)
                 if (result == SnackbarResult.ActionPerformed) verifying = true else onDismissLikeVerification()
             }
         }
@@ -169,14 +172,14 @@ fun ReleaseScreen(
     val downloadSheetState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     val requestDownloadNotifications = rememberDownloadNotificationRequest()
     val downloadFile: (suspend (String, suspend () -> String) -> Unit)? =
-        if (preferences.internalDownloads && release != null) { original, direct ->
+        if (preferences.internalDownloads && release != null && auth is AuthState.SignedIn && debrid.hasPremiumAccount(auth)) { original, direct ->
             val folder = preferences.downloadFolder ?: throw org.mobilism.material.downloads.DownloadProblem(
-                "Choose a folder in Downloads settings.")
+                resources.getString(R.string.download_choose_folder))
             requestDownloadNotifications()
             val started = org.mobilism.material.downloads.ReleaseDownloads.enqueue(context.applicationContext, original, release,
-                folder, preferences.extractZips, direct)
+                folder, preferences.extractZips, auth.username, direct)
             downloadsOpen = false
-            org.mobilism.material.downloads.showDownloadToast(context, if (started) "Downloading…" else "Already downloading")
+            org.mobilism.material.downloads.showDownloadToast(context, if (started) resources.getString(R.string.release_downloading) else resources.getString(R.string.release_already_downloading))
         } else null
     if (downloadsOpen && release != null) downloadSheetState.SaveableStateProvider(release.id) {
         ReleaseDownloadsSheet(release.id, ReleaseTitles.parse(release.title, release.section).name,
@@ -197,71 +200,71 @@ fun ReleaseScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
-                title = { AppHeading("Release", HeadingLevel.Page, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack) },
+                title = { AppHeading(resources.getString(R.string.release_page_title), HeadingLevel.Page, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, resources.getString(R.string.action_back), onBack) },
                 actions = { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { release?.let {
                     AppIconToggleButton(
                         if (it.liked == true) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
-                        if (it.liked == true) "Remove thumbs up" else "Thumbs up",
+                        if (it.liked == true) resources.getString(R.string.release_remove_like) else resources.getString(R.string.release_like),
                         it.liked == true, MaterialTheme.colorScheme.secondary,
                         onCheckedChange = { onLike() }, enabled = !state.likeBusy && !state.busy,
                     )
                     if (it.section == ContentSection.Apps) {
                         AppIconToggleButton(
                             if (watched) Icons.Filled.Visibility else Icons.Outlined.Visibility,
-                            if (watched) "Unwatch app" else "Watch app", watched, theme.featured,
+                            if (watched) resources.getString(R.string.release_unwatch) else resources.getString(R.string.release_watch), watched, theme.featured,
                             onCheckedChange = { enabled ->
                                 onWatch(enabled)
-                                scope.launch { snackbar.showSnackbar(if (enabled) "Watching app" else "App unwatched") }
+                                scope.launch { snackbar.showSnackbar(if (enabled) resources.getString(R.string.release_watching) else resources.getString(R.string.release_unwatched)) }
                             },
                         )
                         AppIconToggleButton(
                             if (downloaded) Icons.Filled.DownloadDone else Icons.Outlined.Download,
-                            if (downloaded) "Clear downloaded mark" else "Mark as downloaded", downloaded, theme.success,
+                            if (downloaded) resources.getString(R.string.release_clear_mark) else resources.getString(R.string.release_mark_downloaded), downloaded, theme.success,
                             onCheckedChange = { enabled ->
                                 onDownloaded(enabled)
-                                scope.launch { snackbar.showSnackbar(if (enabled) "Marked as downloaded" else "Downloaded mark cleared") }
+                                scope.launch { snackbar.showSnackbar(if (enabled) resources.getString(R.string.release_marked_downloaded) else resources.getString(R.string.release_mark_cleared)) }
                             },
                         )
                     }
                     val url = it.browserUrl ?: "https://forum.mobilism.org/viewtopic.php?t=${it.id}"
                     Box {
-                        AppIconButton(Icons.Outlined.MoreVert, "Release options", { menu = true })
+                        AppIconButton(Icons.Outlined.MoreVert, resources.getString(R.string.release_options), { menu = true })
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = MaterialTheme.shapes.extraLarge) {
                             if (onCategories != null) RoundedMenuItem(
-                                label = "Categories", accent = theme.featured, icon = Icons.Outlined.Category,
+                                label = resources.getString(R.string.release_categories), accent = theme.featured, icon = Icons.Outlined.Category,
                                 onClick = { menu = false; onCategories() },
                             )
                             if (it.section == ContentSection.Apps) {
                                 RoundedMenuItem(
-                                    label = if (watched) "Unfollow app" else "Follow app", accent = theme.featured,
+                                    label = if (watched) resources.getString(R.string.release_unfollow) else resources.getString(R.string.release_follow), accent = theme.featured,
                                     icon = if (watched) Icons.Outlined.BookmarkRemove else Icons.Outlined.BookmarkAdd,
                                     onClick = {
                                         menu = false; onWatch(!watched)
-                                        scope.launch { snackbar.showSnackbar(if (watched) "App unfollowed" else "App followed") }
+                                        scope.launch { snackbar.showSnackbar(if (watched) resources.getString(R.string.release_unfollowed) else resources.getString(R.string.release_followed)) }
                                     },
                                 )
                                 RoundedMenuItem(
-                                    label = if (downloaded) "Clear downloaded mark" else "Mark as downloaded", accent = theme.success,
+                                    label = if (downloaded) resources.getString(R.string.release_clear_mark) else resources.getString(R.string.release_mark_downloaded), accent = theme.success,
                                     icon = Icons.Outlined.DownloadDone,
                                     onClick = {
                                         menu = false; onDownloaded(!downloaded)
-                                        scope.launch { snackbar.showSnackbar(if (downloaded) "Downloaded mark cleared" else "Marked as downloaded") }
+                                        scope.launch { snackbar.showSnackbar(if (downloaded) resources.getString(R.string.release_mark_cleared) else resources.getString(R.string.release_marked_downloaded)) }
                                     },
                                 )
                             }
                             RoundedMenuItem(
-                                label = "Copy release URL", accent = theme.featured, icon = Icons.Outlined.ContentCopy,
+                                label = resources.getString(R.string.release_copy_url), accent = theme.featured, icon = Icons.Outlined.ContentCopy,
                                 onClick = {
                                     menu = false
                                     scope.launch {
-                                        clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Release URL", url)))
-                                        snackbar.showSnackbar("Release URL copied")
+                                        clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(resources.getString(R.string.release_url_label), url)))
+                                        snackbar.showSnackbar(resources.getString(R.string.release_url_copied))
                                     }
                                 },
                             )
                             RoundedMenuItem(
-                                label = "Open in browser", accent = MaterialTheme.colorScheme.tertiary, icon = Icons.Outlined.OpenInBrowser,
+                                label = resources.getString(R.string.release_open_browser), accent = MaterialTheme.colorScheme.tertiary, icon = Icons.Outlined.OpenInBrowser,
                                 onClick = { menu = false; openForumBrowser(context, url) },
                             )
                         }
@@ -272,12 +275,12 @@ fun ReleaseScreen(
     ) { padding ->
         PullToRefreshBox(isRefreshing = state.busy, onRefresh = refresh, indicator = {},
             modifier = Modifier.padding(padding).fillMaxSize().semantics {
-                customActions = listOf(CustomAccessibilityAction("Refresh") {
+                customActions = listOf(CustomAccessibilityAction(resources.getString(R.string.release_refresh)) {
                     if (!canRefresh) false else { onRefresh(); true }
                 })
             }, contentAlignment = Alignment.TopCenter) {
             if (state.busy && release == null) {
-                LoadingState("Loading release…", Modifier.align(Alignment.Center), indicatorSize = 96.dp)
+                LoadingState(resources.getString(R.string.release_loading), Modifier.align(Alignment.Center), indicatorSize = 96.dp)
             }
             val list = androidx.compose.foundation.lazy.rememberLazyListState()
             CommentJumpList(release?.id, ordered, commentRows, collapsedComments, { collapsedComments = it }, list,
@@ -285,7 +288,7 @@ fun ReleaseScreen(
                 modifier = Modifier.widthIn(max = 840.dp).fillMaxSize().testTag("release-content"),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(24.dp),
             ) { highlight, followingLink ->
-                if (state.busy && release != null) releaseDetailItem { LoadingState("Updating release…", Modifier.fillMaxWidth()) }
+                if (state.busy && release != null) releaseDetailItem { LoadingState(resources.getString(R.string.release_updating), Modifier.fillMaxWidth()) }
                 state.error?.let { releaseDetailItem { ErrorPanel(it, onRetry = onRetry) } }
                 if (release != null) {
                     releaseDetailItem(bottomPadding = 4.dp) {
@@ -296,7 +299,7 @@ fun ReleaseScreen(
                             UsernameLink(release.author, color = theme.originalPoster)
                             ReleaseMetadataFooter(release, expanded = true, spacing = 12.dp) {
                                 ReleasePostDate(release.publishedAt)
-                                Text("${release.replies} replies", style = MaterialTheme.typography.bodySmall,
+                                Text(resources.getQuantityString(R.plurals.release_replies, release.replies.coerceIn(0, Int.MAX_VALUE.toLong()).toInt(), release.replies), style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 ReleaseViewCount(release.views, textStyle = MaterialTheme.typography.bodySmall)
                             }
@@ -306,7 +309,7 @@ fun ReleaseScreen(
                         ExpressiveButton({ downloadsOpen = true }, Modifier.fillMaxWidth().testTag("open-downloads"),
                             colors = ButtonDefaults.filledTonalButtonColors()) {
                             Icon(Icons.Outlined.Download, null)
-                            Text("Downloads", Modifier.padding(start = 8.dp))
+                            Text(resources.getString(R.string.settings_downloads), Modifier.padding(start = 8.dp))
                         }
                     }
                     if (images.isNotEmpty()) releaseDetailItem("images-${release.id}") {
@@ -342,7 +345,7 @@ fun ReleaseScreen(
                         }
                     }
                     if (groups.isNotEmpty() || !content?.downloadNotesHtml.isNullOrBlank()) releaseDetailItem("downloads") {
-                        CollapsibleSection("${release.id}-downloads", "Downloads", Icons.Outlined.Download, theme.success,
+                        CollapsibleSection("${release.id}-downloads", resources.getString(R.string.settings_downloads), Icons.Outlined.Download, theme.success,
                             compactHeaderBottom = cleanUpHeadings,
                             headingStyle = MaterialTheme.typography.titleMedium.let { style ->
                                 if (cleanUpHeadings) style.copy(fontSize = (style.fontSize.value + 1).sp) else style
@@ -357,7 +360,7 @@ fun ReleaseScreen(
                                     groups.forEach { group ->
                                         ReleaseDownloadGroup(release.id, group, release.browserUrl ?: "https://forum.mobilism.org/",
                                             debrid, downloadRequests, onResolveDownload, downloadOpened,
-                                            onCopied = { snackbar.showSnackbar("Link copied") }, onRelease = onRelease,
+                                            onCopied = { snackbar.showSnackbar(resources.getString(R.string.release_link_copied)) }, onRelease = onRelease,
                                             downloadFile = downloadFile)
                                     }
                                 }
@@ -365,13 +368,13 @@ fun ReleaseScreen(
                         }
                     }
                     item("comments-heading") {
-                        val label = if (auth !is AuthState.SignedIn) "Sign in to comment"
-                            else if (state.composer.draft.isNotBlank()) "Continue your comment" else "Comment"
+                        val label = if (auth !is AuthState.SignedIn) resources.getString(R.string.release_sign_in_comment)
+                            else if (state.composer.draft.isNotBlank()) resources.getString(R.string.release_continue_comment) else resources.getString(R.string.release_comment)
                         val write = if (auth is AuthState.SignedIn) onWriteComment else onSignIn
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Column {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    AppHeading("Comments", HeadingLevel.Section, Modifier.weight(1f),
+                                    AppHeading(resources.getString(R.string.release_comments), HeadingLevel.Section, Modifier.weight(1f),
                                         style = if (cleanUpHeadings) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge)
                                     if (cleanUpHeadings) AppIconButton(Icons.Outlined.ChatBubbleOutline, label, write,
                                         Modifier.testTag("write-comment"))
@@ -408,10 +411,10 @@ fun ReleaseScreen(
                         val comments = state.comments
                         when {
                             comments.error != null -> ErrorPanel(comments.error, onRetry = onMoreComments)
-                            comments.busy -> LoadingState("Loading comments…", Modifier.fillMaxWidth())
-                            comments.canLoadMore && followingLink -> org.mobilism.material.designsystem.AppTextButton("Load more comments", onMoreComments)
+                            comments.busy -> LoadingState(resources.getString(R.string.release_loading_comments), Modifier.fillMaxWidth())
+                            comments.canLoadMore && followingLink -> org.mobilism.material.designsystem.AppTextButton(resources.getString(R.string.release_load_more_comments), onMoreComments)
                             comments.canLoadMore -> LaunchedEffect(comments.page) { onMoreComments() }
-                            comments.items.isEmpty() -> Text("No comments yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            comments.items.isEmpty() -> Text(resources.getString(R.string.release_empty_comments), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }

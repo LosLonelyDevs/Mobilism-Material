@@ -30,6 +30,7 @@ data class DebridAccount(
     val error: String? = null,
     val validated: Boolean = false,
     val hostsVerified: Boolean = false,
+    val forumOwner: String? = null,
 ) {
     val hostNames: List<String>
         get() = Alphabetical.sorted(hosts.map { it.name }.distinctBy { it.lowercase(java.util.Locale.ROOT) }) { it }
@@ -99,7 +100,10 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
     private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
     private val requestLimits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
     private val now: () -> Long = { System.nanoTime() / 1_000_000 }) {
+    private val resources = context.resources
     private val keys = DebridKeyStore(context)
+    private val downloadAccess = PremiumDownloadAccess(context)
+    private val forumSession = SessionStore(context)
     private val cache = context.getSharedPreferences("material-debrid-hosts", Context.MODE_PRIVATE)
     private val mutex = Mutex()
     private val loading = Mutex()
@@ -115,19 +119,20 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
             chain.proceed(chain.request())
         }.addInterceptor(DiagnosticInterceptor(diagnostics)).build()
     private val api = DebridApi(this.client, diagnostics)
-    private val megaSessions = MegaDebridSessions(api,
+    private fun megaSessions(owner: String) = MegaDebridSessions(api,
         read = { keys.read(DebridProvider.MegaDebrid) },
-        save = { value -> requireEnabled(); keys.write(DebridProvider.MegaDebrid, value) },
+        save = { value -> requireEnabled(); keys.write(DebridProvider.MegaDebrid, value, owner) },
         legacyPremiumUntil = { cache.getLong("mega-premium-until", 0) }, diagnostics = diagnostics)
 
     fun deactivate() {
+        downloadAccess.revoke()
         lastLoad = null
         client.dispatcher.cancelAll()
         mutableState.value = DebridState(enabled = false)
     }
 
     private fun requireEnabled() {
-        if (!isEnabled()) throw DebridException("Experimental premium services are disabled.")
+        if (!isEnabled()) throw DebridException(resources.getString(R.string.debrid_disabled))
     }
 
     suspend fun fileHosts(): List<SupportedHost> = withContext(Dispatchers.IO) {
@@ -143,16 +148,17 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
         }
         if (!loading.tryLock()) return@withContext
         try {
+            val owner = forumSession.read()?.username ?: return@withContext
             val previous = lastLoad
             if (previous != null && now() - previous in 0 until requestLimits().debridRefreshIntervalMs) return@withContext
             lastLoad = now()
             mutex.withLock {
                 mutableState.value = DebridState(DebridProvider.entries.map { provider ->
                     try {
-                        val configured = !keys.read(provider).isNullOrBlank()
-                        DebridAccount(provider, configured, if (configured) cachedHosts(provider) else emptyList())
+                        val configured = owner.equals(keys.owner(provider), true) && !keys.read(provider).isNullOrBlank()
+                        DebridAccount(provider, configured, if (configured) cachedHosts(provider) else emptyList(), forumOwner = owner)
                     } catch (_: Exception) {
-                        DebridAccount(provider, error = "The saved key could not be read. Enter it again.")
+                        DebridAccount(provider, error = resources.getString(R.string.debrid_saved_key_unreadable))
                     }
                 }, enabled = isEnabled())
             }
@@ -169,14 +175,17 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
         mutex.withLock {
             requireEnabled()
             if (provider != DebridProvider.RealDebrid) {
-                throw DebridException("Sign in to ${provider.label} to connect your Premium account.", true)
+                throw DebridException(resources.getString(R.string.debrid_connect_account, provider.label), true)
             }
             update(provider) { it.copy(busy = true, error = null) }
             try {
+                val owner = currentForumUser()
                 api.validate(provider, value.trim())
                 requireEnabled()
-                keys.write(provider, value.trim())
-                update(provider) { it.copy(configured = true, validated = true, hostsVerified = false, error = null) }
+                requireForumUser(owner)
+                downloadAccess.revoke(provider)
+                keys.write(provider, value.trim(), owner)
+                update(provider) { it.copy(configured = true, validated = true, hostsVerified = false, forumOwner = owner, error = null) }
             } finally {
                 update(provider) { it.copy(busy = false) }
             }
@@ -190,8 +199,11 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
             requireEnabled()
             update(provider) { it.copy(busy = true, error = null) }
             try {
-                megaSessions.connect(username, password)
-                update(provider) { it.copy(configured = true, validated = true, hostsVerified = false, error = null) }
+                val owner = currentForumUser()
+                megaSessions(owner).connect(username, password)
+                downloadAccess.revoke(provider)
+                requireForumUser(owner)
+                update(provider) { it.copy(configured = true, validated = true, hostsVerified = false, forumOwner = owner, error = null) }
             } finally {
                 update(provider) { it.copy(busy = false) }
             }
@@ -202,6 +214,7 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
     suspend fun removeKey(provider: DebridProvider) = withContext(Dispatchers.IO) {
         mutex.withLock {
             keys.remove(provider)
+            downloadAccess.revoke(provider)
             if (provider == DebridProvider.MegaDebrid) cache.edit().remove("mega-premium-until").apply()
             cache.edit().remove(provider.name).remove(provider.name + "-updated")
                 .remove(provider.name + "-format").apply()
@@ -215,10 +228,14 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
             requireEnabled()
             update(provider) { it.copy(busy = true, error = null) }
             try {
+                val owner = currentForumUser()
                 val credentials = api.connectMobilism(username, password)
                 requireEnabled()
-                keys.write(provider, credentials)
-                update(provider) { it.copy(configured = true, validated = true, hostsVerified = false, error = null) }
+                requireForumUser(owner)
+                downloadAccess.revoke(provider)
+                keys.write(provider, credentials, owner)
+                update(provider) { it.copy(configured = true, validated = true, forumOwner = owner,
+                    hostsVerified = false, error = null) }
             } finally {
                 update(provider) { it.copy(busy = false) }
             }
@@ -228,37 +245,51 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
 
     suspend fun refresh(provider: DebridProvider) = refreshHosts(provider, validate = true)
 
+    private suspend fun currentForumUser(): String = forumSession.read()?.username?.takeIf { it.isNotBlank() }
+        ?: throw DebridException(resources.getString(R.string.premium_matching_forum_login))
+
+    private suspend fun requireForumUser(username: String) {
+        if (username.isBlank() || !username.equals(forumSession.read()?.username, ignoreCase = true))
+            throw DebridException(resources.getString(R.string.premium_matching_forum_login))
+    }
+
     private suspend fun refreshHosts(provider: DebridProvider, validate: Boolean) = withContext(Dispatchers.IO) {
         mutex.withLock {
             if (!isEnabled()) return@withLock
             if (state.value.accounts.none { it.provider == provider && it.configured }) return@withLock
             update(provider) { it.copy(busy = true, hostsVerified = false, error = null) }
             try {
+                val owner = keys.owner(provider).orEmpty()
+                requireForumUser(owner)
                 if (validate) {
                     update(provider) { it.copy(validated = false) }
-                    withAccount(provider) { key -> api.validate(provider, key) }
-                    update(provider) { it.copy(validated = true) }
+                    withAccount(provider, owner) { key -> api.validate(provider, key) }
+                    update(provider) { it.copy(validated = true, forumOwner = owner) }
                 }
                 val catalogDomains = if (provider == DebridProvider.RealDebrid) {
                     val domains = JSONArray(get("https://api.real-debrid.com/rest/1.0/hosts/domains"))
                     (0 until domains.length()).map { domains.getString(it) }
                 } else emptyList()
-                val providerHosts = withAccount(provider) { key -> api.availableHosts(provider, key, catalogDomains) }
+                val providerHosts = withAccount(provider, owner) { key -> api.availableHosts(provider, key, catalogDomains) }
                 requireEnabled()
+                requireForumUser(owner)
                 val hosts = Alphabetical.sorted(if (provider == DebridProvider.Mobilism) providerHosts
                     else MobilismHosts.shortlist(MobilismHosts.domains, providerHosts)) { it.name }
                 cache.edit().putString(provider.name, JSONArray().apply {
                     hosts.forEach { put(JSONObject().put("domain", it.domain).put("name", it.name)) }
                 }.toString()).putLong(provider.name + "-updated", System.currentTimeMillis())
                     .putInt(provider.name + "-format", CACHE_FORMAT).apply()
+                downloadAccess.verified(provider, owner, hosts)
                 update(provider) { it.copy(hosts = hosts, hostsVerified = true, busy = false, error = null) }
             } catch (cancelled: CancellationException) {
                 update(provider) { it.copy(busy = false) }
                 throw cancelled
             } catch (failure: DebridException) {
+                downloadAccess.revoke(provider)
                 update(provider) { it.copy(busy = false,
                     validated = it.validated && !failure.invalidatesAccount, error = failure.message) }
             } catch (failure: Exception) {
+                downloadAccess.revoke(provider)
                 diagnostics.record(DiagnosticEvent(
                     when (provider) {
                         DebridProvider.RealDebrid -> DiagnosticSource.RealDebrid
@@ -267,8 +298,8 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
                     },
                     DiagnosticOperation.Hosts, DiagnosticPhase.Failed, failure = DiagnosticFailure.Unexpected))
                 update(provider) { it.copy(busy = false, error =
-                    if (it.hosts.isEmpty()) "Host support could not be loaded. Try again."
-                    else "Host refresh failed. Saved hosts will stay inactive until a refresh succeeds."
+                    if (it.hosts.isEmpty()) resources.getString(R.string.debrid_hosts_unavailable)
+                    else resources.getString(R.string.debrid_hosts_inactive)
                 ) }
             }
         }
@@ -276,38 +307,43 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
 
     suspend fun resolve(url: String): String = withContext(Dispatchers.IO) {
         requireEnabled()
+        val owner = currentForumUser()
         val candidates = mutex.withLock {
-            state.value.supporting(url).map { it.provider }
+            state.value.forForumUser(AuthState.SignedIn(owner)).supporting(url).map { it.provider }
         }
-        if (candidates.isEmpty()) throw DebridException("No verified account supports this host. Check Premium accounts in Settings.")
+        if (candidates.isEmpty()) throw DebridException(resources.getString(R.string.debrid_no_host_account))
         val failures = mutableListOf<String>()
         for (provider in candidates) {
             requireEnabled()
             mutex.withLock {
-                if (state.value.supporting(url).none { it.provider == provider }) return@withLock
+                requireForumUser(owner)
+                if (!owner.equals(keys.owner(provider), true) ||
+                    state.value.forForumUser(AuthState.SignedIn(owner)).supporting(url).none { it.provider == provider }) return@withLock
                 try {
-                    val resolved = withAccount(provider) { key -> api.resolve(provider, key, url) }
+                    val resolved = withAccount(provider, owner) { key -> api.resolve(provider, key, url) }
                     requireEnabled()
+                    requireForumUser(owner)
                     return@withContext resolved
                 } catch (failure: DebridException) {
                     requireEnabled()
-                    if (failure.invalidatesAccount) update(provider) {
-                        it.copy(validated = false, error = failure.message)
+                    if (failure.invalidatesAccount) {
+                        downloadAccess.revoke(provider)
+                        update(provider) { it.copy(validated = false, error = failure.message) }
                     }
                     failures += "${provider.label}: ${failure.message}"
                 }
             }
         }
-        throw DebridException(failures.joinToString("\n\n").ifEmpty { "The saved account changed. Try again." })
+        throw DebridException(failures.joinToString("\n\n").ifEmpty { resources.getString(R.string.debrid_account_changed) })
     }
 
-    private fun <T> withAccount(provider: DebridProvider, block: (String) -> T): T =
-        if (provider == DebridProvider.MegaDebrid) megaSessions.use(block)
+    private fun <T> withAccount(provider: DebridProvider, owner: String, block: (String) -> T): T =
+        if (provider == DebridProvider.MegaDebrid) megaSessions(owner).use(block)
         else block(keys.read(provider).orEmpty())
 
     private fun get(url: String): String = client.newCall(Request.Builder().url(url)
         .build()).execute().use { response ->
-        if (!response.isSuccessful) throw DebridException("Real-Debrid host list returned HTTP ${response.code}. Try again later.")
+        if (!response.isSuccessful) throw DebridException(resources.getString(R.string.debrid_host_list_http, response.code))
         val source = checkNotNull(response.body).source()
         source.request(MAX_CATALOG_BYTES + 1)
         check(source.buffer.size <= MAX_CATALOG_BYTES)

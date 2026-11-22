@@ -37,6 +37,7 @@ import androidx.navigation.navArgument
 import org.mobilism.material.MobilismApplication
 import org.mobilism.material.R
 import org.mobilism.material.data.AuthState
+import org.mobilism.material.data.forForumUser
 import org.mobilism.material.data.DiscussionCategory
 import org.mobilism.material.data.DiscussionTopic
 import org.mobilism.material.data.FeedFilters
@@ -73,6 +74,17 @@ fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fro
         initializer { MobilismViewModel(app, app.repository, app.appearance, app.debrid, app.library, app.contentPreferences, app.developer, app.customCategories) }
     })
     val auth by model.auth.collectAsStateWithLifecycle()
+    val signedIn = auth as? AuthState.SignedIn
+    if (signedIn == null) {
+        if (auth == AuthState.Restoring) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                LoadingState(stringResource(R.string.opening_mobilism))
+            }
+        } else {
+            AccountNavigation(model)
+        }
+        return
+    }
     val updater: org.mobilism.material.updates.AppUpdateViewModel = viewModel(factory = viewModelFactory {
         initializer { org.mobilism.material.updates.AppUpdateViewModel(app) }
     })
@@ -85,14 +97,8 @@ fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fro
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             DownloadCompletionHost {
                 // Auth boundaries discard the previous account's navigation and screen state.
-                key(auth) {
-                    when (auth) {
-                        AuthState.Restoring -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            LoadingState(stringResource(R.string.opening_mobilism))
-                        }
-                        AuthState.SignedOut -> AccountNavigation(model, app.diagnostics)
-                        else -> MainNavigation(model, auth, notificationRelease, notificationMessage, fromNotification, linkedPost, onNotificationHandled, onUpdates)
-                    }
+                key(signedIn) {
+                    MainNavigation(model, signedIn, notificationRelease, notificationMessage, fromNotification, linkedPost, onNotificationHandled, onUpdates)
                 }
             }
         }
@@ -100,7 +106,7 @@ fun MobilismApp(app: MobilismApplication, notificationRelease: Long? = null, fro
 }
 
 @Composable
-private fun AccountNavigation(model: MobilismViewModel, diagnostics: org.mobilism.material.settings.DiagnosticLogStore) {
+private fun AccountNavigation(model: MobilismViewModel) {
     val autofill = LocalAutofillManager.current
     val nav = rememberNavController()
     val motion = screenMotion()
@@ -114,10 +120,8 @@ private fun AccountNavigation(model: MobilismViewModel, diagnostics: org.mobilis
             LoginScreen(
                 state = login,
                 onSignIn = { username, password -> model.signIn(username, password) { autofill?.commit() } },
-                onGuest = { autofill?.cancel(); model.continueAsGuest() },
                 onRegister = { autofill?.cancel(); nav.navigate("register") { launchSingleTop = true } },
                 onForgot = { autofill?.cancel(); nav.navigate("recover") { launchSingleTop = true } },
-                diagnostics = diagnostics,
             )
         }
         composable("register") {
@@ -143,7 +147,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     val developer by model.developer.state.collectAsStateWithLifecycle()
     val localCategories by model.customCategories.state.collectAsStateWithLifecycle()
     val categoryStore = model.customCategories.takeIf { developer.customCategoriesActive }
-    val debrid = if (developer.debridEnabled) debridState else org.mobilism.material.data.DebridState(enabled = false)
+    val debrid = if (developer.debridEnabled) debridState.forForumUser(auth) else org.mobilism.material.data.DebridState(enabled = false)
     val library by model.library.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val followPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -458,7 +462,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onEnableDeveloperMode = model.developer::unlock)
         }
         composable("download-preferences") {
-            DownloadSettingsScreen(downloads, model.downloads, model.debrid, onBack = { nav.popBackStack() })
+            DownloadSettingsScreen(downloads, model.downloads, model.debrid, onBack = { nav.popBackStack() }, auth = auth)
         }
         composable("appearance") {
             AppearanceScreen(appearance, model.appearance, onBack = { nav.popBackStack() })

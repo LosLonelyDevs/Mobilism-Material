@@ -53,7 +53,7 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         try {
             session = store.read()
             mutableAuth.value = session?.let { AuthState.SignedIn(it.username) }
-                ?: if (store.isGuest()) AuthState.Guest else AuthState.SignedOut
+                ?: AuthState.SignedOut
         } catch (error: Exception) {
             mutableAuth.value = AuthState.SignedOut
             throw error

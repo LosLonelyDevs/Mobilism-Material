@@ -1,5 +1,9 @@
 package org.mobilism.material.ui
 
+import org.mobilism.material.data.AuthState
+import org.mobilism.material.data.forForumUser
+import org.mobilism.material.data.hasPremiumAccount
+
 import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
@@ -65,7 +69,8 @@ import org.mobilism.material.settings.DownloadPreferencesStore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreferencesStore, repository: DebridRepository, onBack: () -> Unit) {
+fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreferencesStore, repository: DebridRepository, onBack: () -> Unit,
+    auth: AuthState = AuthState.SignedOut) {
     val resources = LocalResources.current
     val colors = MaterialTheme.colorScheme
     val debrid by repository.state.collectAsStateWithLifecycle()
@@ -88,8 +93,10 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
         })
     }) { insets ->
         SettingsList(Modifier.padding(insets)) {
-            item { SettingsSectionLabel(stringResource(R.string.download_files)) }
-            item("release-transfers") { ReleaseTransferSettings(state, store) }
+            if (debrid.hasPremiumAccount(auth)) {
+                item { SettingsSectionLabel(stringResource(R.string.download_files)) }
+                item("release-transfers") { ReleaseTransferSettings(state, store) }
+            }
             item("download-tracking") {
                 SettingsExpandableSection(stringResource(R.string.download_tracking)) {
                     SettingsToggleRow(stringResource(R.string.download_auto_watch), stringResource(R.string.download_auto_watch_summary),
@@ -118,7 +125,7 @@ fun DownloadSettingsScreen(state: DownloadPreferences, store: DownloadPreference
             }
             item("host-preferences") {
                 SettingsExpandableSection(stringResource(R.string.download_preferred_hosts)) {
-                    PreferredHostsCard(state, debrid, busy, error, onRetry = { scope.launch { loadHosts() } },
+                    PreferredHostsCard(state, debrid.forForumUser(auth), busy, error, onRetry = { scope.launch { loadHosts() } },
                         onSelectionChange = store::hosts)
                 }
             }

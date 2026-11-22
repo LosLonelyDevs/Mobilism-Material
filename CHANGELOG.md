@@ -2,8 +2,12 @@
 
 ## Unreleased
 
+## 0.1.27
+
+- Forum sign-in is required to browse.
+- Reconnect your Premium providers once after updating.
+- The in-app downloader requires a verified Premium provider that supports the file host. Other links open in your browser.
 - Followed apps page improvements
-- Various improvements and bug fixes
 
 ## 0.1.26
 

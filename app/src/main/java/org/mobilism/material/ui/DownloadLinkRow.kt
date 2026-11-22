@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
@@ -40,28 +41,27 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
-import org.mobilism.material.data.DebridException
+import org.mobilism.material.R
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.AppTextButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.LocalAppTheme
 import org.mobilism.material.designsystem.LocalReducedMotion
-import org.mobilism.material.downloads.DownloadProblem
 import org.mobilism.material.downloads.ReleaseFiles
-import org.mobilism.material.downloads.showDownloadToast
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DownloadLinkRow(
     link: DownloadLink, debrid: DebridState, onOpened: () -> Unit,
-    resolveLink: suspend (String) -> String = { throw DebridException("Debrid is not available. Try again.") },
+    resolveLink: suspend (String) -> String = { throw IllegalStateException() },
     openLink: ((String) -> Boolean)? = null,
     requests: DownloadRequestTracker = remember { DownloadRequestTracker() },
     downloadFile: (suspend (String, suspend () -> String) -> Unit)? = null,
     onCopied: suspend () -> Unit,
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val providers = debrid.supporting(link.url).map { it.provider.label }
@@ -69,13 +69,13 @@ fun DownloadLinkRow(
     val hostWeight = if (LocalForumFormatting.current.cleanUpReleaseText) FontWeight.Bold else null
     val supported = providers.isNotEmpty()
     val fileName = remember(link.url) { ReleaseFiles.directName(link.url) }
-    val internal = downloadFile != null && (supported || fileName != null)
+    val internal = downloadFile != null && supported
     val pending by requests.pending.collectAsStateWithLifecycle()
     val resolving = link.url in pending
     var error by remember(link.url) { mutableStateOf<String?>(null) }
     fun open(url: String): Boolean {
         val opened = openLink?.invoke(url) ?: openForumBrowser(context, url)
-        if (opened) onOpened() else error = "No browser is available to open this download."
+        if (opened) onOpened() else error = resources.getString(R.string.download_browser_missing)
         return opened
     }
     val theme = LocalAppTheme.current
@@ -91,7 +91,7 @@ fun DownloadLinkRow(
                             scope.launch {
                                 try {
                                     if (internal) {
-                                        downloadFile(link.url) { if (supported) resolveLink(link.url) else link.url }
+                                        downloadFile(link.url) { resolveLink(link.url) }
                                         onOpened()
                                     } else {
                                         val resolved = resolveLink(link.url)
@@ -101,19 +101,15 @@ fun DownloadLinkRow(
                                 }
                                 catch (cancelled: CancellationException) { throw cancelled }
                                 catch (failure: Exception) {
-                                    val message = when (failure) {
-                                        is DebridException, is DownloadProblem -> failure.message
-                                        else -> null
-                                    } ?: "The download could not be resolved. Please try again."
-                                    if (internal) showDownloadToast(context, message, long = true) else error = message
+                                    open(link.url)
                                 }
                             }.invokeOnCompletion { requests.finish(link.url) }
                         }
                     }
                 },
                 modifier = Modifier.weight(1f).testTag("download:${link.url}").semantics {
-                    stateDescription = if (resolving) "Resolving download" else if (internal) "Download to selected folder"
-                        else if (supported) "Download through " + providers.joinToString() else "Open in browser"
+                    stateDescription = if (resolving) resources.getString(R.string.download_resolving) else if (internal) resources.getString(R.string.download_to_selected)
+                        else if (supported) resources.getString(R.string.download_through_providers, providers.joinToString()) else resources.getString(R.string.release_open_browser)
                 },
                 enabled = !resolving,
                 colors = colors,
@@ -124,7 +120,7 @@ fun DownloadLinkRow(
                     Column(Modifier.padding(horizontal = if (supported || resolving) 24.dp else 0.dp),
                         horizontalAlignment = Alignment.CenterHorizontally) {
                         val label = when {
-                            resolving -> if (supported) "Resolving $name" else "Queuing download"
+                            resolving -> resources.getString(R.string.download_resolving_host, name)
                             internal && fileName != null -> fileName
                             else -> name
                         }
@@ -141,9 +137,9 @@ fun DownloadLinkRow(
                 }
             }
             val linkLabel = fileName ?: name
-            AppIconButton(Icons.Outlined.ContentCopy, "Copy $linkLabel link", {
+            AppIconButton(Icons.Outlined.ContentCopy, resources.getString(R.string.download_copy_host_link, linkLabel), {
                 scope.launch {
-                    clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Download link", link.url)))
+                    clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(resources.getString(R.string.download_clip_label), link.url)))
                     onCopied()
                 }
             })
@@ -152,12 +148,12 @@ fun DownloadLinkRow(
     error?.let { message ->
         AlertDialog(
             onDismissRequest = { error = null },
-            title = { Text("Download unavailable") },
+            title = { Text(resources.getString(R.string.download_unavailable_title)) },
             text = { Text(message) },
             confirmButton = {
-                AppTextButton("Open original host", { if (open(link.url)) error = null })
+                AppTextButton(resources.getString(R.string.download_open_original), { if (open(link.url)) error = null })
             },
-            dismissButton = { AppTextButton("Cancel", { error = null }) },
+            dismissButton = { AppTextButton(resources.getString(R.string.download_cancel_action), { error = null }) },
             shape = MaterialTheme.shapes.extraLarge,
         )
     }

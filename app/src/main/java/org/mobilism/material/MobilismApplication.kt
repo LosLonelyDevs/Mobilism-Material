@@ -130,10 +130,11 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
         }
         scope.launch {
             diagnostics.record(DiagnosticEvent(DiagnosticSource.App, DiagnosticOperation.Startup, DiagnosticPhase.Completed))
-            combine(developer.state.map { it.debridEnabled }, foreground) { enabled, visible -> enabled to visible }
-                .distinctUntilChanged().collectLatest { (enabled, visible) ->
+            combine(developer.state.map { it.debridEnabled }, foreground, repository.auth) { enabled, visible, auth ->
+                Triple(enabled, visible, auth)
+            }.distinctUntilChanged().collectLatest { (enabled, visible, auth) ->
                     if (!enabled) debrid.deactivate()
-                    else if (visible) {
+                    else if (visible && auth is AuthState.SignedIn) {
                         try { debrid.load() }
                         catch (cancelled: CancellationException) { throw cancelled }
                         catch (_: Exception) {
