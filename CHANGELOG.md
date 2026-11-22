@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Followed apps page improvements
+- Various improvements and bug fixes
+
 ## 0.1.26
 
 - Improved update notifications for followed apps
