@@ -3,12 +3,17 @@ package org.mobilism.material
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -18,6 +23,8 @@ import org.mobilism.material.designsystem.MobilismTheme
 import org.mobilism.material.ui.DownloadLink
 import org.mobilism.material.ui.DownloadLinkRow
 import org.mobilism.material.ui.DownloadRequestTracker
+import org.mobilism.material.ui.openReleaseTopic
+import org.mobilism.material.ui.premiumForScreen
 
 @RunWith(AndroidJUnit4::class)
 class DebridDownloadsTest {
@@ -27,6 +34,28 @@ class DebridDownloadsTest {
     private val verified = DebridState(listOf(DebridAccount(DebridProvider.RealDebrid,
         configured = true, validated = true, hostsVerified = true,
         hosts = listOf(SupportedHost("files.example.org", "Example host")))), enabled = true)
+
+    @Test fun notificationReleaseUpdatesTheOpenHostButtonWhenPremiumFinishesRestoring() {
+        val accounts = MutableStateFlow(DebridState())
+        val auth = AuthState.SignedIn("Reader")
+        val check = compose.onNodeWithTag("premium-download-check", useUnmergedTree = true)
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            val nav = rememberNavController()
+            NavHost(nav, startDestination = "following") {
+                composable("following") { LaunchedEffect(Unit) { nav.openReleaseTopic(42) } }
+                composable("release/{id}") {
+                    val debrid = premiumForScreen(accounts, auth, enabled = true)
+                    DownloadLinkRow(DownloadLink(original), debrid, onOpened = {}, onCopied = {})
+                }
+            }
+        } }
+        compose.onNodeWithTag("download:$original").assertIsDisplayed()
+        check.assertDoesNotExist()
+        compose.runOnIdle { accounts.value = verified.copy(accounts = verified.accounts.map { it.copy(forumOwner = "Reader") }) }
+        check.assertIsDisplayed()
+        compose.runOnIdle { accounts.value = verified.copy(accounts = verified.accounts.map { it.copy(forumOwner = "Other") }) }
+        check.assertDoesNotExist()
+    }
 
     @Test fun sharedLookupDisablesBothPresentationsAndDismissalAllowsRetry() {
         val requests = DownloadRequestTracker()

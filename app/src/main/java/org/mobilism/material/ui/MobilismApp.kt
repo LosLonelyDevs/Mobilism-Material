@@ -34,9 +34,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import kotlinx.coroutines.flow.StateFlow
 import org.mobilism.material.MobilismApplication
 import org.mobilism.material.R
 import org.mobilism.material.data.AuthState
+import org.mobilism.material.data.DebridState
 import org.mobilism.material.data.forForumUser
 import org.mobilism.material.data.DiscussionCategory
 import org.mobilism.material.data.DiscussionTopic
@@ -49,6 +51,14 @@ internal fun NavController.openReleaseTopic(id: Long) {
     if (isCurrentTopic(id)) return
     // Each topic owns its detail ViewModel and scroll position on the back stack.
     navigate("release/$id")
+}
+
+@Composable
+internal fun premiumForScreen(accounts: StateFlow<DebridState>, auth: AuthState, enabled: Boolean): DebridState {
+    val current by accounts.collectAsStateWithLifecycle()
+    return remember(current, auth, enabled) {
+        if (enabled) current.forForumUser(auth) else DebridState(enabled = false)
+    }
 }
 
 private fun NavController.isCurrentTopic(id: Long) =
@@ -142,12 +152,10 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     val feed by model.feed.collectAsStateWithLifecycle()
     val categories by model.categories.collectAsStateWithLifecycle()
     val appearance by model.appearance.state.collectAsStateWithLifecycle()
-    val debridState by model.debrid.state.collectAsStateWithLifecycle()
     val downloads by model.downloads.state.collectAsStateWithLifecycle()
     val developer by model.developer.state.collectAsStateWithLifecycle()
     val localCategories by model.customCategories.state.collectAsStateWithLifecycle()
     val categoryStore = model.customCategories.takeIf { developer.customCategoriesActive }
-    val debrid = if (developer.debridEnabled) debridState.forForumUser(auth) else org.mobilism.material.data.DebridState(enabled = false)
     val library by model.library.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val followPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -416,6 +424,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             }
         }
         composable("settings") {
+            val debrid = premiumForScreen(model.debrid.state, auth, developer.debridEnabled)
             val dailyUsageEnabled by app.dailyUsage.enabled.collectAsStateWithLifecycle()
             val hideAdult by model.contentPreferences.hideAdult.collectAsStateWithLifecycle()
             val landingPage by model.landingPage.state.collectAsStateWithLifecycle()
@@ -482,6 +491,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         }
         composable("release/{id}?forum={forum}", arguments = listOf(navArgument("id") { type = NavType.LongType },
             navArgument("forum") { type = NavType.LongType; defaultValue = -1L })) { entry ->
+            val debrid = premiumForScreen(model.debrid.state, auth, developer.debridEnabled)
             val args = requireNotNull(entry.arguments)
             val id = args.getLong("id")
             val forum = args.getLong("forum").takeIf { it >= 0 }
