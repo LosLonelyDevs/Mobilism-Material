@@ -74,8 +74,8 @@
     <string name="follow_not_linked">Installed app not linked</string>
     <string name="follow_version">v%1$s</string>
     <string name="follow_no_version">Version not detected</string>
-    <string name="follow_latest_build">Latest found: %1$s (build %2$s)</string>
-    <string name="follow_latest">Latest found: %1$s</string>
+    <string name="follow_latest_build">Latest: %1$s (build %2$s)</string>
+    <string name="follow_latest">Latest: %1$s</string>
     <string name="follow_tracking_version">Tracking the followed release: %1$s</string>
     <string name="follow_unknown_version">Unknown version</string>
     <string name="follow_cannot_compare">This version couldn\'t be compared automatically.</string>
@@ -83,7 +83,9 @@
     <string name="follow_link_app">Link installed app</string>
     <string name="follow_change_app">Change linked app</string>
     <string name="follow_no_newer_release">No newer matching release found · %1$s</string>
-    <string name="follow_checked_at">Checked · %1$s</string>
+    <string name="follow_checked_at">Last checked %1$s</string>
+    <string name="follow_filter">Filter followed apps</string>
+    <string name="follow_no_matches">No matching apps</string>
     <string name="follow_find_app">Find an app</string>
     <string name="follow_match_automatically">Match automatically</string>
     <string name="follow_package_version">%1$s · %2$s</string>

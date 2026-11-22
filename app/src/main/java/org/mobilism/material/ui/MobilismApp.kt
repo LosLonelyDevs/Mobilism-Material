@@ -1,5 +1,10 @@
 package org.mobilism.material.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -141,6 +146,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     val debrid = if (developer.debridEnabled) debridState else org.mobilism.material.data.DebridState(enabled = false)
     val library by model.library.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val followPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val app = context.applicationContext as MobilismApplication
     val catalogs by app.repository.categoryCatalogs.collectAsStateWithLifecycle()
     val hideAdult by model.contentPreferences.hideAdult.collectAsStateWithLifecycle()
@@ -517,7 +523,12 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 onDownloadHosts = model.downloads::discover,
                 watched = library.any { item -> item.watched && state.release?.let { org.mobilism.material.data.ReleaseVersions.sameApp(item.release, it) } == true },
                 downloaded = library.any { it.downloaded && it.release.id == state.release?.id },
-                onWatch = { enabled -> state.release?.let { model.library.watch(it, enabled) } },
+                onWatch = { enabled -> state.release?.let {
+                    model.library.watch(it, enabled)
+                    if (enabled && Build.VERSION.SDK_INT >= 33 &&
+                        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                        followPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } },
                 onDownloaded = { enabled -> state.release?.let {
                     model.library.downloaded(it, enabled, downloads.autoWatchDownloads)
                 } })

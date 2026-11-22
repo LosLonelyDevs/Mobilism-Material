@@ -148,7 +148,7 @@ class FollowingChecker(
             notifications.cancel(entry.release.id)
         } else {
             val key = FollowingVersions.notificationKey(update)
-            if (preferences.state.value.notifications && saved.lastNotifiedVersion != key &&
+            if (saved.lastNotifiedVersion != key &&
                 notifications.post(saved, update, FollowingVersions.baseline(saved, current), current != null))
                 library.notified(entry.release.id, key)
         }

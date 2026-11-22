@@ -2,6 +2,7 @@ package org.mobilism.material
 
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
@@ -19,6 +20,43 @@ import org.mobilism.material.ui.FollowingScreen
 
 class FollowingScreenTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun filterMatchesFollowedNamesLocallyAndChecksExpansionPersists() {
+        val activity = compose.activity
+        val settings = FollowingPreferences(activity)
+        val original = settings.state.value.checksExpanded
+        val library = AppLibraryStore(activity)
+        val notifications = FollowingNotifications(activity)
+        val entries = listOf("Reader v1.0", "Camera v2.0").mapIndexed { index, title ->
+            LibraryEntry(Release(index.toLong() + 1, title, "Sample", null, 0, 0, 0), watched = true)
+        }
+        var refreshes = 0
+        try {
+            settings.checksExpanded(true)
+            compose.setContent {
+                val preferences by settings.state.collectAsState()
+                MobilismTheme(reduceMotion = true) {
+                    FollowingScreen(entries, emptyList(), FollowCheckState(), null, preferences, settings, notifications,
+                        library, onRefresh = { refreshes++ }, onCheck = { error("Filter triggered a check") },
+                        onLink = { _, _ -> }, onRelease = {}, onBack = {})
+                }
+            }
+            compose.onNodeWithText(activity.getString(R.string.follow_update_checks)).performClick()
+            compose.runOnIdle { assertEquals(false, FollowingPreferences(activity).state.value.checksExpanded) }
+            val baseline = compose.runOnIdle { refreshes }
+            val field = compose.onNodeWithText(activity.getString(R.string.follow_filter))
+            field.performTextInput("  REad ")
+            compose.onNodeWithText("Reader").assertExists()
+            compose.onNodeWithText("Camera").assertDoesNotExist()
+            field.performTextReplacement("v1.0")
+            compose.onNodeWithText(activity.getString(R.string.follow_no_matches)).assertExists()
+            field.performTextClearance()
+            compose.onNodeWithText("Camera").assertExists()
+            compose.runOnIdle { assertEquals(baseline, refreshes) }
+        } finally {
+            settings.checksExpanded(original)
+        }
+    }
 
     @Test fun updateCardHasNoManualButtonAndPullRespectsRemoteSwitch() {
         val activity = compose.activity

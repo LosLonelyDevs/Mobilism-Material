@@ -3,7 +3,7 @@
 - Browse and search Apps, Games, and Books, with Latest/Top feeds, category filters, and infinite scrolling.
 - Release pages split into collapsible Description, What's new, Mod info, and Downloads sections, with comments, quoted replies, and saved drafts.
 - Swipe through release screenshots and open them full screen with zoom and gallery navigation.
-- Follow apps and check for newer versions against what's installed. Supports manual checks, background checks, and optional notifications, while keeping phone/TV and stable/preview releases separate.
+- Follow an app to check for newer versions in the background and receive update notifications. Phone and TV releases stay separate, as do stable and preview versions.
 - Manage installed apps and downloaded marks in My Applications. Find matching releases, keep download history when following a newer version, and undo removals.
 - Group download links by architecture and put preferred file hosts first. Open links in your browser or copy them.
 - Like, watch, and mark releases downloaded from the release page. Opening a file host adds a downloaded mark and can automatically follow the app.

@@ -43,15 +43,17 @@ fun AppChoiceTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) 
 }
 
 @Composable
-fun AppSearchField(value: String, onValueChange: (String) -> Unit, label: String, supportingText: String,
-    onSearch: () -> Unit, searchIcon: ImageVector, submitIcon: ImageVector, modifier: Modifier = Modifier) {
+fun AppSearchField(value: String, onValueChange: (String) -> Unit, label: String, supportingText: String? = null,
+    onSearch: (() -> Unit)? = null, searchIcon: ImageVector, submitIcon: ImageVector? = null, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     OutlinedTextField(value, onValueChange, modifier = modifier.fillMaxWidth(),
         colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent),
         interactionSource = interaction, label = { Text(label) }, singleLine = true,
-        shape = MaterialTheme.shapes.extraLarge, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+        shape = MaterialTheme.shapes.extraLarge, keyboardOptions = KeyboardOptions(imeAction = if (onSearch == null) ImeAction.Done else ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = onSearch?.let { submit -> { submit() } }),
         leadingIcon = { Icon(searchIcon, null) },
-        trailingIcon = { AppIconButton(submitIcon, label, onSearch, enabled = value.isNotBlank()) },
-        supportingText = { Text(supportingText) })
+        trailingIcon = if (submitIcon != null && onSearch != null) {
+            { AppIconButton(submitIcon, label, onSearch, enabled = value.isNotBlank()) }
+        } else null,
+        supportingText = supportingText?.let { { Text(it) } })
 }

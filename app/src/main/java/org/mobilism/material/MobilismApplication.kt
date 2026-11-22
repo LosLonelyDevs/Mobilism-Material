@@ -153,7 +153,7 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
                 followNotifications.retain(entries.filter { it.watched }.map { it.release.id }.toSet())
                 val minimum = if (latestApps.configured && limits.followCacheBatchSize > 0)
                     limits.followCacheIntervalMinutes.toLong() else FollowCheckPolicy.MIN_BACKGROUND_INTERVAL_HOURS * 60
-                (preferences.backgroundChecks && entries.any { it.watched }) to maxOf(minimum, preferences.intervalHours * 60)
+                entries.any { it.watched } to maxOf(minimum, preferences.intervalHours * 60)
             }.distinctUntilChanged().collect { (enabled, minutes) -> FollowingSchedule.update(this@MobilismApplication, enabled, minutes) }
         }
     }

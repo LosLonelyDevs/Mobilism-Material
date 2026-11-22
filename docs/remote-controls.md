@@ -129,7 +129,7 @@ manual cooldown, and pull-to-refresh gesture. The gesture defaults off. Save the
 switch to enable it on compatible clients. Pulling checks the whole watchlist in
 one request, subject to the manual cooldown. Background checks rotate through
 larger lists. A batch size of zero disables cache reads and contributions.
-Users can select a slower schedule or turn background checks off.
+Users can select a slower schedule. Background checks stop when the last app is unfollowed.
 
 Each check compares followed apps against one shared snapshot. If there is no
 usable match or Vercel is unavailable, the existing direct-search budget applies.

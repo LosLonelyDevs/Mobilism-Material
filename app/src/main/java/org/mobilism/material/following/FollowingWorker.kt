@@ -11,12 +11,11 @@ import java.util.concurrent.TimeUnit
 class FollowingWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result = try {
         val app = applicationContext as MobilismApplication
-        if (!app.followPreferences.state.value.backgroundChecks) Result.success()
-        else {
+        if (app.library.state.value.any { it.watched }) {
             app.remoteControl.refresh()
             withContext(BackgroundMobilismRead) { app.following.check(background = true) }
-            Result.success()
         }
+        Result.success()
     } catch (cancelled: CancellationException) { throw cancelled }
     catch (_: Exception) { Result.success() }
 }

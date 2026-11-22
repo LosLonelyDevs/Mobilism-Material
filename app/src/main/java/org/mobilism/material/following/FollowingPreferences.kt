@@ -6,12 +6,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.mobilism.material.data.ApiRequestLimits
 import org.mobilism.material.data.latestAppKey
 
-data class FollowPreferences(val backgroundChecks: Boolean = true, val notifications: Boolean = false, val intervalHours: Long = 0)
+data class FollowPreferences(val intervalHours: Long = 0, val checksExpanded: Boolean = true)
 
 class FollowingPreferences(context: Context) {
     private val preferences = context.getSharedPreferences("following-settings", Context.MODE_PRIVATE)
-    private val mutableState = MutableStateFlow(FollowPreferences(preferences.getBoolean("background", true),
-        preferences.getBoolean("notifications", false), preferences.getLong("hours", 0).takeIf { it in intervals } ?: 0))
+    private val mutableState = MutableStateFlow(FollowPreferences(
+        preferences.getLong("hours", 0).takeIf { it in intervals } ?: 0,
+        preferences.getBoolean("checks-expanded", true)
+    ))
     val state = mutableState.asStateFlow()
 
     internal fun beginCacheCheck(now: Long, limits: ApiRequestLimits, background: Boolean): Boolean {
@@ -55,13 +57,14 @@ class FollowingPreferences(context: Context) {
         return true
     }
 
-    fun background(enabled: Boolean) = save(state.value.copy(backgroundChecks = enabled))
-    fun notifications(enabled: Boolean) = save(state.value.copy(notifications = enabled))
-    fun interval(hours: Long) { require(hours in intervals); save(state.value.copy(intervalHours = hours)) }
-    private fun save(value: FollowPreferences) {
-        preferences.edit().putBoolean("background", value.backgroundChecks).putBoolean("notifications", value.notifications)
-            .putLong("hours", value.intervalHours).apply()
-        mutableState.value = value
+    fun interval(hours: Long) {
+        require(hours in intervals)
+        preferences.edit().putLong("hours", hours).apply()
+        mutableState.value = state.value.copy(intervalHours = hours)
+    }
+    fun checksExpanded(expanded: Boolean) {
+        preferences.edit().putBoolean("checks-expanded", expanded).apply()
+        mutableState.value = state.value.copy(checksExpanded = expanded)
     }
     companion object { val intervals = listOf(0L, 1L, 6L, 12L, 24L) }
 }
