@@ -5,6 +5,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReleaseSectionsTest {
+    @Test fun customAdaptiveModInfoStartsItsOwnSectionInsideABoldBlock() {
+        val html = "<b>Clear launcher data before installing.</b><br/><br/>" +
+            "<b>Custom Adaptive Mod Info:<br/>Arm7/Arm64<br/>YouTube name Proper banner/logo<br/>" +
+            "Following Compiled Patches Applied<br/>Fixed multiple country restrictions</b><br/><br/>" +
+            "<u>What's New:</u> <br/>VERSION 1.1.2"
+        val body = ReleaseContentParser.parse(html, emptyList(), "https://example.org/").bodyHtml
+        for (cleanUp in listOf(false, true)) {
+            val sections = ReleaseSections.parse(body, cleanUp = cleanUp).associate { it.kind to Jsoup.parse(it.html).text() }
+            assertEquals("Clear launcher data before installing.", sections[ReleaseSection.Description])
+            assertEquals("Arm7/Arm64 YouTube name Proper banner/logo Following Compiled Patches Applied " +
+                "Fixed multiple country restrictions", sections[ReleaseSection.Mod])
+            assertEquals("VERSION 1.1.2", sections[ReleaseSection.Changes])
+        }
+    }
+
     @Test fun versionedPatchSetsKeepTheirHeadingAndPlainFeatureLinesTogether() {
         val features = listOf("Custom seek step", "Disable forced update", "Prefer highest resolution",
             "Serve requested resolution", "Unlock VIP")
@@ -55,7 +70,8 @@ class ReleaseSectionsTest {
     }
 
     @Test fun recognizesCustomAttributedModBlocksWithoutNeedingKnownFeatureWords() {
-        listOf("Custom Mod Info By Example", "Mod Features from Another Author", "Patched Details by Team.Name").forEach { heading ->
+        listOf("Custom Mod Info By Example", "Custom Adaptive Mod Info By Example",
+            "Mod Features from Another Author", "Patched Details by Team.Name").forEach { heading ->
             val html = "<p>Original app description.</p><b>Custom Mod Tested On Many Devices</b><br>" +
                 "<a href='https://forum.mobilism.org/viewtopic.php?t=6286022'>Another release</a><br>" +
                 "<b>$heading:<br>Arm7/Arm64 Splits<br>Camera disabled<br>Unfamiliar device adjustment applied<br>Full root support</b><br>" +
@@ -74,6 +90,7 @@ class ReleaseSectionsTest {
 
     @Test fun customModMentionsAndAttributedLinksDoNotStartAModBlock() {
         val html = "<p>Read custom mod info by the author before installing.</p>" +
+            "<p>Custom adaptive mod info is available in the help menu.</p>" +
             "<p>Custom Mod Info By Example explains the release.</p>" +
             "<a href='https://example.org'>Custom Mod Info By Example:</a><p>Ordinary description.</p>"
         assertEquals(listOf(ReleaseSection.Description), ReleaseSections.parse(html).map { it.kind })

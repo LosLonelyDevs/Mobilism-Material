@@ -2,6 +2,9 @@
 <resources>
     <string name="follow_search_error">Couldn\'t check for updates. Try again.</string>
     <string name="app_name">Mobilism Material</string>
+    <string name="release_section_description">Description</string>
+    <string name="release_section_changes">What\'s new</string>
+    <string name="release_section_mod">Mod info</string>
     <string name="action_back">Back</string>
     <string name="state_selected">Selected</string>
     <string name="state_expanded">Expanded</string>
