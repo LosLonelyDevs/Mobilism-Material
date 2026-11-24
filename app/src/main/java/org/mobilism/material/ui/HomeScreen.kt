@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -152,7 +153,8 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
                     val names = apps.categoryNames
                     HomeHeading(if (names.size == 2) stringResource(R.string.home_top_apps_two_categories, names[0], names[1])
                         else stringResource(R.string.home_top_apps_in_category, names.first()), null)
-                    LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LazyRow(Modifier.testTag("home-daily-category"), contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         itemsIndexed(apps.featured, key = { _, release -> release.id }) { index, release ->
                             DailyCategoryTile(release, index, onRelease)
                         }
@@ -278,6 +280,11 @@ private fun HomeHero(releases: List<Release>, section: ContentSection, onRelease
                     if (section == ContentSection.Apps) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(title.name.take(1), color = tone.second.copy(alpha = 0.55f),
                             style = MaterialTheme.typography.displayLarge, modifier = Modifier.clearAndSetSemantics {})
+                        val visible by remember(pager, index) { derivedStateOf { pager.layoutInfo.visiblePagesInfo.any { it.index == index } } }
+                        val thumbnail = release.thumbnail ?: images.firstOrNull()
+                        if (visible && thumbnail != null) ReleaseArtwork(thumbnail, null,
+                            Modifier.fillMaxSize().graphicsLayer { rotationZ = 4f }.clip(MaterialTheme.shapes.large)
+                                .testTag("home-hero-artwork-${release.id}"), contentScale = ContentScale.Crop)
                     } else {
                         images.take(1).takeIf { images.size > 1 }?.forEach { url ->
                             HomeArtwork(url, Modifier.fillMaxSize().offset(x = (-22).dp, y = 8.dp).graphicsLayer { rotationZ = -9f }, section)

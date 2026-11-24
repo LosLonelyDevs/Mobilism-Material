@@ -158,6 +158,44 @@ class HomeTest {
         capture("apps-paired-categories")
     }
 
+    @Test fun discoverDrawsThumbnailPixelsAndExpandsAVerifiedMusicRowSavedWithOneApp() {
+        val base = fixtureState(ContentSection.Apps)
+        val hero = base.latest.items.first().copy(id = 500, title = "Daily Notes v1")
+        val music = List(7) { index ->
+            hero.copy(id = 600L + index, title = "Player ${index + 1} v2", categoryId = 1332, categoryName = "Music & Audio")
+        }
+        val state = base.copy(latest = HomeShelf(loaded = true), popular = HomeShelf(loaded = true),
+            discovery = HomeShelf(listOf(hero) + music, loaded = true))
+        val account = java.util.UUID.randomUUID().toString()
+        val prefs = compose.activity.getSharedPreferences("daily-home", Context.MODE_PRIVATE)
+        val key = "false:$account"
+        DailyHomeStore(prefs, key).save(state.day, DailySelection(listOf(hero.discoveryKey()), listOf(1332), listOf(music.first().discoveryKey())))
+        try {
+            compose.setContent { MobilismTheme(reduceMotion = true) {
+                HomeHost(state) { HomeScreen(state, {}, {}, {}, {}, {}, { _, _ -> }, {}, account = account) }
+            } }
+            val art = compose.onNodeWithTag("home-hero-artwork-500", useUnmergedTree = true)
+            compose.waitUntil(8_000) {
+                if (compose.onAllNodesWithTag("home-hero-artwork-500", useUnmergedTree = true).fetchSemanticsNodes().isEmpty()) false
+                else {
+                    val bmp = art.captureToImage().asAndroidBitmap()
+                    (3 until bmp.width step 11).any { x ->
+                        (3 until bmp.height step 11).any { y -> bmp.getPixel(x, y) == 0xff285e55.toInt() }
+                    }
+                }
+            }
+            compose.onNodeWithText("Popular apps in Music & Audio").assertIsDisplayed()
+            val selected = requireNotNull(DailyHomeStore(prefs, key).read(state.day))
+            assertEquals(5, selected.featured.distinct().size)
+            val row = compose.onNodeWithTag("home-daily-category")
+            row.performScrollToIndex(4)
+            val last = music.single { it.discoveryKey() == selected.featured.last() }
+            compose.onNodeWithText(last.appTitle.name).assertIsDisplayed()
+            row.performScrollToIndex(0)
+            capture("apps-music-artwork")
+        } finally { prefs.edit().remove(key).apply() }
+    }
+
     @Test fun dailySelectionsSurviveReopeningButExpireAtTheNextDayAndStayAccountScoped() {
         val prefs = compose.activity.getSharedPreferences("home-selection-fixture", Context.MODE_PRIVATE)
         val key = java.util.UUID.randomUUID().toString()

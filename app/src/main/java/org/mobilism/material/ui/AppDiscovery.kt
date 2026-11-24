@@ -46,7 +46,8 @@ internal fun discoverPicks(ranked: List<Release>, library: List<LibraryEntry>, l
         } else if (release.id == old.id) {
             // Feed cards carry artwork and counts. The shared ranking can supply their category.
             val category = release.categoryId ?: old.categoryId
-            catalog[app] = release.copy(categoryId = category, storePackage = release.storePackage ?: old.storePackage,
+            catalog[app] = release.copy(thumbnail = release.thumbnail ?: old.thumbnail, images = release.images.ifEmpty { old.images },
+                categoryId = category, storePackage = release.storePackage ?: old.storePackage,
                 categoryName = release.categoryName ?: old.categoryName.takeIf { category == old.categoryId })
         }
     }

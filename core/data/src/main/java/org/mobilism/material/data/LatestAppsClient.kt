@@ -21,6 +21,8 @@ data class LatestAppsPage(val releases: List<Release>, val firstPage: Boolean, v
 data class LatestAppsSnapshot(val outcome: CacheOutcome, val releases: List<Release> = emptyList(), val httpStatus: Int? = null,
     val missingNames: Int? = null)
 
+private val sharedArtwork = Regex("""https?://images\.mobilism\.org/\?dm=([A-Za-z0-9_-]{1,64})""", RegexOption.IGNORE_CASE)
+private val artworkId = Regex("[A-Za-z0-9_-]{1,64}")
 private val appWhitespace = Regex("[\\s\\p{Z}]+")
 fun latestAppKey(name: String): String = Normalizer.normalize(name, Normalizer.Form.NFKC)
     .trim().lowercase(Locale.ROOT).replace(appWhitespace, " ")
@@ -45,6 +47,9 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
         if (title.name.length !in 1..200 || version.length !in 1..80) return null
         return JSONObject().put("id", release.id).put("name", title.name).put("version", version)
             .put("title", release.title.trim()).put("postedAt", release.publishedAt).put("author", release.author.trim()).apply {
+                release.views.takeIf { it > 0 }?.let { put("topicViews", it) }
+                val thumbnail = release.thumbnail ?: release.images.firstOrNull()
+                thumbnail?.let(sharedArtwork::matchEntire)?.let { put("artworkId", it.groupValues[1]) }
                 (release.storePackage ?: ReleaseVersions.packageName(release))?.takeIf { it.length <= 255 }?.let { put("packageName", it) }
                 release.categoryId?.takeIf { it > 0 }?.let { id ->
                     val name = (categoryNames[id] ?: release.categoryName)?.trim()
@@ -67,6 +72,8 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
                 if (previous != null && (category == null || (category.optLong("id") == previous.optLong("id") && !category.has("name"))))
                     item.put("category", previous)
                 if (!item.has("packageName")) old.item.optString("packageName").takeIf(String::isNotEmpty)?.let { item.put("packageName", it) }
+                if (!item.has("artworkId") && old.item.has("artworkId")) item.put("artworkId", old.item.getString("artworkId"))
+                maxOf(item.optLong("topicViews"), old.item.optLong("topicViews")).takeIf { it > 0 }?.let { item.put("topicViews", it) }
             }
             pending[release.id] = Observation(release.id, item, at, safe)
         }
@@ -207,8 +214,10 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
                     val item = items.getJSONObject(index)
                     if (hideAdult && !item.optBoolean("adultFiltered")) continue
                     val category = item.optJSONObject("category")
+                    val thumbnail = (item.opt("artworkId") as? String)?.takeIf(artworkId::matches)
+                        ?.let { "https://images.mobilism.org/?dm=$it" }
                     val release = Release(item.getLong("id"), item.getString("title"), item.getString("author"),
-                        null, item.getLong("postedAt"), 0, 0, section = ContentSection.Apps,
+                        thumbnail, item.getLong("postedAt"), 0, 0, section = ContentSection.Apps,
                         categoryId = category?.optLong("id")?.takeIf { it > 0 },
                         categoryName = (category?.opt("name") as? String)?.takeIf(String::isNotBlank),
                         storePackage = item.opt("packageName") as? String)

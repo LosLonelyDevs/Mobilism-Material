@@ -55,7 +55,7 @@ class LatestAppsClientTest {
             if (accept) builder.header("X-App-Observations-Accepted", "1")
             builder.body(JSONObject().put("observedAt", now).put("items", org.json.JSONArray()).toString().toResponseBody()).build()
         }.build(), now = { now }, contributionsEnabled = { enabled })
-        val release = Release(7, "Camera v2", "Uploader", null, 80, 0, 4, section = ContentSection.Apps, categoryId = 7,
+        val release = Release(7, "Camera v2", "Uploader", "http://images.mobilism.org/?dm=sample1", 80, 0, 4, section = ContentSection.Apps, categoryId = 7,
             contentHtml = "private body", downloadLinks = listOf("https://private.invalid/file"))
         fun observe() = client.observe(listOf(release), true, mapOf(7L to "Photography"))
         suspend fun lookup() { client.lookup(listOf("Camera"), true) { "day" } }
@@ -65,6 +65,8 @@ class LatestAppsClientTest {
         lookup()
         val payload = requests.last().getJSONObject("observations")
         assertEquals("Photography", payload.getJSONArray("items").getJSONObject(0).getJSONObject("category").getString("name"))
+        assertEquals("sample1", payload.getJSONArray("items").getJSONObject(0).getString("artworkId"))
+        assertEquals(4, payload.getJSONArray("items").getJSONObject(0).getInt("topicViews"))
         assertFalse(payload.toString().contains("private"))
         accept = true
         client.publish(LatestAppsPage(listOf(release), true, true, now))
@@ -117,6 +119,7 @@ class LatestAppsClientTest {
         val response = JSONObject().put("observedAt", 200).put("items", org.json.JSONArray((1..2).map { id ->
             JSONObject().put("id", id).put("title", "App $id v1").put("name", "App $id").put("version", "1")
                 .put("postedAt", 100).put("author", "Member").put("adultFiltered", id == 1)
+                .put("artworkId", if (id == 1) "9WX" else "https://other.invalid/")
         }))
         val client = LatestAppsClient("https://fixture.invalid/api/ping", AppHttp.builder(OkHttpClient()) { identity }
             .addInterceptor { chain ->
@@ -127,7 +130,9 @@ class LatestAppsClientTest {
         assertTrue(client.discover(false).isEmpty())
         response.put("collection", "discover")
         assertEquals(listOf(1L), client.discover(true).map { it.id })
-        assertEquals(listOf(1L, 2L), client.discover(false).map { it.id })
+        val unfiltered = client.discover(false)
+        assertEquals(listOf(1L, 2L), unfiltered.map { it.id })
+        assertEquals(listOf("https://images.mobilism.org/?dm=9WX", null), unfiltered.map { it.thumbnail })
         assertEquals(listOf("0", "1", "0"), requests.map { it.url.queryParameter("safe") })
         assertTrue(requests.all { it.method == "GET" && it.body == null && it.url.queryParameter("view") == "discover" &&
             it.url.queryParameterNames == setOf("view", "safe") && it.header("X-Following-Check") == null })
