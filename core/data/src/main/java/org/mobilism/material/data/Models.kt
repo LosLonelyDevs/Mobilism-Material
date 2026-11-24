@@ -32,6 +32,12 @@ data class Release(
     val storePackage: String? = null,
 ) {
     val appTitle: ReleaseTitle by lazy { ReleaseTitles.parse(title, ContentSection.Apps) }
+    val galleryImages: List<String> by lazy {
+        val embedded = if (contentHtml.isBlank()) emptyList() else
+            org.jsoup.Jsoup.parse(contentHtml, browserUrl ?: "https://forum.mobilism.org/")
+                .select("img[src]").mapNotNull { webUrlOrNull(it.absUrl("src")) }
+        (images + embedded).filter(String::isNotBlank).distinct()
+    }
 }
 
 data class ReleasePage(val items: List<Release>, val canLoadMore: Boolean, val lastPage: Int? = null,

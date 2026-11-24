@@ -46,14 +46,19 @@ internal fun ReleaseArtwork(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Fit,
     error: Painter? = null,
+    alternate: String? = null,
 ) {
-    var loading by remember(model) { mutableStateOf(false) }
+    var source by remember(model, alternate) { mutableStateOf(model) }
+    var loading by remember(source) { mutableStateOf(false) }
     Box(modifier) {
         AsyncImage(
-            model = releaseArtworkRequest(model), contentDescription = contentDescription, modifier = Modifier.fillMaxSize(),
+            model = releaseArtworkRequest(source), contentDescription = contentDescription, modifier = Modifier.fillMaxSize(),
             contentScale = contentScale, error = error, fallback = error,
-            onLoading = { loading = !model.isNullOrBlank() },
-            onSuccess = { loading = false }, onError = { loading = false },
+            onLoading = { loading = !source.isNullOrBlank() },
+            onSuccess = { loading = false }, onError = {
+                loading = false
+                if (alternate != null && source == model) source = alternate
+            },
         )
         if (loading) ReleaseImageShimmer(Modifier.matchParentSize())
     }

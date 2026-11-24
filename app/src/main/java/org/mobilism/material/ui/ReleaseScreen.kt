@@ -75,7 +75,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.launch
-import org.jsoup.Jsoup
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.designsystem.AppFont
 import org.mobilism.material.designsystem.AppIconButton
@@ -155,11 +154,7 @@ fun ReleaseScreen(
         state.actionMessage?.let { snackbar.showSnackbar(it); onActionMessageShown() }
     }
     var gallery by remember(release?.id) { mutableStateOf<Pair<List<String>, Int>?>(null) }
-    val images = remember(release) {
-        val embedded = Jsoup.parse(release?.contentHtml.orEmpty(), release?.browserUrl ?: "https://forum.mobilism.org/")
-            .select("img[src]").mapNotNull { org.mobilism.material.data.webUrlOrNull(it.absUrl("src")) }
-        (release?.images.orEmpty() + embedded).distinct()
-    }
+    val images = release?.galleryImages.orEmpty()
     val content = remember(release) {
         release?.let { ReleaseContentParser.parse(it.contentHtml, it.downloadLinks, it.browserUrl ?: "https://forum.mobilism.org/") }
     }

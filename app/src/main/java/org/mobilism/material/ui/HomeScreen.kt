@@ -285,7 +285,7 @@ private fun HomeHero(releases: List<Release>, section: ContentSection, onRelease
                 val distance = { if (reduced) 0f else pager.getOffsetDistanceInPages(index).coerceIn(-1f, 1f) }
                 StoreShape(index, 220.dp, tone.second.copy(alpha = 0.1f), Modifier.align(Alignment.BottomEnd).offset(x = 50.dp, y = 55.dp)
                     .graphicsLayer { translationX = distance() * 50.dp.toPx(); rotationZ = distance() * 25f })
-                val images = remember(release) { (release.images + listOfNotNull(release.thumbnail)).distinct().take(2) }
+                val images = remember(release) { (release.galleryImages + listOfNotNull(release.homeArtwork)).distinct().take(2) }
                 Box(Modifier.align(Alignment.BottomEnd).fillMaxWidth(0.4f).fillMaxHeight(0.84f).padding(end = 16.dp)
                     .offset(y = 16.dp).graphicsLayer { translationX = distance() * 28.dp.toPx() }) {
                     if (section == ContentSection.Apps) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -295,12 +295,13 @@ private fun HomeHero(releases: List<Release>, section: ContentSection, onRelease
                         val thumbnail = release.homeArtwork
                         if (visible && thumbnail != null) ReleaseArtwork(thumbnail, null,
                             Modifier.fillMaxSize().graphicsLayer { rotationZ = 4f }.clip(MaterialTheme.shapes.large)
-                                .testTag("home-hero-artwork-${release.id}"), contentScale = ContentScale.Crop)
+                                .testTag("home-hero-artwork-${release.id}"), contentScale = ContentScale.Crop, alternate = release.alternateHomeArtwork)
                     } else {
                         images.take(1).takeIf { images.size > 1 }?.forEach { url ->
                             HomeArtwork(url, Modifier.fillMaxSize().offset(x = (-22).dp, y = 8.dp).graphicsLayer { rotationZ = -9f }, section)
                         }
-                        HomeArtwork(images.lastOrNull(), Modifier.fillMaxSize().graphicsLayer { rotationZ = if (section == ContentSection.Books) 6f else 4f }, section)
+                        HomeArtwork(images.lastOrNull(), Modifier.fillMaxSize().graphicsLayer { rotationZ = if (section == ContentSection.Books) 6f else 4f }, section,
+                            images.firstOrNull { it != images.lastOrNull() } ?: release.homeArtwork?.takeIf { it != images.lastOrNull() })
                     }
                 }
                 Column(Modifier.fillMaxHeight().fillMaxWidth(0.59f).padding(20.dp)
@@ -350,7 +351,7 @@ private fun DailyCategoryTile(release: Release, index: Int, visible: Boolean, on
                 val artwork = release.homeArtwork
                 if (visible && artwork != null) ReleaseArtwork(artwork, null,
                     Modifier.fillMaxSize().clip(MaterialTheme.shapes.small).testTag("home-category-artwork-${release.id}"),
-                    contentScale = ContentScale.Crop)
+                    contentScale = ContentScale.Crop, alternate = release.alternateHomeArtwork)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title.name, style = MaterialTheme.typography.titleSmallEmphasized, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
@@ -368,7 +369,7 @@ private fun LatestTile(release: Release, section: ContentSection, onRelease: (Lo
         color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Column(Modifier.padding(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Box {
-                HomeArtwork(release.thumbnail, Modifier.fillMaxWidth().aspectRatio(if (section == ContentSection.Books) 0.68f else 1f), section)
+                HomeArtwork(release.homeArtwork, Modifier.fillMaxWidth().aspectRatio(if (section == ContentSection.Books) 0.68f else 1f), section, release.alternateHomeArtwork)
                 if (isNew) NewReleaseBadge(release.id, Modifier.align(Alignment.TopEnd).padding(4.dp))
             }
             Text(title.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
@@ -391,8 +392,9 @@ private fun PopularTile(release: Release, section: ContentSection, index: Int, o
     StoreCard({ onRelease(release.id) }, Modifier.width(200.dp), color = tone.first, contentColor = tone.second) {
         Column(Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             StoreShape(index, 160.dp, tone.second.copy(alpha = 0.09f)) {
-                HomeArtwork(release.thumbnail, Modifier.width(if (section == ContentSection.Books) 84.dp else 106.dp)
-                    .height(if (section == ContentSection.Books) 126.dp else 106.dp), section)
+                HomeArtwork(release.homeArtwork, Modifier.width(if (section == ContentSection.Books) 84.dp else 106.dp)
+                    .height(if (section == ContentSection.Books) 126.dp else 106.dp).testTag("home-popular-artwork-${release.id}"),
+                    section, release.alternateHomeArtwork)
             }
             Text(title.name, style = MaterialTheme.typography.titleMediumEmphasized, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
             ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
@@ -421,11 +423,11 @@ private fun CategoryTile(id: Long?, name: String, index: Int, onClick: () -> Uni
 }
 
 @Composable
-private fun HomeArtwork(url: String?, modifier: Modifier, section: ContentSection) {
+private fun HomeArtwork(url: String?, modifier: Modifier, section: ContentSection, alternate: String? = null) {
     if (url == null) Box(modifier.clip(MaterialTheme.shapes.large).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) {
         Icon(section.style().icon, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
     } else ReleaseArtwork(url, null, modifier.clip(MaterialTheme.shapes.large), contentScale = ContentScale.Crop,
-        error = painterResource(R.drawable.ic_mobilism))
+        error = painterResource(R.drawable.ic_mobilism), alternate = alternate)
 }
 
 @Composable

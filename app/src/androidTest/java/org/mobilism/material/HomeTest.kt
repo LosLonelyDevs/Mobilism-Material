@@ -169,7 +169,9 @@ class HomeTest {
         val base = fixtureState(ContentSection.Apps)
         val keyPrefix = java.util.UUID.randomUUID().toString()
         fun imageUrl(id: Long) = "https://images.mobilism.org/?dm=$keyPrefix-$id"
-        val hero = base.latest.items.first().copy(id = 500, title = "Daily Notes v1", thumbnail = imageUrl(500), images = emptyList())
+        val broken = imageUrl(499)
+        val hero = base.latest.items.first().copy(id = 500, title = "Daily Notes v1", thumbnail = broken, images = emptyList(),
+            contentHtml = """<img src="${imageUrl(500)}">""")
         val music = List(7) { index ->
             val id = 600L + index
             hero.copy(id = id, title = "Player ${index + 1} v2", thumbnail = imageUrl(id), categoryId = 1332, categoryName = "Music & Audio")
@@ -180,15 +182,19 @@ class HomeTest {
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val url = chain.request().url.toString()
             calls += url
-            val bytes = if (url == hero.thumbnail) heroBytes else musicBytes
+            if (url == broken) return@addInterceptor Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
+                .code(404).message("Missing").body(byteArrayOf().toResponseBody()).build()
+            val bytes = if (url == imageUrl(500)) heroBytes else musicBytes
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
                 .header("Content-Type", "image/png").body(bytes.toResponseBody()).build()
         }.build()
         val loader = org.mobilism.material.images.appImageLoader(compose.activity, client)
         val previous = coil3.SingletonImageLoader.get(compose.activity)
         coil3.SingletonImageLoader.setUnsafe(loader)
-        val state = base.copy(latest = HomeShelf(loaded = true), popular = HomeShelf(loaded = true),
+        val popular = hero.copy(id = 700, title = "Popular editor v1", thumbnail = null, contentHtml = "")
+        val state = base.copy(latest = HomeShelf(loaded = true), popular = HomeShelf(listOf(popular), loaded = true),
             discovery = HomeShelf(listOf(hero) + music, loaded = true))
+            .withViewedArtwork(mapOf(popular.id to listOf(imageUrl(700))))
         val account = java.util.UUID.randomUUID().toString()
         val prefs = compose.activity.getSharedPreferences("daily-home", Context.MODE_PRIVATE)
         val key = "false:$account"
@@ -219,6 +225,8 @@ class HomeTest {
             assertPixels("home-category-artwork-${last.id}", 0xff3b467d.toInt())
             row.performScrollToIndex(0)
             capture("apps-music-artwork")
+            compose.onNodeWithTag("home-Apps").performScrollToNode(hasText(popular.appTitle.name))
+            assertPixels("home-popular-artwork-700", 0xff3b467d.toInt())
         } finally {
             coil3.SingletonImageLoader.setUnsafe(previous)
             loader.shutdown()

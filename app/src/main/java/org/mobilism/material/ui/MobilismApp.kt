@@ -165,6 +165,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     val app = context.applicationContext as MobilismApplication
     val catalogs by app.repository.categoryCatalogs.collectAsStateWithLifecycle()
     val hideAdult by model.contentPreferences.hideAdult.collectAsStateWithLifecycle()
+    var viewedArtwork by remember(auth, hideAdult) { mutableStateOf(emptyMap<Long, List<String>>()) }
     val catalog = catalogs[hideAdult]
     val forumNames = remember(catalog) { catalog.orEmpty().values.flatten().associate { it.id to it.name } }
     if (auth is AuthState.SignedIn) MessageNotificationPermissionPrompt(app)
@@ -239,7 +240,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 initializer { HomeViewModel(app.repository, feed.section, model.contentPreferences.hideAdult,
                     observeNewReleases = model::observeNewReleases, discover = app::discoverApps) }
             })
-            val homeState by home.state.collectAsStateWithLifecycle()
+            val loadedHome by home.state.collectAsStateWithLifecycle()
+            val homeState = remember(loadedHome, viewedArtwork) { loadedHome.withViewedArtwork(viewedArtwork) }
             var tab by rememberSaveable(feed.section) { mutableStateOf(openingTab ?: BrowseTab.Home) }
             LaunchedEffect(openCategoryFeed) {
                 if (openCategoryFeed) {
@@ -518,6 +520,13 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 initializer { ReleaseViewModel(id, model.repository, createSavedStateHandle()) { app.repository.openTopic(it, forum) } }
             })
             val state by detail.state.collectAsStateWithLifecycle()
+            LaunchedEffect(state.release) {
+                val release = state.release ?: return@LaunchedEffect
+                val images = release.galleryImages.take(4)
+                if (images.isNotEmpty() && viewedArtwork[release.id] != images) {
+                    viewedArtwork = (viewedArtwork - release.id).toList().takeLast(63).toMap() + (release.id to images)
+                }
+            }
             val discussion = state.discussion
             if (discussion != null) {
                 val reader: DiscussionsViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {

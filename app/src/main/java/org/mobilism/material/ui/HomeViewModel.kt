@@ -40,6 +40,14 @@ data class HomeState(
     val busy: Boolean get() = latest.busy || popular.busy || categories.busy || reviews.busy || discussions.busy || discovery.busy
 }
 
+internal fun HomeState.withViewedArtwork(artwork: Map<Long, List<String>>): HomeState {
+    if (artwork.isEmpty()) return this
+    fun HomeShelf<Release>.enriched() = copy(items = items.map { release ->
+        artwork[release.id]?.let { release.copy(images = (it + release.images).distinct()) } ?: release
+    })
+    return copy(latest = latest.enriched(), popular = popular.enriched(), discovery = discovery.enriched())
+}
+
 class HomeViewModel(private val repository: HomeRepository, initialSection: ContentSection,
     hideAdult: StateFlow<Boolean> = MutableStateFlow(false),
     private val observeNewReleases: (ContentSection, List<Release>) -> Set<Long> = { _, _ -> emptySet() },

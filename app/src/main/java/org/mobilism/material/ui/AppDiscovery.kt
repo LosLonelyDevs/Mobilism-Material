@@ -10,7 +10,13 @@ import org.mobilism.material.data.latestAppKey
 internal fun Release.discoveryKey() = latestAppKey(appTitle.name)
 
 internal val Release.homeArtwork: String?
-    get() = thumbnail?.takeIf(String::isNotBlank) ?: images.firstOrNull(String::isNotBlank)
+    get() = thumbnail?.takeIf(String::isNotBlank) ?: galleryImages.firstOrNull()
+
+internal val Release.alternateHomeArtwork: String?
+    get() {
+        val primary = homeArtwork
+        return galleryImages.firstOrNull { it != primary }
+    }
 
 private val postingOrder = compareBy<Release> { it.publishedAt }.thenBy { it.id }
 
