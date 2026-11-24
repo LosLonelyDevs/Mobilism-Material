@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, today } from './api';
+import { validStorage } from '../public/config-schema.js';
 import { followingRankingLimit, percentage } from '../public/metrics';
 import { Button, CollapsibleCard, InputField, Notice, Switch } from './ui';
 import { mountUsageCalendar } from './usage-calendar';
@@ -12,9 +13,9 @@ const requestTime = new Intl.DateTimeFormat(undefined, {
   timeZone: 'UTC', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
 });
 
-function CacheCard({ title, defaultOpen = false, children }) {
+function CacheCard({ title, subtitle, defaultOpen = false, children }) {
   return <section aria-label={title}>
-    <CollapsibleCard title={title} defaultOpen={defaultOpen} style={{ backgroundColor: 'var(--admin-surface)', borderRadius: 28, marginBottom: 16 }}>
+    <CollapsibleCard title={title} subtitle={subtitle} defaultOpen={defaultOpen} style={{ backgroundColor: 'var(--admin-surface)', borderRadius: 28, marginBottom: 16 }}>
       {children}
     </CollapsibleCard>
   </section>;
@@ -107,6 +108,23 @@ function DeviceReports({ report }) {
   </section>;
 }
 
+function StorageControls({ settings, saving, save }) {
+  const [capacity, setCapacity] = useState(String(settings.capacity));
+  const [hours, setHours] = useState(String(settings.retentionHours));
+  const storage = { capacity: Number(capacity), retentionHours: Number(hours) };
+  const dirty = storage.capacity !== settings.capacity || storage.retentionHours !== settings.retentionHours;
+  return <div>
+    <div className="form-grid">
+      <InputField label="Cache capacity (apps)" help="500 to 2,000 apps. Default 1,000." type="number" min={500} max={2000} step={1}
+        value={capacity} onChange={event => setCapacity(event.target.value)} />
+      <InputField label="Retention (hours)" help="6 to 72 hours from the last sighting. Default 24." type="number" min={6} max={72} step={1}
+        value={hours} onChange={event => setHours(event.target.value)} />
+    </div>
+    <p className="muted">The newest 500 apps keep their slots. Recent requests determine which other apps stay.</p>
+    <Button disabled={saving || !dirty || !validStorage(storage)} onClick={() => save({ storage })}>Save cache policy</Button>
+  </div>;
+}
+
 export default function FollowingCache({ title }) {
   const calendar = useRef(null);
   const [range, setRange] = useState(() => ({ from: today(), to: today() }));
@@ -125,12 +143,11 @@ export default function FollowingCache({ title }) {
     return () => controller.abort();
   }, [range]);
 
-  async function changeSetting(event) {
-    const enabled = event.target.checked;
+  async function changeSetting(change) {
     setSaving(true); setStatus('');
     try {
-      const setting = await api('/api/following-cache', { method: 'PUT', body: { revision: report.pullToRefresh.revision, enabled } });
-      setReport(current => ({ ...current, pullToRefresh: setting }));
+      const setting = await api('/api/following-cache', { method: 'PUT', body: { revision: report.pullToRefresh.revision, ...change } });
+      setReport(current => ({ ...current, pullToRefresh: setting, storage: change.storage ?? current.storage }));
       setStatus('Saved.');
     } catch (err) { setStatus(err.message); }
     finally { setSaving(false); }
@@ -143,15 +160,19 @@ export default function FollowingCache({ title }) {
     {error ? <Notice variant="danger">{error}</Notice> : !report ? <p role="status">Loading report…</p> :
       !report.available ? <p>Available with stable v0.1.24 or later.</p> : <>
         <LookupSummary report={report} />
+        {report.canEditStorage && <CacheCard title="Cache storage" subtitle={`${number(report.storage.capacity)} apps · ${report.storage.retentionHours} hours`}>
+          <StorageControls key={JSON.stringify(report.storage)} settings={report.storage} saving={saving} save={changeSetting} />
+        </CacheCard>}
+        <div role="status" aria-live="polite">{saving ? 'Saving…' : status}</div>
         <CacheSearch apps={report.catalog} />
         <RecentApps apps={report.recentApps} />
         <Rankings rows={report.followRankings} title="Most followed apps" rank="followRank" count="followers" displayCount="totalLookups" label="Total lookups" />
         <Rankings rows={report.followRankings} title="Most missed apps" rank="missRank" count="misses" label="Missing lookups" />
         <DeviceReports report={report} />
         <section className="admin-panel"><h2>Following controls</h2>
-          <Switch label="Allow pull-to-refresh" disabled={saving} checked={report.pullToRefresh.enabled} onChange={changeSetting} />
+          <Switch label="Allow pull-to-refresh" disabled={saving} checked={report.pullToRefresh.enabled} onChange={event => changeSetting({ enabled: event.target.checked })} />
           <p>Allow users to pull down on Following to check for updates.</p>
-          <span role="status">{saving ? 'Saving…' : status}</span>
+
         </section>
       </>}
   </div>;

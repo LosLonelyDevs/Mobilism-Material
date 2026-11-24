@@ -4,11 +4,13 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.DocumentsContract
 import androidx.activity.ComponentActivity
+import androidx.core.content.IntentCompat
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -37,6 +39,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mobilism.material.R
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.data.DebridRepository
 import org.mobilism.material.data.AuthState
@@ -209,16 +212,35 @@ class NativeReleaseDownloadTest {
                 server.enqueue(MockResponse().setHeader("Content-Type", "application/octet-stream")
                     .setHeader("Content-Disposition", "attachment; filename=\"Reader.apk\"").setBody(Buffer().write(apk)))
                 tap(direct)
-                assertNotNull(resultContaining("Saved to your folder").contentIntent)
+                fun checkCompletedActions(text: String) {
+                    val notification = resultContaining(text)
+                    assertNotNull(notification.contentIntent)
+                    val folderAction = notification.actions.single { it.title.toString() == context.getString(R.string.download_open_folder) }
+                    assertNotNull(folderAction.actionIntent)
+                    assertNotEquals(notification.contentIntent, folderAction.actionIntent)
+                }
+                checkCompletedActions("Saved to your folder")
                 val completed = "Download complete · Pocket Reader v1.2.3"
                 compose.onNodeWithText(completed).assertIsDisplayed()
                 capture("saved")
                 compose.waitUntil(12_000) { compose.onAllNodesWithText(completed).fetchSemanticsNodes().isEmpty() }
                 server.enqueue(MockResponse().setBody(Buffer().write(archive)))
                 tap(wrapped)
-                assertNotNull(resultContaining("Extracted 2 files").contentIntent)
+                checkCompletedActions("Extracted 2 files")
                 compose.onNodeWithText(completed).assertIsDisplayed()
                 val resolver = context.contentResolver
+                val root = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+                val folderIntent = downloadFolderIntent(context, tree)
+                if (folderIntent.action == Intent.ACTION_VIEW) {
+                    assertEquals(root, folderIntent.data)
+                    assertEquals(DocumentsContract.Document.MIME_TYPE_DIR, folderIntent.type)
+                    assertTrue(folderIntent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+                    assertEquals(tree, folderIntent.clipData?.getItemAt(0)?.uri)
+                    assertEquals(0, folderIntent.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                } else {
+                    assertEquals(Intent.ACTION_OPEN_DOCUMENT, folderIntent.action)
+                    assertEquals(root, IntentCompat.getParcelableExtra(folderIntent, DocumentsContract.EXTRA_INITIAL_URI, Uri::class.java))
+                }
                 val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
                 val names = mutableListOf<String>()
                 resolver.query(children, arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_DOCUMENT_ID),
@@ -229,6 +251,13 @@ class NativeReleaseDownloadTest {
                         val uri = DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(1))
                         val expected = if (name == "notes.txt") "notes".toByteArray() else apk
                         assertArrayEquals(name, expected, resolver.openInputStream(uri)!!.use { it.readBytes() })
+                        if (name == "Reader.apk") {
+                            val install = savedReleaseIntent(context, uri)
+                            assertEquals(Intent.ACTION_VIEW, install.action)
+                            assertEquals(uri, install.data)
+                            assertEquals("application/vnd.android.package-archive", install.type)
+                            assertNull(install.clipData)
+                        }
                     }
                 }
                 assertEquals(3, names.size)
@@ -255,7 +284,9 @@ class NativeReleaseDownloadTest {
                 assertEquals(3, server.requestCount)
                 server.enqueue(MockResponse().setHeader("Content-Type", "text/html").setBody("<html>Sign in</html>"))
                 tap(landingPage)
-                assertNotNull(resultContaining("host returned a webpage").contentIntent)
+                val failure = resultContaining("host returned a webpage")
+                assertNotNull(failure.contentIntent)
+                assertTrue(failure.actions.orEmpty().none { it.title.toString() == context.getString(R.string.download_open_folder) })
                 server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "60"))
                 tap(unavailable)
                 resultContaining("HTTP 429")

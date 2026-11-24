@@ -3,6 +3,7 @@ package org.mobilism.material.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
@@ -24,16 +25,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
-import org.mobilism.material.designsystem.LoadingState
+import org.mobilism.material.R
 import org.mobilism.material.designsystem.focusOutline
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ReleaseImageCarousel(images: List<String>, onImage: (Int) -> Unit) {
     if (images.isEmpty()) return
+    val openImage = stringResource(R.string.release_image_open)
     if (images.size == 1) {
         val interaction = remember { MutableInteractionSource() }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -41,7 +44,7 @@ internal fun ReleaseImageCarousel(images: List<String>, onImage: (Int) -> Unit) 
                 .focusOutline(interaction).clip(MaterialTheme.shapes.extraLarge)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 .clickable(interactionSource = interaction, indication = ripple(), role = Role.Button,
-                    onClickLabel = "View full size image") { onImage(0) }) {
+                    onClickLabel = openImage) { onImage(0) }) {
                 ReleaseImageContent(images.single(), 0, 1)
             }
         }
@@ -66,7 +69,7 @@ internal fun ReleaseImageCarousel(images: List<String>, onImage: (Int) -> Unit) 
                 // The focus border follows the moving mask instead of the full image bounds.
                 .then(if (focused) Modifier.maskBorder(BorderStroke(2.dp, MaterialTheme.colorScheme.primary), shape) else Modifier)
                 .clickable(interactionSource = interaction, indication = ripple(), role = Role.Button,
-                    onClickLabel = "View full size image") { onImage(index) },
+                    onClickLabel = openImage) { onImage(index) },
             contentAlignment = Alignment.Center,
         ) {
             ReleaseImageContent(images[index], index, images.size)
@@ -77,16 +80,16 @@ internal fun ReleaseImageCarousel(images: List<String>, onImage: (Int) -> Unit) 
 @Composable
 private fun ReleaseImageContent(image: String, index: Int, count: Int) {
     SubcomposeAsyncImage(
-                model = image,
-                contentDescription = "Release image ${index + 1} of $count",
-                contentScale = if (count == 1) ContentScale.Fit else ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-                loading = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingState("Loading image…") } },
-                error = {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Image unavailable", color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyMedium)
-                    }
-                },
-            )
+        model = releaseArtworkRequest(image),
+        contentDescription = stringResource(R.string.release_image_position, index + 1, count),
+        contentScale = if (count == 1) ContentScale.Fit else ContentScale.Crop,
+        modifier = Modifier.fillMaxSize(),
+        loading = { ReleaseImageShimmer(Modifier.fillMaxSize().progressSemantics()) },
+        error = {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(stringResource(R.string.release_image_unavailable), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium)
+            }
+        },
+    )
 }

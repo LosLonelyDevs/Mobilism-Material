@@ -31,7 +31,7 @@ data class Release(
 )
 
 data class ReleasePage(val items: List<Release>, val canLoadMore: Boolean, val lastPage: Int? = null,
-    val nextActivityAtMost: Long? = null)
+    val nextActivityAtMost: Long? = null, val cachedAgeMs: Long = 0)
 
 data class CommentQuote(val author: String, val html: String, val postId: Long? = null)
 data class ReleaseComment(
@@ -93,7 +93,7 @@ enum class VerificationSite(val url: String) {
 class ApiFailure(val kind: FailureKind, override val message: String, val httpStatus: Int? = null,
     val verificationSite: VerificationSite = VerificationSite.App, val blockedBeforeRequest: Boolean = false) : Exception(message)
 
-interface MobilismRepository {
+interface MobilismRepository : ReleaseFeedPolicies {
     val auth: kotlinx.coroutines.flow.StateFlow<AuthState>
     suspend fun restoreSession()
     suspend fun signIn(username: String, password: String)

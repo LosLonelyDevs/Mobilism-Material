@@ -22,3 +22,5 @@ Leave other fields blank initially. Blank fields use the client defaults shown a
 Limits apply per installation, not across the server's whole population. Check request counts by endpoint, active installations, response latency, and 429/5xx rates after rollout. The app respects server `Retry-After` instructions; changing User-Agent does not remove rate limits. See [HTTP 429 semantics](https://www.rfc-editor.org/rfc/rfc6585.html#section-4).
 
 This profile is guidance only. Deploying the dashboard does not apply it to live configuration.
+
+For release lists, adjust one lifetime under **Device caches** and watch release-list request counts. For Following misses, check capacity and retention under **Followed App Cache > Cache storage**. Track hits, misses and direct searches together. More slots help only when a recent, usable version is available. The protected 500 newest apps and the six-hour verification window stay in effect.

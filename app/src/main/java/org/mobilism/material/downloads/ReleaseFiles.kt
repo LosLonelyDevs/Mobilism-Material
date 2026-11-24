@@ -156,7 +156,7 @@ private class CheckedEntryStream(input: InputStream, private val size: Long) :
 
 internal class ReleaseFolder(private val context: Context, val tree: Uri) {
     private val resolver = context.contentResolver
-    private val root = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+    val root: Uri = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
 
     fun requireWritable() {
         if (resolver.persistedUriPermissions.none { it.uri == tree && it.isWritePermission && it.isReadPermission })

@@ -36,7 +36,7 @@ class DiscussionsTest {
         fixture.communityBody = """{"announcements":[{"id":13,"name":"Announcements"}],"contests":[],"talk":[{"id":66,"name":"General chat"}],"services":[],"feedback":[]}"""
         lateinit var model: DiscussionsViewModel
         var closed = false
-        compose.runOnUiThread { model = DiscussionsViewModel(fixture.repository, null, SavedStateHandle(), announcementsOnly = true) }
+        compose.runOnUiThread { model = DiscussionsViewModel(fixture.repository, null, SavedStateHandle(), compose.activity::getString, announcementsOnly = true) }
         compose.setContent { MobilismTheme(reduceMotion = true) {
             DiscussionsScreen(model, AuthState.Guest, { closed = true }, { _, _ -> })
         } }
@@ -137,7 +137,7 @@ class DiscussionsTest {
             {"id":503,"name":"Games"},{"id":504,"name":"Game Codes"}
         ],"books":[]}}"""
         lateinit var model: DiscussionsViewModel
-        compose.runOnUiThread { model = DiscussionsViewModel(fixture.repository, null, SavedStateHandle()) }
+        compose.runOnUiThread { model = DiscussionsViewModel(fixture.repository, null, SavedStateHandle(), compose.activity::getString) }
         compose.setContent { MobilismTheme(theme = SolarizedDark, reduceMotion = true) {
             DiscussionsScreen(model, AuthState.Guest, {}, { _, _ -> })
         } }
@@ -182,7 +182,7 @@ class DiscussionsTest {
         val fixture = Fixture()
         fixture.repository.signIn("Reader", "sample-password")
         lateinit var model: DiscussionsViewModel
-        compose.runOnUiThread { model = DiscussionsViewModel(fixture.repository, "Reader", SavedStateHandle()) }
+        compose.runOnUiThread { model = DiscussionsViewModel(fixture.repository, "Reader", SavedStateHandle(), compose.activity::getString) }
         var dark by mutableStateOf(false)
         var reduced by mutableStateOf(false)
         compose.setContent { MobilismTheme(theme = if (dark) AmoledBlack else CatppuccinLatte, reduceMotion = reduced) {
@@ -239,7 +239,7 @@ class DiscussionsTest {
         fixture.offline = true
         lateinit var model: DiscussionsViewModel
         var requested: DiscussionTopic? = null
-        compose.runOnUiThread { model = DiscussionsViewModel(fixture.repository, null, SavedStateHandle()) }
+        compose.runOnUiThread { model = DiscussionsViewModel(fixture.repository, null, SavedStateHandle(), compose.activity::getString) }
         compose.setContent { MobilismTheme(reduceMotion = true) {
             DiscussionsScreen(model, AuthState.Guest, {}, { topic, _ -> requested = topic })
         } }
@@ -261,7 +261,7 @@ class DiscussionsTest {
         val fixture = Fixture()
         lateinit var model: DiscussionsViewModel
         lateinit var inputMode: InputModeManager
-        compose.runOnUiThread { model = DiscussionsViewModel(fixture.repository, "Reader", SavedStateHandle()) }
+        compose.runOnUiThread { model = DiscussionsViewModel(fixture.repository, "Reader", SavedStateHandle(), compose.activity::getString) }
         compose.setContent { MobilismTheme(theme = AmoledBlack, reduceMotion = true) {
             inputMode = LocalInputModeManager.current
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 1.5f)) {

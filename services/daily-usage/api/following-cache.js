@@ -8,6 +8,7 @@ import { requestBody } from '../lib/request-body.js';
 import { visibleSnapshot } from '../lib/follow-lookup.js';
 import { followingControlsAvailable } from '../public/limit-availability.js';
 import { followingRankingLimit } from '../public/metrics.js';
+import { defaultStorage, validStorage } from '../public/config-schema.js';
 
 const ranks = `WITH selected AS (
   SELECT * FROM daily_followed_apps WHERE day BETWEEN $1::date AND $2::date
@@ -44,7 +45,8 @@ const setting = config => ({ revision: config.revision, enabled: config.limits.f
 
 export function createHandler(database = query, session = req => sessionUser(req, { database }), catalog = releaseCatalog, now = () => new Date()) {
   return async (req, res) => {
-    if (!await authorize(req, res, 'following-cache', session)) return;
+    const user = await authorize(req, res, 'following-cache', session);
+    if (!user) return;
     if (!['GET', 'PUT'].includes(req.method)) {
       res.setHeader('Allow', 'GET, PUT'); return respond(res, 405, { error: 'Use GET or PUT' });
     }
@@ -66,17 +68,21 @@ export function createHandler(database = query, session = req => sessionUser(req
           cacheUsage, lookups, todayLookups: to === today ? todayLookups : null, followRankings: rankings.map(withVersion),
           recentApps: recent.map(withVersion), catalog: snapshot.items.map(({ key, name, version }) =>
             ({ name, version, clientVersion: Object.hasOwn(catalogClients, key) ? catalogClients[key] : null })),
+          storage: config.followingStorage ?? defaultStorage, canEditStorage: user.isAdmin === true,
           pullToRefresh: setting(config) });
       }
       if (!available) return respond(res, 409, { error: 'Requires stable v0.1.24 or later.' });
       const body = requestBody(req, res, respond);
       if (!body) return;
-      if (typeof body.enabled !== 'boolean' || !Number.isSafeInteger(body.revision) || body.revision < 0 ||
-          Object.keys(body).some(key => !['revision', 'enabled'].includes(key)))
-        return respond(res, 400, { error: 'Choose a valid pull-to-refresh setting.' });
+      const storageEdit = Object.hasOwn(body, 'storage');
+      if (!Number.isSafeInteger(body.revision) || body.revision < 0 || Object.keys(body).length !== 2 ||
+          (storageEdit ? !validStorage(body.storage) : typeof body.enabled !== 'boolean'))
+        return respond(res, 400, { error: 'Choose a valid Following cache setting.' });
+      if (storageEdit && !user.isAdmin) return respond(res, 403, { error: 'An administrator must change cache retention.' });
       const config = await readConfig(database);
       if (config.revision === body.revision) {
-        config.limits.followPullToRefreshEnabled = body.enabled;
+        if (storageEdit) config.followingStorage = { ...body.storage };
+        else config.limits.followPullToRefreshEnabled = body.enabled;
         if (Buffer.byteLength(JSON.stringify(publicConfig(config))) > 65536) return respond(res, 413, { error: 'Configuration too large' });
         const saved = await saveConfig(database, config);
         if (saved) return respond(res, 200, setting(saved));

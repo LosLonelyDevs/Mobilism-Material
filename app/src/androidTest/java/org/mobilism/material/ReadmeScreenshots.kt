@@ -80,6 +80,34 @@ class ReadmeScreenshots {
         compose.onNodeWithContentDescription("Close image viewer").assertExists()
     }
 
+    @OptIn(coil3.annotation.DelicateCoilApi::class)
+    @Test fun galleryShowsLoadingOnlyUntilLocalImageIsReady() {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val previous = SingletonImageLoader.get(compose.activity)
+        val loader = ImageLoader.Builder(compose.activity).components {
+            add(coil3.intercept.Interceptor { chain ->
+                gate.await()
+                chain.proceed()
+            })
+        }.build()
+        SingletonImageLoader.setUnsafe(loader)
+        try {
+            val image = asset("aloha")
+            screen { ReleaseImageCarousel(listOf(image), {}) }
+            val progress = SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)
+            compose.waitUntil(5_000) { compose.onAllNodes(progress, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+            gate.complete(Unit)
+            compose.waitUntil(5_000) { compose.onAllNodes(progress, useUnmergedTree = true).fetchSemanticsNodes().isEmpty() }
+            compose.onNode(progress, useUnmergedTree = true).assertDoesNotExist()
+            compose.onNodeWithText("Image unavailable").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Release image 1 of 1").assertIsDisplayed()
+        } finally {
+            gate.complete(Unit)
+            SingletonImageLoader.setUnsafe(previous)
+            loader.shutdown()
+        }
+    }
+
     @Test fun release() {
         releaseScreen(browserPreview = true)
         awaitImages(listOf(asset("aloha")))

@@ -55,9 +55,11 @@ internal class MobilismApi(private val context: Context, private val diagnostics
     private val feedPages = FeedPageStore(context.getSharedPreferences("release-feed-pages", Context.MODE_PRIVATE))
     private val feedLocks = Array(8) { kotlinx.coroutines.sync.Mutex() }
     private val latestWindow = LatestFeedWindow(context.getSharedPreferences("latest-apps-window", Context.MODE_PRIVATE))
-    private val searches = SearchRequestPolicy(limits = requestLimits, diagnostics = diagnostics)
-    private val reads = ReadRequestPolicy(limits = requestLimits, diagnostics = diagnostics)
-    private val forumReads = ReadRequestPolicy(limits = requestLimits)
+    private val searches = SearchRequestPolicy(limits = requestLimits, diagnostics = diagnostics,
+        pausedMessage = { context.getString(R.string.search_paused) })
+    private val reads = ReadRequestPolicy(limits = requestLimits, diagnostics = diagnostics,
+        busyMessage = { context.getString(R.string.read_paused) })
+    private val forumReads = ReadRequestPolicy(limits = requestLimits, busyMessage = { context.getString(R.string.read_paused) })
     fun commentGateway(account: () -> Session?, changed: (Long) -> Unit): ForumCommentGateway =
         NativeForumComments(context, this.client, forumReads, account, changed)
     private val likePostIds = context.getSharedPreferences("release-post-ids", Context.MODE_PRIVATE)
@@ -77,6 +79,14 @@ internal class MobilismApi(private val context: Context, private val diagnostics
     suspend fun categories(token: String?, hideAdult: Boolean = false): Map<ContentSection, List<ReleaseCategory>> {
         val response = request("release/category", token, hideAdult = hideAdult)
         return ContentSection.entries.associateWith { CategoryJson.parse(response, it) }
+    }
+
+    fun feedPolicy(order: FeedOrder): ReleaseFeedPolicy {
+        val limits = requestLimits()
+        val latest = order == FeedOrder.Latest
+        return ReleaseFeedPolicy(if (latest) limits.releaseLatestCacheTtlMs else limits.releaseTopCacheTtlMs,
+            feedPages.generation(order, limits.cacheResets[order.name] ?: 0), latest || limits.customTopLifetime,
+            if (latest) limits.customLatestLifetime else limits.customTopLifetime)
     }
 
     suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, token: String?, categoryId: Long? = null,
@@ -103,12 +113,16 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             return result
         }
         val firstPage = kotlin.coroutines.coroutineContext[FirstFeedPage] ?: return fetch(null)
-        val key = requestKey(listOf(path, token, hideAdult).toString())
-        val ttl = if (order == FeedOrder.Latest) 5 * 60_000L else 15 * 60_000L
+        val policy = feedPolicy(order)
+        val oldKey = requestKey(listOf(path, token, hideAdult).toString())
+        val key = if (policy.generation == 0) oldKey else "$oldKey:${policy.generation}"
+        val ttl = policy.ttlMs
         return withContext(Dispatchers.IO) {
             feedLocks[Math.floorMod(key.hashCode(), feedLocks.size)].withLock {
                 if (!firstPage.fresh) {
-                    val cached = feedPages.read(key, ttl)?.let { runCatching { parse(org.json.JSONArray(it)) }.getOrNull() }
+                    val cached = feedPages.read(key, ttl)?.let { saved ->
+                        runCatching { parse(org.json.JSONArray(saved.json)) }.getOrNull()?.also { firstPage.include(saved.savedAt) }
+                    }
                     diagnostics.cacheLookup(AppCache.ReleaseFeed, if (cached != null) CacheOutcome.DiskHit else CacheOutcome.Miss)
                     if (cached != null) return@withLock cached
                 }
@@ -194,21 +208,23 @@ internal class MobilismApi(private val context: Context, private val diagnostics
     }
 
     suspend fun discussionCategories(area: DiscussionArea, token: String?, fresh: Boolean = false): List<DiscussionCategory> =
-        DiscussionJson.categories(request(if (area == DiscussionArea.Community) "other/category" else "discussion/categories", token,
-            cacheMillis = requestLimits().discussionCategoriesCacheTtlMs, fresh = fresh), area)
+        requestPage(if (area == DiscussionArea.Community) "other/category" else "discussion/categories", token,
+            cacheMillis = requestLimits().discussionCategoriesCacheTtlMs, fresh = fresh, categoryGroup = area.categoryKey) {
+            DiscussionJson.categories(it, area)
+        }
 
     suspend fun discussionTopics(category: DiscussionCategory, page: Int, query: String, token: String?, includePinned: Boolean = true,
         fresh: Boolean = false): DiscussionPage {
         require(page > 0)
-        if (query.isNotBlank()) return DiscussionJson.page(request("search", token, form = mapOf(
+        if (query.isNotBlank()) return requestPage("search", token, form = mapOf(
             "search" to query.trim(), "count" to page.toString(), "limits" to PAGE_SIZE.toString(),
             "isrelease" to "0", "isdiscussion" to if (category.kind == DiscussionKind.Discussion) "1" else "0",
             "isother" to if (category.kind == DiscussionKind.Other) "1" else "0",
             "id" to if (category.id == 12L) "all" else category.id.toString(),
-        )), category.kind, search = true)
-        return DiscussionJson.page(request("${category.kind.path}/category/${category.apiId}/page/$page/limit/$PAGE_SIZE/orderby/topic_last_post_time/desc/${if (includePinned) 1 else 0}",
+        )) { DiscussionJson.page(it, category.kind, search = true) }
+        return requestPage("${category.kind.path}/category/${category.apiId}/page/$page/limit/$PAGE_SIZE/orderby/topic_last_post_time/desc/${if (includePinned) 1 else 0}",
             token, emptyRecordsAsArray = true,
-            cacheMillis = if (page == 1) requestLimits().discussionFirstPageCacheTtlMs else 0, fresh = fresh), category.kind)
+            cacheMillis = if (page == 1) requestLimits().discussionFirstPageCacheTtlMs else 0, fresh = fresh) { DiscussionJson.page(it, category.kind) }
     }
 
     suspend fun discussionComments(topic: DiscussionTopic, page: Int, token: String?): CommentPage {
@@ -281,10 +297,10 @@ internal class MobilismApi(private val context: Context, private val diagnostics
 
     suspend fun search(query: String, scope: SearchScope, page: Int, token: String?, hideAdult: Boolean = false): ReleasePage {
         require(query.isNotBlank() && page > 0)
-        return SearchJson.page(request("search", token, form = mapOf(
+        return requestPage("search", token, form = mapOf(
             "search" to query.trim(), "count" to page.toString(), "limits" to PAGE_SIZE.toString(),
             "isrelease" to "1", "isdiscussion" to "0", "isother" to "0", "id" to scope.apiId,
-        ), hideAdult = hideAdult)).let { result ->
+        ), hideAdult = hideAdult, parse = SearchJson::page).let { result ->
             result.copy(items = result.items.map { it.copy(section = it.section ?: scope.section) })
         }
     }
@@ -351,22 +367,37 @@ internal class MobilismApi(private val context: Context, private val diagnostics
 
     private suspend fun request(path: String, token: String? = null, form: Map<String, String>? = null,
         emptyRecordsAsArray: Boolean = false, hideAdult: Boolean = false, retryRead: Boolean = true,
-        emptySuccess: Boolean = false, recovered: Boolean = false, cacheMillis: Long = 0, fresh: Boolean = false): JSONObject {
-        if (path != "search" && (form != null || !retryRead))
-            return performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead, emptySuccess, recovered)
-        val identity = listOf(path, token, hideAdult.toString(), form?.toSortedMap().toString()).toString()
-        val key = requestKey(identity)
-        if (path != "search") return JSONObject(reads.request(key, cacheMillis, fresh) {
-            performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead, emptySuccess, recovered).toString()
+        emptySuccess: Boolean = false): JSONObject {
+        if (form != null || !retryRead)
+            return performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead, emptySuccess)
+        return JSONObject(reads.request(requestKey(listOf(path, token, hideAdult).toString())) {
+            performRequest(path, token, emptyRecordsAsArray = emptyRecordsAsArray, hideAdult = hideAdult, emptySuccess = emptySuccess).toString()
         })
-        return JSONObject(searches.request(key) {
+    }
+
+    private suspend fun <T> requestPage(path: String, token: String?, form: Map<String, String>? = null,
+        emptyRecordsAsArray: Boolean = false, hideAdult: Boolean = false, cacheMillis: Long = 0, fresh: Boolean = false,
+        categoryGroup: String? = null, parse: (JSONObject) -> T): T {
+        val key = requestKey(listOf(path, token, hideAdult, form?.toSortedMap()).toString())
+        val decode = { body: String ->
+            try { parse(JSONObject(body)) }
+            catch (_: JSONException) { throw ApiFailure(FailureKind.InvalidResponse, context.getString(R.string.api_unreadable)) }
+            catch (_: IllegalArgumentException) { throw ApiFailure(FailureKind.InvalidResponse, context.getString(R.string.api_unreadable)) }
+        }
+        if (form == null) return reads.request(key, cacheMillis, fresh, decode, pageKey = categoryGroup?.let { "$key:$it" } ?: key) {
+            performRequest(path, token, emptyRecordsAsArray = emptyRecordsAsArray, hideAdult = hideAdult).toString()
+        }
+        var readAt = 0L
+        var fullPage = false
+        val page = searches.request(key, decode) {
             reads.checkAllowed()
-            val at = System.currentTimeMillis() / 1000
-            val result = performRequest(path, token, form, emptyRecordsAsArray, hideAdult, retryRead = false, emptySuccess = emptySuccess)
-            kotlin.coroutines.coroutineContext[FollowSearchObservation]?.observed(at, hideAdult,
-                (result.optJSONArray("releases")?.length() ?: 0) >= PAGE_SIZE)
+            readAt = System.currentTimeMillis() / 1000
+            val result = performRequest(path, token, form, hideAdult = hideAdult, retryRead = false)
+            fullPage = (result.optJSONArray("releases")?.length() ?: 0) >= PAGE_SIZE
             result.toString()
-        })
+        }
+        if (readAt > 0) kotlin.coroutines.coroutineContext[FollowSearchObservation]?.observed(readAt, hideAdult, fullPage)
+        return page
     }
 
     private suspend fun performRequest(path: String, token: String? = null, form: Map<String, String>? = null,

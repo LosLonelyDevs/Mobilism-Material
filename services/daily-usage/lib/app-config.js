@@ -7,7 +7,8 @@ export function publicConfig(config) {
       createHash('sha256').update(`mobilism-notice-user-v1\0${value}`).digest('hex')) };
     return rule.conditions ? { ...rule, conditions: rule.conditions.map(audience) } : rule;
   }
-  return { ...config, notices: config.notices.map(notice => ({ ...notice, audience: audience(notice.audience) })) };
+  const { followingStorage, ...client } = config;
+  return { ...client, notices: config.notices.map(notice => ({ ...notice, audience: audience(notice.audience) })) };
 }
 
 export async function readConfig(database) {

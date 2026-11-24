@@ -68,7 +68,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import androidx.compose.ui.res.stringResource
+import org.mobilism.material.R
 import org.mobilism.material.data.ReleaseComment
 
 internal val LocalCommentHold = staticCompositionLocalOf<(() -> Unit)?> { null }
@@ -95,6 +96,11 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
     val content = threadContent ?: remember(comment.contentHtml, comment.quotes) { CommentContent.parse(comment) }
     val interaction = remember { MutableInteractionSource() }
     val reduced = LocalReducedMotion.current
+    val linkedLabel = stringResource(R.string.comment_linked)
+    val expandedLabel = stringResource(if (expanded) R.string.state_expanded else R.string.state_collapsed)
+    val originalPosterLabel = stringResource(R.string.comment_original_poster)
+    val originalPostLabel = stringResource(R.string.comment_original_post)
+    val optionsLabel = stringResource(R.string.comment_options)
     val isOriginalPoster = !earlierComment && !originalPoster.isNullOrBlank() &&
         originalPoster.trim().equals(comment.author.trim(), ignoreCase = true)
     val color by animateColorAsState(
@@ -102,15 +108,15 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
         if (reduced) snap() else tween(if (highlighted) 150 else 850), label = "Linked comment",
     )
     Surface(Modifier.fillMaxWidth().testTag("comment-${comment.id}")
-        .then(if (highlighted) Modifier.semantics { stateDescription = "Linked comment" } else Modifier)
+        .then(if (highlighted) Modifier.semantics { stateDescription = linkedLabel } else Modifier)
         .then(if (canCopyLink) Modifier.pointerInput(comment.id) { detectTapGestures(onLongPress = { menu = true }) } else Modifier),
         shape = MaterialTheme.shapes.large, color = color) {
         Column {
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("comment-toggle-${comment.id}")
-                .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
+                .semantics { stateDescription = expandedLabel }
                 .focusOutline(interaction).combinedClickable(interactionSource = interaction, indication = ripple(), role = Role.Button,
-                    onClickLabel = if (expanded) "Collapse comment" else "Expand comment", onClick = toggle,
-                    onLongClickLabel = "Comment options", onLongClick = openMenu)
+                    onClickLabel = stringResource(if (expanded) R.string.comment_collapse else R.string.comment_expand), onClick = toggle,
+                    onLongClickLabel = optionsLabel, onLongClick = openMenu)
                 .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MessageAvatar(comment.author, comment.avatar, Modifier.size(28.dp))
@@ -119,29 +125,30 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
                     UsernameLink(comment.author, style = MaterialTheme.typography.titleSmall, showAvatar = false,
                         color = if (isOriginalPoster) LocalAppTheme.current.originalPoster else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.weight(1f, fill = false).then(
-                            if (isOriginalPoster) Modifier.semantics { stateDescription = "Original poster" } else Modifier))
+                            if (isOriginalPoster) Modifier.semantics { stateDescription = originalPosterLabel } else Modifier))
                     if (comment.publishedAt > 0) CommentTimestamp(comment.publishedAt)
                 }
                 Box {
                     if (onEdit != null || onDelete != null)
-                        AppIconButton(Icons.Outlined.MoreVert, "Comment options", { menu = true }, enabled = actionsEnabled)
+                        AppIconButton(Icons.Outlined.MoreVert, optionsLabel, { menu = true }, enabled = actionsEnabled)
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = MaterialTheme.shapes.extraLarge) {
-                        if (canCopyLink) RoundedMenuItem("Copy comment link", {
+                        val linkLabel = stringResource(R.string.comment_link_label)
+                        if (canCopyLink) RoundedMenuItem(stringResource(R.string.comment_copy_link), {
                             menu = false
                             val link = ReleaseLinks.Comment(comment.id, topicId ?: ReleaseLinks.topicId(baseUrl))
-                            scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Comment link", link.url))) }
+                            scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(linkLabel, link.url))) }
                         }, MaterialTheme.colorScheme.secondary, Icons.Outlined.ContentCopy)
-                        onEdit?.takeIf { actionsEnabled }?.let { edit -> RoundedMenuItem("Edit comment", { menu = false; edit() },
+                        onEdit?.takeIf { actionsEnabled }?.let { edit -> RoundedMenuItem(stringResource(R.string.comment_edit), { menu = false; edit() },
                             MaterialTheme.colorScheme.primary, Icons.Outlined.Edit) }
-                        onDelete?.takeIf { actionsEnabled }?.let { delete -> RoundedMenuItem("Delete comment", { menu = false; delete() },
+                        onDelete?.takeIf { actionsEnabled }?.let { delete -> RoundedMenuItem(stringResource(R.string.comment_delete), { menu = false; delete() },
                             MaterialTheme.colorScheme.error, Icons.Outlined.Delete) }
                     }
                 }
                 if (!expanded) CommentCollapseButton(false, toggle)
-                if (openingPost) AppHeading("OP", HeadingLevel.Subsection,
-                    Modifier.semantics { contentDescription = "Original post" }, style = MaterialTheme.typography.titleSmall)
+                if (openingPost) AppHeading(stringResource(R.string.comment_op), HeadingLevel.Subsection,
+                    Modifier.semantics { contentDescription = originalPostLabel }, style = MaterialTheme.typography.titleSmall)
             }
-            if (earlierComment) Text("Earlier comment", Modifier.padding(start = 48.dp, end = 12.dp),
+            if (earlierComment) Text(stringResource(R.string.comment_earlier), Modifier.padding(start = 48.dp, end = 12.dp),
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             AnimatedVisibility(expanded,
                 enter = if (reduced) EnterTransition.None else expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
@@ -155,7 +162,7 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
                         }
                         if (comment.images.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             itemsIndexed(comment.images) { index, url ->
-                                AsyncImage(url, "Open comment image ${index + 1}", Modifier.size(120.dp).clip(MaterialTheme.shapes.large)
+                                ReleaseArtwork(url, stringResource(R.string.comment_open_image, index + 1), Modifier.size(120.dp).clip(MaterialTheme.shapes.large)
                                     .clickable { onImage(comment.images, index) }, contentScale = ContentScale.Fit)
                             }
                         }
@@ -163,7 +170,7 @@ internal fun ReleaseCommentCard(comment: ReleaseComment, baseUrl: String, onRele
                             onReply?.let { reply ->
                                 TextButton(reply, enabled = replyEnabled) {
                                     Icon(Icons.AutoMirrored.Outlined.Reply, null, Modifier.size(16.dp))
-                                    Text("Reply", Modifier.padding(start = 6.dp))
+                                    Text(stringResource(R.string.comment_reply), Modifier.padding(start = 6.dp))
                                 }
                             }
                             Spacer(Modifier.weight(1f))

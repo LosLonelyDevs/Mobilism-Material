@@ -12,11 +12,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SearchRequestPolicyTest {
+    private suspend fun SearchRequestPolicy.request(key: String, load: suspend () -> String) =
+        request(key, { it }, load)
+
     @Test fun remoteThresholdsApplyAndFallbackRestoresShippedSpacingAndCooldown() = runBlocking {
         var time = 1_000L
         var limits = ApiRequestLimits.Defaults.copy(searchSpacingMs = 10_000, searchFailureCooldownMs = 600_000)
         val waits = mutableListOf<Long>()
-        val policy = SearchRequestPolicy({ time }, { time }, { limits }) { waits += it; time += it }
+        val policy = SearchRequestPolicy({ time }, { time }, { limits }, pausedMessage = { "Paused" }) { waits += it; time += it }
         policy.request("one") { "one" }
         policy.request("two") { "two" }
         assertEquals(listOf(10_000L), waits)
@@ -35,7 +38,7 @@ class SearchRequestPolicyTest {
         var time = 1000L
         var limits = ApiRequestLimits.Defaults
         var calls = 0
-        val policy = SearchRequestPolicy({ time }, { time }, { limits }) { time += it }
+        val policy = SearchRequestPolicy({ time }, { time }, { limits }, pausedMessage = { "Paused" }) { time += it }
         policy.request("one") { calls++; "first" }
         assertEquals("first", policy.request("one") { calls++; "second" })
         limits = limits.copy(searchCacheTtlMs = 0)
@@ -44,10 +47,39 @@ class SearchRequestPolicyTest {
         assertEquals(3, calls)
     }
 
+    @Test fun unrelatedLimitChangeDuringSearchPreservesItsValidatedResult() = runBlocking {
+        var limits = ApiRequestLimits.Defaults
+        val policy = SearchRequestPolicy(limits = { limits }, pausedMessage = { "Paused" })
+        val page = policy.request("query", { SearchJson.page(org.json.JSONObject(it)) }) {
+            limits = limits.copy(debridRefreshIntervalMs = 60_000)
+            """{"releases":null}"""
+        }
+        assertTrue(page.items.isEmpty())
+        limits = limits.copy(followBatchSize = 2)
+        assertEquals(page, policy.request("query", { SearchJson.page(org.json.JSONObject(it)) }) { error("Unexpected load") })
+    }
+
+    @Test fun malformedSearchWaitsForCooldownThenCachesTheFirstValidResponse() = runBlocking {
+        val clock = Clock()
+        var calls = 0
+        suspend fun page() = clock.policy.request("query", { SearchJson.page(org.json.JSONObject(it)) }) {
+            if (++calls == 1) "{}" else """{"releases":[]}"""
+        }
+        assertTrue(runCatching { page() }.exceptionOrNull() is org.json.JSONException)
+        assertEquals("valid", clock.policy.request("another query") { "valid" })
+        clock.time = 60_999
+        assertTrue((runCatching { page() }.exceptionOrNull() as ApiFailure).blockedBeforeRequest)
+        assertEquals(1, calls)
+        clock.time++
+        assertTrue(page().items.isEmpty())
+        assertTrue(page().items.isEmpty())
+        assertEquals(2, calls)
+    }
+
     private class Clock {
         var time = 1_000L
         val waits = mutableListOf<Long>()
-        val policy = SearchRequestPolicy({ time }, { time }) { waits += it; time += it }
+        val policy = SearchRequestPolicy({ time }, { time }, pausedMessage = { "Paused" }) { waits += it; time += it }
     }
 
     @Test fun concurrentDuplicateSearchesShareOneResponse() = runBlocking {

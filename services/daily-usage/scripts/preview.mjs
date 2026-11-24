@@ -37,7 +37,7 @@ for (let days = 0; days < 90; days++) {
 }
 const session = sessionHandler({ database: query, env });
 const dashboardPreview = process.argv.includes('--dashboard');
-const access = req => dashboardPreview || sessionUser(req, { database: query, env });
+const access = req => dashboardPreview ? previewUser : sessionUser(req, { database: query, env });
 const config = configHandler(query);
 const control = controlHandler(query, access);
 const catalog = async () => ({

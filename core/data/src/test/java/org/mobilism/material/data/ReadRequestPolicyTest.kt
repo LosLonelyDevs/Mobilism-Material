@@ -12,10 +12,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReadRequestPolicyTest {
-    @Test fun remoteSpacingConcurrencyAndCacheReturnToDefaults() = runBlocking {
+    private suspend fun ReadRequestPolicy.request(key: String, ttl: Long, fresh: Boolean = false, load: suspend () -> String) =
+        request(key, ttl, fresh, { it }, load = load)
+
+    @Test fun restoringPacingAndConcurrencyKeepsValidCachedPages() = runBlocking {
         var time = 1_000L
         var limits = ApiRequestLimits.Defaults.copy(readSpacingMs = 2_000, readConcurrency = 1)
-        val policy = ReadRequestPolicy({ time }, { time }, { limits }) { time += it }
+        val policy = ReadRequestPolicy({ time }, { time }, { limits }, busyMessage = { "Paused" }) { time += it }
         val finish = CompletableDeferred<Unit>()
         val starts = mutableListOf<Long>()
         val jobs = (1..3).map { key -> async {
@@ -28,14 +31,15 @@ class ReadRequestPolicyTest {
         assertEquals(listOf(1_000L, 3_000L, 5_000L), starts)
         assertEquals("1", policy.request("1", 60_000) { error("Cached") })
         limits = ApiRequestLimits.Defaults
-        assertEquals("new", policy.request("1", 60_000) { "new" })
+        assertEquals("1", policy.request("1", 60_000) { error("Unrelated limits must preserve cached data") })
+        assertEquals("new", policy.request("4", 60_000) { "new" })
         assertEquals(5_250L, time)
     }
 
     @Test fun expiredOverridesRestoreBackoffButNeverShortenRetryAfter() {
         var time = 1_000L
         var limits = ApiRequestLimits.Defaults.copy(readFailureCooldownMs = 120_000)
-        val policy = ReadRequestPolicy({ time }, { time }, { limits })
+        val policy = ReadRequestPolicy({ time }, { time }, { limits }, busyMessage = { "Paused" })
         policy.response(503, null)
         time += 60_000
         assertTrue(runCatching { policy.checkAllowed() }.isFailure)
@@ -50,7 +54,7 @@ class ReadRequestPolicyTest {
 
     private class Clock {
         var time = 1_000L
-        val policy = ReadRequestPolicy({ time }, { time }) { time += it }
+        val policy = ReadRequestPolicy({ time }, { time }, busyMessage = { "Paused" }) { time += it }
     }
 
     @Test fun concurrentReadsShareOneResponseWithoutCachingLaterReadsByDefault() = runBlocking {
@@ -82,6 +86,65 @@ class ReadRequestPolicyTest {
         assertEquals("4", read())
         clock.time += 60_000
         assertEquals("5", read())
+    }
+
+    @Test fun changingOnePageLifetimePreservesOtherPagesAndZeroBypassesTheOldEntry() = runBlocking {
+        val clock = Clock()
+        val policy = clock.policy
+        policy.request("categories", 300_000) { "categories" }
+        policy.request("topics", 60_000) { "topics" }
+        assertEquals("new", policy.request("topics", 0) { "new" })
+        assertEquals("next", policy.request("topics", 0) { "next" })
+        assertEquals("categories", policy.request("categories", 300_000) { error("Unexpected load") })
+    }
+
+    @Test fun concurrentMalformedDiscussionReadsShareTheFailureAndRetryOnlyAfterCooldown() = runBlocking {
+        val clock = Clock()
+        var calls = 0
+        val finish = CompletableDeferred<Unit>()
+        suspend fun page(fresh: Boolean = false) = clock.policy.request("topics", 300_000, fresh,
+            { DiscussionJson.page(org.json.JSONObject(it), DiscussionKind.Discussion) }) {
+            calls++
+            finish.await()
+            if (calls == 1) "{}" else """{"response":null}"""
+        }
+        val attempts = (1..6).map { async { runCatching { page() }.exceptionOrNull() as ApiFailure } }
+        yield()
+        finish.complete(Unit)
+        assertTrue(attempts.awaitAll().all { it.kind == FailureKind.InvalidResponse })
+        assertEquals(1, calls)
+        assertEquals("ok", clock.policy.request("unrelated") { "ok" })
+        clock.time = 60_999
+        assertTrue((runCatching { page(fresh = true) }.exceptionOrNull() as ApiFailure).blockedBeforeRequest)
+        clock.policy.response(429, "120")
+        clock.time++
+        assertEquals(429, (runCatching { page() }.exceptionOrNull() as ApiFailure).httpStatus)
+        assertEquals(1, calls)
+        clock.time += 120_000
+        assertTrue(page().items.isEmpty())
+        assertTrue(page().items.isEmpty())
+        assertEquals(2, calls)
+    }
+
+    @Test fun missingCategoryGroupDoesNotBlockOrRefetchAValidGroupInTheSameResponse() = runBlocking {
+        val clock = Clock()
+        var calls = 0
+        suspend fun categories(group: String) = clock.policy.request("categories", 300_000, false, { body ->
+            org.json.JSONObject(body).optJSONArray(group)?.length()
+                ?: throw ApiFailure(FailureKind.InvalidResponse, "Missing group")
+        }, pageKey = "categories:$group") {
+            if (++calls == 1) """{"apps":[1]}""" else """{"apps":[1],"books":[2,3]}"""
+        }
+        assertEquals(1, categories("apps"))
+        assertTrue(runCatching { categories("books") }.isFailure)
+        assertTrue((runCatching { categories("books") }.exceptionOrNull() as ApiFailure).blockedBeforeRequest)
+        assertEquals(1, categories("apps"))
+        assertEquals(1, calls)
+        clock.time += 60_000
+        assertEquals(2, categories("books"))
+        assertEquals(2, categories("books"))
+        assertEquals(1, categories("apps"))
+        assertEquals(2, calls)
     }
 
     @Test fun differentReadsArePacedAndAtMostThreeAreInFlight() = runBlocking {

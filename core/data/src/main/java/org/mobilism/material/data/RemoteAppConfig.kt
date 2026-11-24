@@ -31,6 +31,12 @@ data class ApiRequestLimits(
     val followCacheBatchSize: Int = 200,
     val followCacheManualCooldownMs: Long = 5 * 60_000,
     val followPullToRefreshEnabled: Boolean = false,
+    val releaseLatestCacheTtlMs: Long = 5 * 60_000,
+    val releaseTopCacheTtlMs: Long = 15 * 60_000,
+    val premiumHostCacheTtlMs: Long = 0,
+    val customTopLifetime: Boolean = false,
+    val customLatestLifetime: Boolean = false,
+    val cacheResets: Map<String, Int> = emptyMap(),
 ) {
     companion object {
         val Defaults = ApiRequestLimits()
@@ -68,6 +74,11 @@ data class ApiRequestLimits(
                 value("followCacheBatchSize", Defaults.followCacheBatchSize.toLong(), 0L..512L).toInt(),
                 value("followCacheManualCooldownMs", Defaults.followCacheManualCooldownMs, 60_000L..3_600_000L),
                 json?.opt("followPullToRefreshEnabled") as? Boolean ?: Defaults.followPullToRefreshEnabled,
+                value("releaseLatestCacheTtlMs", Defaults.releaseLatestCacheTtlMs, 0L..86_400_000L),
+                value("releaseTopCacheTtlMs", Defaults.releaseTopCacheTtlMs, 0L..86_400_000L),
+                value("premiumHostCacheTtlMs", Defaults.premiumHostCacheTtlMs, 0L..604_800_000L),
+                value("releaseTopCacheTtlMs", -1, 0L..86_400_000L) >= 0,
+                value("releaseLatestCacheTtlMs", -1, 0L..86_400_000L) >= 0,
             )
         }
     }
@@ -134,8 +145,10 @@ data class AppNotice(
     }
 }
 
+data class ImageCacheControls(val cacheEnabled: Boolean = true, val retriesEnabled: Boolean = true, val retryGeneration: Int = 0)
+
 data class RemoteAppConfig(val limits: ApiRequestLimits = ApiRequestLimits.Defaults, val notices: List<AppNotice> = emptyList(),
-    val userAgentRules: List<UserAgentRule> = emptyList()) {
+    val userAgentRules: List<UserAgentRule> = emptyList(), val images: ImageCacheControls = ImageCacheControls()) {
     companion object {
         fun parse(text: String): RemoteAppConfig {
             require(text.toByteArray(Charsets.UTF_8).size <= 65_536)
@@ -144,11 +157,18 @@ data class RemoteAppConfig(val limits: ApiRequestLimits = ApiRequestLimits.Defau
             val notices = json.optJSONArray("notices")
             val rules = json.optJSONArray("userAgentRules")?.takeIf { it.length() <= 10 }
             require(notices == null || notices.length() <= 10)
-            return RemoteAppConfig(ApiRequestLimits.parse(json.optJSONObject("limits")),
+            val resets = json.optJSONObject("cacheResets")
+            val generations = (FeedOrder.entries.map { it.name } + DebridProvider.entries.map { it.name }).mapNotNull { key ->
+                (resets?.opt(key) as? Int)?.takeIf { it in 1 until Int.MAX_VALUE }?.let { key to it }
+            }.toMap()
+            return RemoteAppConfig(ApiRequestLimits.parse(json.optJSONObject("limits")).copy(cacheResets = generations),
                 (0 until (notices?.length() ?: 0)).mapNotNull { notices?.optJSONObject(it)?.let(AppNotice::parse) }
                     .distinctBy { it.id },
                 (0 until (rules?.length() ?: 0)).mapNotNull { rules?.optJSONObject(it)?.let(UserAgentRule::parse) }
-                    .distinctBy { it.id })
+                    .distinctBy { it.id },
+                ImageCacheControls(json.opt("imageCacheEnabled") as? Boolean ?: true,
+                    json.opt("imageRetriesEnabled") as? Boolean ?: true,
+                    (json.opt("imageRetryGeneration") as? Int)?.takeIf { it in 1 until Int.MAX_VALUE } ?: 0))
         }
     }
 }

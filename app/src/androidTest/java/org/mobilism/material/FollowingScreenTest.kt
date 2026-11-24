@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.lifecycle.Lifecycle
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -16,7 +17,9 @@ import org.mobilism.material.data.LibraryEntry
 import org.mobilism.material.data.Release
 import org.mobilism.material.designsystem.MobilismTheme
 import org.mobilism.material.following.*
+import org.mobilism.material.ui.FollowingError
 import org.mobilism.material.ui.FollowingScreen
+import org.mobilism.material.ui.ScreenError
 
 class FollowingScreenTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
@@ -66,11 +69,13 @@ class FollowingScreenTest {
         val entry = LibraryEntry(Release(1, "Reader v1.0", "Sample", null, 0, 0, 0), watched = true)
         var pullEnabled by mutableStateOf(false)
         var check by mutableStateOf(FollowCheckState())
+        var failure by mutableStateOf<FollowingError?>(null)
+        var localRefreshes = 0
         var calls = 0
         compose.setContent {
             MobilismTheme(reduceMotion = true) {
-                FollowingScreen(listOf(entry), emptyList(), check, null, FollowPreferences(intervalHours = 6),
-                    settings, notifications, library, onRefresh = {}, onCheck = {
+                FollowingScreen(listOf(entry), emptyList(), check, failure, FollowPreferences(intervalHours = 6),
+                    settings, notifications, library, onRefresh = { localRefreshes++ }, onCheck = {
                         calls++
                         check = FollowCheckState(busy = true, total = 1)
                     }, onLink = { _, _ -> }, onRelease = {}, onBack = {},
@@ -85,6 +90,21 @@ class FollowingScreenTest {
         val list = compose.onNode(hasScrollToIndexAction())
         list.performTouchInput { swipeDown() }
         compose.runOnIdle { assertEquals(0, calls); pullEnabled = true }
+        compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.onNodeWithText("Every 6 hours").assertIsDisplayed()
+        compose.onNodeWithTag("feed-refresh-indicator").assertDoesNotExist()
+        val beforeRetry = compose.runOnIdle {
+            assertEquals(0, calls)
+            failure = FollowingError(ScreenError("Fixture error"), fromManualCheck = false)
+            localRefreshes
+        }
+        compose.onNodeWithText("Try again").performClick()
+        compose.runOnIdle {
+            assertEquals(0, calls)
+            assertEquals(beforeRetry + 1, localRefreshes)
+            failure = null
+        }
         list.performTouchInput { swipeDown() }
         if (BuildConfig.DAILY_USAGE_ENDPOINT.isNotBlank()) {
             compose.onNodeWithText("Checking 0 of 1…").assertIsDisplayed()

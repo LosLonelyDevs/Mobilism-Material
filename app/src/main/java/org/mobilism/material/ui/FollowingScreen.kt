@@ -24,7 +24,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import org.mobilism.material.R
 import org.mobilism.material.data.*
@@ -34,7 +33,7 @@ import org.mobilism.material.following.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FollowingScreen(
-    entries: List<LibraryEntry>, installed: List<InstalledVersion>, check: FollowCheckState, error: ScreenError?,
+    entries: List<LibraryEntry>, installed: List<InstalledVersion>, check: FollowCheckState, error: FollowingError?,
     preferences: FollowPreferences, settings: FollowingPreferences, notifications: FollowingNotifications, store: AppLibraryStore,
     onRefresh: () -> Unit, onCheck: () -> Unit, onLink: (Long, String?) -> Unit, onRelease: (Long) -> Unit, onBack: () -> Unit,
     limits: ApiRequestLimits = ApiRequestLimits.Defaults,
@@ -57,6 +56,7 @@ fun FollowingScreen(
         val name = filter.trim()
         if (name.isEmpty()) followed else followed.filter { ReleaseTitles.parse(it.release.title).name.contains(name, ignoreCase = true) }
     }
+    val manualCheckEnabled = limits.followPullToRefreshEnabled && sharedCache && followed.isNotEmpty()
     val openNotificationSettings = {
         context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
     }
@@ -72,7 +72,7 @@ fun FollowingScreen(
         navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.action_back), onBack) },
     ) }) { padding ->
         FeedRefreshContainer(check.busy, check.busy, onCheck, modifier = Modifier.padding(padding),
-            enabled = limits.followPullToRefreshEnabled && sharedCache && followed.isNotEmpty(),
+            enabled = manualCheckEnabled,
             indicatorDescription = stringResource(R.string.follow_checking_apps)) {
             LazyColumn(Modifier.align(Alignment.TopCenter).widthIn(max = 840.dp).fillMaxSize(), contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -115,7 +115,10 @@ fun FollowingScreen(
                         }
                     }
                 }
-                error?.let { item { ErrorPanel(it, onRetry = onCheck) } }
+                error?.let { failure -> item {
+                    val retry = if (failure.fromManualCheck) onCheck.takeIf { manualCheckEnabled } else onRefresh
+                    ErrorPanel(failure.detail, onRetry = retry)
+                } }
                 if (followed.isNotEmpty()) item(key = "filter") {
                     AppSearchField(filter, { filter = it }, stringResource(R.string.follow_filter), searchIcon = Icons.Outlined.Search)
                 }
@@ -151,7 +154,7 @@ private fun FollowingCard(entry: LibraryEntry, installed: InstalledVersion?, onR
     ExpressiveCard({ onRelease(result.latest?.id ?: entry.release.id) }, Modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 16.dp, top = 12.dp, end = 12.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AsyncImage(entry.release.thumbnail, null, Modifier.size(72.dp).clip(MaterialTheme.shapes.medium))
+                ReleaseArtwork(entry.release.thumbnail, null, Modifier.size(72.dp).clip(MaterialTheme.shapes.medium))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     AppHeading(title.name, HeadingLevel.Subsection, style = MaterialTheme.typography.titleMedium)
                     val version = latest?.version?.let { stringResource(R.string.follow_version, it) } ?: stringResource(R.string.follow_no_version)

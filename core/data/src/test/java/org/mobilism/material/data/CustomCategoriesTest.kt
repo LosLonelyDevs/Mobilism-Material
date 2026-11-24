@@ -85,6 +85,17 @@ class CustomCategoriesTest {
         assertEquals(setOf(favorites.id), deleted.items.single().categoryIds)
     }
 
+    @Test fun optionalDescriptionRoundTripsAndLegacyMembershipsSurvive() {
+        val original = CustomCategories.assign(state(), release(), setOf(sports.id))
+        val legacy = CustomCategoryJson.encode(original)
+        assertFalse(legacy.contains("\"description\""))
+        assertEquals(original, CustomCategoryJson.decode(legacy))
+        val updated = original.copy(categories = original.categories.map {
+            if (it.id == sports.id) it.copy(description = "Scores and fixtures") else it
+        })
+        assertEquals(updated, CustomCategoryJson.decode(CustomCategoryJson.encode(updated)))
+    }
+
     @Test fun mixedCategorySelectionsUseNativeUnionThenDates() {
         val local = CustomCategories.assign(state(), release(), setOf(sports.id))
         val filters = FeedFilters(categoryIds = setOf(20), customCategoryIds = setOf(sports.id))

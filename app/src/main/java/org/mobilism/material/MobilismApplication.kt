@@ -28,7 +28,8 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
         if (org.mobilism.material.usage.DailyUsageSchedule.configured) dailyUsage.recordTraffic(it)
     }
     override fun newImageLoader(context: android.content.Context): coil3.ImageLoader =
-        org.mobilism.material.images.appImageLoader(context, diagnostics = appLogger)
+        org.mobilism.material.images.appImageLoader(context, diagnostics = appLogger,
+            imageControls = { remoteControl.imageControls })
 
     override val userAgentPolicy get() = remoteControl.userAgentPolicy
     val memberIdentities by lazy { org.mobilism.material.members.MemberIdentityStore(repository::profile,
@@ -60,8 +61,11 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
     val customCategories by lazy { org.mobilism.material.data.CustomCategoryStore(this) }
     internal val connectionRecovery by lazy { org.mobilism.material.ui.ConnectionRecoveryController() }
     internal val remoteControl by lazy { org.mobilism.material.remote.RemoteControlStore.create(this, diagnostics) }
+    internal val appWriteAttestation by lazy { org.mobilism.material.usage.AppWriteAttestation(this, BuildConfig.DAILY_USAGE_ENDPOINT) }
     private val latestApps by lazy { org.mobilism.material.data.LatestAppsClient(BuildConfig.DAILY_USAGE_ENDPOINT,
-        diagnostics = appLogger) }
+        client = org.mobilism.material.data.AppHttp.builder().followRedirects(false).retryOnConnectionFailure(false)
+            .callTimeout(4, java.util.concurrent.TimeUnit.SECONDS)
+            .addInterceptor(appWriteAttestation.interceptor("following")).build(), diagnostics = appLogger) }
     private val latestPages = kotlinx.coroutines.channels.Channel<org.mobilism.material.data.LatestAppsPage>(
         capacity = 4, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
     val repository by lazy { DefaultMobilismRepository(this, contentPreferences, appLogger,

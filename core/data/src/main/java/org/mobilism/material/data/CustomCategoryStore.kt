@@ -20,20 +20,21 @@ class CustomCategoryStore(context: Context) {
         mutableState.value = next
     }
 
-    fun create(section: ContentSection, name: String): CustomCategory {
+    fun create(section: ContentSection, name: String, description: String = ""): CustomCategory {
         var created: CustomCategory? = null
         change { current ->
-            val category = CustomCategory(UUID.randomUUID().toString(), section, CustomCategories.validateName(current, section, name))
+            val category = CustomCategory(UUID.randomUUID().toString(), section,
+                CustomCategories.validateName(current, section, name), description.trim())
             created = category
             current.copy(categories = current.categories + category)
         }
         return checkNotNull(created)
     }
 
-    fun rename(id: String, name: String) = change { current ->
+    fun update(id: String, name: String, description: String) = change { current ->
         val category = current.categories.first { it.id == id }
         val valid = CustomCategories.validateName(current, category.section, name, id)
-        current.copy(categories = current.categories.map { if (it.id == id) it.copy(name = valid) else it })
+        current.copy(categories = current.categories.map { if (it.id == id) it.copy(name = valid, description = description.trim()) else it })
     }
 
     fun delete(id: String) = change { CustomCategories.delete(it, id) }

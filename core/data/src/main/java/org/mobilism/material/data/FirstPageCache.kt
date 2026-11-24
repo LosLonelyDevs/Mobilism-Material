@@ -52,15 +52,28 @@ internal class RecentPages<K : Any, V : Any>(private val cache: AppCache, privat
 // A filtered first page can scan several source pages. Replay those pages to rebuild its cursors.
 internal class FirstFeedPage(val fresh: Boolean) : kotlin.coroutines.AbstractCoroutineContextElement(Key) {
     companion object Key : kotlin.coroutines.CoroutineContext.Key<FirstFeedPage>
+    private var oldestSavedAt = Long.MAX_VALUE
+
+    @Synchronized fun include(savedAt: Long) { oldestSavedAt = minOf(oldestSavedAt, savedAt) }
+    @Synchronized fun cachedAgeMs() = (System.currentTimeMillis() - oldestSavedAt).coerceAtLeast(0)
 }
 
 /** Each value is a validated server page. Filters that run locally are reapplied on every read. */
 internal class FeedPageStore(private val storage: SharedPreferences, private val now: () -> Long = System::currentTimeMillis) {
-    suspend fun read(key: String, ttl: Long): String? = withContext(Dispatchers.IO) {
+    fun generation(order: FeedOrder, requested: Int): Int = synchronized(storage) {
+        val key = "generation-${order.name}"
+        val previous = storage.getInt(key, 0)
+        if (requested > previous) storage.edit().putInt(key, requested).apply()
+        maxOf(requested, previous)
+    }
+
+    data class SavedPage(val json: String, val savedAt: Long)
+
+    suspend fun read(key: String, ttl: Long): SavedPage? = withContext(Dispatchers.IO) {
         runCatching {
             val value = storage.getString(key, null) ?: return@runCatching null
             val timestamp = value.substringBefore('\n').toLong()
-            value.substringAfter('\n').takeIf { now() - timestamp in 0 until ttl }
+            if (now() - timestamp in 0 until ttl) SavedPage(value.substringAfter('\n'), timestamp) else null
         }.getOrNull()
     }
 

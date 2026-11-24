@@ -19,6 +19,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.util.UUID
@@ -87,12 +90,15 @@ class CustomCategoriesTest {
             }
         } }
         compose.onNodeWithText("Sports").assertDoesNotExist()
-        compose.onNodeWithText("Manage categories").assertDoesNotExist()
+        compose.onNodeWithText("Manage").assertDoesNotExist()
         compose.onNodeWithText("Cancel").performClick()
         assertFalse(options.state.value.customCategoriesEnabled)
         capture("developer-options")
         compose.onNodeWithText("Custom categories").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
+        val heading = compose.onNodeWithText("Categories · Apps").getUnclippedBoundsInRoot()
+        val manage = compose.onNodeWithText("Manage").assertIsDisplayed().getUnclippedBoundsInRoot()
+        assertTrue(manage.left >= heading.right && manage.top < heading.bottom && heading.top < manage.bottom)
         compose.onNodeWithText("Sports").assertIsDisplayed().performClick()
         compose.onNodeWithText("Utilities").performClick()
         capture("category-picker")
@@ -104,7 +110,7 @@ class CustomCategoriesTest {
         compose.onNodeWithText("Custom categories").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Sports").assertDoesNotExist()
-        compose.onNodeWithText("Manage categories").assertDoesNotExist()
+        compose.onNodeWithText("Manage").assertDoesNotExist()
         compose.onNodeWithText("Cancel").performClick()
         compose.onNodeWithText("Custom categories").performClick()
         assertEquals(store.state.value, CustomCategoryStore(context).state.value)
@@ -119,7 +125,7 @@ class CustomCategoriesTest {
         val favorites = store.create(ContentSection.Apps, "Favorites")
         var open by mutableStateOf(true)
         compose.setContent { MobilismTheme(reduceMotion = true) {
-            if (open) CategoryAssignmentSheet(release(), store, { open = false })
+            if (open) CategoryAssignmentSheet(release(), store, { open = false }, {})
         } }
         compose.onNodeWithText("Sports").performClick()
         compose.onNodeWithText("Favorites").performClick()
@@ -132,6 +138,49 @@ class CustomCategoriesTest {
         compose.onNodeWithText("Sports").performClick()
         compose.onNodeWithText("Save categories").performClick()
         compose.runOnIdle { assertEquals(setOf(favorites.id), store.state.value.memberships(release())) }
+    }
+
+    @Test fun manageFromAssignmentPreservesDraftAndShowsUpdatedDescriptions() {
+        val context = context()
+        val store = CustomCategoryStore(context)
+        val sports = store.create(ContentSection.Apps, "Sports", "Live scores")
+        val release = release()
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            val nav = rememberNavController()
+            NavHost(nav, startDestination = "release") {
+                composable("release") {
+                    CategoryAssignmentSheet(release, store, onDismiss = {}, onManage = {
+                        nav.navigate("manage/${it.name}")
+                    })
+                }
+                composable("manage/{section}") { entry ->
+                    CustomCategoriesScreen(ContentSection.valueOf(requireNotNull(entry.arguments?.getString("section"))),
+                        store, onBack = { nav.popBackStack() }, onRelease = {})
+                }
+            }
+        } }
+        compose.onNodeWithText("Reset").assertDoesNotExist()
+        compose.onNodeWithText("Live scores").performClick()
+        compose.onNodeWithText("Manage").performClick()
+        compose.onNodeWithText("Sports").performClick()
+        compose.onNodeWithContentDescription("Edit category").performClick()
+        compose.onNodeWithText("Description (optional)").performTextReplacement("Scores and fixtures")
+        compose.onNodeWithText("Save").performClick()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNode(hasText("Scores and fixtures") and isToggleable()).assertIsOn()
+        compose.runOnIdle { assertTrue(store.state.value.memberships(release).isEmpty()) }
+        compose.onNodeWithText("Create category").performClick()
+        compose.onNodeWithText("Category name").performTextInput("Reading")
+        compose.onNodeWithText("Description (optional)").performTextInput("Read later")
+        compose.onNodeWithText("Save").performClick()
+        compose.onNode(hasText("Read later") and isToggleable()).assertIsOn()
+        compose.onNodeWithText("Save categories").performClick()
+        compose.runOnIdle {
+            val restored = CustomCategoryStore(context).state.value
+            assertEquals("Scores and fixtures", restored.categories.single { it.id == sports.id }.description)
+            assertEquals(restored.categories.map { it.id }.toSet(), restored.memberships(release))
+        }
     }
 
     @Test fun releaseCardsShowForumAndAssignedCategoriesInBothDensities() {
@@ -293,7 +342,7 @@ class CustomCategoriesTest {
         val sports = store.state.value.categories.first { it.name == "Sports" }
         compose.runOnIdle { store.assign(release(), setOf(sports.id, favorites.id)) }
         capture("category-members")
-        compose.onNodeWithContentDescription("Rename category").performClick()
+        compose.onNodeWithContentDescription("Edit category").performClick()
         compose.onNodeWithText("Category name").performTextReplacement("Matchdays")
         compose.onNodeWithText("Save").performClick()
         compose.onNodeWithContentDescription("Remove Example from Matchdays").performClick()
@@ -355,7 +404,7 @@ class CustomCategoriesTest {
         paths.clear()
         enabled = false
         assertEquals(listOf(3L), repository.releases(ContentSection.Apps, FeedOrder.Latest, 1, filters).items.map { it.id })
-        assertTrue(paths.last().contains("/category/20/"))
+        assertTrue("The native category page is already cached", paths.isEmpty())
         assertEquals(listOf(4L, 2L, 3L), repository.releases(ContentSection.Apps, FeedOrder.Latest, 1,
             filters.copy(categoryIds = emptySet())).items.map { it.id })
         assertEquals(listOf(4L, 2L, 3L), repository.search("Example", SearchScope.Apps, 1,

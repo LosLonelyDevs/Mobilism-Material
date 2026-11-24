@@ -17,7 +17,11 @@ import org.mobilism.material.data.HomeTopics
 import org.mobilism.material.data.Release
 import org.mobilism.material.data.ReleaseCategory
 
-enum class BrowseTab(val label: String) { Home("Home"), Latest("Latest"), Top("Top") }
+enum class BrowseTab(@androidx.annotation.StringRes val labelRes: Int) {
+    Home(org.mobilism.material.R.string.browse_tab_home),
+    Latest(org.mobilism.material.R.string.browse_tab_latest),
+    Top(org.mobilism.material.R.string.browse_tab_top),
+}
 enum class HomeCollection { Latest, Popular, Categories, Reviews, Discussions }
 
 data class HomeShelf<T>(val items: List<T> = emptyList(), val busy: Boolean = false,
@@ -43,7 +47,8 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
     val state = mutableState.asStateFlow()
     private val cache = mutableMapOf<ContentSection, HomeState>()
     private val jobs = mutableMapOf<HomeCollection, Job>()
-    private val latestLoadedAt = mutableMapOf<ContentSection, Long>()
+    private data class ShelfStamp(val generation: Int, val loadedAt: Long, val cachedAgeMs: Long)
+    private val releaseStamps = mutableMapOf<Pair<ContentSection, FeedOrder>, ShelfStamp>()
     private var adultFilter = hideAdult.value
     private var visible = false
 
@@ -54,7 +59,7 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
                 adultFilter = hidden
                 cancelLoads()
                 cache.clear()
-                latestLoadedAt.clear()
+                releaseStamps.clear()
                 mutableState.value = HomeState(state.value.section)
                 if (visible) refresh()
             }
@@ -96,9 +101,11 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
                 when (collection) {
                     HomeCollection.Latest, HomeCollection.Popular -> {
                         val order = if (collection == HomeCollection.Latest) FeedOrder.Latest else FeedOrder.Top
-                        val items = repository.homeReleases(section, order, fresh).distinctBy { it.id }
+                        val generation = repository.feedPolicy(order).generation
+                        val page = repository.homeReleasePage(section, order, fresh)
+                        val items = page.items.distinctBy { it.id }
                         ensureActive()
-                        if (collection == HomeCollection.Latest) latestLoadedAt[section] = now()
+                        releaseStamps[section to order] = ShelfStamp(generation, now(), page.cachedAgeMs)
                         val newReleaseIds = if (collection == HomeCollection.Latest) observeNewReleases(section, items) else emptySet()
                         mutableState.update { if (collection == HomeCollection.Latest) it.copy(latest = HomeShelf(items, loaded = true),
                             newReleaseIds = newReleaseIds)
@@ -130,8 +137,14 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
 
     private fun loaded(collection: HomeCollection) = with(state.value) {
         when (collection) {
-            HomeCollection.Latest -> latest.loaded && latestLoadedAt[section]?.let { now() - it < 5 * 60_000 } == true
-            HomeCollection.Popular -> popular.loaded
+            HomeCollection.Latest, HomeCollection.Popular -> {
+                val order = if (collection == HomeCollection.Latest) FeedOrder.Latest else FeedOrder.Top
+                val policy = repository.feedPolicy(order)
+                releaseStamps[section to order]?.let { stamp ->
+                    val age = now() - stamp.loadedAt + (if (policy.expireOnReturn) stamp.cachedAgeMs else 0L)
+                    stamp.generation == policy.generation && (!policy.expireHome || age in 0 until policy.ttlMs)
+                } == true
+            }
             HomeCollection.Categories -> categories.loaded
             HomeCollection.Reviews -> reviews.loaded
             HomeCollection.Discussions -> discussions.loaded

@@ -73,7 +73,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -257,7 +256,7 @@ fun FeedScreen(
                             selected = tab == item, onClick = { onTab(item) },
                             selectedContentColor = sectionStyle.accent,
                             interactionSource = interaction, modifier = Modifier.focusOutline(interaction),
-                            text = { Text(item.label) },
+                            text = { Text(stringResource(item.labelRes)) },
                         )
                     }
                 }
@@ -325,9 +324,9 @@ internal fun ReleaseCard(release: Release, accent: Color, compact: Boolean = fal
         val inset = if (compact) 12.dp else 16.dp
         Column(Modifier.padding(start = inset, top = inset, end = inset, bottom = 4.dp)) {
             Row(Modifier.fillMaxWidth().height(maxOf(thumbnailSize, textHeight)), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AsyncImage(
+                ReleaseArtwork(
                     model = release.thumbnail, contentDescription = null,
-                    placeholder = painterResource(R.drawable.ic_mobilism), error = painterResource(R.drawable.ic_mobilism),
+                    error = painterResource(R.drawable.ic_mobilism),
                     modifier = Modifier.size(thumbnailSize).clip(MaterialTheme.shapes.medium).testTag("release-artwork-${release.id}"),
                     contentScale = ContentScale.Crop,
                 )

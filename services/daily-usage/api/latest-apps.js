@@ -1,11 +1,13 @@
 import { query } from '../lib/database.js';
+import { authorizeAppWrite, enrollmentEnabled } from '../lib/app-writes.js';
 import { respond } from '../lib/protocol.js';
-import { appKey, cacheLifetime, latestFeedSize, lookup, parseLookup, visibleSnapshot } from '../lib/follow-lookup.js';
+import { appKey, cacheLifetime, capacitySql, latestFeedSize, lookup, parseLookup, retentionSecondsSql, visibleSnapshot } from '../lib/follow-lookup.js';
+import { defaultStorage } from '../public/config-schema.js';
 
 const fields = ['id', 'title', 'name', 'version', 'postedAt', 'author'];
 const confirmAfter = 10 * 60;
 const maxUploadDelay = 2 * 60;
-export const catalogCapacity = 1000;
+export const catalogCapacity = defaultStorage.capacity;
 const text = (value, max) => typeof value === 'string' && value.length > 0 && value.length <= max &&
   value.trim() === value && !/[\u0000-\u001f\u007f]/u.test(value);
 
@@ -74,7 +76,7 @@ const updatePage = `
       SELECT DISTINCT ON (item->>'key') item, item->>'key' AS app_key,
         (item->>'postedAt')::bigint AS posted, (item->>'id')::bigint AS id
       FROM candidates
-      WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $5::bigint
+      WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $5::bigint - ${retentionSecondsSql}
       ORDER BY item->>'key', posted DESC, id DESC, priority
     ), ranked AS (
       SELECT *, row_number() OVER (ORDER BY posted DESC, id DESC, app_key) AS position FROM unique_apps
@@ -83,27 +85,27 @@ const updatePage = `
         CASE WHEN day = $10::date THEN 1 ELSE $11::numeric END) AS requests,
         max(last_requested_at) AS last_request
       FROM daily_followed_apps
-      WHERE day BETWEEN $10::date - 1 AND $10::date AND last_requested_at > $5::bigint
+      WHERE day BETWEEN $10::date - 1 AND $10::date AND last_requested_at > $5::bigint - ${cacheLifetime}
         AND app_key IN (SELECT app_key FROM ranked WHERE position > ${latestFeedSize})
       GROUP BY app_key
     ), followed AS (
       SELECT position FROM ranked LEFT JOIN demand USING (app_key)
       WHERE position > ${latestFeedSize}
       ORDER BY requests DESC NULLS LAST, last_request DESC NULLS LAST, position
-      LIMIT ${catalogCapacity - latestFeedSize}
+      LIMIT (${capacitySql} - ${latestFeedSize})
     )
     SELECT coalesce(jsonb_agg(item ORDER BY position), '[]'::jsonb) FROM ranked
     WHERE position <= ${latestFeedSize} OR position IN (SELECT position FROM followed)
   ), observed_at = greatest(observed_at, $2::bigint) WHERE singleton`;
 
-export function createHandler(database = query, clock = () => Math.floor(Date.now() / 1000)) {
+export function createHandler(database = query, clock = () => Math.floor(Date.now() / 1000), env = process.env) {
   return async (req, res) => {
     if (req.method === 'GET') {
       try {
         const now = clock();
-        const { observedAt, items: visible } = await visibleSnapshot(database, now, true);
+        const { observedAt, items: visible, lifetime } = await visibleSnapshot(database, now, true);
         const items = visible.map(item => Object.fromEntries([...fields, 'adultFiltered'].map(key => [key, item[key]])));
-        const ttl = Math.min(60, ...visible.map(item => (item.lastSeen ?? item.postedAt) + cacheLifetime - now));
+        const ttl = Math.min(60, ...visible.map(item => (item.lastSeen ?? item.postedAt) + lifetime - now));
         res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=' + ttl);
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Cache-Control', 'public, max-age=' + ttl);
@@ -117,15 +119,20 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
     }
     if (!/^application\/json(?:;|$)/iu.test(req.headers?.['content-type'] || '')) return respond(res, 415, { error: 'Use JSON' });
     const now = clock();
-    let page, firstPage, requested, body;
+    if (enrollmentEnabled(env)) res.setHeader('X-App-Attestation', '1');
+    let page, firstPage, requested, body, allowed, renew, unavailable;
     try {
       body = req.body;
-      if (Buffer.isBuffer(body) || typeof body === 'string') {
-        if (Buffer.byteLength(body) > 512 * 1024) throw new Error();
-        body = JSON.parse(body.toString());
-      }
+      const raw = Buffer.isBuffer(body) || typeof body === 'string' ? body : JSON.stringify(body);
+      if (!raw || Buffer.byteLength(raw) > 1024 * 1024 + 4096) throw new Error();
+      body = JSON.parse(raw.toString());
+      if (Buffer.byteLength(typeof body?.payload === 'string' ? body.payload : raw) > 512 * 1024) throw new Error();
+      ({ body, allowed, renew, unavailable } = await authorizeAppWrite(body, req, 'following', database, env));
+      if (renew) res.setHeader('X-App-Attestation-Renew', '1');
       if (body && Object.hasOwn(body, 'apps')) requested = parseLookup(body);
       else {
+        if (unavailable) return respond(res, 503, { error: 'Cache unavailable' });
+        if (!allowed) return respond(res, 403, { error: 'Verified install required' });
         page = parsePage(body, now);
         firstPage = body.firstPage;
       }
@@ -138,7 +145,7 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
         const version = check && typeof agent === 'string' && agent.length <= 1024
           ? /(?:^| )MobilismMaterial\/(\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?) \(Android; build \d{1,19}\)$/.exec(agent)?.[1] : null;
         return respond(res, 200, await lookup(database, requested, body.adultFiltered, now, body.day, check,
-          version && version.length <= 50 ? version : null));
+          version && version.length <= 50 ? version : null, allowed));
       }
       const { items, ids, at, dated, anchors, missing, adultFiltered } = page;
       for (const item of items) if (anchors[item.id]) item.anchors = anchors[item.id];
@@ -148,7 +155,7 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
       const today = new Date(now * 1000).toISOString().slice(0, 10);
       const yesterdayWeight = 1 - (now % 86400) / 86400;
       await database(updatePage, [JSON.stringify(items), firstPage ? at : 0, JSON.stringify(seen), at,
-        now - cacheLifetime, JSON.stringify(anchors), JSON.stringify(missing), confirmAfter, JSON.stringify(safe),
+        now, JSON.stringify(anchors), JSON.stringify(missing), confirmAfter, JSON.stringify(safe),
         today, yesterdayWeight]);
       return respond(res, 200, { accepted: true });
     } catch { return respond(res, 503, { error: 'Cache unavailable' }); }

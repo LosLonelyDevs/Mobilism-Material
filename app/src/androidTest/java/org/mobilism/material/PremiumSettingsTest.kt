@@ -183,6 +183,8 @@ class PremiumSettingsTest {
         val left = compose.onAllNodesWithContentDescription("Verify account and refresh hosts").onLast().fetchSemanticsNode().boundsInRoot
         val right = compose.onAllNodesWithContentDescription("Remove account").onLast().fetchSemanticsNode().boundsInRoot
         assertEquals((left.right + right.left) / 2, bounds.center.x, 1f)
+        assertEquals(left.height, bounds.height, 1f)
+        assertEquals(right.height, bounds.height, 1f)
         label.performClick()
         val providers = compose.onNodeWithText("Real-Debrid · MegaDebrid · Mobilism Premium", useUnmergedTree = true)
         providers.assertIsDisplayed()

@@ -1,4 +1,5 @@
 import java.net.URI
+import java.util.Base64
 
 plugins {
     alias(libs.plugins.android.application)
@@ -55,7 +56,9 @@ android {
         targetSdk = 36
         versionCode = 28
         versionName = "0.1.27"
-        buildConfigField("String", "DAILY_USAGE_ENDPOINT", dailyUsageEndpoint.buildConfigString())
+        val encodedEndpoint = Base64.getEncoder().encodeToString(dailyUsageEndpoint.toByteArray(Charsets.UTF_8))
+        buildConfigField("String", "DAILY_USAGE_ENDPOINT",
+            "new String(java.util.Base64.getDecoder().decode(${encodedEndpoint.buildConfigString()}), java.nio.charset.StandardCharsets.UTF_8)")
         val releaseNotes = changelog.substringAfter("## $versionName\n", "")
             .substringBefore("\n## ").trim()
         check(releaseNotes.isNotBlank()) { "Add CHANGELOG.md notes for $versionName" }

@@ -10,6 +10,7 @@ import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.mobilism.material.R
 import org.mobilism.material.data.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -21,7 +22,7 @@ class DiscussionsViewModelTest {
     @Test fun linkedAnnouncementUsesBundledRepliesAndReturnsDirectlyToTheComment() = runTest(dispatcher) {
         val repo = Repository()
         val linked = topic.copy(id = 6464350, forumId = 1, kind = DiscussionKind.Other)
-        val model = DiscussionsViewModel(repo, null, SavedStateHandle(), announcementsOnly = true,
+        val model = DiscussionsViewModel(repo, null, SavedStateHandle(), ::textFor, announcementsOnly = true,
             linkedAnnouncement = { LinkedAnnouncement(linked, CommentPage(listOf(comment), false)) })
         advanceUntilIdle()
         assertEquals(linked, model.state.value.topic)
@@ -36,7 +37,7 @@ class DiscussionsViewModelTest {
         val repo = Repository()
         val announcement = category.copy(id = 13, name = "Announcements", area = DiscussionArea.Community, section = "Announcements")
         repo.categories = listOf(announcement, category.copy(section = "Chitchat"))
-        val model = DiscussionsViewModel(repo, null, SavedStateHandle(), announcementsOnly = true)
+        val model = DiscussionsViewModel(repo, null, SavedStateHandle(), ::textFor, announcementsOnly = true)
         advanceUntilIdle()
         assertEquals(listOf(announcement), model.state.value.categories)
         assertEquals(announcement, model.state.value.category)
@@ -54,7 +55,7 @@ class DiscussionsViewModelTest {
     @Test fun announcementsKeepMultipleForumsSelectableAndHandleEmptyResults() = runTest(dispatcher) {
         val repo = Repository()
         repo.categories = listOf(category.copy(section = "Announcements"), category.copy(id = 501, section = "Announcements"))
-        val model = DiscussionsViewModel(repo, null, SavedStateHandle(), announcementsOnly = true)
+        val model = DiscussionsViewModel(repo, null, SavedStateHandle(), ::textFor, announcementsOnly = true)
         advanceUntilIdle()
         assertNull(model.state.value.category)
         model.openCategory(model.state.value.categories.last())
@@ -292,7 +293,14 @@ class DiscussionsViewModelTest {
     }
 
     private fun model(repo: Repository, username: String? = "Reader", saved: SavedStateHandle = SavedStateHandle()) =
-        DiscussionsViewModel(repo, username, saved)
+        DiscussionsViewModel(repo, username, saved, ::textFor)
+
+    private fun textFor(id: Int): String = when (id) {
+        R.string.discussion_comment_posted -> "Comment posted"
+        R.string.discussion_check_before_reposting -> "Posting could not be confirmed. Check the comments to avoid a duplicate."
+        R.string.discussion_comment_not_confirmed -> "The server did not confirm the comment."
+        else -> error("Unexpected resource $id")
+    }
 
     @Test fun forumEditReplacesTheLocallyConfirmedCommentAndKeepsAnUnfinishedReply() = runTest(dispatcher) {
         val repo = Repository()
@@ -313,6 +321,30 @@ class DiscussionsViewModelTest {
         assertEquals(listOf(edited, comment), model.state.value.comments.items)
         assertEquals("Unfinished reply", model.state.value.composer.draft)
         assertEquals(comment.id, model.state.value.composer.replyTo?.id)
+        assertEquals(1, repo.posts)
+    }
+
+    @Test fun pagedReplyReplacesItsLocalCopyAndCannotReappearAfterDeletion() = runTest(dispatcher) {
+        val repo = Repository()
+        val model = model(repo)
+        model.openTopic(topic)
+        model.editDraft("Original")
+        repo.postResult.complete(101)
+        model.post()
+        advanceUntilIdle()
+        assertEquals("Original", model.state.value.comments.items.first().contentHtml)
+
+        val updated = ReleaseComments.posted(101, "Reader", "Edited elsewhere", 1)
+        repo.comments = CommentPage(listOf(updated), true)
+        model.loadComments()
+        advanceUntilIdle()
+        assertEquals(listOf(comment, updated), model.state.value.comments.items)
+        assertTrue(model.state.value.comments.canLoadMore)
+
+        repo.comments = CommentPage(listOf(comment), false)
+        model.loadComments(refresh = true)
+        advanceUntilIdle()
+        assertEquals(listOf(comment), model.state.value.comments.items)
         assertEquals(1, repo.posts)
     }
 

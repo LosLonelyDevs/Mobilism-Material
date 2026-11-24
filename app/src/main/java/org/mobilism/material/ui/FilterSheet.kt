@@ -33,11 +33,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.mobilism.material.data.FeedFilters
-import org.mobilism.material.data.Alphabetical
+import org.mobilism.material.R
 import org.mobilism.material.designsystem.AppTextButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.LoadingState
@@ -50,11 +52,12 @@ import org.mobilism.material.designsystem.LoadingState
 @Composable
 fun FilterSheet(
     onDismiss: () -> Unit,
-    onReset: () -> Unit,
+    onReset: (() -> Unit)? = null,
     onApply: () -> Unit,
     applyEnabled: Boolean,
-    title: String = "Filters",
-    applyLabel: String = "Apply filters",
+    title: String = stringResource(R.string.feed_filters),
+    applyLabel: String = stringResource(R.string.filter_apply),
+    headerAction: @Composable () -> Unit = { onReset?.let { AppTextButton(stringResource(R.string.filter_reset), it) } },
     content: LazyListScope.() -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -79,8 +82,8 @@ fun FilterSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AppHeading(title, HeadingLevel.Page, style = MaterialTheme.typography.headlineMedium)
-                AppTextButton("Reset", onReset)
+                AppHeading(title, HeadingLevel.Page, Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium)
+                headerAction()
             }
             LazyColumn(
                 modifier = Modifier.weight(1f),
@@ -93,7 +96,7 @@ fun FilterSheet(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AppTextButton("Cancel", { close() })
+                AppTextButton(stringResource(R.string.download_cancel_action), { close() })
                 ExpressiveButton({ close(apply = true) }, Modifier.weight(1f), enabled = applyEnabled) { Text(applyLabel) }
             }
         }
@@ -101,9 +104,12 @@ fun FilterSheet(
 }
 
 @Composable
-fun FilterSectionHeader(title: String, description: String) {
+fun FilterSectionHeader(title: String, description: String, action: (@Composable () -> Unit)? = null) {
     Column(Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        AppHeading(title, HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            AppHeading(title, HeadingLevel.Section, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+            action?.invoke()
+        }
         Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -128,9 +134,10 @@ fun CategoryFilterSheet(
     var sortTab by remember { mutableStateOf(false) }
     val sectionStyle = state.section.style()
     var search by remember { mutableStateOf("") }
-    val visible = remember(state.items, local.categories, state.section, search) {
+    val deviceLabel = stringResource(R.string.category_device)
+    val visible = remember(state.items, local.categories, state.section, search, deviceLabel) {
         categoryChoices(state.items, local.categories(state.section)).filter { it.name.contains(search.trim(), ignoreCase = true) ||
-            it.group.orEmpty().contains(search.trim(), ignoreCase = true) }
+            it.group(deviceLabel).orEmpty().contains(search.trim(), ignoreCase = true) }
     }
     FilterSheet(
         onDismiss = onDismiss,
@@ -141,8 +148,8 @@ fun CategoryFilterSheet(
         if (showSearchSort) item("filter-tabs") {
             androidx.compose.material3.PrimaryTabRow(selectedTabIndex = if (sortTab) 1 else 0,
                 modifier = Modifier.clip(MaterialTheme.shapes.large)) {
-                androidx.compose.material3.Tab(selected = !sortTab, onClick = { sortTab = false }, text = { Text("Filters") })
-                androidx.compose.material3.Tab(selected = sortTab, onClick = { sortTab = true }, text = { Text("Sort") })
+                androidx.compose.material3.Tab(selected = !sortTab, onClick = { sortTab = false }, text = { Text(stringResource(R.string.feed_filters)) })
+                androidx.compose.material3.Tab(selected = sortTab, onClick = { sortTab = true }, text = { Text(stringResource(R.string.filter_sort)) })
             }
         }
         if (showSearchSort && sortTab) {
@@ -155,23 +162,23 @@ fun CategoryFilterSheet(
         }
         if (!showCategories) return@FilterSheet
         item("category-header") {
-            FilterSectionHeader("Categories · " + state.section.label,
-                if (selected.isEmpty() && selectedCustom.isEmpty()) "All categories. Select any combination to narrow the feed."
-                else (selected.size + selectedCustom.size).toString() + " selected")
-        }
-        if (customCategories != null) item("manage-categories") {
-            AppTextButton("Manage categories", onManageCategories)
+            val count = selected.size + selectedCustom.size
+            FilterSectionHeader(stringResource(R.string.filter_section_categories, state.section.categorySectionLabel()),
+                if (count == 0) stringResource(R.string.filter_all_categories)
+                else pluralStringResource(R.plurals.filter_selected_categories, count, count)) {
+                if (customCategories != null) AppTextButton(stringResource(R.string.category_manage), onManageCategories)
+            }
         }
         item("category-search") {
             OutlinedTextField(
                 value = search, onValueChange = { search = it },
-                label = { Text("Search categories") },
+                label = { Text(stringResource(R.string.filter_search_categories)) },
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), singleLine = true,
                 shape = MaterialTheme.shapes.large,
                 colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent),
             )
         }
-        if (state.busy) item("category-loading") { LoadingState("Loading categories…", Modifier.fillMaxWidth()) }
+        if (state.busy) item("category-loading") { LoadingState(stringResource(R.string.filter_loading_categories), Modifier.fillMaxWidth()) }
         state.error?.let { error -> item("category-error") { ErrorPanel(error, onRetry = onRetry) } }
         items(visible, key = { it.key }, contentType = { "multi-select" }) { category ->
             val checked = category.forum?.id in selected || category.custom?.id in selectedCustom
@@ -190,13 +197,13 @@ fun CategoryFilterSheet(
                     colors = CheckboxDefaults.colors(checkedColor = sectionStyle.accent, checkmarkColor = sectionStyle.onAccent))
                 Column(Modifier.weight(1f)) {
                     Text(category.name, style = MaterialTheme.typography.bodyLarge)
-                    category.group?.let { Text(it, style = MaterialTheme.typography.labelMedium,
+                    category.group(deviceLabel)?.let { Text(it, style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
         }
         if (!state.busy && state.error == null && visible.isEmpty()) item("category-empty") {
-            Text("No matching categories.", Modifier.padding(vertical = 16.dp))
+            Text(stringResource(R.string.filter_no_categories), Modifier.padding(vertical = 16.dp))
         }
     }
 }

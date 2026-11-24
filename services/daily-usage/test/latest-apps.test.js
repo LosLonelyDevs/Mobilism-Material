@@ -204,6 +204,35 @@ test('paging past a topic cannot evict it, and other fresh topics do not extend 
   assert.equal((await call('GET', null, query, now + 86400)).body.items.length, 5);
 });
 
+test('changing storage policy trims on the next upload and keeps the published snapshot bounded', async () => {
+  const change = (capacity, retentionHours) => query(`INSERT INTO app_control (id, revision, config, updated_at)
+    VALUES (1,1,$1::jsonb,CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET config=EXCLUDED.config`,
+  [JSON.stringify({ followingStorage: { capacity, retentionHours } })]);
+  const upload = async (id, at) => {
+    const response = await call('POST', { firstPage: true, adultFiltered: false, items: [item(id)], readAt: at }, query, at);
+    assert.equal(response.statusCode, 200);
+  };
+  try {
+    await change(1200, 48);
+    const apps = Array.from({ length: 1100 }, (_, i) => ({ ...item(i + 1), key: 'app ' + (i + 1), lastSeen: now }));
+    await query('UPDATE latest_apps_cache SET items=$1::jsonb', [JSON.stringify(apps)]);
+    await upload(1101, now);
+    assert.equal((await visibleSnapshot(query, now)).items.length, 1101);
+    assert.equal((await call('GET')).body.items.length, 500);
+    const tomorrow = now + 86401;
+    await upload(1102, tomorrow);
+    assert.equal((await visibleSnapshot(query, tomorrow)).items.length, 1102);
+    assert.deepEqual((await named([{ name: 'App 1101', receipt: randomUUID() }], false, query, tomorrow)).body.items, []);
+    await change(501, 48);
+    await upload(1103, tomorrow + 1);
+    assert.equal((await visibleSnapshot(query, tomorrow + 1)).items.length, 501);
+    await change(501, 6);
+    assert.equal((await visibleSnapshot(query, tomorrow + 1)).items.length, 2);
+    await upload(1104, tomorrow + 2);
+    assert.equal((await query('SELECT jsonb_array_length(items) AS size FROM latest_apps_cache'))[0].size, 3);
+  } finally { await db.exec('TRUNCATE app_control'); }
+});
+
 test('concurrent overlapping pages keep the newest 500 unique apps in post order', async () => {
   const pages = Array.from({ length: 26 }, (_, page) => Array.from({ length: 20 }, (_, i) => item(page * 20 + i + 1)));
   const uploads = await Promise.all(pages.reverse().map((items, index) => post(items, index === 0)));
@@ -275,8 +304,8 @@ test('migration widens an existing 500-app cache without losing its entries', as
   assert.equal(body.items[0].id, 1);
   assert.equal(body.observedAt, now);
   const fill = count => query("UPDATE latest_apps_cache SET items = (SELECT jsonb_agg('{}'::jsonb) FROM generate_series(1, $1::int))", [count]);
-  await fill(catalogCapacity);
-  await assert.rejects(fill(catalogCapacity + 1), /latest_apps_cache_items_check/);
+  await fill(2000);
+  await assert.rejects(fill(2001), /latest_apps_cache_items_check/);
 });
 
 test('later pages alone cannot claim freshness and invalid reports cannot alter the index', async () => {

@@ -9,6 +9,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 
 object AppHttp {
+    const val USER_AGENT_HEADER = "User-Agent"
     @Volatile private var application: Context? = null
     private val transport = OkHttpClient()
 
@@ -27,7 +28,7 @@ object AppHttp {
     }
 
     fun openConnection(url: URL): HttpURLConnection = (url.openConnection() as HttpURLConnection).apply {
-        setRequestProperty("User-Agent", currentUserAgent())
+        setRequestProperty(USER_AGENT_HEADER, currentUserAgent())
     }
 
     fun webView(context: Context): WebView = WebView(context).also(::applyBrowserIdentity)
@@ -38,6 +39,6 @@ object AppHttp {
 
     private class Identity(private val userAgent: () -> String) : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response =
-            chain.proceed(chain.request().newBuilder().header("User-Agent", userAgent()).build())
+            chain.proceed(chain.request().newBuilder().header(USER_AGENT_HEADER, userAgent()).build())
     }
 }

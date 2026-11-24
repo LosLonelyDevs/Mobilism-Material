@@ -3,6 +3,7 @@ package org.mobilism.material.ui
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
+import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -39,17 +40,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.SubcomposeAsyncImage
-import coil3.request.ImageRequest
-import coil3.size.Size
 import kotlinx.coroutines.launch
 import org.mobilism.material.designsystem.AppIconButton
-import org.mobilism.material.designsystem.LoadingState
+import org.mobilism.material.R
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -65,14 +64,14 @@ fun ReleaseImageViewer(images: List<String>, initialPage: Int, onDismiss: () -> 
             }
             Row(Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("${pager.currentPage + 1} / ${images.size}", Modifier.padding(start = 16.dp), color = Color.White)
-                AppIconButton(Icons.Outlined.Close, "Close image viewer", onDismiss)
+                Text(stringResource(R.string.release_image_counter, pager.currentPage + 1, images.size), Modifier.padding(start = 16.dp), color = Color.White)
+                AppIconButton(Icons.Outlined.Close, stringResource(R.string.release_image_close), onDismiss)
             }
             if (images.size > 1) Row(Modifier.align(Alignment.BottomCenter).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                if (pager.currentPage > 0) AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Previous image", {
+                if (pager.currentPage > 0) AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.release_image_previous), {
                     scope.launch { pager.animateScrollToPage(pager.currentPage - 1, animationSpec = motion) }
                 })
-                if (pager.currentPage < images.lastIndex) AppIconButton(Icons.AutoMirrored.Outlined.ArrowForward, "Next image", {
+                if (pager.currentPage < images.lastIndex) AppIconButton(Icons.AutoMirrored.Outlined.ArrowForward, stringResource(R.string.release_image_next), {
                     scope.launch { pager.animateScrollToPage(pager.currentPage + 1, animationSpec = motion) }
                 })
             }
@@ -106,8 +105,7 @@ private fun ZoomableImage(url: String, active: Boolean, onZoom: (Boolean) -> Uni
         if (transform.isTransformInProgress) snap() else MaterialTheme.motionScheme.fastSpatialSpec(), label = "image zoom")
     LaunchedEffect(active) { if (!active) { scale = 1f; offset = Offset.Zero } }
     LaunchedEffect(scale, active) { if (active) onZoom(scale > 1.01f) }
-    val context = LocalContext.current
-    val request = remember(url, context) { ImageRequest.Builder(context).data(url).size(Size.ORIGINAL).build() }
+    val request = releaseArtworkRequest(url, originalSize = true)
     Box(Modifier.fillMaxSize().onSizeChanged { viewport = it }.clipToBounds()
         .transformable(transform, canPan = { scale > 1f })
         .pointerInput(url) { detectTapGestures(onDoubleTap = {
@@ -115,14 +113,14 @@ private fun ZoomableImage(url: String, active: Boolean, onZoom: (Boolean) -> Uni
             offset = Offset.Zero
         }) }, contentAlignment = Alignment.Center) {
         SubcomposeAsyncImage(
-            model = request, contentDescription = "Full size release image. Pinch or double tap to zoom.",
+            model = request, contentDescription = stringResource(R.string.release_image_zoom),
             contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxSize().graphicsLayer {
                 scaleX = animatedScale; scaleY = animatedScale; translationX = offset.x; translationY = offset.y
             },
             onSuccess = { imageSize = IntSize(it.result.image.width, it.result.image.height) },
-            loading = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingState("Loading image…") } },
-            error = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Image unavailable", color = Color.White) } },
+            loading = { ReleaseImageShimmer(Modifier.fillMaxSize().progressSemantics()) },
+            error = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.release_image_unavailable), color = Color.White) } },
         )
     }
 }

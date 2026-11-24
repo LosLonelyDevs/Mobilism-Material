@@ -146,6 +146,16 @@ test('Following cache has its own grant and owns the pull switch across concurre
   assert.equal((await put(controls, general.cookie, { ...current, limits: { followPullToRefreshEnabled: false } })).statusCode, 403);
   assert.equal((await put(controls, general.cookie, { ...current, limits: {} })).statusCode, 200);
   assert.equal((await read(following, editor.cookie)).body.pullToRefresh.enabled, true);
+  const storage = { capacity: 1500, retentionHours: 48 };
+  assert.equal((await put(following, editor.cookie, { revision: 2, storage })).statusCode, 403);
+  assert.equal((await put(controls, general.cookie, { ...current, revision: 2, followingStorage: storage })).statusCode, 403);
+  assert.equal((await put(following, ownerCookie, { revision: 2, storage: { ...storage, capacity: 2001 } })).statusCode, 400);
+  assert.equal((await put(following, ownerCookie, { revision: 2, storage })).statusCode, 200);
+  assert.equal((await put(following, ownerCookie, { revision: 2, storage })).statusCode, 409);
+  const ordinary = (await read(controls, general.cookie)).body;
+  assert.equal('followingStorage' in ordinary, false);
+  assert.equal((await put(controls, general.cookie, ordinary)).statusCode, 200);
+  assert.deepEqual((await read(following, ownerCookie)).body.storage, storage);
 });
 
 test('access changes revoke sessions and pending challenges; stale edits and deleted users cannot restore access', async () => {

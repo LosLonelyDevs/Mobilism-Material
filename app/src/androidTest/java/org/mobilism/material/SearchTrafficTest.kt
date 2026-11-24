@@ -5,6 +5,8 @@ import android.content.ContextWrapper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.util.UUID
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -75,6 +77,38 @@ class SearchTrafficTest {
         assertEquals(5, fixture.library.state.value.count { it.checkedAt != null })
         fixture.checker().check()
         assertEquals(5, fixture.calls)
+    }
+
+    @Test fun openingFollowingDuringScheduledWorkDoesNotStartOrReportAManualCheck() = runBlocking {
+        val fixture = Fixture()
+        fixture.followApps()
+        val started = CompletableDeferred<Unit>()
+        val resume = CompletableDeferred<Unit>()
+        var lookups = 0
+        val checker = fixture.checker(latest = {
+            lookups++
+            started.complete(Unit)
+            resume.await()
+            fixture.library.state.value.map { it.release }
+        })
+        val background = async { checker.check(background = true) }
+        started.await()
+        val manualProgress = mutableListOf<FollowCheckState>()
+        try {
+            checker.refreshInstalled()
+            checker.check(onProgress = { manualProgress.add(it) })
+        } finally {
+            resume.complete(Unit)
+        }
+        assertEquals(12, background.await().done)
+        assertEquals(1, lookups)
+        assertEquals(0, fixture.calls)
+        assertTrue(manualProgress.isEmpty())
+        val result = checker.check(onProgress = { manualProgress.add(it) })
+        assertEquals(2, lookups)
+        assertEquals(12, result.done)
+        assertTrue(manualProgress.first().busy)
+        assertEquals(result, manualProgress.last())
     }
 
     @Test fun followingStopsTheWholeBatchOnItsFirstServerFailure() = runBlocking {

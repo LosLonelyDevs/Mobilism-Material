@@ -37,6 +37,25 @@ class HomeViewModelTest {
         assertEquals(listOf("Apps-Latest", "Apps-Top", "Apps-Latest"), repo.calls)
     }
 
+    @Test fun topResetAndExpiryReloadOnlyPopularOnNextVisit() = runTest(dispatcher) {
+        val repo = Repository()
+        var time = 0L
+        val model = HomeViewModel(repo, ContentSection.Apps, now = { time })
+        model.setVisible(true)
+        advanceUntilIdle()
+        model.setVisible(false)
+        repo.topPolicy = ReleaseFeedPolicy(ttlMs = 100, generation = 1)
+        advanceUntilIdle()
+        assertEquals(2, repo.calls.size)
+        listOf(0L, 99L, 100L).forEach {
+            time = it
+            model.setVisible(true)
+            advanceUntilIdle()
+            model.setVisible(false)
+        }
+        assertEquals(listOf("Apps-Latest", "Apps-Top", "Apps-Top", "Apps-Top"), repo.calls)
+    }
+
     @Test fun hiddenHomeDoesNotLoadAndReturningReusesCompletedShelves() = runTest(dispatcher) {
         val repo = Repository()
         val hidden = MutableStateFlow(false)
@@ -121,6 +140,8 @@ class HomeViewModelTest {
 
     private class Repository : HomeRepository {
         val calls = mutableListOf<String>()
+        var topPolicy: ReleaseFeedPolicy? = null
+        override fun feedPolicy(order: FeedOrder) = topPolicy?.takeIf { order == FeedOrder.Top } ?: super.feedPolicy(order)
         var failPopular = false
         var slowApps = false
         override suspend fun homeReleases(section: ContentSection, order: FeedOrder, fresh: Boolean): List<Release> {

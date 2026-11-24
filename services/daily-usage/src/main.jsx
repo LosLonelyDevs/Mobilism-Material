@@ -146,7 +146,7 @@ function App() {
   </div></header><main id="main-content" className="main-content">
     {error && <Notice variant="danger">{error}</Notice>}
     {!allowed ? <VStack gap={16}><Heading level={1}>{route ? 'Access denied' : 'Page not found'}</Heading><Text>{route ? 'You do not have access to this page.' : 'This page does not exist.'}</Text><Link href={allowedRoutes[0].href}>Open an available page</Link></VStack>
-      : path === '/' ? <Overview user={auth} /> : path === '/app-usage' ? <Usage /> : path === '/app-controls' ? <Controls />
+      : path === '/' ? <Overview user={auth} /> : path === '/app-usage' ? <Usage /> : path === '/app-controls' ? <Controls isAdmin={auth.isAdmin} />
         : path === '/following-cache' ? <FollowingCache title={route.title} />
         : path === '/users' ? <Users currentUser={auth} onSignedOut={signedOut} /> : <Account user={auth} onSignedOut={signedOut} />}
   </main></>;

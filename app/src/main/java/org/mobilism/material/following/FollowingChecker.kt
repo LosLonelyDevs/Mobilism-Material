@@ -4,7 +4,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import org.mobilism.material.data.*
@@ -21,8 +20,6 @@ class FollowingChecker(
     private val searchError: () -> String,
 ) {
     private val mutex = Mutex()
-    private val mutableState = MutableStateFlow(FollowCheckState())
-    val state = mutableState.asStateFlow()
     private val mutableInstalled = MutableStateFlow<List<InstalledVersion>>(emptyList())
     val installed = mutableInstalled.asStateFlow()
 
@@ -37,12 +34,17 @@ class FollowingChecker(
         }
     }
 
-    suspend fun check(background: Boolean = false): FollowCheckState = withContext(Dispatchers.Default) {
-        checkUpdates(background)
+    suspend fun check(background: Boolean = false, onProgress: (FollowCheckState) -> Unit = {}): FollowCheckState = withContext(Dispatchers.Default) {
+        checkUpdates(background, onProgress)
     }
 
-    private suspend fun checkUpdates(background: Boolean): FollowCheckState {
-        if (!mutex.tryLock()) return mutableState.value
+    private suspend fun checkUpdates(background: Boolean, onProgress: (FollowCheckState) -> Unit): FollowCheckState {
+        if (!mutex.tryLock()) return FollowCheckState()
+        var progress = FollowCheckState()
+        fun report(next: FollowCheckState) {
+            progress = next
+            onProgress(next)
+        }
         try {
             val watched = library.state.value.filter { it.watched }
             if (watched.isEmpty()) return FollowCheckState()
@@ -51,8 +53,7 @@ class FollowingChecker(
             val readCache = enabled && preferences.beginCacheCheck(System.currentTimeMillis(), policy, background)
             val names = watched.map { ReleaseTitles.parse(it.release.title).name }.distinctBy(::latestAppKey)
             val requested = if (readCache && background) preferences.backgroundBatch(names, policy.followCacheBatchSize) else names
-            val previous = mutableState.value
-            mutableState.value = FollowCheckState(busy = true)
+            report(FollowCheckState(busy = true))
             val snapshot = if (!readCache) LatestAppsSnapshot(if (enabled) CacheOutcome.Cooldown else CacheOutcome.Disabled)
                 else try { latestApps(requested, background) }
                 catch (cancelled: CancellationException) { throw cancelled }
@@ -89,10 +90,9 @@ class FollowingChecker(
             if (direct.isEmpty() && snapshot.outcome == CacheOutcome.Cooldown) {
                 diagnostics.recordCache(CacheDiagnostic(AppCache.Following, CacheOutcome.Cooldown, background = background,
                     fallbackSearches = 0), DiagnosticOperation.FollowingCheck)
-                mutableState.value = previous
                 return FollowCheckState()
             }
-            mutableState.value = FollowCheckState(busy = true, total = hits.size + direct.size, done = hits.size)
+            report(FollowCheckState(busy = true, total = hits.size + direct.size, done = hits.size))
             if (direct.isNotEmpty() && repository.auth.value == AuthState.Restoring) repository.restoreSession()
             var searches = 0
             val observations = mutableListOf<LatestAppsPage>()
@@ -106,12 +106,12 @@ class FollowingChecker(
                     }
                     refreshInstalled()
                     applyResult(entry, FollowingVersions.matchingInstalled(entry, installed.value), page.items)
-                    mutableState.update { it.copy(done = it.done + 1) }
+                    report(progress.copy(done = progress.done + 1))
                     if (enabled) observation.contribution(entry.release, page)?.let(observations::add)
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) {
                     library.failed(entry, searchError())
-                    mutableState.update { it.copy(failed = it.failed + 1) }
+                    report(progress.copy(failed = progress.failed + 1))
                     break
                 }
             }
@@ -130,10 +130,10 @@ class FollowingChecker(
                 misses = missing, items = candidates.size, background = background, fallbackSearches = searches),
                 DiagnosticOperation.FollowingCheck, snapshot.httpStatus)
         } finally {
-            mutableState.update { it.copy(busy = false) }
             mutex.unlock()
+            report(progress.copy(busy = false))
         }
-        return mutableState.value
+        return progress
     }
 
     private fun applyResult(entry: LibraryEntry, current: InstalledVersion?, candidates: List<Release>) {

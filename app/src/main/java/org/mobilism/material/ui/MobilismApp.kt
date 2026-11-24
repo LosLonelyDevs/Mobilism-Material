@@ -361,7 +361,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                     val pending = model.discussionAfterSignIn ?: homeForum
                     homeForum = null
                     model.discussionSignInHandled()
-                    DiscussionsViewModel(app.repository, (auth as? AuthState.SignedIn)?.username, createSavedStateHandle(), pending?.first, pending?.second)
+                    DiscussionsViewModel(app.repository, (auth as? AuthState.SignedIn)?.username, createSavedStateHandle(), app::getString, pending?.first, pending?.second)
                 }
             })
             DiscussionsScreen(discussions, auth, onBack = { nav.popBackStack() }, onSignIn = model::signInForDiscussion)
@@ -369,7 +369,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         composable("announcements") { entry ->
             val announcements: DiscussionsViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
                 initializer { DiscussionsViewModel(app.repository, (auth as? AuthState.SignedIn)?.username,
-                    createSavedStateHandle(), announcementsOnly = true) }
+                    createSavedStateHandle(), app::getString, announcementsOnly = true) }
             })
             DiscussionsScreen(announcements, auth, onBack = { nav.popBackStack() }, onSignIn = model::signInForDiscussion)
         }
@@ -380,7 +380,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             val forum = args.getLong("forum")
             val reader: DiscussionsViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
                 initializer { DiscussionsViewModel(app.repository, (auth as? AuthState.SignedIn)?.username,
-                    createSavedStateHandle(), announcementsOnly = true, linkedAnnouncement = { app.repository.announcement(id, forum) }) }
+                    createSavedStateHandle(), app::getString, announcementsOnly = true, linkedAnnouncement = { app.repository.announcement(id, forum) }) }
             })
             DiscussionsScreen(reader, auth, onBack = { nav.popBackStack() }, onSignIn = model::signInForDiscussion,
                 linkedUrl = "https://forum.mobilism.org/viewtopic.php?f=$forum&t=$id")
@@ -503,7 +503,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             if (discussion != null) {
                 val reader: DiscussionsViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
                     initializer { DiscussionsViewModel(app.repository, (auth as? AuthState.SignedIn)?.username,
-                        createSavedStateHandle(), linkedAnnouncement = { discussion }) }
+                        createSavedStateHandle(), app::getString, linkedAnnouncement = { discussion }) }
                 })
                 DiscussionsScreen(reader, auth, onBack = { nav.popBackStack() }, onSignIn = model::signInForDiscussion,
                     linkedUrl = discussion.topic.browserUrl)
@@ -519,7 +519,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 else assigningCategories = false
             }
             if (assigningCategories && categoryStore != null) state.release?.let {
-                CategoryAssignmentSheet(it, categoryStore, onDismiss = { assigningCategories = false })
+                CategoryAssignmentSheet(it, categoryStore, onDismiss = { assigningCategories = false },
+                    onManage = { section -> nav.navigate("categories/${section.name}") { launchSingleTop = true } })
             }
             ReleaseScreen(state, debrid, downloads, onBack = { nav.popBackStack() }, onRetry = detail::load, onMoreComments = detail::loadComments,
                 onCategories = if (categoryStore != null && state.release?.section != null) ({ assigningCategories = true }) else null,

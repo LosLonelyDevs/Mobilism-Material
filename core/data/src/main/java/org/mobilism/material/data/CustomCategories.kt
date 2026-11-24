@@ -5,7 +5,9 @@ import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class CustomCategory(val id: String, val section: ContentSection, val name: String)
+data class CustomCategory(val id: String, val section: ContentSection, val name: String, val description: String = "")
+
+class CategoryNameException(@androidx.annotation.StringRes val reason: Int) : IllegalArgumentException()
 
 data class CategorizedItem(
     val id: String,
@@ -53,15 +55,14 @@ object CustomCategories {
 
     fun validateName(state: CustomCategoryState, section: ContentSection, value: String, except: String? = null): String {
         val name = value.trim()
-        require(name.isNotEmpty()) { "Enter a category name." }
-        require(state.categories.none { it.id != except && it.section == section && normalized(it.name) == normalized(name) }) {
-            "A category with this name already exists."
-        }
+        if (name.isEmpty()) throw CategoryNameException(R.string.category_name_required)
+        if (state.categories.any { it.id != except && it.section == section && normalized(it.name) == normalized(name) })
+            throw CategoryNameException(R.string.category_name_duplicate)
         return name
     }
 
     fun assign(state: CustomCategoryState, release: Release, selected: Set<String>): CustomCategoryState {
-        val section = requireNotNull(release.section) { "The release section is unavailable." }
+        val section = requireNotNull(release.section)
         val ids = state.retain(section, selected)
         val previous = state.items.filter { it.matches(release) }
         val compact = AppLibrary.compact(release).let { candidate ->
@@ -100,6 +101,7 @@ internal object CustomCategoryJson {
         put("version", 1)
         put("categories", JSONArray().apply { state.categories.forEach { category -> put(JSONObject().apply {
             put("id", category.id); put("section", category.section.name); put("name", category.name)
+            if (category.description.isNotEmpty()) put("description", category.description)
         }) } })
         put("items", JSONArray().apply { state.items.forEach { item -> put(JSONObject().apply {
             put("id", item.id); put("categories", JSONArray(item.categoryIds.toList()))
@@ -117,7 +119,8 @@ internal object CustomCategoryJson {
         require(root.getInt("version") == 1)
         val categories = root.getJSONArray("categories").objects().mapNotNull { item -> runCatching {
             CustomCategory(item.getString("id").also { require(it.isNotBlank()) },
-                ContentSection.valueOf(item.getString("section")), item.getString("name").also { require(it.isNotBlank()) })
+                ContentSection.valueOf(item.getString("section")), item.getString("name").also { require(it.isNotBlank()) },
+                item.text("description").orEmpty())
         }.getOrNull() }.distinctBy { it.id }
         val items = root.getJSONArray("items").objects().mapNotNull { item -> runCatching {
             val releases = item.getJSONArray("releases").objects().map { release -> Release(

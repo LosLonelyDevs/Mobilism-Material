@@ -104,8 +104,10 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
     }
 
     override suspend fun releases(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters, fresh: Boolean): ReleasePage =
-        if (page == 1) kotlinx.coroutines.withContext(FirstFeedPage(fresh)) { releasePage(section, order, page, filters) }
-        else releasePage(section, order, page, filters)
+        if (page == 1) {
+            val first = FirstFeedPage(fresh)
+            kotlinx.coroutines.withContext(first) { releasePage(section, order, page, filters).copy(cachedAgeMs = first.cachedAgeMs()) }
+        } else releasePage(section, order, page, filters)
 
     private suspend fun releasePage(section: ContentSection, order: FeedOrder, page: Int, filters: FeedFilters): ReleasePage {
         val effective = if (customCategoriesEnabled()) filters else filters.copy(customCategoryIds = emptySet())
@@ -240,8 +242,13 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
         api.discussionTopics(category, 1, "", token, fresh = true).items.maxOfOrNull { it.activityAt }?.takeIf { it > 0 }
     }
 
+    override fun feedPolicy(order: FeedOrder) = api.feedPolicy(order)
+
     override suspend fun homeReleases(section: ContentSection, order: FeedOrder, fresh: Boolean) =
-        releases(section, order, 1, FeedFilters(), fresh).items.take(12)
+        homeReleasePage(section, order, fresh).items
+
+    override suspend fun homeReleasePage(section: ContentSection, order: FeedOrder, fresh: Boolean) =
+        releases(section, order, 1, FeedFilters(), fresh).let { it.copy(items = it.items.take(12)) }
 
     override suspend fun homeCategories(section: ContentSection) = categories(section)
 

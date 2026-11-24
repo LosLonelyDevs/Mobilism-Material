@@ -33,7 +33,7 @@ class DiscussionDesignTest {
         val repository = Repository()
         lateinit var model: DiscussionsViewModel
         var theme by mutableStateOf(CatppuccinLatte)
-        compose.runOnUiThread { model = DiscussionsViewModel(repository, null, SavedStateHandle()) }
+        compose.runOnUiThread { model = DiscussionsViewModel(repository, null, SavedStateHandle(), compose.activity::getString) }
         compose.setContent { MobilismTheme(theme = theme, reduceMotion = true) {
             DiscussionsScreen(model, AuthState.Guest, {}, { _, _ -> })
         } }

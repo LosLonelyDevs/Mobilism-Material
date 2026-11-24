@@ -68,7 +68,7 @@ class ForumLinkActionsTest {
                     composable("announcement/{forum}/{id}", arguments = listOf(navArgument("forum") { type = NavType.LongType },
                         navArgument("id") { type = NavType.LongType })) { entry ->
                         val args = requireNotNull(entry.arguments)
-                        val reader = viewModel<DiscussionsViewModel> { DiscussionsViewModel(repository, null, SavedStateHandle(),
+                        val reader = viewModel<DiscussionsViewModel> { DiscussionsViewModel(repository, null, SavedStateHandle(), compose.activity::getString,
                             announcementsOnly = true, linkedAnnouncement = { repository.announcement(args.getLong("id"), args.getLong("forum")) }) }
                         DiscussionsScreen(reader, AuthState.Guest, { nav.popBackStack() }, { _, _ -> }, linkedUrl = url)
                     }
@@ -107,7 +107,7 @@ class ForumLinkActionsTest {
             androidx.compose.runtime.CompositionLocalProvider(LocalLinkedTopicHandler provides nav::openForumTopic) {
                 NavHost(nav, startDestination = "source") {
                     composable("source") {
-                        val model = viewModel<DiscussionsViewModel> { DiscussionsViewModel(repository, null, SavedStateHandle(),
+                        val model = viewModel<DiscussionsViewModel> { DiscussionsViewModel(repository, null, SavedStateHandle(), compose.activity::getString,
                             announcementsOnly = true, linkedAnnouncement = { LinkedAnnouncement(announcement, CommentPage(emptyList(), false)) }) }
                         DiscussionsScreen(model, AuthState.Guest, { nav.popBackStack() }, { _, _ -> }, announcement.browserUrl)
                     }
@@ -119,7 +119,7 @@ class ForumLinkActionsTest {
                         } }
                         val state by model.state.collectAsStateWithLifecycle()
                         state.discussion?.let { discussion ->
-                            val reader = viewModel<DiscussionsViewModel> { DiscussionsViewModel(repository, null, SavedStateHandle(),
+                            val reader = viewModel<DiscussionsViewModel> { DiscussionsViewModel(repository, null, SavedStateHandle(), compose.activity::getString,
                                 linkedAnnouncement = { discussion }) }
                             DiscussionsScreen(reader, AuthState.Guest, { nav.popBackStack() }, { _, _ -> }, url)
                         }

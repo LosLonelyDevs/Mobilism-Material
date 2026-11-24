@@ -86,6 +86,8 @@ class MobilismViewModel(
     private var categoryJob: Job? = null
     private var feedJob: Job? = null
     private var feedVisible = false
+    private var firstPageGeneration = 0
+    private var firstPageLoadedAt = 0L
     private var loginJob: Job? = null
     var releaseAfterSignIn: Long? = null
         private set
@@ -295,19 +297,24 @@ class MobilismViewModel(
         mutableFeed.value = FeedState(section = section, order = snapshot.order, filters = filters)
     }
 
-    fun loadFeed(refresh: Boolean = false) {
+    fun loadFeed(refresh: Boolean = false, revisit: Boolean = false) {
         if (!feedVisible) return
         if (auth.value == AuthState.SignedOut || auth.value == AuthState.Restoring) return
-        if (!refresh && (feedJob?.isActive == true || !mutableFeed.value.canLoadMore)) return
+        if (!refresh && (feedJob?.isActive == true || (!revisit && !mutableFeed.value.canLoadMore))) return
         feedJob?.cancel()
         val snapshot = mutableFeed.value
-        val page = if (refresh) 1 else snapshot.page + 1
+        val page = if (refresh || revisit) 1 else snapshot.page + 1
+        val generation = if (page == 1) repository.feedPolicy(snapshot.order).generation else firstPageGeneration
         feedJob = viewModelScope.launch {
             mutableFeed.update { it.copy(busy = true, refreshing = refresh, error = null) }
             try {
                 val result = repository.releases(snapshot.section, snapshot.order, page, snapshot.filters, fresh = refresh)
                 coroutineContext.ensureActive()
-                val existing = if (refresh) emptyList() else snapshot.items
+                if (page == 1) {
+                    firstPageGeneration = generation
+                    firstPageLoadedAt = android.os.SystemClock.elapsedRealtime() - result.cachedAgeMs
+                }
+                val existing = if (page == 1) emptyList() else snapshot.items
                 val combined = (existing + result.items).distinctBy { it.id }
                 val newReleaseIds = if (snapshot.order == FeedOrder.Latest)
                     newReleaseSession.observe(snapshot.section, combined, initialize = !snapshot.filters.isActive)
@@ -316,7 +323,7 @@ class MobilismViewModel(
                     items = combined, page = result.lastPage ?: page, busy = false, refreshing = false,
                     newReleaseIds = newReleaseIds,
                     awaitingMore = result.items.isEmpty() && result.canLoadMore,
-                    canLoadMore = result.canLoadMore && (result.items.isEmpty() || refresh || combined.size > existing.size),
+                    canLoadMore = result.canLoadMore && (result.items.isEmpty() || page == 1 || combined.size > existing.size),
                 ) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
@@ -328,7 +335,11 @@ class MobilismViewModel(
     fun setFeedVisible(visible: Boolean) {
         feedVisible = visible
         if (visible && mutableFeed.value.page == 0) loadFeed()
-        else if (!visible) {
+        else if (visible) {
+            val policy = repository.feedPolicy(mutableFeed.value.order)
+            if (policy.generation != firstPageGeneration || (policy.expireOnReturn &&
+                    android.os.SystemClock.elapsedRealtime() - firstPageLoadedAt >= policy.ttlMs)) loadFeed(revisit = true)
+        } else {
             feedJob?.cancel()
             mutableFeed.update { it.copy(busy = false, refreshing = false) }
         }

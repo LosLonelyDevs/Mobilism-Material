@@ -148,6 +148,14 @@ CREATE INDEX IF NOT EXISTS dashboard_sessions_user ON dashboard_sessions (user_i
 ALTER TABLE admin_login_challenges ADD COLUMN IF NOT EXISTS user_id text REFERENCES dashboard_users(id) ON DELETE CASCADE;
 ALTER TABLE admin_login_challenges ADD COLUMN IF NOT EXISTS auth_version integer;
 
+CREATE TABLE IF NOT EXISTS app_write_windows (
+    bucket text NOT NULL,
+    window_start bigint NOT NULL,
+    nonces uuid[] NOT NULL CHECK (cardinality(nonces) BETWEEN 1 AND 120),
+    PRIMARY KEY (bucket, window_start)
+);
+CREATE INDEX IF NOT EXISTS app_write_windows_expiry ON app_write_windows(window_start);
+
 CREATE TABLE IF NOT EXISTS latest_apps_cache (
     singleton boolean PRIMARY KEY CHECK (singleton),
     items jsonb NOT NULL,
@@ -155,5 +163,5 @@ CREATE TABLE IF NOT EXISTS latest_apps_cache (
 );
 ALTER TABLE latest_apps_cache
     DROP CONSTRAINT IF EXISTS latest_apps_cache_items_check,
-    ADD CONSTRAINT latest_apps_cache_items_check CHECK (jsonb_typeof(items) = 'array' AND jsonb_array_length(items) <= 1000);
+    ADD CONSTRAINT latest_apps_cache_items_check CHECK (jsonb_typeof(items) = 'array' AND jsonb_array_length(items) <= 2000);
 INSERT INTO latest_apps_cache(singleton, items) VALUES (true, '[]') ON CONFLICT DO NOTHING;

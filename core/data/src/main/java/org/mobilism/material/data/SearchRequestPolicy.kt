@@ -10,47 +10,65 @@ internal class SearchRequestPolicy(
     private val wallTime: () -> Long = System::currentTimeMillis,
     private val limits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
     private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
+    private val pausedMessage: () -> String,
     private val wait: suspend (Long) -> Unit = { delay(it) },
 ) {
     private data class Cached(val body: String, val expires: Long)
     private val mutex = Mutex()
     private val cache = linkedMapOf<String, Cached>()
+    private val invalidAt = linkedMapOf<String, Long>()
     private var lastRequest: Long? = null
     private var failedAt: Long? = null
     private var blockedUntil = 0L
-    private var previousLimits = ApiRequestLimits.Defaults
+    private var previousTtl = ApiRequestLimits.Defaults.searchCacheTtlMs
 
-    suspend fun request(key: String, load: suspend () -> String): String = mutex.withLock {
+    suspend fun <T> request(key: String, decode: (String) -> T, load: suspend () -> String): T = mutex.withLock {
         val policy = limits()
-        if (policy != previousLimits) {
+        if (policy.searchCacheTtlMs != previousTtl) {
             cache.clear()
-            previousLimits = policy
+            previousTtl = policy.searchCacheTtlMs
         }
         cache.entries.removeAll { it.value.expires <= now() }
-        cache[key]?.let {
-            diagnostics.cacheLookup(AppCache.Search, CacheOutcome.MemoryHit)
-            return@withLock it.body
+        invalidAt.entries.removeAll { now() - it.value >= policy.searchFailureCooldownMs }
+        if (key in invalidAt) throw ApiFailure(FailureKind.InvalidResponse, pausedMessage(), blockedBeforeRequest = true)
+        cache[key]?.let { cached ->
+            return@withLock decodePage(key, cached.body, decode).also { diagnostics.cacheLookup(AppCache.Search, CacheOutcome.MemoryHit) }
         }
         diagnostics.cacheLookup(AppCache.Search, CacheOutcome.Miss)
         if (now() < blockedUntil || failedAt?.let { now() - it < policy.searchFailureCooldownMs } == true) throw ApiFailure(FailureKind.Server,
-            "Search is paused after a failed request. Try again later.")
+            pausedMessage(), blockedBeforeRequest = true)
         val remaining = lastRequest?.let { it + policy.searchSpacingMs - now() } ?: 0
         if (remaining > 0) wait(remaining)
         lastRequest = now()
-        try {
-            load().also { body ->
-                // Keep account-specific responses in memory only, with a small bounded cache.
-                if (body.length <= 256_000) {
-                    cache[key] = Cached(body, now() + policy.searchCacheTtlMs)
-                    while (cache.size > 32) cache.remove(cache.keys.first())
-                }
-            }
+        val body = try {
+            load()
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
-            failedAt = now()
+            if (error is ApiFailure && error.kind == FailureKind.InvalidResponse) markInvalid(key) else failedAt = now()
             throw error
         }
+        decodePage(key, body, decode).also {
+            if (policy.searchCacheTtlMs > 0 && limits().searchCacheTtlMs == policy.searchCacheTtlMs && body.length <= 256_000) {
+                cache[key] = Cached(body, now() + policy.searchCacheTtlMs)
+                while (cache.size > 32) cache.remove(cache.keys.first())
+            }
+        }
+    }
+
+    private fun <T> decodePage(key: String, body: String, decode: (String) -> T): T = try {
+        decode(body)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Exception) {
+        markInvalid(key)
+        throw failure
+    }
+
+    private fun markInvalid(key: String) {
+        cache.remove(key)
+        invalidAt[key] = now()
+        while (invalidAt.size > 32) invalidAt.remove(invalidAt.keys.first())
     }
 
     fun retryAfter(value: String?) {

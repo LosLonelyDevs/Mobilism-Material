@@ -36,12 +36,14 @@ class ReadTrafficTest {
         var onRead: () -> Unit = {}
         var login = 0
         var releaseBody = """{"response":[]}"""
+        var fixtureBody: String? = null
+        var limits = ApiRequestLimits.Defaults
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val request = chain.request()
             requests += request
             val signingIn = request.url.encodedPath.endsWith("auth/login")
             if (!signingIn) onRead()
-            val body = when {
+            val body = fixtureBody ?: when {
                 signingIn -> """{"access_token":"fixture-${++login}","id":1}"""
                 status != 200 -> """{"error":{"text":"Busy"}}"""
                 request.url.encodedPath.endsWith("discussion/categories") -> """{"response":{"app|game":[],"books":[]}}"""
@@ -53,7 +55,39 @@ class ReadTrafficTest {
                 .code(if (signingIn) 200 else status).apply { retryAfter?.let { header("Retry-After", it) } }
                 .body(body.toResponseBody()).build()
         }.build()
-        val repository = DefaultMobilismRepository(context, client = client)
+        val repository = DefaultMobilismRepository(context, client = client, requestLimits = { limits })
+    }
+
+    @Test fun malformedResponsesNeverBecomeCacheHitsOnAnyCachedPageRoute() = runBlocking {
+        val forum = DiscussionCategory(42, "Apps", DiscussionArea.Apps)
+        val routes: List<suspend (DefaultMobilismRepository) -> Unit> = listOf(
+            { it.search("fixture", SearchScope.Apps, 1) },
+            { it.discussionTopics(forum, 1, "fixture") },
+            { it.discussionTopics(forum, 1) },
+            { it.discussionCategories(DiscussionArea.Apps) },
+        )
+        for (read in routes) {
+            val f = Fixture().apply { fixtureBody = "{}" }
+            val first = runCatching { read(f.repository) }.exceptionOrNull() as ApiFailure
+            assertEquals(FailureKind.InvalidResponse, first.kind)
+            val next = runCatching { read(f.repository) }.exceptionOrNull() as ApiFailure
+            assertTrue(next.blockedBeforeRequest)
+            assertEquals(1, f.requests.size)
+        }
+    }
+
+    @Test fun debridSettingChangeKeepsValidSearchAndDiscussionPages() = runBlocking {
+        val f = Fixture()
+        val forum = DiscussionCategory(42, "Apps", DiscussionArea.Apps)
+        f.fixtureBody = """{"releases":[]}"""
+        f.repository.search("fixture", SearchScope.Apps, 1)
+        f.fixtureBody = null
+        f.repository.discussionTopics(forum, 1)
+        f.limits = f.limits.copy(debridRefreshIntervalMs = 60_000)
+        f.fixtureBody = "{}"
+        assertTrue(f.repository.search("fixture", SearchScope.Apps, 1).items.isEmpty())
+        assertTrue(f.repository.discussionTopics(forum, 1).items.isEmpty())
+        assertEquals(2, f.requests.size)
     }
 
     @Test fun fullFirstPageSurvivesRepositoryRecreationAndManualRefreshReplacesIt() = runBlocking {
@@ -75,6 +109,62 @@ class ReadTrafficTest {
         assertEquals(4, count())
     }
 
+    @Test fun targetedFeedResetSurvivesRecreationAndDoesNotDiscardTop() = runBlocking {
+        val f = Fixture()
+        suspend fun page(repo: DefaultMobilismRepository, order: FeedOrder) = repo.homeReleases(ContentSection.Apps, order)
+        for (order in FeedOrder.entries) page(f.repository, order)
+        f.limits = f.limits.copy(cacheResets = mapOf("Latest" to 9))
+        page(f.repository, FeedOrder.Top)
+        assertEquals(2, f.requests.size)
+        page(f.repository, FeedOrder.Latest)
+        assertEquals(3, f.requests.size)
+        val reopened = DefaultMobilismRepository(f.context, client = f.client)
+        assertEquals(9, reopened.feedPolicy(FeedOrder.Latest).generation)
+        for (order in FeedOrder.entries) page(reopened, order)
+        assertEquals(3, f.requests.size)
+        f.limits = f.limits.copy(releaseTopCacheTtlMs = 0)
+        page(f.repository, FeedOrder.Top)
+        assertEquals(4, f.requests.size)
+    }
+
+    @Test fun premiumCatalogResetRevokesOnlyTheTargetAndDoesNotReauthenticateOnATap() = runBlocking {
+        val f = Fixture()
+        f.repository.signIn("Reader", "fixture")
+        var reads = 0
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            reads++
+            val body = when (request.url.encodedPath.substringAfterLast('/')) {
+                "user" -> """{"id":1,"type":"premium","premium":3600}"""
+                "domains" -> """["send.now"]"""
+                "status" -> """{"send.now":{"supported":1,"status":"up"}}"""
+                else -> error("Unexpected request")
+            }
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("Fixture")
+                .body(body.toResponseBody()).build()
+        }.build()
+        val repo = DebridRepository(f.context, client, requestLimits = { f.limits })
+        val provider = DebridProvider.RealDebrid
+        val url = "https://send.now/fixture"
+        repo.saveKey(provider, "fixture")
+        val before = reads
+        f.limits = f.limits.copy(cacheResets = mapOf("MegaDebrid" to 2))
+        assertTrue(repo.permitsDownload("Reader", url))
+        f.limits = f.limits.copy(cacheResets = mapOf("RealDebrid" to 3))
+        assertFalse(repo.permitsDownload("Reader", url))
+        assertTrue(repo.state.value.accounts.single { it.provider == provider }.validated)
+        assertTrue(runCatching { repo.resolve(url) }.isFailure)
+        assertEquals(before, reads)
+        repo.refresh(provider)
+        assertTrue(repo.permitsDownload("Reader", url))
+        f.context.getSharedPreferences("material-debrid-hosts", Context.MODE_PRIVATE)
+            .edit().putLong("RealDebrid-updated", System.currentTimeMillis() - 60_000).apply()
+        f.limits = f.limits.copy(premiumHostCacheTtlMs = 60_000L)
+        assertFalse(repo.permitsDownload("Reader", url))
+        assertEquals(before + 3, reads)
+        repo.removeKey(provider)
+    }
+
     @Test fun latestAndTopUseDifferentExpiryWindows() = runBlocking {
         val f = Fixture()
         val prefs = f.context.getSharedPreferences("release-feed-pages", Context.MODE_PRIVATE)
@@ -89,6 +179,8 @@ class ReadTrafficTest {
             edit.apply()
         }
         age(6)
+        val popular = f.repository.homeReleasePage(ContentSection.Apps, FeedOrder.Top, fresh = false)
+        assertTrue(popular.cachedAgeMs >= 6 * 60_000L)
         for (order in orders) f.repository.homeReleases(ContentSection.Apps, order)
         assertEquals(3, f.requests.size)
         age(16)

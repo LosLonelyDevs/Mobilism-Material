@@ -26,22 +26,26 @@ export function validateReport(report, now = new Date()) {
 
 export async function readReport(req) {
   if (!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) throw new Error('Expected JSON');
-  if (Number(req.headers['content-length']) > 262144) throw new Error('Too large');
+  const payloadLimit = 262144;
+  const wireLimit = 2 * payloadLimit + 4096;
+  if (Number(req.headers['content-length']) > wireLimit) throw new Error('Too large');
   let body = req.body;
   if (body === undefined) {
     const chunks = [];
     let size = 0;
     for await (const chunk of req) {
       size += Buffer.byteLength(chunk);
-      if (size > 262144) throw new Error('Too large');
+      if (size > wireLimit) throw new Error('Too large');
       chunks.push(Buffer.from(chunk));
     }
     body = Buffer.concat(chunks);
   }
   if (Buffer.isBuffer(body)) body = body.toString('utf8');
   if (typeof body !== 'string') body = JSON.stringify(body);
-  if (Buffer.byteLength(body) > 262144) throw new Error('Too large');
-  return JSON.parse(body);
+  if (Buffer.byteLength(body) > wireLimit) throw new Error('Too large');
+  const parsed = JSON.parse(body);
+  if (Buffer.byteLength(typeof parsed?.payload === 'string' ? parsed.payload : body) > payloadLimit) throw new Error('Too large');
+  return parsed;
 }
 
 export function authorized(req, token) {

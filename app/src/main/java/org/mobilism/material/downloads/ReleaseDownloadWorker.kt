@@ -3,6 +3,7 @@ package org.mobilism.material.downloads
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -33,6 +34,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.mobilism.material.R
 import org.mobilism.material.data.AppHttp
 import org.mobilism.material.data.KeystoreText
+import org.mobilism.material.MobilismApplication
 import org.mobilism.material.data.PremiumDownloadAccess
 import org.mobilism.material.data.Release
 import org.mobilism.material.data.ReleaseTitle
@@ -47,6 +49,11 @@ internal fun ReleaseTitle.downloadNotificationTitle(fallback: String, savedName:
     val displayName = name.take(120)
     val displayVersion = version.orEmpty().take(80)
     return if (displayVersion.isBlank()) displayName else "$displayName v$displayVersion"
+}
+
+private fun Context.downloadPermission(): suspend (String, String) -> Boolean {
+    val services = applicationContext as? MobilismApplication
+    return services?.debrid?.let { it::permitsDownload } ?: PremiumDownloadAccess(this)::permits
 }
 
 internal object ReleaseDownloads {
@@ -67,15 +74,15 @@ internal object ReleaseDownloads {
     suspend fun enqueue(context: Context, original: String, release: Release, folder: String, extract: Boolean,
         owner: String, directLink: suspend () -> String): Boolean = withContext(Dispatchers.IO) {
         queueLock.withLock {
-            val access = PremiumDownloadAccess(context)
-            if (!access.permits(owner, original)) throw DownloadProblem(context.getString(R.string.download_premium_required))
+            val permits = context.downloadPermission()
+            if (!permits(owner, original)) throw DownloadProblem(context.getString(R.string.download_premium_required))
             val manager = WorkManager.getInstance(context)
             val digest = MessageDigest.getInstance("SHA-256").digest(original.toByteArray())
             val key = TAG + digest.joinToString("") { "%02x".format(it) }
             if (manager.getWorkInfosForUniqueWorkFlow(key).first().any { !it.state.isFinished }) return@withLock false
             ReleaseFolder(context, Uri.parse(folder)).requireWritable()
             val url = directLink()
-            if (!access.permits(owner, original)) throw DownloadProblem(context.getString(R.string.download_premium_required))
+            if (!permits(owner, original)) throw DownloadProblem(context.getString(R.string.download_premium_required))
             val parsed = url.toHttpUrlOrNull()
             if (parsed == null || !parsed.isHttps || parsed.username.isNotEmpty() || parsed.password.isNotEmpty())
                 throw DownloadProblem(context.getString(R.string.download_link_needs_browser))
@@ -118,9 +125,9 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
                 if (runAttemptCount > 0) throw DownloadProblem(applicationContext.getString(R.string.download_interrupted))
                 val owner = inputData.getString("owner")?.let(ReleaseDownloads.links::decrypt).orEmpty()
                 val original = inputData.getString("original")?.let(ReleaseDownloads.links::decrypt).orEmpty()
-                val access = PremiumDownloadAccess(applicationContext)
+                val permits = applicationContext.downloadPermission()
                 suspend fun requireAccount() {
-                    if (!access.permits(owner, original)) throw DownloadProblem(applicationContext.getString(R.string.download_premium_required))
+                    if (!permits(owner, original)) throw DownloadProblem(applicationContext.getString(R.string.download_premium_required))
                 }
                 requireAccount()
                 val tree = Uri.parse(requireNotNull(inputData.getString("folder")))
@@ -152,8 +159,7 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
                     applicationContext.getString(R.string.download_saved_original_archive)
                 }
                 job.ensureActive()
-                val target = if (created.size == 1) created.single()
-                    else DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+                val target = created.singleOrNull() ?: folder.root
                 val displayName = if (created.size == 1) runCatching {
                     applicationContext.contentResolver.query(target, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
                         ?.use { if (it.moveToFirst()) it.getString(0) else null }
@@ -162,7 +168,7 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
                     "name" to displayName, "multiple" to (created.size > 1))
                 check(journal.edit().remove(id.toString()).commit())
                 created.clear()
-                notifyResult(message, target)
+                notifyResult(message, target, tree)
                 Result.success(result)
             }
         } catch (cancelled: CancellationException) {
@@ -269,7 +275,7 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
         else ForegroundInfo(notificationId, notification)
     }
 
-    private fun notifyResult(message: String, target: Uri? = null) {
+    private fun notifyResult(message: String, target: Uri? = null, folderTree: Uri? = null) {
         val context = applicationContext
         if (target == null) showDownloadToast(context, message, long = true)
         else ReleaseDownloads.announceCompletion(context, notificationTitle)
@@ -284,6 +290,11 @@ class ReleaseDownloadWorker internal constructor(context: Context, params: Worke
             if (destination != null) {
                 result.setContentIntent(PendingIntent.getActivity(context, notificationId, destination,
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+            }
+            if (folderTree != null) {
+                val openFolder = PendingIntent.getActivity(context, notificationId xor 1, downloadFolderIntent(context, folderTree),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                result.addAction(0, context.getString(R.string.download_open_folder), openFolder)
             }
             context.getSystemService(NotificationManager::class.java).notify("release-result", notificationId, result.build())
         }
@@ -301,6 +312,16 @@ internal fun showDownloadToast(context: Context, message: String, long: Boolean 
 internal fun savedReleaseIntent(context: Context, uri: Uri): Intent =
     Intent(Intent.ACTION_VIEW).setDataAndType(uri, context.contentResolver.getType(uri))
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+internal fun downloadFolderIntent(context: Context, tree: Uri): Intent {
+    val folder = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+    val view = Intent(Intent.ACTION_VIEW).setDataAndType(folder, DocumentsContract.Document.MIME_TYPE_DIR)
+        .apply { clipData = ClipData.newRawUri(null, tree) }
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+    if (view.resolveActivity(context.packageManager) != null) return view
+    return Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+        .putExtra(DocumentsContract.EXTRA_INITIAL_URI, folder)
+}
 
 internal fun releaseFileClient(context: Context): OkHttpClient {
     val cooldowns = context.getSharedPreferences("release-host-cooldowns", Context.MODE_PRIVATE)

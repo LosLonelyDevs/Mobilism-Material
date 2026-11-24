@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import org.mobilism.material.R
 import org.mobilism.material.data.*
 
 data class DiscussionListState(
@@ -35,6 +36,7 @@ data class DiscussionsState(
 
 class DiscussionsViewModel(
     private val repository: DiscussionsRepository, private val username: String?, private val saved: SavedStateHandle,
+    private val textFor: (Int) -> String,
     initialTopic: DiscussionTopic? = null, initialCategory: DiscussionCategory? = null,
     private val announcementsOnly: Boolean = false,
     private val linkedAnnouncement: (suspend () -> LinkedAnnouncement)? = null,
@@ -179,12 +181,12 @@ class DiscussionsViewModel(
         if (state.value.composer.posting) return
         commentsJob?.cancel()
         // Forum HTML starts with the oldest replies. An explicit next request starts at API page one.
-        val comments = forumComments?.let { CommentsState(items = it.items, canLoadMore = it.canLoadMore) } ?: CommentsState()
+        val comments = forumComments?.let { mergeComments(topic.key, emptyList(), it, page = 0, refresh = true) } ?: CommentsState()
         mutableState.update { it.copy(topic = topic, comments = comments, commentRefreshFailed = false,
             composer = CommentComposerState(draft = saved["draft:${topic.key}"] ?: "",
                 replyTo = saved.get<Long>("reply:${topic.key}")?.let { id ->
                     CommentReplyTarget(id, saved["author:${topic.key}"] ?: "", saved["quote:${topic.key}"] ?: "")
-                }, error = if (saved.get<Boolean>("pending:${topic.key}") == true) UNCONFIRMED else null),
+                }, error = if (saved.get<Boolean>("pending:${topic.key}") == true) textFor(R.string.discussion_check_before_reposting) else null),
             notice = null, forward = true) }
         if (forumComments == null) loadComments()
     }
@@ -221,15 +223,24 @@ class DiscussionsViewModel(
                 val result = repository.discussionComments(topic, page)
                 ensureActive()
                 val previous = if (page == 1) emptyList() else snapshot.comments.items
-                val serverItems = (previous + result.items).distinctBy { it.id }
-                val items = (confirmed[topic.key].orEmpty() + serverItems).distinctBy { it.id }
-                mutableState.update { it.copy(comments = CommentsState(items, page,
-                    canLoadMore = result.canLoadMore && (restart || serverItems.any { item -> previous.none { it.id == item.id } })),
-                    commentRefreshFailed = false) }
+                val comments = mergeComments(topic.key, previous, result, page, restart)
+                mutableState.update { it.copy(comments = comments, commentRefreshFailed = false) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) { mutableState.update { it.copy(comments = it.comments.copy(busy = false,
                 error = failure.forScreen()), commentRefreshFailed = restart) } }
         }
+    }
+
+    private fun mergeComments(topicKey: String, previous: List<ReleaseComment>, result: CommentPage, page: Int, refresh: Boolean): CommentsState {
+        val pending = confirmed[topicKey].orEmpty()
+        val serverItems = previous.associateByTo(linkedMapOf()) { it.id }
+        pending.forEach { serverItems.remove(it.id) }
+        val previousCount = serverItems.size
+        result.items.forEach { serverItems[it.id] = it }
+        val remaining = pending.filterNot { it.id in serverItems }
+        if (remaining.isEmpty()) confirmed.remove(topicKey) else confirmed[topicKey] = remaining
+        return CommentsState(remaining + serverItems.values, page,
+            canLoadMore = result.canLoadMore && (refresh || serverItems.size > previousCount))
     }
 
     fun openComposer(reply: ReleaseComment? = null) {
@@ -278,12 +289,12 @@ class DiscussionsViewModel(
         viewModelScope.launch {
             try {
                 val id = repository.postDiscussionComment(topic, text, snapshot.composer.replyTo?.id)
-                if (id <= 0) throw ApiFailure(FailureKind.InvalidResponse, "The server did not confirm the comment.")
+                if (id <= 0) throw ApiFailure(FailureKind.InvalidResponse, textFor(R.string.discussion_comment_not_confirmed))
                 val comment = ReleaseComments.posted(id, author, text, System.currentTimeMillis() / 1000).copy(
                     quotes = snapshot.composer.replyTo?.let { listOf(CommentQuote(it.author, it.html, it.id)) }.orEmpty())
                 confirmed[topic.key] = listOf(comment) + confirmed[topic.key].orEmpty()
                 listOf("draft", "pending", "reply", "author", "quote").forEach { saved.remove<Any>("$it:${topic.key}") }
-                mutableState.update { it.copy(composer = CommentComposerState(), notice = "Comment posted",
+                mutableState.update { it.copy(composer = CommentComposerState(), notice = textFor(R.string.discussion_comment_posted),
                     comments = it.comments.copy(items = listOf(comment) + it.comments.items),
                     topic = topic.copy(replies = topic.replies + 1),
                     topics = it.topics.copy(items = it.topics.items.map { row -> if (row.key == topic.key) row.copy(replies = row.replies + 1) else row })) }
@@ -294,14 +305,10 @@ class DiscussionsViewModel(
                     failure.kind in setOf(FailureKind.Credentials, FailureKind.Session, FailureKind.Permission, FailureKind.Dns))
                 if (rejected) saved.remove<Boolean>("pending:${topic.key}")
                 mutableState.update { it.copy(composer = it.composer.copy(posting = false,
-                    error = if (rejected) failure.forScreen().message else UNCONFIRMED)) }
+                    error = if (rejected) failure.forScreen().message else textFor(R.string.discussion_check_before_reposting))) }
             }
         }
     }
 
     fun noticeShown() { mutableState.update { it.copy(notice = null) } }
-
-    private companion object {
-        const val UNCONFIRMED = "Posting could not be confirmed. Your draft is kept. Check the comments before trying again to avoid a duplicate."
-    }
 }

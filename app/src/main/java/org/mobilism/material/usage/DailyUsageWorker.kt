@@ -18,7 +18,8 @@ import java.util.concurrent.TimeUnit
 
 class DailyUsageWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val store = (applicationContext as MobilismApplication).dailyUsage
+        val app = applicationContext as MobilismApplication
+        val store = app.dailyUsage
         if (!DailyUsageSchedule.configured || !store.enabled.value) return@withContext Result.success()
         val body = inputData.getString("day")?.let { value ->
             runCatching { store.storedReport(LocalDate.parse(value)) }.getOrNull()
@@ -31,6 +32,8 @@ class DailyUsageWorker(context: Context, parameters: WorkerParameters) : Corouti
             }
             val request = Request.Builder().url(BuildConfig.DAILY_USAGE_ENDPOINT)
                 .post(body.toRequestBody("application/json".toMediaType())).build()
+            val client = AppHttp.builder().followRedirects(false).followSslRedirects(false)
+                .addInterceptor(app.appWriteAttestation.interceptor("usage")).callTimeout(20, TimeUnit.SECONDS).build()
             client.newCall(request).execute().use { response ->
                 if (response.code == 200) {
                     val source = response.body?.source() ?: return@withContext Result.retry()
@@ -41,16 +44,12 @@ class DailyUsageWorker(context: Context, parameters: WorkerParameters) : Corouti
                         receipt.optString("day") == day.toString()) {
                         if (store.journal.markSent(day)) Result.success() else Result.retry()
                     } else Result.retry()
-                } else if (response.code in listOf(408, 429) || response.code >= 500) Result.retry()
+                } else if (response.code == 428 && runAttemptCount < 2) Result.retry()
+                else if (response.code in listOf(408, 429) || response.code >= 500) Result.retry()
                 else Result.failure()
             }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { Result.retry() }
-    }
-
-    private companion object {
-        val client = AppHttp.builder().followRedirects(false).followSslRedirects(false)
-            .callTimeout(20, TimeUnit.SECONDS).build()
     }
 }
 

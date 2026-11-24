@@ -309,6 +309,7 @@ private fun DebridHostMenu(account: DebridAccount, debrid: DebridState, preferre
         ExpressiveButton(
             { expanded = !expanded },
             Modifier.fillMaxWidth().semantics { stateDescription = expansionLabel },
+            compact = true,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primaryContainer,

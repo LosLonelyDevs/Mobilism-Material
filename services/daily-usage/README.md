@@ -1,16 +1,30 @@
 # Daily usage endpoint
 
-Vercel functions for anonymous daily app usage, backed by Neon Postgres. `POST /api/ping` accepts reports. `GET /api/stats` returns protected daily counts and app/device breakdowns. The browser dashboard lives at [mobilism-material-usage.vercel.app](https://mobilism-material-usage.vercel.app/).
+Vercel functions for anonymous daily app usage, backed by Neon Postgres. The app submits reports here. Signed-in dashboard users can see daily counts and device breakdowns. Open the deployment root to access the dashboard.
 
 Completed-day endpoint counters share that same report. App usage shows request totals, outcomes, and average response-header time for the selected UTC day or range. This panel stays hidden until the verified stable catalog contains v0.1.24 or later, then displays its minimum version. See [request traffic](../../docs/request-traffic.md) for batching, coverage, and limitations.
 
-Production runs at [mobilism-material-usage.vercel.app](https://mobilism-material-usage.vercel.app/api/ping), in the separate `mobilism-material-usage` Vercel project. Its dedicated `mobilism-material-usage-db` Neon database uses the free plan in `iad1`. The existing app projects are unchanged.
+The usage service has its own Vercel project and Neon database. Set `DAILY_USAGE_ENDPOINT` to the private build configuration value for the HTTPS reporting URL.
 
-The repository Actions variable `DAILY_USAGE_ENDPOINT` supplies future release builds. The root `.env` also saves that URL and the dashboard credentials. Server credentials are in Vercel and the ignored `services/daily-usage/.env`; never include either environment file in Git or deployment uploads. No app version was changed by deployment.
+The Actions build setting supplies future release builds. Keep server credentials in the deployment environment and local overrides outside Git.
+
+## Verify Android contributions
+
+Apply `schema.sql` before enabling verification. Set these values in the service environment:
+
+| Setting | Value |
+|---|---|
+| `ANDROID_RELEASE_CERT_SHA256` | The 64-digit SHA-256 signing certificate fingerprint from a known official release. Check it with `apksigner verify --print-certs`. |
+| `APP_ATTESTATION_SECRET` | A separate random server secret of at least 32 characters. |
+| `APP_WRITE_POLICY` | Defaults to `observe` so older installs keep contributing during rollout. Set `enforce` to require verified writes. |
+
+In observe mode, existing clients can contribute. Filter the function logs for `app-write` to compare verified, unsigned, and denied requests. These are request counts. Switch to enforcement after checking coverage on supported devices. Invalid signed requests never contribute. An unsigned Following lookup still gets its cache results in either mode.
+
+The official APK can enroll from GitHub, Obtainium, or another installer. Enrollment checks Android hardware key attestation, the release signer, and locked verified boot. Locked GrapheneOS devices use the project's signed list of official boot keys. The app needs no Play services or Mobilism credentials for enrollment. Keys rotate when their 24-hour tickets expire. Repeated signed requests count once. Keep the same ticket secret across function instances. [Android attestation](https://developer.android.com/privacy-and-security/security-key-attestation) · [GrapheneOS compatibility](https://grapheneos.org/articles/attestation-compatibility-guide)
 
 ## Shared Latest Apps cache
 
-`POST /api/latest-apps` accepts up to 20 public release summaries from Apps > Latest or exact matches from a Following search. Each record holds the app name, release title, version, topic ID, posting time, and uploader. An older upload cannot replace a newer release. Contributions respect the app's usage-sharing opt-out.
+The cache accepts up to 20 public release summaries from Apps > Latest or exact matches from a Following search. Each record holds the app name, release title, version, topic ID, posting time, and uploader. An older upload cannot replace a newer release. Contributions respect the app's usage-sharing opt-out.
 
 The public `GET` snapshot holds the newest 500 apps by posting date. Following has another 500 slots. Apps people requested in the last 24 hours get first pick. Hits and misses both count. Yesterday's counts carry less weight as today progresses. The most recent request breaks ties. Other releases use spare slots in posting order.
 
@@ -60,25 +74,26 @@ The separate bearer `STATS_TOKEN` remains available for scripts. The browser nev
    | `ADMIN_TOTP_SECRET` | Random 20-byte secret encoded as 32 Base32 characters |
    | `ADMIN_SESSION_SECRET` | Separate random signing and encryption secret of at least 32 characters |
 
-4. Deploy. The production `/api/ping` route must accept unauthenticated app requests. `/api/stats` requires a completed two-factor browser session or its bearer token; `/api/cleanup` requires its separate bearer token. Use Vercel Firewall rate limits on `/api/ping` to limit abuse; do not put a shared secret in the APK. Keep preview and script fixtures outside production uploads with `.vercelignore`.
-5. Set the GitHub repository **Actions variable** `DAILY_USAGE_ENDPOINT` to `https://YOUR-PROJECT.vercel.app/api/ping`. The release and manual APK workflows pass it to Gradle. Local builds use the same environment variable:
+4. Deploy. Reading stats requires a two-factor dashboard session or its bearer token. Scheduled cleanup uses a separate token. Apply firewall rate limits to app submissions. Keep preview and script fixtures outside production uploads with `.vercelignore`.
+5. Set the GitHub repository **Actions variable** `DAILY_USAGE_ENDPOINT` to the HTTPS reporting URL from your deployment configuration. The release and manual APK workflows pass it to Gradle. Local builds use the same environment variable:
 
    ```sh
-   DAILY_USAGE_ENDPOINT=https://YOUR-PROJECT.vercel.app/api/ping bash ./gradlew :app:assembleRelease
+   : "${DAILY_USAGE_ENDPOINT:?Set the reporting URL first}"
+   bash ./gradlew :app:assembleRelease
    ```
 
 The endpoint is compiled into the APK. Setting the variable does not change installed apps. An empty variable disables reporting; debug builds never send reports. No app version is changed by this setup.
 
 Apply the full idempotent `schema.sql` before deploying user management. It adds user and session tables and binds login challenges to users without changing usage data. Existing dashboard sessions require a fresh sign-in after this upgrade. Keep `ADMIN_SESSION_SECRET` stable: changing it requires re-encrypting stored authenticator keys with the new key first. Keep bootstrap environment credentials configured even after changing the owner's credentials through My account.
 
-The daily Vercel cron calls `/api/cleanup` with `CRON_SECRET`. It deletes receipts older than the retry window, aggregates older than 365 UTC dates, expired sessions and login challenges, and login limits older than a day. Check that the cron is enabled after deployment. Use separate databases and tokens for preview deployments.
+The daily Vercel cron runs cleanup with `CRON_SECRET`. It deletes receipts older than the retry window, aggregates older than 365 UTC dates, expired sessions and login challenges, and login limits older than a day. Check that the cron is enabled after deployment. Use separate databases and tokens for preview deployments.
 
 ## Read counts
 
 ```sh
 curl --fail --silent --show-error \
   -H "Authorization: Bearer $STATS_TOKEN" \
-  'https://YOUR-PROJECT.vercel.app/api/stats?from=2026-11-01&to=2026-11-04'
+  "${STATS_URL:?Set the stats URL first}?from=2026-11-01&to=2026-11-04"
 ```
 
 The default range is the last 30 UTC dates. Up to 365 dates are allowed. `daily` includes zero-count dates; `breakdown` groups by app version/code, Android API level, manufacturer, and model. Counts are decimal strings so large integers remain exact. Dates can gain late reports for seven days.

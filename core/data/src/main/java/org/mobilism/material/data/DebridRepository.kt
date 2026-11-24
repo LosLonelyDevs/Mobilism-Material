@@ -118,7 +118,14 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
             if (!isEnabled()) throw java.io.IOException("Premium services disabled")
             chain.proceed(chain.request())
         }.addInterceptor(DiagnosticInterceptor(diagnostics)).build()
-    private val api = DebridApi(this.client, diagnostics)
+    private var api = DebridApi(this.client, diagnostics)
+    private var mobilismCatalogStartedAt: Long? = null
+
+    private fun forgetMobilismCatalog() {
+        // The provider client holds a fallback catalog. Its OkHttp connection pool and saved credentials outlive it.
+        api = DebridApi(client, diagnostics)
+        mobilismCatalogStartedAt = null
+    }
     private fun megaSessions(owner: String) = MegaDebridSessions(api,
         read = { keys.read(DebridProvider.MegaDebrid) },
         save = { value -> requireEnabled(); keys.write(DebridProvider.MegaDebrid, value, owner) },
@@ -149,6 +156,7 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
         if (!loading.tryLock()) return@withContext
         try {
             val owner = forumSession.read()?.username ?: return@withContext
+            mutex.withLock { applyCatalogPolicy() }
             val previous = lastLoad
             if (previous != null && now() - previous in 0 until requestLimits().debridRefreshIntervalMs) return@withContext
             lastLoad = now()
@@ -214,6 +222,7 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
     suspend fun removeKey(provider: DebridProvider) = withContext(Dispatchers.IO) {
         mutex.withLock {
             keys.remove(provider)
+            if (provider == DebridProvider.Mobilism) forgetMobilismCatalog()
             downloadAccess.revoke(provider)
             if (provider == DebridProvider.MegaDebrid) cache.edit().remove("mega-premium-until").apply()
             cache.edit().remove(provider.name).remove(provider.name + "-updated")
@@ -256,6 +265,7 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
     private suspend fun refreshHosts(provider: DebridProvider, validate: Boolean) = withContext(Dispatchers.IO) {
         mutex.withLock {
             if (!isEnabled()) return@withLock
+            applyCatalogPolicy()
             if (state.value.accounts.none { it.provider == provider && it.configured }) return@withLock
             update(provider) { it.copy(busy = true, hostsVerified = false, error = null) }
             try {
@@ -270,14 +280,19 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
                     val domains = JSONArray(get("https://api.real-debrid.com/rest/1.0/hosts/domains"))
                     (0 until domains.length()).map { domains.getString(it) }
                 } else emptyList()
+                if (provider == DebridProvider.Mobilism && mobilismCatalogStartedAt == null)
+                    mobilismCatalogStartedAt = System.currentTimeMillis()
                 val providerHosts = withAccount(provider, owner) { key -> api.availableHosts(provider, key, catalogDomains) }
                 requireEnabled()
                 requireForumUser(owner)
                 val hosts = Alphabetical.sorted(if (provider == DebridProvider.Mobilism) providerHosts
                     else MobilismHosts.shortlist(MobilismHosts.domains, providerHosts)) { it.name }
+                // A blocked public catalog can reuse the first result, so a refresh alone cannot renew its age.
+                val catalogAt = if (provider == DebridProvider.Mobilism) checkNotNull(mobilismCatalogStartedAt)
+                    else System.currentTimeMillis()
                 cache.edit().putString(provider.name, JSONArray().apply {
                     hosts.forEach { put(JSONObject().put("domain", it.domain).put("name", it.name)) }
-                }.toString()).putLong(provider.name + "-updated", System.currentTimeMillis())
+                }.toString()).putLong(provider.name + "-updated", catalogAt)
                     .putInt(provider.name + "-format", CACHE_FORMAT).apply()
                 downloadAccess.verified(provider, owner, hosts)
                 update(provider) { it.copy(hosts = hosts, hostsVerified = true, busy = false, error = null) }
@@ -305,10 +320,18 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
         }
     }
 
+    suspend fun permitsDownload(owner: String, host: String): Boolean = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            applyCatalogPolicy()
+            isEnabled() && downloadAccess.permits(owner, host)
+        }
+    }
+
     suspend fun resolve(url: String): String = withContext(Dispatchers.IO) {
         requireEnabled()
         val owner = currentForumUser()
         val candidates = mutex.withLock {
+            applyCatalogPolicy()
             state.value.forForumUser(AuthState.SignedIn(owner)).supporting(url).map { it.provider }
         }
         if (candidates.isEmpty()) throw DebridException(resources.getString(R.string.debrid_no_host_account))
@@ -317,6 +340,7 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
             requireEnabled()
             mutex.withLock {
                 requireForumUser(owner)
+                applyCatalogPolicy()
                 if (!owner.equals(keys.owner(provider), true) ||
                     state.value.forForumUser(AuthState.SignedIn(owner)).supporting(url).none { it.provider == provider }) return@withLock
                 try {
@@ -348,6 +372,26 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
         source.request(MAX_CATALOG_BYTES + 1)
         check(source.buffer.size <= MAX_CATALOG_BYTES)
         source.readUtf8()
+    }
+
+    // Called under mutex so an older refresh cannot restore a catalog after a reset.
+    private fun applyCatalogPolicy() {
+        val limits = requestLimits()
+        val time = System.currentTimeMillis()
+        for (provider in DebridProvider.entries) {
+            val key = provider.name
+            val generation = limits.cacheResets[key] ?: 0
+            val reset = generation > cache.getInt("$key-generation", 0)
+            val expired = limits.premiumHostCacheTtlMs > 0 && cache.contains(key) &&
+                time - cache.getLong("$key-updated", 0) !in 0 until limits.premiumHostCacheTtlMs
+            if (!reset && !expired) continue
+            val editor = cache.edit().remove(key).remove("$key-updated").remove("$key-format")
+            if (reset) editor.putInt("$key-generation", generation)
+            editor.apply()
+            if (provider == DebridProvider.Mobilism) forgetMobilismCatalog()
+            downloadAccess.revoke(provider)
+            update(provider) { it.copy(hosts = emptyList(), hostsVerified = false) }
+        }
     }
 
     private fun cachedHosts(provider: DebridProvider): List<SupportedHost> = runCatching {

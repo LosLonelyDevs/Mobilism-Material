@@ -22,6 +22,9 @@ export const limitFields = [
   ['memberFailureCooldownMs', 'Initial failed member lookup cooldown (ms)', 60000, 60000, 3600000],
   ['memberFailureMaxCooldownMs', 'Maximum failed member lookup cooldown (ms)', 900000, 60000, 3600000],
   ['debridRefreshIntervalMs', 'Minimum debrid refresh interval (ms)', 900000, 60000, 3600000],
+  ['releaseLatestCacheTtlMs', 'Latest release cache lifetime (ms)', 300000, 0, 86400000],
+  ['releaseTopCacheTtlMs', 'Top release cache lifetime (ms)', 900000, 0, 86400000],
+  ['premiumHostCacheTtlMs', 'Premium host catalog lifetime (ms)', 0, 0, 604800000],
   ['followBatchSize', 'Following apps per batch', 5, 1, 20],
   ['followAppIntervalMs', 'Minimum interval per followed app (ms)', 21600000, 3600000, 604800000],
   ['followAttemptIntervalMs', 'Minimum following batch interval (ms)', 900000, 900000, 86400000],
@@ -29,6 +32,14 @@ export const limitFields = [
   ['followCacheBatchSize', 'Apps per background cache request (0 disables cache)', 200, 0, 512],
   ['followCacheManualCooldownMs', 'Manual cache check cooldown (ms)', 300000, 60000, 3600000],
 ];
+
+export const cacheResetTargets = ['Latest', 'Top', 'RealDebrid', 'MegaDebrid', 'Mobilism'];
+export const defaultStorage = { capacity: 1000, retentionHours: 24 };
+export function validStorage(value) {
+  return value && Object.keys(value).length === 2 && Number.isInteger(value.capacity) &&
+    value.capacity >= 500 && value.capacity <= 2000 && Number.isInteger(value.retentionHours) &&
+    value.retentionHours >= 6 && value.retentionHours <= 72;
+}
 
 export function defaultConfig() { return { schema: 2, revision: 0, limits: {}, notices: [], userAgentRules: [] }; }
 
@@ -39,7 +50,27 @@ export function validateConfig(input) {
   const text = (value, max) => typeof value === 'string' && value.trim().length > 0 && value.length <= max && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value);
   if (!object(input) || input.schema !== 2 || !integer(input.revision, 0, 2147483646) || !object(input.limits) ||
       !Array.isArray(input.notices) || input.notices.length > 10) fail('Invalid configuration. Use up to 10 notices.');
-  if (Object.keys(input).some(key => !['schema', 'revision', 'limits', 'notices', 'userAgentRules'].includes(key))) fail('Unknown configuration field.');
+  if (Object.keys(input).some(key => !['schema', 'revision', 'limits', 'notices', 'userAgentRules', 'imageRetryGeneration', 'imageCacheEnabled', 'imageRetriesEnabled', 'cacheResets', 'followingStorage'].includes(key))) fail('Unknown configuration field.');
+  const cache = {};
+  if ('followingStorage' in input) {
+    if (!validStorage(input.followingStorage)) fail('Choose 500 to 2,000 apps and 6 to 72 hours.');
+    cache.followingStorage = { ...input.followingStorage };
+  }
+  if ('cacheResets' in input) {
+    if (!object(input.cacheResets) || Object.entries(input.cacheResets).some(([target, revision]) =>
+      !cacheResetTargets.includes(target) || !integer(revision, 1, 2147483646))) fail('Invalid cache reset.');
+    cache.cacheResets = { ...input.cacheResets };
+  }
+  const images = {};
+  for (const field of ['imageCacheEnabled', 'imageRetriesEnabled']) {
+    if (!Object.hasOwn(input, field)) continue;
+    if (typeof input[field] !== 'boolean') fail('Image switches must be on or off.');
+    images[field] = input[field];
+  }
+  if (Object.hasOwn(input, 'imageRetryGeneration')) {
+    if (!integer(input.imageRetryGeneration, 1, 2147483646)) fail('Invalid image retry generation.');
+    images.imageRetryGeneration = input.imageRetryGeneration;
+  }
   const limits = {};
   for (const key of Object.keys(input.limits)) {
     if (key === 'followPullToRefreshEnabled') {
@@ -81,5 +112,5 @@ export function validateConfig(input) {
     } else if (notice.linkText !== null) fail('Link text needs a URL.');
     return { ...notice, deviceNotification: notice.deviceNotification ?? false, audience: validateAudience(notice.audience) };
   });
-  return { schema: 2, revision: input.revision, limits, notices, userAgentRules: validateUserAgentRules(input.userAgentRules) };
+  return { schema: 2, revision: input.revision, limits, notices, userAgentRules: validateUserAgentRules(input.userAgentRules), ...images, ...cache };
 }

@@ -28,6 +28,43 @@ test('empty database returns no overrides and no notices publicly', async () => 
   assert.deepEqual(result.body, defaultConfig());
   assert.equal(result.headers['Cache-Control'], 'no-store');
 });
+test('only an admin with Controls can publish image switches or a new retry generation', async () => {
+  const handler = user => adminHandler(query, () => user);
+  const admin = handler({ isAdmin: true, pages: ['app-controls'] });
+  const editor = handler({ isAdmin: false, pages: ['app-controls'] });
+  const publish = (service, body) => call(service, { method: 'PUT', body });
+  const first = { ...defaultConfig(), imageRetryGeneration: 1, imageCacheEnabled: false, imageRetriesEnabled: true };
+  assert.equal((await publish(editor, first)).statusCode, 403);
+  assert.equal((await publish(handler({ isAdmin: true, pages: [] }), first)).statusCode, 403);
+  assert.equal((await publish(admin, first)).statusCode, 200);
+  assert.equal((await publish(admin, first)).statusCode, 409);
+  const second = { ...defaultConfig(), revision: 1, limits: { searchSpacingMs: 11000 } };
+  assert.equal((await publish(editor, second)).statusCode, 200);
+  const live = (await call(publicHandler(query))).body;
+  assert.equal(live.imageRetryGeneration, 1);
+  assert.equal(live.imageCacheEnabled, false);
+  assert.equal(live.imageRetriesEnabled, true);
+  for (const field of ['imageCacheEnabled', 'imageRetriesEnabled']) {
+    assert.equal((await publish(editor, { ...live, [field]: !live[field] })).statusCode, 403);
+    assert.throws(() => validateConfig({ ...live, [field]: 'false' }));
+  }
+  assert.equal((await publish(admin, { ...live, imageRetryGeneration: 999 })).statusCode, 400);
+  assert.equal((await publish(admin, { ...live, imageRetryGeneration: 3, imageRetriesEnabled: false })).statusCode, 400);
+  assert.equal((await publish(admin, { ...live, imageRetryGeneration: 3 })).statusCode, 200);
+  assert.deepEqual((await call(publicHandler(query))).body.limits, second.limits);
+});
+test('cache resets are admin-only, targeted and preserved by an older editor', async () => {
+  const handler = admin => adminHandler(query, () => ({ isAdmin: admin, pages: ['app-controls'] }));
+  const publish = (admin, fields) => call(handler(admin), { method: 'PUT', body: { ...defaultConfig(), ...fields } });
+  assert.equal((await publish(false, { cacheResets: { Top: 1 } })).statusCode, 403);
+  assert.equal((await publish(true, { cacheResets: { Unknown: 1 } })).statusCode, 400);
+  assert.equal((await publish(true, { cacheResets: { Top: 2 } })).statusCode, 400);
+  assert.equal((await publish(true, { cacheResets: { Top: 1 } })).statusCode, 200);
+  assert.equal((await publish(true, { revision: 1, cacheResets: { MegaDebrid: 2 } })).statusCode, 200);
+  assert.equal((await publish(false, { revision: 2 })).statusCode, 200);
+  assert.deepEqual((await call(publicHandler(query))).body.cacheResets, { Top: 1, MegaDebrid: 2 });
+});
+
 test('User-Agent rules round-trip publicly without changing notices or limits', async () => {
   const rules = [{ id: 'new-client', name: 'New clients', enabled: true, allVersions: false,
     versions: ['0.1.22'], userAgent: 'MobilismClient', statuses: [403] }];
@@ -133,7 +170,8 @@ test('upstream policy thresholds round-trip through the protected editor and pub
   const limits = Object.fromEntries(limitFields.map(([key, , fallback]) => [key, fallback]));
   Object.assign(limits, { readSpacingMs: 2000, readConcurrency: 1, messagePollIntervalMs: 180000,
     memberLookupSpacingMs: 5000, debridRefreshIntervalMs: 60000 });
-  const saved = await call(adminHandler(query, () => true), { method: 'PUT', body: { ...defaultConfig(), limits } });
+  const saved = await call(adminHandler(query, () => ({ isAdmin: true, pages: ['app-controls'] })),
+    { method: 'PUT', body: { ...defaultConfig(), limits } });
   assert.equal(saved.statusCode, 200);
   assert.deepEqual((await call(publicHandler(query))).body.limits, limits);
 });

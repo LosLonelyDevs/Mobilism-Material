@@ -86,6 +86,8 @@ export function cleanReports(query) {
     DELETE FROM admin_login_limits WHERE started_at < CURRENT_TIMESTAMP - interval '1 day' RETURNING key
   ), challenges AS (
     DELETE FROM admin_login_challenges WHERE expires_at < CURRENT_TIMESTAMP RETURNING nonce
+  ), write_windows AS (
+    DELETE FROM app_write_windows WHERE window_start < extract(epoch from now())::bigint - 3600
   ), sessions AS (
     DELETE FROM dashboard_sessions WHERE expires_at < CURRENT_TIMESTAMP RETURNING nonce
   ) SELECT (SELECT count(*)::int FROM receipts) AS receipts,

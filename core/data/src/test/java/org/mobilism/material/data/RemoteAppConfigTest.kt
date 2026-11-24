@@ -5,6 +5,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class RemoteAppConfigTest {
+    @Test fun cacheLifetimesAndResetsAcceptOnlySupportedValues() {
+        val limits = RemoteAppConfig.parse("""{"schema":2,"limits":{"releaseTopCacheTtlMs":0,
+            "releaseLatestCacheTtlMs":12345,"premiumHostCacheTtlMs":604800001},
+            "cacheResets":{"Latest":2,"Top":0,"RealDebrid":3,"MegaDebrid":"4","Unknown":5}}""").limits
+        assertEquals(0L, limits.releaseTopCacheTtlMs)
+        assertEquals(12345L, limits.releaseLatestCacheTtlMs)
+        assertTrue(limits.customTopLifetime && limits.customLatestLifetime)
+        assertEquals(0L, limits.premiumHostCacheTtlMs)
+        assertEquals(mapOf("Latest" to 2, "RealDebrid" to 3), limits.cacheResets)
+        assertFalse(ApiRequestLimits.parse(JSONObject("""{"releaseTopCacheTtlMs":86400001}""")).customTopLifetime)
+    }
+
+    @Test fun imageControlsUseSafeDefaultsAndAcceptIndependentOverrides() {
+        fun parse(fields: String) = RemoteAppConfig.parse("""{"schema":2,$fields}""").images
+        assertEquals(ImageCacheControls(), parse(""""imageCacheEnabled":"false","imageRetryGeneration":-1"""))
+        assertEquals(ImageCacheControls(cacheEnabled = false, retryGeneration = 7),
+            parse(""""imageCacheEnabled":false,"imageRetryGeneration":7"""))
+        assertEquals(ImageCacheControls(retriesEnabled = false), parse(""""imageRetriesEnabled":false"""))
+    }
     @Test fun followingGestureFailsClosedAndCacheOverridesDoNotChangeDirectLimits() {
         val defaults = ApiRequestLimits.Defaults
         for (invalid in listOf(JSONObject.NULL, "true", 1, false))

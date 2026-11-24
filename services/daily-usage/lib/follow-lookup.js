@@ -1,15 +1,23 @@
+import { defaultStorage } from '../public/config-schema.js';
+
 const maxNames = 512;
 const receiptFormat = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 export const appKey = name => name.normalize('NFKC').trim().toLowerCase().replace(/\s+/gu, ' ');
 export const cacheLifetime = 86400;
+// Scalar subqueries read the policy in the same statement as the snapshot.
+export const retentionSecondsSql = `(3600 * coalesce((SELECT (config->'followingStorage'->>'retentionHours')::int
+  FROM app_control WHERE id = 1), ${defaultStorage.retentionHours}))`;
+export const capacitySql = `coalesce((SELECT (config->'followingStorage'->>'capacity')::int
+  FROM app_control WHERE id = 1), ${defaultStorage.capacity})`;
 export const latestFeedSize = 500;
 const verificationLifetime = 21600;
 
 export async function visibleSnapshot(database, now, latestOnly = false) {
   const itemsColumn = latestOnly ? `jsonb_path_query_array(items, '$[0 to ${latestFeedSize - 1}]') AS items` : 'items';
-  const [row] = await database(`SELECT ${itemsColumn}, observed_at FROM latest_apps_cache WHERE singleton`);
-  const items = (row?.items ?? []).filter(item => !item.hiddenAt && (item.lastSeen ?? item.postedAt) > now - cacheLifetime);
-  return { observedAt: Number(row?.observed_at ?? 0), items };
+  const [row] = await database(`SELECT ${itemsColumn}, observed_at, ${retentionSecondsSql} AS lifetime FROM latest_apps_cache WHERE singleton`);
+  const lifetime = Math.min(row?.lifetime ?? cacheLifetime, latestOnly ? cacheLifetime : Infinity);
+  const items = (row?.items ?? []).filter(item => !item.hiddenAt && (item.lastSeen ?? item.postedAt) > now - lifetime);
+  return { observedAt: Number(row?.observed_at ?? 0), items, lifetime };
 }
 
 export function parseLookup(body) {
@@ -29,16 +37,17 @@ export function parseLookup(body) {
   });
 }
 
-export async function lookup(database, apps, adultFiltered, now, clientDay, mode, clientVersion) {
+export async function lookup(database, apps, adultFiltered, now, clientDay, mode, clientVersion, record = true) {
   const keys = apps.map(app => app.key);
   const [row] = await database(`SELECT observed_at, available.* FROM latest_apps_cache
     CROSS JOIN LATERAL (
       SELECT coalesce(jsonb_agg(item ORDER BY position) FILTER (WHERE (NOT $2::boolean OR (item->>'adultFiltered')::boolean)
-        AND (position <= ${latestFeedSize} OR (item->>'lastSeen')::bigint >= $4)), '[]') AS matches,
+        AND ((position <= ${latestFeedSize} AND coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $3::bigint - ${cacheLifetime})
+          OR (item->>'lastSeen')::bigint >= $4)), '[]') AS matches,
         coalesce(jsonb_agg(item->>'key'), '[]') AS keys
       FROM jsonb_array_elements(items) WITH ORDINALITY AS entry(item, position) WHERE item->>'key' = ANY ($1::text[])
-        AND NOT (item ? 'hiddenAt') AND coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $3
-    ) available WHERE singleton`, [keys, adultFiltered, now - cacheLifetime, now - verificationLifetime]);
+        AND NOT (item ? 'hiddenAt') AND coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $3::bigint - ${retentionSecondsSql}
+    ) available WHERE singleton`, [keys, adultFiltered, now, now - verificationLifetime]);
   if (!row) throw new Error();
   const feedObservedAt = Number(row.observed_at);
   const matches = new Set(row.keys);
@@ -52,7 +61,7 @@ export async function lookup(database, apps, adultFiltered, now, clientDay, mode
   const returned = new Set(items.map(item => item.key));
   const counts = apps.map(app => ({ ...app, hit: returned.has(app.key) ? 1 : 0,
     miss: fresh && !matches.has(app.key) ? 1 : 0 }));
-  try {
+  if (record) try {
     await database(`WITH input AS (
         SELECT * FROM jsonb_to_recordset($1::jsonb) AS a(key text, name text, receipt uuid, hit int, miss int)
       ), first_today AS (

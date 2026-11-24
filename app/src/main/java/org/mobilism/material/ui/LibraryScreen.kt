@@ -15,11 +15,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import coil3.compose.AsyncImage
+import org.mobilism.material.R
 import kotlinx.coroutines.launch
 import org.mobilism.material.data.AppLibraryStore
 import org.mobilism.material.data.LibraryEntry
@@ -46,17 +47,17 @@ fun LibraryScreen(
     val downloadedScroll = rememberLazyListState()
     LifecycleResumeEffect(Unit) { onRefresh(); onPauseOrDispose { } }
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = { TopAppBar(
-        title = { AppHeading("My Applications", HeadingLevel.Page, style = MaterialTheme.typography.titleLarge) },
-        navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack) },
+        title = { AppHeading(stringResource(R.string.drawer_library), HeadingLevel.Page, style = MaterialTheme.typography.titleLarge) },
+        navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.action_back), onBack) },
         actions = {
-            AppIconButton(Icons.Outlined.Bookmarks, "Following", onFollowing)
-            if (tab == 0) AppIconButton(Icons.Outlined.Refresh, "Refresh installed apps", onRefresh)
+            AppIconButton(Icons.Outlined.Bookmarks, stringResource(R.string.drawer_following), onFollowing)
+            if (tab == 0) AppIconButton(Icons.Outlined.Refresh, stringResource(R.string.library_refresh), onRefresh)
         },
     ) }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             PrimaryTabRow(tab, modifier = Modifier.widthIn(max = 840.dp)) {
-                listOf("Installed", "Downloaded").forEachIndexed { index, label ->
-                    Tab(selected = tab == index, onClick = { tab = index }, text = { Text(label) })
+                listOf(R.string.library_installed, R.string.library_downloaded).forEachIndexed { index, label ->
+                    Tab(selected = tab == index, onClick = { tab = index }, text = { Text(stringResource(label)) })
                 }
             }
             LazyColumn(state = if (tab == 0) installedScroll else downloadedScroll,
@@ -66,19 +67,19 @@ fun LibraryScreen(
                     item(key = "installed-controls") {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), singleLine = true,
-                                label = { Text("Find an installed app") }, shape = MaterialTheme.shapes.extraLarge,
+                                label = { Text(stringResource(R.string.library_filter)) }, shape = MaterialTheme.shapes.extraLarge,
                                 leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                                trailingIcon = { if (query.isNotEmpty()) AppIconButton(Icons.Outlined.Close, "Clear app filter", { query = "" }) })
-                            FilterChip(showSystem, { showSystem = !showSystem }, label = { Text("Include system apps") },
+                                trailingIcon = { if (query.isNotEmpty()) AppIconButton(Icons.Outlined.Close, stringResource(R.string.library_clear_filter), { query = "" }) })
+                            FilterChip(showSystem, { showSystem = !showSystem }, label = { Text(stringResource(R.string.library_system_apps)) },
                                 shape = MaterialTheme.shapes.large,
                                 leadingIcon = { Icon(if (showSystem) Icons.Outlined.Check else Icons.Outlined.PhoneAndroid, null, Modifier.size(18.dp)) })
-                            Text("Tap an app to find its releases on Mobilism.", style = MaterialTheme.typography.bodyMedium,
+                            Text(stringResource(R.string.library_find_hint), style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     val apps = Alphabetical.sorted(installed.apps) { it.label }.filter { (showSystem || !it.system) &&
                         (it.label.contains(query, true) || it.packageName.contains(query, true)) }
-                    if (installed.busy) item { LoadingState("Reading installed apps…", Modifier.fillMaxWidth()) }
+                    if (installed.busy) item { LoadingState(stringResource(R.string.library_reading), Modifier.fillMaxWidth()) }
                     installed.error?.let { item { ErrorPanel(it, onRetry = onRefresh) } }
                     items(apps, key = { it.packageName }) { app ->
                         ExpressiveCard({ onSearch(app.label) }, Modifier.fillMaxWidth()) {
@@ -87,25 +88,25 @@ fun LibraryScreen(
                                 Image(icon, null, Modifier.size(56.dp).clip(MaterialTheme.shapes.medium))
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     AppHeading(app.label, HeadingLevel.Subsection, style = MaterialTheme.typography.titleMedium)
-                                    Text(app.version.ifBlank { "Version unavailable" }, style = MaterialTheme.typography.bodySmall)
+                                    Text(app.version.ifBlank { stringResource(R.string.library_no_version) }, style = MaterialTheme.typography.bodySmall)
                                     Text(app.packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
-                                Icon(Icons.Outlined.Search, "Find releases", tint = theme.featured)
+                                Icon(Icons.Outlined.Search, stringResource(R.string.library_find), tint = theme.featured)
                             }
                         }
                     }
                     if (!installed.busy && installed.error == null && apps.isEmpty()) item {
-                        Text("No matching apps. Try including system apps.", Modifier.padding(16.dp))
+                        Text(stringResource(R.string.library_no_matches), Modifier.padding(16.dp))
                     }
                 } else {
                     val saved = Alphabetical.sorted(entries.filter { it.downloaded }) { ReleaseTitles.parse(it.release.title, it.release.section).name }
-                    if (saved.isEmpty()) item { Text("Releases you mark as downloaded appear here.", Modifier.padding(16.dp)) }
+                    if (saved.isEmpty()) item { Text(stringResource(R.string.library_empty_downloads), Modifier.padding(16.dp)) }
                     items(saved, key = { it.release.id }) { entry ->
                         val title = remember(entry.release.title, entry.release.section) { ReleaseTitles.parse(entry.release.title, entry.release.section) }
                         ExpressiveCard({ onRelease(entry.release.id) }, Modifier.fillMaxWidth()) {
                             Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                AsyncImage(entry.release.thumbnail, null, Modifier.size(56.dp).clip(MaterialTheme.shapes.medium))
+                                ReleaseArtwork(entry.release.thumbnail, null, Modifier.size(56.dp).clip(MaterialTheme.shapes.medium))
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     AppHeading(title.name, HeadingLevel.Subsection, style = MaterialTheme.typography.titleMedium)
                                     title.subtitle.takeIf { it.isNotBlank() }?.let {
@@ -114,9 +115,11 @@ fun LibraryScreen(
                                     ReleaseViewCount(entry.release.views)
                                     ReleasePostDate(entry.release.publishedAt)
                                 }
-                                AppIconButton(Icons.Outlined.DeleteOutline, "Remove ${title.name} from downloaded", {
+                                val cleared = stringResource(R.string.library_download_cleared)
+                                val undo = stringResource(R.string.action_undo)
+                                AppIconButton(Icons.Outlined.DeleteOutline, stringResource(R.string.library_remove_download, title.name), {
                                     store.downloaded(entry.release, false)
-                                    scope.launch { if (snackbar.showSnackbar("Downloaded mark cleared", "Undo") == SnackbarResult.ActionPerformed)
+                                    scope.launch { if (snackbar.showSnackbar(cleared, undo) == SnackbarResult.ActionPerformed)
                                         store.downloaded(entry.release, true) }
                                 })
                             }

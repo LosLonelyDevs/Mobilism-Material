@@ -28,7 +28,7 @@ class RequestTrafficTest {
         assertEquals("api/login", endpoint("auth/login"))
         assertEquals("forum/topic", RequestTrafficProtocol.endpoint(Request.Builder().url("https://forum.mobilism.org/viewtopic.php?t=123").build()))
         assertEquals("images", RequestTrafficProtocol.endpoint(Request.Builder().url("https://images.mobilism.org/private.jpg").build(), true))
-        for (url in listOf("https://mobilism.org.evil.test/api-new/search", "https://mobilism-material-usage.vercel.app/api/ping", "https://external.test/image.jpg")) {
+        for (url in listOf("https://mobilism.org.evil.test/api-new/search", "https://usage.example.invalid/sample", "https://external.test/image.jpg")) {
             assertNull(RequestTrafficProtocol.endpoint(Request.Builder().url(url).build(), true))
         }
         assertEquals(listOf(0, 1, 2, 3, 4, 5), listOf(200, 302, 403, 429, 503, null).map(RequestTrafficProtocol::outcome))

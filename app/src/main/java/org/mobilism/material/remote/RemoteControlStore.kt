@@ -49,6 +49,7 @@ internal class RemoteControlStore(
 
     // No disk cache of remote values: a cold start or failed refresh uses shipped defaults.
     val limits: ApiRequestLimits get() = currentConfig().limits
+    val imageControls get() = currentConfig().images
     val hasConfiguration: Boolean get() = fetchedAt?.let { now() - it in 0 until MAX_AGE_MS } == true
     private fun currentConfig(): RemoteAppConfig {
         val age = fetchedAt?.let { now() - it }

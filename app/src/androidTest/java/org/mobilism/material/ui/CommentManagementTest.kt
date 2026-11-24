@@ -65,7 +65,7 @@ class CommentManagementTest {
         fixture.signIn()
         val repository = Repository()
         lateinit var model: DiscussionsViewModel
-        compose.runOnUiThread { model = DiscussionsViewModel(repository, "Reader", SavedStateHandle(), initialTopic = topic) }
+        compose.runOnUiThread { model = DiscussionsViewModel(repository, "Reader", SavedStateHandle(), compose.activity::getString, initialTopic = topic) }
         compose.setContent { CompositionLocalProvider(LocalCommentGateway provides fixture.gateway) {
             MobilismTheme(reduceMotion = true) { DiscussionsScreen(model, AuthState.SignedIn("Reader"), {}, { _, _ -> }) }
         } }

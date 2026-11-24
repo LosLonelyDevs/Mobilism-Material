@@ -10,8 +10,8 @@ Existing update checks can also prompt for a newer published version when automa
 
 ## Publish a notice
 
-1. Sign in to the [admin overview](https://mobilism-material-usage.vercel.app/) with your password and authenticator.
-2. Open [App controls](https://mobilism-material-usage.vercel.app/app-controls), then **Add notice**. Usage reports are separate at `/app-usage`.
+1. Sign in to the dashboard with your password and authenticator.
+2. Open **App controls** at `/app-controls`, then **Add notice**. Usage reports are at `/app-usage`.
 3. Set the message, audience rules, and action. Schedule and **Device notification** are optional; device notifications default off.
 4. Use **Test this notice**, then choose **Create notice**. The form closes and the saved preview card appears, disabled.
 5. Review the card, then switch it to **Enabled**. Use its edit icon for changes; **Save notice** returns to the list.
@@ -162,13 +162,33 @@ The app keeps its hardcoded defaults. Missing or invalid fields fall back indivi
 
 Open apps check every five minutes. Schedules update within 30 seconds while foregrounded. Configuration expires after 15 minutes without a successful refresh. Foregrounding checks freshness without hammering the service. Required notices include **Refresh notice**, limited to one attempt per 15 seconds. An outage releases the notice gate and restores defaults.
 
-Remote controls work independently of anonymous usage reporting and the user's optional update alerts. They use the origin from `DAILY_USAGE_ENDPOINT`, requesting `/api/app-config`. Builds without that endpoint keep their defaults and show no remote notices.
+Remote controls work independently of anonymous usage reporting and the user's optional update alerts. They use the service configured by `DAILY_USAGE_ENDPOINT`. Builds without that endpoint keep their defaults and show no remote notices.
+
+### Release images
+
+Admins with Controls access can manage release images under **Controls > API controls > Device caches**. These controls require Android support added after the published 0.1.27 APK.
+
+- **Cache release images** lets the app reuse artwork from memory and disk. Turning it off bypasses both caches on new network-enabled image loads and can increase requests to image hosts. Turning it back on reuses good copies.
+- **Retry failed images** lets the next view retry a known failure after one minute. Repeated failures wait five minutes, thirty minutes, then one hour. Turning it off pauses those attempts.
+- **Retry failed thumbnails** lets each failed URL skip its longer local wait once. A phone still waits at least a minute between attempts for that URL, retries at most three failed images per rolling minute, and honors the host’s Retry-After. The command travels with normal config refreshes. It does not download images in the background.
+
+The app rejects the image host’s error text before writing to disk and removes cached files that fail decoding. It saves retry timing under a hash of the URL.
+
+## Cache lifetimes and resets
+
+Under **Controls > API controls > Device caches**, administrators can set Latest and Top lifetimes in minutes and the maximum age of Premium host lists in hours. Latest defaults to 5 minutes and Top to 15 minutes on disk. Home Latest uses 5 minutes. Home Popular normally stays loaded for the screen session. An explicit feed lifetime also applies when returning to its list or Home shelf. Zero bypasses reuse on the next visit. Pull-to-refresh remains available.
+
+Each reset targets Latest, Top or one Premium provider. Phones apply it once on next use and remember its revision across restarts. Premium catalog age defaults to unlimited. An expired or reset catalog becomes inactive until a normal provider refresh verifies host support. Saved accounts stay connected. These device controls require a supporting Android build.
+
+Under **Followed App Cache > Cache storage**, administrators can keep 500 to 2,000 apps for 6 to 72 hours after their last sighting. Defaults are 1,000 apps and 24 hours. The newest 500 keep priority. Remaining slots use lookup demand over the past day. Shortening retention affects reads immediately at origin. Capacity is enforced on the next contribution. Public GET responses can remain cached for up to 60 seconds. The server still returns at most 500 apps and preserves the existing freshness checks. Apply the service schema before deploying support for more than 1,000 slots.
+
+Discussion category activity has a separate 5-minute hold per category, including failed attempts. Explicit refresh clears the hold. The category list and first topic page have separate lifetimes under **API controls > Limits > Discussions**.
 
 ## Deploy the service
 
-Run the idempotent `services/daily-usage/schema.sql` against the existing database. It adds the singleton `app_control` table without changing usage or sign-in records. Deploy `services/daily-usage` to its existing `mobilism-material-usage` Vercel project.
+Run the idempotent `services/daily-usage/schema.sql` against the existing database. It adds the singleton `app_control` table without changing usage or sign-in records. Deploy `services/daily-usage` to its existing Vercel project.
 
-The initial configuration contains no notices or threshold overrides. `/api/control-config` requires the existing admin session. Writes also require a matching Origin and JSON content type. `/api/app-config` exposes only the validated public configuration. Both endpoints disable response caching.
+The initial configuration contains no notices or threshold overrides. Editing controls requires the existing admin session. Writes also require a matching Origin and JSON content type. The Android app receives only the validated public configuration. Both endpoints disable response caching.
 
 ## User-Agent
 
