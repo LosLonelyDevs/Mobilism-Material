@@ -72,6 +72,25 @@ class AppDiscoveryTest {
         assertTrue(result.featured.none { it == reader || it == notes })
     }
 
+    @Test fun aSparseSavedCategoryUsesViewedLatestAndSwitchesWhenItCannotFill() {
+        val song = app(1, "Deezer v1")
+        val labels = listOf(ReleaseCategory(7, "Music"), ReleaseCategory(8, "Photography"))
+        val photos = (10L..16L).map { app(it, "Camera $it v1", 8).copy(views = it) }
+        val following = listOf(LibraryEntry(app(2, "Player v1"), watched = true))
+        val saved = DailySelection(emptyList(), listOf(7), listOf(song.discoveryKey()))
+        fun picks(latest: List<Release>) = discoverPicks(listOf(song), following, latest, emptyList(), labels, 1, saved = saved)
+        assertTrue(picks(emptyList()).featured.isEmpty())
+        val alternative = picks(photos)
+        assertEquals(listOf("Photography"), alternative.categoryNames)
+        assertTrue(alternative.featured.size in 3..5)
+        val music = (20L..24L).map { app(it, "Music app $it v1").copy(views = it) }
+        val expanded = picks(photos + music)
+        assertEquals(listOf("Music"), expanded.categoryNames)
+        assertEquals(5, expanded.featured.size)
+        assertEquals(song.id, expanded.featured.first().id)
+        assertTrue(expanded.discover.none { it in expanded.featured })
+    }
+
     @Test fun emptySharedCacheFallsBackToDistinctUnfollowedLocallyLoadedApps() {
         val followed = app(1, "Followed v1")
         val old = app(2, "Sketch v1")

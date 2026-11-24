@@ -52,6 +52,34 @@ test('category metadata fills older rows, survives legacy uploads, and belongs t
     assert.equal((await upload({ ...next, category })).statusCode, 400);
 });
 
+test('a cache read can carry an observed release without changing the Latest feed timestamp', async () => {
+  const older = item(1, 'Camera'), newer = { ...item(2, 'Camera'), version: '2', title: 'Camera v2', category: { id: 7, name: 'Photography' } };
+  await post([older], true);
+  const apps = [{ name: 'Camera', receipt: randomUUID() }];
+  const observations = { items: [newer], readAt: now - 600, adultFiltered: false };
+  const request = extra => call('POST', { apps, adultFiltered: false, day, observations: extra });
+  const reply = await request(observations);
+  assert.equal(reply.headers['X-App-Observations-Accepted'], '1');
+  assert.equal(reply.body.items[0].id, 2);
+  assert.deepEqual(reply.body.items[0].category, newer.category);
+  await request({ ...observations, items: [older] });
+  for (const bad of [{ ...observations, items: [{ url: 'private' }] }, { ...observations, readAt: now - 21601 },
+    { ...observations, items: Array(11).fill(newer) }]) {
+    const ignored = await request(bad);
+    assert.equal(ignored.statusCode, 200);
+    assert.equal(ignored.headers['X-App-Observations-Accepted'], undefined);
+    assert.equal(ignored.body.items[0].id, 2);
+  }
+  const failure = await call('POST', { apps, adultFiltered: false, day, observations }, async (sql, values) => {
+    if (sql.includes('UPDATE latest_apps_cache SET items')) throw new Error('optional write unavailable');
+    return query(sql, values);
+  });
+  assert.equal(failure.statusCode, 200);
+  assert.equal(failure.body.items[0].id, 2);
+  assert.equal((await call('GET')).body.observedAt, now);
+  assert.equal((await named(apps, true)).body.items.length, 0);
+});
+
 test('Installed shares current versions without receiving device packages or counting lookups', async () => {
   const camera = { ...item(11, 'Camera'), packageName: 'example.camera', category: { id: 7 } };
   await post([camera], true, true);
@@ -108,6 +136,8 @@ test('one lookup counts each requesting device once per app and only absent visi
   assert.equal((await named(apps, false, noMetrics)).body.items.length, 2);
   assert.equal((await named(apps, false, async () => { throw new Error(); })).statusCode, 503);
   assert.deepEqual(await counts(), before);
+  const category = { id: 7, name: 'Photography' };
+  await post([{ ...item(1), category }], true, true);
   const res = { setHeader() {}, end(value) { this.body = JSON.parse(value); } };
   await followingHandler(query, () => true,
     async () => ({ versions: [{ version: '0.1.24', versionCode: 25, prerelease: false }] }), () => new Date(now * 1000))(
@@ -116,6 +146,9 @@ test('one lookup counts each requesting device once per app and only absent visi
   assert.equal(res.body.cachedApps, 2);
   assert.deepEqual(res.body.lookups, { hits: '4', misses: '3', measuredMisses: '3' });
   assert.equal(res.body.followRankings.find(row => row.name === 'APP 1').cachedVersion, '1.1');
+  assert.deepEqual(res.body.followRankings.find(row => row.name === 'APP 1').category, category);
+  assert.deepEqual(res.body.recentApps.find(row => row.name === 'APP 1').category, category);
+  assert.deepEqual(res.body.catalog.find(row => row.name === 'App 1').category, category);
   assert.equal(res.body.followRankings.find(row => row.name === 'Absent').cachedVersion, null);
   assert.equal(res.body.followRankings.find(row => row.missRank === 1).name, 'Absent');
   assert.ok(res.body.followRankings.every(row => row.followers === '2'));

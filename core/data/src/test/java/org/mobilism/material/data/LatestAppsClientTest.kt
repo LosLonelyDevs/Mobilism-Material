@@ -44,6 +44,43 @@ class LatestAppsClientTest {
         requests.forEach { assertEquals(identity, it.header("User-Agent")) }
     }
 
+    @Test fun recentPublicObservationsRideExistingPostsAndClearOnlyAfterAcknowledgment() = runBlocking {
+        var enabled = true
+        var now = 100L
+        var accept = false
+        val requests = mutableListOf<JSONObject>()
+        val client = LatestAppsClient("https://fixture.invalid/api/ping", AppHttp.builder(OkHttpClient()) { identity }.addInterceptor { chain ->
+            val builder = Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+            chain.request().body?.let { body -> requests += JSONObject(Buffer().also { body.writeTo(it) }.readUtf8()) }
+            if (accept) builder.header("X-App-Observations-Accepted", "1")
+            builder.body(JSONObject().put("observedAt", now).put("items", org.json.JSONArray()).toString().toResponseBody()).build()
+        }.build(), now = { now }, contributionsEnabled = { enabled })
+        val release = Release(7, "Camera v2", "Uploader", null, 80, 0, 4, section = ContentSection.Apps, categoryId = 7,
+            contentHtml = "private body", downloadLinks = listOf("https://private.invalid/file"))
+        fun observe() = client.observe(listOf(release), true, mapOf(7L to "Photography"))
+        suspend fun lookup() { client.lookup(listOf("Camera"), true) { "day" } }
+        observe()
+        client.snapshot(false)
+        assertTrue(requests.isEmpty())
+        lookup()
+        val payload = requests.last().getJSONObject("observations")
+        assertEquals("Photography", payload.getJSONArray("items").getJSONObject(0).getJSONObject("category").getString("name"))
+        assertFalse(payload.toString().contains("private"))
+        accept = true
+        client.publish(LatestAppsPage(listOf(release), true, true, now))
+        assertTrue(requests.last().has("observations"))
+        lookup()
+        assertFalse(requests.last().has("observations"))
+        observe()
+        now += 21_601
+        lookup()
+        assertFalse(requests.last().has("observations"))
+        observe()
+        enabled = false
+        lookup()
+        assertFalse(requests.last().has("observations"))
+    }
+
     @Test fun installedCatalogMatchesPrivatelyByPackageOrUniqueExactLabel() = runBlocking {
         val rows = org.json.JSONArray()
         fun row(id: Int, name: String, pkg: String?, safe: Boolean = true) {

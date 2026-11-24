@@ -60,7 +60,7 @@ if (futureFollowing) {
   const at = Math.floor(Date.now() / 1000);
   await query('UPDATE latest_apps_cache SET items = $1::jsonb, observed_at = $2 WHERE singleton',
     [JSON.stringify([{ key: 'calendar', id: 1, name: 'Calendar', title: 'Calendar v2.1', version: '2.1',
-      postedAt: at, author: 'Example', adultFiltered: true }]), at]);
+      postedAt: at, author: 'Example', adultFiltered: true, category: { id: 432, name: 'Office & Productivity' } }]), at]);
 }
 const users = usersHandler({ database: query, env }), account = accountHandler({ database: query, env });
 await userStore(query, env).ensureOwner();

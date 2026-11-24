@@ -32,7 +32,8 @@ internal class MobilismApi(private val context: Context, private val diagnostics
     client: OkHttpClient = AppHttp.client, private val challengeRecovery: ChallengeRecovery = ChallengeRecovery.None,
     private val requestLimits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
     requestTraffic: RequestTrafficSink = RequestTrafficSink.None,
-    private val onLatestApps: (LatestAppsPage) -> Unit = {}) {
+    private val onLatestApps: (LatestAppsPage) -> Unit = {},
+    private val onObservedApps: (List<Release>, Boolean) -> Unit = { _, _ -> }) {
     private val client = AppHttp.builder(client)
         .apply {
             interceptors().add(0, DiagnosticInterceptor(diagnostics))
@@ -109,7 +110,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
                     latestWindow.baseline(requestKey("latest:$token:$hideAdult"), result.items, readAt)
                 }.getOrNull() else null
                 onLatestApps(LatestAppsPage(result.items, first, hideAdult, readAt, baseline))
-            }
+            } else if (section == ContentSection.Apps) onObservedApps(result.items, hideAdult)
             return result
         }
         val firstPage = kotlin.coroutines.coroutineContext[FirstFeedPage] ?: return fetch(null)
@@ -148,6 +149,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             try {
                 val release = ReleaseJson.parse(request("release/$id", token).getJSONObject("response"))
                 forumPostIds.remove(id)
+                if (release.section == ContentSection.Apps) onObservedApps(listOf(release), false)
                 return TopicContent.Catalog(release)
             } catch (failure: ApiFailure) {
                 if (failure.httpStatus != 400 || failure.message != "No records found.") throw failure
@@ -300,8 +302,11 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         return requestPage("search", token, form = mapOf(
             "search" to query.trim(), "count" to page.toString(), "limits" to PAGE_SIZE.toString(),
             "isrelease" to "1", "isdiscussion" to "0", "isother" to "0", "id" to scope.apiId,
-        ), hideAdult = hideAdult, parse = SearchJson::page).let { result ->
-            result.copy(items = result.items.map { it.copy(section = it.section ?: scope.section) })
+        ), hideAdult = hideAdult, onFreshSearch = { page: ReleasePage ->
+            onObservedApps(page.items.filter { it.section == ContentSection.Apps }, hideAdult)
+        }) { json ->
+            val page = SearchJson.page(json)
+            page.copy(items = page.items.map { it.copy(section = it.section ?: scope.section) })
         }
     }
 
@@ -377,7 +382,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
 
     private suspend fun <T> requestPage(path: String, token: String?, form: Map<String, String>? = null,
         emptyRecordsAsArray: Boolean = false, hideAdult: Boolean = false, cacheMillis: Long = 0, fresh: Boolean = false,
-        categoryGroup: String? = null, parse: (JSONObject) -> T): T {
+        categoryGroup: String? = null, onFreshSearch: ((T) -> Unit)? = null, parse: (JSONObject) -> T): T {
         val key = requestKey(listOf(path, token, hideAdult, form?.toSortedMap()).toString())
         val decode = { body: String ->
             try { parse(JSONObject(body)) }
@@ -396,7 +401,10 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             fullPage = (result.optJSONArray("releases")?.length() ?: 0) >= PAGE_SIZE
             result.toString()
         }
-        if (readAt > 0) kotlin.coroutines.coroutineContext[FollowSearchObservation]?.observed(readAt, hideAdult, fullPage)
+        if (readAt > 0) {
+            kotlin.coroutines.coroutineContext[FollowSearchObservation]?.observed(readAt, hideAdult, fullPage)
+            onFreshSearch?.invoke(page)
+        }
         return page
     }
 

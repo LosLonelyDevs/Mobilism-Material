@@ -68,7 +68,8 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
         client = org.mobilism.material.data.AppHttp.builder().followRedirects(false).retryOnConnectionFailure(false)
             .callTimeout(4, java.util.concurrent.TimeUnit.SECONDS)
             .addInterceptor(appWriteAttestation.interceptor("following")).build(), diagnostics = appLogger,
-        browseCache = okhttp3.Cache(cacheDir.resolve("app-browse-cache"), 8L * 1024 * 1024)) }
+        browseCache = okhttp3.Cache(cacheDir.resolve("app-browse-cache"), 8L * 1024 * 1024),
+        contributionsEnabled = { dailyUsage.enabled.value && remoteControl.limits.followCacheBatchSize > 0 }) }
     private val latestPages = kotlinx.coroutines.channels.Channel<org.mobilism.material.data.LatestAppsPage>(
         capacity = 4, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
     val repository by lazy { DefaultMobilismRepository(this, contentPreferences, appLogger,
@@ -77,12 +78,14 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
         onLatestApps = { page ->
             if (latestApps.configured && remoteControl.limits.followCacheBatchSize > 0 && dailyUsage.enabled.value)
                 latestPages.trySend(page)
+        }, onObservedApps = { releases, safe ->
+            latestApps.observe(releases, safe, categoryNames())
         }) }
-    private suspend fun publishLatestApps(page: LatestAppsPage) {
+    private fun categoryNames(): Map<Long, String> {
         val catalogs = repository.categoryCatalogs.value
-        val apps = (catalogs[false] ?: catalogs[true])?.get(ContentSection.Apps).orEmpty()
-        latestApps.publish(page, apps.associate { it.id to it.name })
+        return (catalogs[false] ?: catalogs[true])?.get(ContentSection.Apps).orEmpty().associate { it.id to it.name }
     }
+    private suspend fun publishLatestApps(page: LatestAppsPage) = latestApps.publish(page, categoryNames())
 
     internal suspend fun discoverApps(hideAdult: Boolean) = latestApps.discover(hideAdult)
     internal suspend fun installedCatalog(hideAdult: Boolean) = latestApps.installedCatalog(hideAdult)

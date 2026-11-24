@@ -7,6 +7,7 @@
 package org.mobilism.material.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -111,7 +112,7 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
     }
     LaunchedEffect(store, state.day, apps?.selection) {
         val selection = apps?.selection ?: return@LaunchedEffect
-        if (store != null && saved == null && (selection.discover.isNotEmpty() || selection.featured.isNotEmpty()) &&
+        if (store != null && saved != selection && (selection.discover.isNotEmpty() || selection.featured.isNotEmpty()) &&
             state.discovery.loaded && state.popular.loaded && state.latest.loaded && state.categories.loaded) {
             store.save(state.day, selection)
             saved = selection
@@ -119,6 +120,9 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
     }
     val highlights = if (section == ContentSection.Apps) apps?.discover.orEmpty()
         else state.popular.items.ifEmpty { state.latest.items }.take(5)
+    // Keep the first lazy item in place while feeds or the installed-app scan are pending.
+    val waitingForHero = if (section == ContentSection.Apps) !ready
+        else listOf(state.popular, state.latest).any { !it.loaded && it.error == null }
     val latest = apps?.latest ?: state.latest.items
     val popular = apps?.popular ?: state.popular.items
     val scroll = rememberLazyListState()
@@ -130,7 +134,7 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
         LazyColumn(Modifier.widthIn(max = 1000.dp).fillMaxSize().testTag("home-${section.name}"),
             state = scroll,
             contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            if (highlights.isNotEmpty() || state.popular.busy || state.latest.busy || state.discovery.busy) item(key = "hero") {
+            if (highlights.isNotEmpty() || waitingForHero) item(key = "hero") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val heading = stringResource(when (section) {
                         ContentSection.Apps -> R.string.home_discover_apps
@@ -140,11 +144,7 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
                     Text(heading,
                         Modifier.padding(horizontal = 20.dp).semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
                     if (highlights.isNotEmpty()) HomeHero(highlights, section, onRelease)
-                    else LoadingState(stringResource(when (section) {
-                        ContentSection.Apps -> R.string.home_finding_apps
-                        ContentSection.Books -> R.string.home_finding_books
-                        ContentSection.Games -> R.string.home_finding_games
-                    }), Modifier.fillMaxWidth().heightIn(min = 220.dp))
+                    else HomeHeroPlaceholder(section)
                 }
             }
             if (apps != null && apps.featured.isNotEmpty() && apps.categoryNames.isNotEmpty()) item(key = "daily-category") {
@@ -230,6 +230,27 @@ private fun HomeHeading(title: String, onMore: (() -> Unit)?) {
     }
 }
 
+@Composable
+private fun homeHeroHeight(section: ContentSection) =
+    ((if (section == ContentSection.Apps) 172 else 220) * LocalDensity.current.fontScale.coerceIn(1f, 1.6f)).dp
+
+@Composable
+private fun HomeHeroPlaceholder(section: ContentSection) {
+    val label = stringResource(when (section) {
+        ContentSection.Apps -> R.string.home_finding_apps
+        ContentSection.Books -> R.string.home_finding_books
+        ContentSection.Games -> R.string.home_finding_games
+    })
+    Column(Modifier.testTag("home-hero-loading").progressSemantics().semantics { contentDescription = label },
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ReleaseImageShimmer(Modifier.fillMaxWidth().padding(horizontal = 20.dp).widthIn(max = 520.dp)
+            .height(homeHeroHeight(section)).clip(MaterialTheme.shapes.extraLarge))
+        Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
+            ReleaseImageShimmer(Modifier.size(64.dp, 6.dp).clip(MaterialTheme.shapes.extraLarge))
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun HomeHero(releases: List<Release>, section: ContentSection, onRelease: (Long) -> Unit) {
@@ -239,8 +260,7 @@ private fun HomeHero(releases: List<Release>, section: ContentSection, onRelease
     val reduced = LocalReducedMotion.current
     val windowWidth = LocalWindowInfo.current.containerSize.width
     val wide = with(LocalDensity.current) { windowWidth.toDp() } >= 600.dp
-    val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.6f)
-    val heroHeight = ((if (section == ContentSection.Apps) 172 else 220) * fontScale).dp
+    val heroHeight = homeHeroHeight(section)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HorizontalPager(pager, Modifier.fillMaxWidth().height(heroHeight).testTag("home-hero"),
             contentPadding = PaddingValues(horizontal = 20.dp), pageSpacing = 12.dp,

@@ -61,12 +61,15 @@ export function createHandler(database = query, session = req => sessionUser(req
         if (!available) return respond(res, 200, { available: false });
         const [cacheUsage, [totals], snapshot, config] = await Promise.all([database(rates, [from, to]), database(ranks, [from, to, followingRankingLimit, today]),
           visibleSnapshot(database, Math.floor(asOf.getTime() / 1000)), readConfig(database)]);
-        const versions = new Map(snapshot.items.map(item => [item.key, item.version]));
+        const apps = new Map(snapshot.items.map(item => [item.key, item]));
         const { rankings, recent, todayLookups, catalogClients, ...lookups } = totals;
-        const withVersion = ({ key, ...row }) => ({ ...row, cachedVersion: versions.get(key) ?? null });
-        return respond(res, 200, { available, from, to, asOf: asOf.toISOString(), cachedApps: versions.size,
-          cacheUsage, lookups, todayLookups: to === today ? todayLookups : null, followRankings: rankings.map(withVersion),
-          recentApps: recent.map(withVersion), catalog: snapshot.items.map(({ key, name, version, category }) =>
+        const withCachedApp = ({ key, ...row }) => {
+          const app = apps.get(key);
+          return { ...row, cachedVersion: app?.version ?? null, ...(app?.category && { category: app.category }) };
+        };
+        return respond(res, 200, { available, from, to, asOf: asOf.toISOString(), cachedApps: apps.size,
+          cacheUsage, lookups, todayLookups: to === today ? todayLookups : null, followRankings: rankings.map(withCachedApp),
+          recentApps: recent.map(withCachedApp), catalog: snapshot.items.map(({ key, name, version, category }) =>
             ({ name, version, ...(category && { category }), clientVersion: Object.hasOwn(catalogClients, key) ? catalogClients[key] : null })),
           storage: config.followingStorage ?? defaultStorage, canEditStorage: user.isAdmin === true,
           pullToRefresh: setting(config) });

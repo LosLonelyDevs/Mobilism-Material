@@ -170,6 +170,28 @@ class HomeTest {
         } finally { prefs.edit().remove(key).apply() }
     }
 
+    @Test fun discoverStaysAtTheTopFromTheFirstFrameThroughDelayedRecommendations() {
+        val loaded = fixtureState(ContentSection.Apps)
+        var home by mutableStateOf(HomeState(ContentSection.Apps))
+        var installed by mutableStateOf<Map<String, String>?>(null)
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            HomeHost(home) { HomeScreen(home, {}, {}, {}, {}, {}, { _, _ -> }, {}, installed = installed) }
+        } }
+        val heading = compose.onNodeWithText("Discover apps")
+        val initialY = heading.assertIsDisplayed().fetchSemanticsNode().boundsInRoot.top
+        compose.onNodeWithTag("home-hero-loading").assertIsDisplayed()
+        compose.runOnIdle { home = loaded }
+        compose.onNodeWithTag("home-hero-loading").assertIsDisplayed()
+        compose.runOnIdle { installed = emptyMap() }
+        compose.onNodeWithTag("home-hero").assertIsDisplayed()
+        assertEquals(initialY, heading.fetchSemanticsNode().boundsInRoot.top, 1f)
+        compose.onNodeWithTag("home-hero-loading").assertDoesNotExist()
+        compose.runOnIdle { home = loaded.copy(discovery = HomeShelf(loaded = true), latest = HomeShelf(loaded = true),
+            popular = HomeShelf(loaded = true)) }
+        compose.onNodeWithTag("home-hero-loading").assertDoesNotExist()
+        compose.onNodeWithText("Browse by category").assertIsDisplayed()
+    }
+
     @Test fun homeTabReturnsToItsScrollPositionAndFeedsRemainAccessible() {
         val state = fixtureState(ContentSection.Apps)
         var tab by mutableStateOf(BrowseTab.Home)

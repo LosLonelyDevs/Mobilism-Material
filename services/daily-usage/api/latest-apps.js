@@ -16,12 +16,12 @@ function validIds(ids) {
     new Set(ids).size === ids.length;
 }
 
-function parsePage(body, now) {
+function parsePage(body, now, maxAge = maxUploadDelay) {
   if (!body || Object.keys(body).some(key => !['firstPage', 'adultFiltered', 'items', 'ids', 'readAt', 'baseline'].includes(key)) ||
       typeof body.firstPage !== 'boolean' || typeof body.adultFiltered !== 'boolean' || !Array.isArray(body.items) ||
       body.items.length > 20) throw new Error();
   const dated = Object.hasOwn(body, 'readAt');
-  if (dated && (!Number.isSafeInteger(body.readAt) || Math.abs(now - body.readAt) > maxUploadDelay)) throw new Error();
+  if (dated && (!Number.isSafeInteger(body.readAt) || body.readAt > now + maxUploadDelay || now - body.readAt > maxAge)) throw new Error();
   const at = dated ? Math.min(body.readAt, now) : now;
   const items = body.items.map(item => {
     if (!item || Object.keys(item).some(key => !['category', 'packageName', ...fields].includes(key)) || !fields.every(key => Object.hasOwn(item, key)) ||
@@ -111,6 +111,20 @@ const updatePage = `
     WHERE position <= ${latestFeedSize} OR position IN (SELECT position FROM followed)
   ), observed_at = greatest(observed_at, $2::bigint) WHERE singleton`;
 
+async function savePage(database, page, firstPage, now) {
+  const { items, ids, at, dated, anchors, missing, adultFiltered } = page;
+  for (const item of items) if (anchors[item.id]) item.anchors = anchors[item.id];
+  const seen = Object.fromEntries((dated ? ids : []).map(id => [id, true]));
+  const safe = Object.fromEntries((adultFiltered ? ids : []).map(id => [id, true]));
+  // Approximate a rolling day using existing daily counts. Midnight preserves yesterday's demand.
+  const today = new Date(now * 1000).toISOString().slice(0, 10);
+  const yesterdayWeight = 1 - (now % 86400) / 86400;
+  await database(updatePage, [JSON.stringify(items), firstPage ? at : 0, JSON.stringify(seen), at,
+    now, JSON.stringify(anchors), JSON.stringify(missing), confirmAfter, JSON.stringify(safe),
+    today, yesterdayWeight, JSON.stringify(Object.fromEntries(items.filter(item => item.category).map(item => [item.id, item.category]))),
+    JSON.stringify(Object.fromEntries(items.filter(item => item.packageName).map(item => [item.id, item.packageName])))]);
+}
+
 export function createHandler(database = query, clock = () => Math.floor(Date.now() / 1000), env = process.env) {
   return async (req, res) => {
     if (req.method === 'GET') {
@@ -141,7 +155,7 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
     if (!/^application\/json(?:;|$)/iu.test(req.headers?.['content-type'] || '')) return respond(res, 415, { error: 'Use JSON' });
     const now = clock();
     if (enrollmentEnabled(env)) res.setHeader('X-App-Attestation', '1');
-    let page, firstPage, requested, body, allowed, renew, unavailable;
+    let page, firstPage, requested, body, allowed, renew, unavailable, observations;
     try {
       body = req.body;
       const raw = Buffer.isBuffer(body) || typeof body === 'string' ? body : JSON.stringify(body);
@@ -150,6 +164,10 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
       if (Buffer.byteLength(typeof body?.payload === 'string' ? body.payload : raw) > 512 * 1024) throw new Error();
       ({ body, allowed, renew, unavailable } = await authorizeAppWrite(body, req, 'following', database, env));
       if (renew) res.setHeader('X-App-Attestation-Renew', '1');
+      if (body && Object.hasOwn(body, 'observations')) {
+        observations = body.observations;
+        delete body.observations;
+      }
       if (body && Object.hasOwn(body, 'apps')) requested = parseLookup(body);
       else {
         if (unavailable) return respond(res, 503, { error: 'Cache unavailable' });
@@ -159,6 +177,16 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
       }
     } catch { return respond(res, 400, { error: 'Invalid Latest page' }); }
     try {
+      if (allowed && observations) {
+        try {
+          const { items, adultFiltered, readAt } = observations;
+          if (!Array.isArray(items) || items.length < 1 || items.length > 10 || !Number.isSafeInteger(readAt)) throw new Error();
+          // Only an actual Latest page can provide a baseline, missing IDs or a feed timestamp.
+          const extra = parsePage({ items, adultFiltered, readAt, firstPage: false }, now, 6 * 3600);
+          await savePage(database, extra, false, now);
+          res.setHeader('X-App-Observations-Accepted', '1');
+        } catch { /* Invalid or unavailable optional data must not fail the primary request. */ }
+      }
       if (requested) {
         const mode = req.headers?.['x-following-check'];
         const check = mode === 'background' || mode === 'manual' ? mode : null;
@@ -168,17 +196,7 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
         return respond(res, 200, await lookup(database, requested, body.adultFiltered, now, body.day, check,
           version && version.length <= 50 ? version : null, allowed));
       }
-      const { items, ids, at, dated, anchors, missing, adultFiltered } = page;
-      for (const item of items) if (anchors[item.id]) item.anchors = anchors[item.id];
-      const seen = Object.fromEntries((dated ? ids : []).map(id => [id, true]));
-      const safe = Object.fromEntries((adultFiltered ? ids : []).map(id => [id, true]));
-      // Approximate a rolling day using existing daily counts. Midnight preserves yesterday's demand.
-      const today = new Date(now * 1000).toISOString().slice(0, 10);
-      const yesterdayWeight = 1 - (now % 86400) / 86400;
-      await database(updatePage, [JSON.stringify(items), firstPage ? at : 0, JSON.stringify(seen), at,
-        now, JSON.stringify(anchors), JSON.stringify(missing), confirmAfter, JSON.stringify(safe),
-        today, yesterdayWeight, JSON.stringify(Object.fromEntries(items.filter(item => item.category).map(item => [item.id, item.category]))),
-        JSON.stringify(Object.fromEntries(items.filter(item => item.packageName).map(item => [item.id, item.packageName])))]);
+      await savePage(database, page, firstPage, now);
       return respond(res, 200, { accepted: true });
     } catch { return respond(res, 503, { error: 'Cache unavailable' }); }
   };
