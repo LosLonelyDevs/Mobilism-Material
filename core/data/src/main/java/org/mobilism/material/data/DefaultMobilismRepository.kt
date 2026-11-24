@@ -9,7 +9,7 @@ import kotlinx.coroutines.sync.withLock
 class DefaultMobilismRepository(context: Context, private val contentPreferences: ContentPreferencesStore = ContentPreferencesStore(context),
     diagnostics: DiagnosticLogger = DiagnosticLogger.None, client: okhttp3.OkHttpClient = AppHttp.client,
     private val customCategories: CustomCategoryStore? = null,
-    private val customCategoriesEnabled: () -> Boolean = { false },
+    private val customCategoriesEnabled: () -> Boolean = { contentPreferences.customCategoriesEnabled.value },
     challengeRecovery: ChallengeRecovery = ChallengeRecovery.None,
     private val requestLimits: () -> ApiRequestLimits = { ApiRequestLimits.Defaults },
     requestTraffic: RequestTrafficSink = RequestTrafficSink.None,

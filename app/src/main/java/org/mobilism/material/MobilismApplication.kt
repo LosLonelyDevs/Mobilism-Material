@@ -73,7 +73,7 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
     private val latestPages = kotlinx.coroutines.channels.Channel<org.mobilism.material.data.LatestAppsPage>(
         capacity = 4, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
     val repository by lazy { DefaultMobilismRepository(this, contentPreferences, appLogger,
-        customCategories = customCategories, customCategoriesEnabled = { developer.state.value.customCategoriesActive },
+        customCategories = customCategories,
         challengeRecovery = connectionRecovery, requestLimits = { remoteControl.limits }, requestTraffic = requestTraffic,
         onLatestApps = { page ->
             if (latestApps.configured && remoteControl.limits.followCacheBatchSize > 0 && dailyUsage.enabled.value)

@@ -1,6 +1,6 @@
 # Custom categories
 
-Development feature. **Developer options > Custom categories** defaults off. Keep it out of release notes while it stays off by default.
+Custom categories are on by default. Toggle them in **Settings > Preferences**, below **Hide 18+ content**.
 
 Categories stay on this installation, including across logout and Guest use. Apps, Games, and Books keep separate category lists. Nothing syncs to Mobilism.
 

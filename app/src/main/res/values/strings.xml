@@ -209,8 +209,7 @@
     <string name="dev_mode_summary">Turn off to hide these options</string>
     <string name="dev_verbose_logging">Verbose logging</string>
     <string name="dev_verbose_logging_summary">Record diagnostic details</string>
-    <string name="dev_custom_categories">Custom categories</string>
-    <string name="dev_custom_categories_summary">Organize releases with categories saved on this device</string>
+    <string name="settings_custom_categories">Custom categories</string>
     <string name="dev_markdown">Enable Markdown syntax</string>
     <string name="dev_markdown_summary">Format Markdown in releases, forum posts, and comments</string>
     <string name="download_files">Files</string>

@@ -39,7 +39,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mobilism.material.data.*
 import org.mobilism.material.designsystem.MobilismTheme
-import org.mobilism.material.settings.DeveloperPreferencesStore
 import org.mobilism.material.ui.*
 
 @RunWith(AndroidJUnit4::class)
@@ -67,35 +66,24 @@ class CustomCategoriesTest {
         }
     }
 
-    @Test fun developerToggleDefaultsOffAndPickerUsesOneCategorySelection() {
+    @Test fun preferenceDefaultsOnAndPickerUsesOneCategorySelection() {
         val context = context()
-        val options = DeveloperPreferencesStore(context)
+        val options = ContentPreferencesStore(context)
         val store = CustomCategoryStore(context)
         val sports = store.create(ContentSection.Apps, "Sports")
         store.assign(release(), setOf(sports.id))
-        assertFalse(options.state.value.customCategoriesActive)
-        options.setCustomCategoriesEnabled(true)
-        assertFalse(options.state.value.customCategoriesEnabled)
-        options.unlock()
+        assertTrue(options.customCategoriesEnabled.value)
         var screen by mutableStateOf("filters")
         var filters by mutableStateOf(FeedFilters())
         compose.setContent { MobilismTheme(reduceMotion = true) {
-            val state by options.state.collectAsState()
+            val enabled by options.customCategoriesEnabled.collectAsState()
             when (screen) {
-                "options" -> DeveloperOptionsScreen(state, options::setVerboseLogging, options::disable,
-                    onBack = { screen = "filters" }, onCustomCategories = options::setCustomCategoriesEnabled)
+                "options" -> CustomCategoriesSetting(enabled) { options.setCustomCategoriesEnabled(it); screen = "filters" }
                 "filters" -> CategoryFilterSheet(CategoryState(items = listOf(ReleaseCategory(20, "Utilities"))),
                     filters, {}, { filters = it; screen = "options" }, { screen = "options" },
-                    customCategories = store.takeIf { state.customCategoriesActive })
+                    customCategories = store.takeIf { enabled })
             }
         } }
-        compose.onNodeWithText("Sports").assertDoesNotExist()
-        compose.onNodeWithText("Manage").assertDoesNotExist()
-        compose.onNodeWithText("Cancel").performClick()
-        assertFalse(options.state.value.customCategoriesEnabled)
-        capture("developer-options")
-        compose.onNodeWithText("Custom categories").performClick()
-        compose.onNodeWithContentDescription("Back").performClick()
         val heading = compose.onNodeWithText("Categories · Apps").getUnclippedBoundsInRoot()
         val manage = compose.onNodeWithText("Manage").assertIsDisplayed().getUnclippedBoundsInRoot()
         assertTrue(manage.left >= heading.right && manage.top < heading.bottom && heading.top < manage.bottom)
@@ -108,15 +96,14 @@ class CustomCategoriesTest {
             assertEquals(setOf(sports.id), filters.customCategoryIds)
         }
         compose.onNodeWithText("Custom categories").performClick()
-        compose.onNodeWithContentDescription("Back").performClick()
+        assertFalse(ContentPreferencesStore(context).customCategoriesEnabled.value)
         compose.onNodeWithText("Sports").assertDoesNotExist()
         compose.onNodeWithText("Manage").assertDoesNotExist()
         compose.onNodeWithText("Cancel").performClick()
         compose.onNodeWithText("Custom categories").performClick()
         assertEquals(store.state.value, CustomCategoryStore(context).state.value)
         assertEquals(setOf(sports.id), store.state.value.memberships(release()))
-        options.disable()
-        assertFalse(DeveloperPreferencesStore(context).state.value.customCategoriesActive)
+        assertTrue(ContentPreferencesStore(context).customCategoriesEnabled.value)
     }
 
     @Test fun assignmentSupportsSeveralCategoriesAndCancelDiscardsChanges() {
@@ -329,6 +316,64 @@ class CustomCategoriesTest {
         compose.onNodeWithText("Sports").assertDoesNotExist()
     }
 
+    @Test fun narrowHomeFooterFitsViewCountAndOpensCategoryIcon() {
+        val music = release().copy(categoryId = 1332, views = 26)
+        var opened: FeedFilters? = null
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            CompositionLocalProvider(LocalForumCategoryNames provides mapOf(1332L to "Music & Audio"),
+                LocalOpenReleaseCategory provides { _, filters -> opened = filters }) {
+                Column(Modifier.width(136.dp).testTag("footer")) {
+                    ReleaseMetadataFooter(music, singleRow = true, inlineIcons = true) {
+                        ReleaseViewCount(music.views, numberOnly = true)
+                    }
+                }
+            }
+        } }
+        val bounds = compose.onNodeWithTag("footer").getUnclippedBoundsInRoot()
+        val count = compose.onNodeWithContentDescription("26 views").assertIsDisplayed().getUnclippedBoundsInRoot()
+        val button = compose.onNodeWithContentDescription("Music & Audio").assertIsDisplayed()
+        val icon = button.getUnclippedBoundsInRoot()
+        assertTrue(count.right <= icon.left && icon.right <= bounds.right && icon.right - icon.left <= 19.dp)
+        val dateTime = compose.onNode(hasText("\n", substring = true)).getUnclippedBoundsInRoot()
+        assertEquals((dateTime.top + dateTime.bottom).value / 2, (icon.top + icon.bottom).value / 2, 1f)
+        assertEquals(bounds.right.value, icon.right.value, 1f)
+        assertTrue(dateTime.right <= count.left && bounds.bottom - bounds.top < 48.dp)
+        assertEquals((count.left - dateTime.right).value, (icon.left - count.right).value, 1f)
+        compose.onNodeWithText("Music & Audio").assertDoesNotExist()
+        button.performClick()
+        compose.runOnIdle { assertEquals(setOf(1332L), opened?.categoryIds) }
+    }
+
+    @Test fun savedAppsShowArtworkAndPostDateInNameOrder() {
+        val context = context()
+        val store = CustomCategoryStore(context)
+        val category = store.create(ContentSection.Apps, "Players")
+        val late = release().copy(title = "Zebra v1")
+        val early = late.copy(id = 2, title = "alpha v2.0 [Premium]")
+        val image = File(context.cacheDir, "category-art-test.png")
+        val color = android.graphics.Color.rgb(193, 49, 122)
+        val bitmap = Bitmap.createBitmap(12, 12, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
+        image.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        store.assign(late, setOf(category.id))
+        store.assign(early, setOf(category.id))
+        store.observe(early.copy(images = listOf(image.toURI().toString())))
+        val reopened = CustomCategoryStore(context)
+        compose.setContent { MobilismTheme(reduceMotion = true) {
+            CustomCategoriesScreen(ContentSection.Apps, reopened, {}, {})
+        } }
+        compose.onNodeWithText("Players").performClick()
+        val alpha = compose.onNodeWithText("alpha")
+        assertTrue(alpha.getUnclippedBoundsInRoot().top < compose.onNodeWithText("Zebra").getUnclippedBoundsInRoot().top)
+        val locale = context.resources.configuration.locales[0]
+        val date = java.time.Instant.ofEpochSecond(early.publishedAt).atZone(java.time.ZoneId.systemDefault())
+            .format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM).withLocale(locale))
+        compose.onNodeWithText("v2.0 · $date · Premium").assertIsDisplayed()
+        compose.waitUntil(8000) {
+            val pixels = alpha.captureToImage().asAndroidBitmap()
+            (0 until pixels.width step 5).any { x -> (0 until pixels.height step 5).any { y -> pixels.getPixel(x, y) == color } }
+        }
+    }
+
     @Test fun managementCreatesRenamesRemovesMembersAndConfirmsDeletion() {
         val context = context()
         val store = CustomCategoryStore(context)
@@ -341,6 +386,8 @@ class CustomCategoriesTest {
         val iconBounds = iconButton.getUnclippedBoundsInRoot()
         val nameBounds = compose.onNodeWithText("Category name").getUnclippedBoundsInRoot()
         assertTrue(iconBounds.right + 12.dp <= nameBounds.left && iconBounds.top < nameBounds.bottom)
+        assertEquals(nameBounds.bottom.value, iconBounds.bottom.value, 1f)
+        assertEquals((iconBounds.right - iconBounds.left).value, (iconBounds.bottom - iconBounds.top).value, 1f)
         iconButton.performClick()
         compose.onNodeWithText("Search icons").performTextInput("sports")
         compose.onNodeWithContentDescription("Ball football").assertIsDisplayed()

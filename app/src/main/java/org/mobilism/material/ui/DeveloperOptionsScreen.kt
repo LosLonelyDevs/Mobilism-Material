@@ -24,7 +24,7 @@ import org.mobilism.material.settings.DeveloperPreferences
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeveloperOptionsScreen(state: DeveloperPreferences, onVerboseLogging: (Boolean) -> Unit,
-    onDisable: () -> Unit, onBack: () -> Unit, onCustomCategories: (Boolean) -> Unit = {},
+    onDisable: () -> Unit, onBack: () -> Unit,
     onMarkdownSyntax: (Boolean) -> Unit = {}, onManualNoticeChecks: (Boolean) -> Unit = {},
     onCheckNotices: suspend () -> Int? = { null }) {
     val scope = rememberCoroutineScope()
@@ -57,10 +57,6 @@ fun DeveloperOptionsScreen(state: DeveloperPreferences, onVerboseLogging: (Boole
                     })
             }
             item { SettingsSectionLabel(stringResource(R.string.settings_experiments)) }
-            item {
-                SettingsToggleRow(stringResource(R.string.dev_custom_categories), stringResource(R.string.dev_custom_categories_summary),
-                    null, state.customCategoriesEnabled, onCheckedChange = onCustomCategories)
-            }
             item {
                 SettingsToggleRow(stringResource(R.string.dev_markdown), stringResource(R.string.dev_markdown_summary),
                     null, state.markdownSyntax, onCheckedChange = onMarkdownSyntax)

@@ -5,6 +5,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import java.time.Instant
+import java.time.ZoneId
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -88,17 +100,21 @@ private fun CategoryEditor(category: CustomCategory? = null, onDismiss: () -> Un
         return
     }
     AlertDialog(onDismissRequest = onDismiss,
+        modifier = Modifier.padding(horizontal = 16.dp).widthIn(max = 560.dp).fillMaxWidth(),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
         title = { Text(stringResource(if (category == null) R.string.category_create else R.string.category_edit)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SmallFloatingActionButton(onClick = { picking = true }) {
+                val labelInset = with(LocalDensity.current) { MaterialTheme.typography.bodySmall.lineHeight.toDp() / 2 }
+                Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SmallFloatingActionButton(onClick = { picking = true },
+                        modifier = Modifier.padding(top = labelInset).fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true)) {
                         Icon(ImageVector.vectorResource(categoryIcon(null, icon).drawable), stringResource(R.string.category_choose_icon))
                     }
                     OutlinedTextField(name, { name = it; error = null }, Modifier.weight(1f),
-                    label = { Text(stringResource(R.string.category_name)) }, singleLine = true, isError = error != null,
-                    supportingText = error?.let { reason -> { Text(stringResource(reason)) } })
+                        label = { Text(stringResource(R.string.category_name)) }, singleLine = true, isError = error != null)
                 }
+                error?.let { Text(stringResource(it), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
                 OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(),
                     label = { Text(stringResource(R.string.category_description)) }, maxLines = 3)
             }
@@ -234,12 +250,22 @@ fun CustomCategoriesScreen(section: ContentSection, store: CustomCategoryStore, 
                 item("hint") { Text(stringResource(R.string.category_assign_hint), style = MaterialTheme.typography.bodyMedium) }
                 items(members, key = { it.id }) { item ->
                     val title = ReleaseTitles.parse(item.release.title, section)
+                    val isApp = section == ContentSection.Apps
+                    val subtitle = if (isApp && item.release.publishedAt > 0) {
+                        val date = Instant.ofEpochSecond(item.release.publishedAt).atZone(ZoneId.systemDefault()).format(dateFormatter())
+                        val details = title.copy(version = null).subtitle.takeIf(String::isNotBlank)
+                        listOfNotNull(title.version?.let { stringResource(R.string.follow_version, it) }, date, details).joinToString(" · ")
+                    } else title.subtitle
                     ExpressiveCard({ onRelease(item.release.id) }, Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            if (isApp) item.release.homeArtwork?.let { image ->
+                                ReleaseArtwork(image, null, Modifier.size(48.dp).clip(MaterialTheme.shapes.medium),
+                                    contentScale = ContentScale.Crop)
+                            }
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 AppHeading(title.name, HeadingLevel.Subsection, style = MaterialTheme.typography.titleMedium)
-                                if (title.subtitle.isNotBlank()) Text(title.subtitle, style = MaterialTheme.typography.bodySmall)
+                                if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall)
                             }
                             AppIconButton(Icons.Outlined.RemoveCircleOutline, stringResource(R.string.category_remove_member, title.name, selected.name), {
                                 store.remove(item.id, selected.id)

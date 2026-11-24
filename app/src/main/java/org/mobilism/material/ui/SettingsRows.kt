@@ -83,7 +83,7 @@ internal fun SettingsNavigationRow(title: String, description: String, icon: Ima
 }
 
 @Composable
-internal fun SettingsToggleRow(title: String, description: String, icon: ImageVector?,
+internal fun SettingsToggleRow(title: String, description: String?, icon: ImageVector?,
     checked: Boolean, modifier: Modifier = Modifier, onCheckedChange: (Boolean) -> Unit) {
     SettingsRow(title, description, icon, modifier.toggleable(checked, role = Role.Switch, onValueChange = onCheckedChange)) {
         Switch(checked, onCheckedChange = null, thumbContent = if (checked) {
@@ -93,7 +93,7 @@ internal fun SettingsToggleRow(title: String, description: String, icon: ImageVe
 }
 
 @Composable
-internal fun SettingsRow(title: String, description: String, icon: ImageVector?, modifier: Modifier,
+internal fun SettingsRow(title: String, description: String?, icon: ImageVector?, modifier: Modifier,
     trailing: @Composable () -> Unit = { Icon(Icons.Outlined.ChevronRight, null) }) {
     Row(Modifier.clip(MaterialTheme.shapes.large).then(modifier).fillMaxWidth().heightIn(min = 72.dp)
         .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -101,7 +101,7 @@ internal fun SettingsRow(title: String, description: String, icon: ImageVector?,
         if (icon != null) Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             SettingsTitle(title)
-            SettingsSubtitle(description)
+            description?.let { SettingsSubtitle(it) }
         }
         trailing()
     }

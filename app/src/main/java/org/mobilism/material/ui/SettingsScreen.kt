@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -93,6 +94,7 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
     landingPage: org.mobilism.material.settings.LandingPage = org.mobilism.material.settings.LandingPage(),
     onLandingPage: (org.mobilism.material.settings.LandingPage) -> Unit = {},
     dailyUsageEnabled: Boolean = true, onDailyUsage: (Boolean) -> Unit = {}, onUpdates: () -> Unit = {},
+    customCategoriesEnabled: Boolean = true, onCustomCategories: (Boolean) -> Unit = {},
     messageNotifications: (@Composable () -> Unit)? = null) {
     var premiumOpen by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -113,6 +115,7 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             messageNotifications?.let { setting -> item("message-notifications") { setting() } }
             item("landing-page") { LandingPageSetting(landingPage, onLandingPage) }
             item("content") { ContentVisibilitySetting(hideAdult, onHideAdult) }
+            item("custom-categories") { CustomCategoriesSetting(customCategoriesEnabled, onCustomCategories) }
             item("downloads-section") { SettingsSectionLabel(stringResource(R.string.settings_downloads)) }
             item("downloads") { SettingsNavigationRow(stringResource(R.string.settings_downloads), stringResource(R.string.settings_downloads_summary),
                 Icons.Outlined.Download, onDownloads) }
@@ -137,6 +140,11 @@ fun SettingsScreen(state: DebridState, repository: DebridRepository, onAppearanc
             }
         }
     }
+}
+
+@Composable
+internal fun CustomCategoriesSetting(enabled: Boolean, onChange: (Boolean) -> Unit) {
+    SettingsToggleRow(stringResource(R.string.settings_custom_categories), null, Icons.Outlined.Category, enabled, onCheckedChange = onChange)
 }
 
 @Composable

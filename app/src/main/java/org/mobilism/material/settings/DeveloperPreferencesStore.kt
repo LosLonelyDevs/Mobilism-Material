@@ -5,9 +5,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 data class DeveloperPreferences(val enabled: Boolean = false, val verboseLogging: Boolean = false,
-    val debridEnabled: Boolean = true, val customCategoriesEnabled: Boolean = false,
+    val debridEnabled: Boolean = true,
     val markdownSyntax: Boolean = false, val manualNoticeChecks: Boolean = false) {
-    val customCategoriesActive: Boolean get() = enabled && customCategoriesEnabled
     val markdownSyntaxActive: Boolean get() = enabled && markdownSyntax
 }
 
@@ -17,7 +16,6 @@ class DeveloperPreferencesStore(context: Context) {
     private val mutableState = MutableStateFlow(DeveloperPreferences(enabled = enabled,
         verboseLogging = enabled && preferences.getBoolean("verbose-logging", false),
         debridEnabled = preferences.getBoolean("debrid-enabled", true),
-        customCategoriesEnabled = preferences.getBoolean("custom-categories-enabled", false),
         markdownSyntax = preferences.getBoolean("markdown-syntax", false),
         manualNoticeChecks = enabled && preferences.getBoolean("manual-notice-checks", false)))
     val state = mutableState.asStateFlow()
@@ -34,10 +32,6 @@ class DeveloperPreferencesStore(context: Context) {
         if (mutableState.value.enabled) save(mutableState.value.copy(debridEnabled = enabled))
     }
 
-    fun setCustomCategoriesEnabled(enabled: Boolean) {
-        if (mutableState.value.enabled) save(mutableState.value.copy(customCategoriesEnabled = enabled))
-    }
-
     fun setMarkdownSyntax(enabled: Boolean) {
         if (mutableState.value.enabled) save(mutableState.value.copy(markdownSyntax = enabled))
     }
@@ -49,7 +43,6 @@ class DeveloperPreferencesStore(context: Context) {
     private fun save(value: DeveloperPreferences) {
         preferences.edit().remove("unlocked").putBoolean("enabled", value.enabled)
             .putBoolean("verbose-logging", value.verboseLogging).putBoolean("debrid-enabled", value.debridEnabled)
-            .putBoolean("custom-categories-enabled", value.customCategoriesEnabled)
             .putBoolean("markdown-syntax", value.markdownSyntax)
             .putBoolean("manual-notice-checks", value.manualNoticeChecks).apply()
         mutableState.value = value

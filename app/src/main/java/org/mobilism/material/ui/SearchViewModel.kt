@@ -31,7 +31,7 @@ class SearchViewModel(
     private val onFiltersChanged: (ContentSection, FeedFilters) -> Unit = { _, _ -> },
     hideAdultContent: kotlinx.coroutines.flow.StateFlow<Boolean>? = null,
     private val customCategories: org.mobilism.material.data.CustomCategoryStore? = null,
-    private val developer: org.mobilism.material.settings.DeveloperPreferencesStore? = null,
+    private val customCategoriesEnabled: kotlinx.coroutines.flow.StateFlow<Boolean>? = null,
     private val history: org.mobilism.material.settings.RecentSearches = org.mobilism.material.settings.RecentSearches(),
 ) : ViewModel() {
     val recentQueries = history.queries
@@ -49,11 +49,11 @@ class SearchViewModel(
     private var pager: SortedSearchPager? = null
 
     init {
-        if (customCategories != null && developer != null) {
+        if (customCategories != null && customCategoriesEnabled != null) {
             var previous = customCategories.state.value
             viewModelScope.launch {
-                kotlinx.coroutines.flow.combine(customCategories.state, developer.state) { local, options ->
-                    local to options.customCategoriesActive
+                kotlinx.coroutines.flow.combine(customCategories.state, customCategoriesEnabled) { local, enabled ->
+                    local to enabled
                 }.collect { (local, _) ->
                     val snapshot = mutableState.value
                     savedFilters.replaceAll { scope, filters -> filters.copy(customCategoryIds =
@@ -93,7 +93,7 @@ class SearchViewModel(
     }
 
     private fun effectiveFilters(scope: SearchScope): FeedFilters = savedFilters.getValue(scope).let {
-        if (developer?.state?.value?.customCategoriesActive == true) it else it.copy(customCategoryIds = emptySet())
+        if (customCategoriesEnabled?.value == true) it else it.copy(customCategoryIds = emptySet())
     }
 
     fun selectScope(scope: SearchScope) {
@@ -129,7 +129,7 @@ class SearchViewModel(
     fun applyFilters(filters: FeedFilters) {
         if (!filters.validDates || filters == mutableState.value.filters) return
         val snapshot = mutableState.value
-        savedFilters[snapshot.scope] = if (developer?.state?.value?.customCategoriesActive == true) filters
+        savedFilters[snapshot.scope] = if (customCategoriesEnabled?.value == true) filters
             else filters.copy(customCategoryIds = savedFilters.getValue(snapshot.scope).customCategoryIds)
         snapshot.scope.section?.let { onFiltersChanged(it, filters) }
         job?.cancel()

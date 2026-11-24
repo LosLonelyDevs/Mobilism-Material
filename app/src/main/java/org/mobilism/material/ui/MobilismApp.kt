@@ -158,7 +158,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
     val downloads by model.downloads.state.collectAsStateWithLifecycle()
     val developer by model.developer.state.collectAsStateWithLifecycle()
     val localCategories by model.customCategories.state.collectAsStateWithLifecycle()
-    val categoryStore = model.customCategories.takeIf { developer.customCategoriesActive }
+    val customCategoriesEnabled by model.contentPreferences.customCategoriesEnabled.collectAsStateWithLifecycle()
+    val categoryStore = model.customCategories.takeIf { customCategoriesEnabled }
     val library by model.library.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val followPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -338,7 +339,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                     else org.mobilism.material.data.SearchScope.entries.first { it.section == feed.section }, query,
                     initialFilters = org.mobilism.material.data.ContentSection.entries.associateWith(model::filtersFor),
                     onFiltersChanged = model::saveFilters, hideAdultContent = model.contentPreferences.hideAdult,
-                    customCategories = model.customCategories, developer = model.developer,
+                    customCategories = model.customCategories, customCategoriesEnabled = model.contentPreferences.customCategoriesEnabled,
                     history = app.recentSearches.forAccount((auth as? AuthState.SignedIn)?.username)) }
             })
             val state by search.state.collectAsStateWithLifecycle()
@@ -452,6 +453,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             SettingsScreen(debrid, model.debrid, onAppearance = { nav.navigate("appearance") },
                 onDownloads = { nav.navigate("download-preferences") }, onBack = { nav.popBackStack() },
                 hideAdult = hideAdult, onHideAdult = model.contentPreferences::hideAdult,
+                customCategoriesEnabled = customCategoriesEnabled, onCustomCategories = model.contentPreferences::setCustomCategoriesEnabled,
                 onAbout = { nav.navigate("about") }, developer = developer,
                 onDeveloperOptions = { nav.navigate("developer-options") }, diagnostics = app.diagnostics,
                 preferredHosts = downloads.preferredHosts, landingPage = landingPage,
@@ -466,7 +468,6 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
             if (developer.enabled) DeveloperOptionsScreen(developer,
                 onVerboseLogging = model.developer::setVerboseLogging,
                 onDisable = model.developer::disable, onBack = { nav.popBackStack() },
-                onCustomCategories = model.developer::setCustomCategoriesEnabled,
                 onMarkdownSyntax = model.developer::setMarkdownSyntax,
                 onManualNoticeChecks = model.developer::setManualNoticeChecks,
                 onCheckNotices = {
@@ -479,10 +480,10 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 })
         }
         composable("categories/{section}") { entry ->
-            LaunchedEffect(developer.customCategoriesActive) {
-                if (!developer.customCategoriesActive) nav.popBackStack()
+            LaunchedEffect(customCategoriesEnabled) {
+                if (!customCategoriesEnabled) nav.popBackStack()
             }
-            if (developer.customCategoriesActive) CustomCategoriesScreen(
+            if (customCategoriesEnabled) CustomCategoriesScreen(
                 org.mobilism.material.data.ContentSection.valueOf(requireNotNull(entry.arguments?.getString("section"))),
                 model.customCategories, onBack = { nav.popBackStack() },
                 onRelease = nav::openReleaseTopic)
@@ -542,8 +543,8 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 if (forum == null && state.release?.categoryId != null && catalog == null) model.loadCategories()
             }
             var assigningCategories by rememberSaveable { mutableStateOf(false) }
-            LaunchedEffect(state.release, developer.customCategoriesActive) {
-                if (developer.customCategoriesActive) state.release?.let(model.customCategories::observe)
+            LaunchedEffect(state.release, customCategoriesEnabled) {
+                if (customCategoriesEnabled) state.release?.let(model.customCategories::observe)
                 else assigningCategories = false
             }
             if (assigningCategories && categoryStore != null) state.release?.let {

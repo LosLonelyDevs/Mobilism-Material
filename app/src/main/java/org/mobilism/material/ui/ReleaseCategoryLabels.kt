@@ -8,10 +8,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -38,12 +42,13 @@ internal val LocalForumCategoryNames = compositionLocalOf { emptyMap<Long, Strin
 internal val LocalReleaseAssignments = compositionLocalOf<CustomCategoryState?> { null }
 internal val LocalOpenReleaseCategory = compositionLocalOf<((ContentSection, FeedFilters) -> Unit)?> { null }
 
-private data class NamedCategory(val name: String, val filters: FeedFilters)
+private data class NamedCategory(val name: String, val filters: FeedFilters, val customIcon: String? = null)
 private val chipVerticalPadding = 6.dp
 
 @Composable
 internal fun ReleaseMetadataFooter(release: Release, expanded: Boolean = false, spacing: Dp = 8.dp,
-    singleRow: Boolean = false, showEmptyRow: Boolean = true, listCard: Boolean = false, metadata: @Composable () -> Unit) {
+    singleRow: Boolean = false, showEmptyRow: Boolean = true, listCard: Boolean = false,
+    categoryIconsOnly: Boolean = false, inlineIcons: Boolean = false, metadata: @Composable () -> Unit) {
     val forum = LocalForumCategoryNames.current[release.categoryId]
     val assignments = LocalReleaseAssignments.current
     val categories = remember(release, forum, assignments) {
@@ -56,14 +61,33 @@ internal fun ReleaseMetadataFooter(release: Release, expanded: Boolean = false, 
             for (category in assignments.categories) {
                 if (category.id !in ids || category.section != release.section) continue
                 val key = category.name.lowercase(Locale.ROOT)
-                val matching = names[key] ?: NamedCategory(category.name, FeedFilters())
+                val matching = names[key] ?: NamedCategory(category.name, FeedFilters(), category.icon)
                 names[key] = matching.copy(filters = matching.filters.copy(customCategoryIds = setOf(category.id)))
             }
         }
         Alphabetical.sorted(names.values) { it.name }
     }
-    if (!showEmptyRow && categories.isEmpty()) return
+    if (!showEmptyRow && categories.isEmpty() && !(inlineIcons && release.publishedAt > 0)) return
     val open = LocalOpenReleaseCategory.current
+    if (inlineIcons) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically) {
+            val dateStyle = MaterialTheme.typography.labelSmall
+            ReleasePostDate(release.publishedAt, modifier = Modifier.weight(1f, fill = false), textStyle = dateStyle.copy(fontSize = (dateStyle.fontSize.value - 1).sp), stacked = true)
+            metadata()
+            if (categories.isNotEmpty()) Row(Modifier.widthIn(max = 18.dp).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (category in categories) {
+                    val icon = categoryIcon(category.filters.categoryIds.firstOrNull(), category.customIcon)
+                    Icon(painterResource(icon.drawable), category.name, Modifier.size(18.dp).clickable(
+                        enabled = open != null && release.section != null, role = Role.Button,
+                    ) { release.section?.let { open?.invoke(it, category.filters) } },
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        return
+    }
     val chips: @Composable () -> Unit = {
         for (category in categories) {
             val scheme = MaterialTheme.colorScheme
@@ -81,7 +105,12 @@ internal fun ReleaseMetadataFooter(release: Release, expanded: Boolean = false, 
                 shape = MaterialTheme.shapes.large,
                 color = container, contentColor = foreground,
             ) {
-                Box(Modifier.padding(horizontal = 14.dp, vertical = chipVerticalPadding), contentAlignment = Alignment.Center) {
+                if (categoryIconsOnly) {
+                    val icon = categoryIcon(category.filters.categoryIds.firstOrNull(), category.customIcon)
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                        Icon(painterResource(icon.drawable), category.name, Modifier.size(22.dp))
+                    }
+                } else Box(Modifier.padding(horizontal = 14.dp, vertical = chipVerticalPadding), contentAlignment = Alignment.Center) {
                     val style = MaterialTheme.typography.labelSmall
                     Text(category.name, style = style, fontSize = (style.fontSize.value - 1).sp,
                         maxLines = if (singleRow) 1 else if (expanded) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
@@ -97,7 +126,8 @@ internal fun ReleaseMetadataFooter(release: Release, expanded: Boolean = false, 
                 else -> 0.34f
             }
             SingleLineMetadataRow(spacing, listCard, metadata) {
-                if (categories.isNotEmpty()) Row(Modifier.widthIn(max = categoryWidth).horizontalScroll(rememberScrollState()),
+                val width = if (categoryIconsOnly) 48.dp else categoryWidth
+                if (categories.isNotEmpty()) Row(Modifier.widthIn(max = width).horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)) { chips() }
             }
         }

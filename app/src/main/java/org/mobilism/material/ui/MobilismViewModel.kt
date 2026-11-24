@@ -111,10 +111,10 @@ class MobilismViewModel(
 
     init {
         var previousCustom = customCategories.state.value
-        var previousCustomEnabled = developer.state.value.customCategoriesActive
+        var previousCustomEnabled = contentPreferences.customCategoriesEnabled.value
         viewModelScope.launch {
-            kotlinx.coroutines.flow.combine(customCategories.state, developer.state) { local, options ->
-                local to options.customCategoriesActive
+            kotlinx.coroutines.flow.combine(customCategories.state, contentPreferences.customCategoriesEnabled) { local, enabled ->
+                local to enabled
             }.collect { (local, enabled) ->
                 if (local.categories != previousCustom.categories) {
                     preferences.edit {
@@ -238,7 +238,7 @@ class MobilismViewModel(
         val sort = runCatching { org.mobilism.material.data.SearchSort.valueOf(
             preferences.getString("filters-${section.name}-search-sort", null).orEmpty())
         }.getOrDefault(org.mobilism.material.data.SearchSort.Newest)
-        val custom = if (developer.state.value.customCategoriesActive) customCategories.state.value.retain(section,
+        val custom = if (contentPreferences.customCategoriesEnabled.value) customCategories.state.value.retain(section,
             preferences.getStringSet("filters-${section.name}-custom-categories", emptySet()).orEmpty()) else emptySet()
         val formats = if (section == ContentSection.Books) preferences.getStringSet("filters-Books-formats", emptySet()).orEmpty()
             .mapNotNull { name -> org.mobilism.material.data.BookFormat.entries.find { it.name == name } }.toSet() else emptySet()
@@ -274,7 +274,7 @@ class MobilismViewModel(
         val allowed = mutableCategories.value.takeIf { it.section == snapshot.section }
             ?.items.orEmpty().map { it.id }.toSet()
         val selected = if (allowed.isEmpty()) filters.categoryIds else filters.categoryIds.intersect(allowed)
-        val custom = if (developer.state.value.customCategoriesActive)
+        val custom = if (contentPreferences.customCategoriesEnabled.value)
             customCategories.state.value.retain(snapshot.section, filters.customCategoryIds) else emptySet()
         val normalized = filters.copy(categoryIds = if (selected == allowed && custom.isEmpty()) emptySet() else selected,
             customCategoryIds = custom)
@@ -288,7 +288,7 @@ class MobilismViewModel(
             .putString("filters-${section.name}-through", filters.postedThrough?.toString())
             .putString("filters-${section.name}-search-sort", filters.searchSort.name)
         if (section == ContentSection.Books) editor.putStringSet("filters-Books-formats", filters.bookFormats.map { it.name }.toSet())
-        if (developer.state.value.customCategoriesActive) editor.putStringSet("filters-${section.name}-custom-categories",
+        if (contentPreferences.customCategoriesEnabled.value) editor.putStringSet("filters-${section.name}-custom-categories",
             customCategories.state.value.retain(section, filters.customCategoryIds))
         editor.apply()
         val snapshot = mutableFeed.value

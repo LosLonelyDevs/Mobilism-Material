@@ -30,17 +30,18 @@ import org.mobilism.material.data.ReleaseCategory
 import org.mobilism.material.designsystem.*
 
 @Composable
-private fun dateFormatter(): DateTimeFormatter {
+internal fun dateFormatter(style: FormatStyle = FormatStyle.MEDIUM): DateTimeFormatter {
     val locale = LocalConfiguration.current.locales[0]
-    return remember(locale) { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale) }
+    return remember(locale, style) { DateTimeFormatter.ofLocalizedDate(style).withLocale(locale) }
 }
 
 @Composable
-fun ReleasePostDate(timestamp: Long, modifier: Modifier = Modifier, textStyle: TextStyle = MaterialTheme.typography.bodySmall) {
+fun ReleasePostDate(timestamp: Long, modifier: Modifier = Modifier, textStyle: TextStyle = MaterialTheme.typography.bodySmall,
+    stacked: Boolean = false) {
     if (timestamp <= 0) return
     val instant = Instant.ofEpochSecond(timestamp)
     val zone = ZoneId.systemDefault()
-    val date = instant.atZone(zone).toLocalDate().format(dateFormatter())
+    val date = instant.atZone(zone).toLocalDate().format(dateFormatter(if (stacked) FormatStyle.SHORT else FormatStyle.MEDIUM))
     val context = LocalContext.current
     val timeFormat = remember(context, LocalConfiguration.current.locales[0], zone, DateFormat.is24HourFormat(context)) {
         DateFormat.getTimeFormat(context)
@@ -48,7 +49,7 @@ fun ReleasePostDate(timestamp: Long, modifier: Modifier = Modifier, textStyle: T
     val time = timeFormat.format(Date.from(instant))
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
-        Text("$date · $time", style = textStyle,
+        Text(if (stacked) "$date\n$time" else "$date · $time", style = textStyle,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

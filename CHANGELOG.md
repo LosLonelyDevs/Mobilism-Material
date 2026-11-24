@@ -2,7 +2,12 @@
 
 ## Unreleased
 
-- Added monochrome category icons and a searchable icon picker for custom categories.
+## 0.1.28
+
+- Group apps, games, and books into your own custom categories
+- Improved content on home tab, rotates daily
+- Fixed image caching issues
+- Various improvements and bug fixes
 
 ## 0.1.27
 

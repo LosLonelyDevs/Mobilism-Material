@@ -60,8 +60,8 @@ android {
         applicationId = "cum.ahfu.mobi.material"
         minSdk = 26
         targetSdk = 36
-        versionCode = 28
-        versionName = "0.1.27"
+        versionCode = 29
+        versionName = "0.1.28"
         val encodedEndpoint = Base64.getEncoder().encodeToString(dailyUsageEndpoint.toByteArray(Charsets.UTF_8))
         buildConfigField("String", "DAILY_USAGE_ENDPOINT",
             "new String(java.util.Base64.getDecoder().decode(${encodedEndpoint.buildConfigString()}), java.nio.charset.StandardCharsets.UTF_8)")

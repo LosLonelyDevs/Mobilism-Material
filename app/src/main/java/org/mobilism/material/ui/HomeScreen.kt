@@ -377,8 +377,9 @@ private fun LatestTile(release: Release, section: ContentSection, onRelease: (Lo
             if (section == ContentSection.Books && title.subtitle.isNotBlank()) Text(title.subtitle,
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             else UsernameLink(release.author, style = MaterialTheme.typography.labelMedium)
-            ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
-            ReleaseMetadataFooter(release, singleRow = true, showEmptyRow = release.views > 0) {
+            if (section != ContentSection.Apps) ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
+            ReleaseMetadataFooter(release, singleRow = true, showEmptyRow = release.views > 0,
+                categoryIconsOnly = true, inlineIcons = section == ContentSection.Apps) {
                 ReleaseViewCount(release.views, numberOnly = true)
             }
         }
@@ -398,8 +399,9 @@ private fun PopularTile(release: Release, section: ContentSection, index: Int, o
                     section, release.alternateHomeArtwork)
             }
             Text(title.name, style = MaterialTheme.typography.titleMediumEmphasized, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
-            ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
-            ReleaseMetadataFooter(release, singleRow = true, showEmptyRow = release.views > 0) {
+            if (section != ContentSection.Apps) ReleasePostDate(release.publishedAt, textStyle = MaterialTheme.typography.labelSmall)
+            ReleaseMetadataFooter(release, singleRow = true, showEmptyRow = release.views > 0,
+                categoryIconsOnly = true, inlineIcons = section == ContentSection.Apps) {
                 ReleaseViewCount(release.views, numberOnly = true, textStyle = MaterialTheme.typography.labelMedium, color = tone.second)
             }
         }

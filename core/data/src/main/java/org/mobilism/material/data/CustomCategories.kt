@@ -65,7 +65,9 @@ object CustomCategories {
         val section = requireNotNull(release.section)
         val ids = state.retain(section, selected)
         val previous = state.items.filter { it.matches(release) }
-        val compact = AppLibrary.compact(release).let { candidate ->
+        val thumbnail = release.thumbnail?.takeIf(String::isNotBlank) ?: release.galleryImages.firstOrNull()
+            ?: previous.flatMap { it.releases }.firstOrNull { it.id == release.id && !it.thumbnail.isNullOrBlank() }?.thumbnail
+        val compact = AppLibrary.compact(release).copy(thumbnail = thumbnail).let { candidate ->
             val known = previous.flatMap { it.releases }.firstOrNull { it.id == release.id && ReleaseVersions.packageName(it) != null }
             if (ReleaseVersions.packageName(candidate) == null && known != null) candidate.copy(contentHtml = known.contentHtml) else candidate
         }
@@ -77,9 +79,17 @@ object CustomCategories {
     fun observe(state: CustomCategoryState, release: Release): CustomCategoryState {
         val matching = state.items.filter { it.matches(release) }
         if (matching.isEmpty()) return state
+        val artwork = release.thumbnail?.takeIf(String::isNotBlank) ?: release.galleryImages.firstOrNull()
+        val enriched = if (artwork != null && matching.any { item ->
+            item.releases.any { it.id == release.id && it.thumbnail.isNullOrBlank() }
+        }) state.copy(items = state.items.map { item ->
+            if (item !in matching) item else item.copy(releases = item.releases.map {
+                if (it.id == release.id && it.thumbnail.isNullOrBlank()) it.copy(thumbnail = artwork) else it
+            })
+        }) else state
         if (matching.size == 1 && matching.single().releases.any { identityDetails(it) == identityDetails(release) ||
-            (ReleaseVersions.packageName(release) == null && identityDetails(it.copy(contentHtml = "")) == identityDetails(release)) }) return state
-        return assign(state, release, matching.flatMap { it.categoryIds }.toSet())
+            (ReleaseVersions.packageName(release) == null && identityDetails(it.copy(contentHtml = "")) == identityDetails(release)) }) return enriched
+        return assign(enriched, release, matching.flatMap { it.categoryIds }.toSet())
     }
 
     private fun identityDetails(release: Release): List<String> {
