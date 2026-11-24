@@ -175,7 +175,7 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
                     val choices = categoryChoices(state.categories.items, customCategories)
                     if (choices.isNotEmpty()) LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(choices, key = { _, item -> item.key }) { index, category ->
-                            CategoryTile(category.name, section, index) {
+                            CategoryTile(category.forum?.id, category.name, index) {
                                 category.forum?.let(onCategory)
                                 category.custom?.let(onCustomCategory)
                             }
@@ -404,14 +404,15 @@ private fun PopularTile(release: Release, section: ContentSection, index: Int, o
 }
 
 @Composable
-private fun CategoryTile(name: String, section: ContentSection, index: Int, onClick: () -> Unit) {
+private fun CategoryTile(id: Long?, name: String, index: Int, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val tone = homeTone(index)
     StoreCard(onClick, Modifier.width(120.dp), color = MaterialTheme.colorScheme.background, interaction = interaction) {
         Column(Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             StoreShape(index, 80.dp, tone.first, pressed = pressed) {
-                Icon(section.style().icon, null, Modifier.size(32.dp), tint = tone.second)
+                Text(id?.let(::categorySymbol) ?: name.take(2).uppercase(), Modifier.clearAndSetSemantics {},
+                    style = MaterialTheme.typography.headlineMedium, color = tone.second)
             }
             Text(name, style = MaterialTheme.typography.labelLarge, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
