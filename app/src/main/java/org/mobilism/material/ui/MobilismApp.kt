@@ -15,6 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -35,9 +36,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import org.mobilism.material.MobilismApplication
 import org.mobilism.material.R
 import org.mobilism.material.data.AuthState
+import org.mobilism.material.data.ContentSection
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.data.forForumUser
 import org.mobilism.material.data.DiscussionCategory
@@ -234,7 +237,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
         composable("feed") { entry ->
             val home: HomeViewModel = viewModel(viewModelStoreOwner = entry, factory = viewModelFactory {
                 initializer { HomeViewModel(app.repository, feed.section, model.contentPreferences.hideAdult,
-                    observeNewReleases = model::observeNewReleases) }
+                    observeNewReleases = model::observeNewReleases, discover = app::discoverApps) }
             })
             val homeState by home.state.collectAsStateWithLifecycle()
             var tab by rememberSaveable(feed.section) { mutableStateOf(openingTab ?: BrowseTab.Home) }
@@ -248,11 +251,14 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 if (tab != BrowseTab.Home && catalog == null) model.loadCategories()
             }
             LaunchedEffect(Unit) { openingTab = null }
-            DisposableEffect(tab, feed.section, feed.order, feed.filters) {
+            DisposableEffect(tab, feed.section) {
                 home.selectSection(feed.section)
                 home.setVisible(tab == BrowseTab.Home)
+                onDispose { home.setVisible(false) }
+            }
+            DisposableEffect(tab, feed.section, feed.order, feed.filters) {
                 model.setFeedVisible(tab != BrowseTab.Home)
-                onDispose { home.setVisible(false); model.setFeedVisible(false) }
+                onDispose { model.setFeedVisible(false) }
             }
             val openRelease: (Long) -> Unit = nav::openReleaseTopic
             val openFeed: (FeedOrder, FeedFilters) -> Unit = { order, filters ->
@@ -290,7 +296,20 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 homeRefreshing = homeState.busy,
                 homeContent = { openCategories ->
                     key(homeState.section) {
-                        HomeScreen(homeState, home::retry, openRelease,
+                        var installedApps by remember { mutableStateOf<Map<String, String>?>(null) }
+                        if (homeState.section == ContentSection.Apps) {
+                            val scope = rememberCoroutineScope()
+                            androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+                                home.updateDay()
+                                val job = scope.launch {
+                                    installedApps = try { app.installedLauncherLabels() }
+                                    catch (_: SecurityException) { emptyMap() }
+                                }
+                                onPauseOrDispose { job.cancel() }
+                            }
+                        }
+                        HomeScreen(homeState, home::retry, openRelease, library = library, installed = installedApps,
+                            account = (auth as? AuthState.SignedIn)?.username?.lowercase(java.util.Locale.ROOT), hideAdult = hideAdult,
                             onReleasesViewed = model::markReleasesViewed,
                             onMore = { openFeed(it, FeedFilters()) },
                             onCategory = { openFeed(FeedOrder.Latest, FeedFilters(categoryIds = setOf(it.id))) },
@@ -336,7 +355,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                 initializer { LibraryViewModel(context) }
             })
             val installed by libraryModel.installed.collectAsStateWithLifecycle()
-            LibraryScreen(library, installed, model.library,
+            LibraryScreen(library, installed, model.library, hideAdult = hideAdult, loadCatalog = app::installedCatalog,
                 onRefresh = libraryModel::refreshInstalled,
                 onSearch = { nav.navigate("search?query=${android.net.Uri.encode(it)}") },
                 onFollowing = { nav.navigate("following") },

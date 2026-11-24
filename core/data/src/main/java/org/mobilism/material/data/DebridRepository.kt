@@ -118,12 +118,12 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
             if (!isEnabled()) throw java.io.IOException("Premium services disabled")
             chain.proceed(chain.request())
         }.addInterceptor(DiagnosticInterceptor(diagnostics)).build()
-    private var api = DebridApi(this.client, diagnostics)
+    private var api = DebridApi(this.client, diagnostics, resources::getString)
     private var mobilismCatalogStartedAt: Long? = null
 
     private fun forgetMobilismCatalog() {
         // The provider client holds a fallback catalog. Its OkHttp connection pool and saved credentials outlive it.
-        api = DebridApi(client, diagnostics)
+        api = DebridApi(client, diagnostics, resources::getString)
         mobilismCatalogStartedAt = null
     }
     private fun megaSessions(owner: String) = MegaDebridSessions(api,
@@ -336,6 +336,7 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
         }
         if (candidates.isEmpty()) throw DebridException(resources.getString(R.string.debrid_no_host_account))
         val failures = mutableListOf<String>()
+        var fileUnavailable = false
         for (provider in candidates) {
             requireEnabled()
             mutex.withLock {
@@ -354,11 +355,13 @@ class DebridRepository(context: Context, client: OkHttpClient = AppHttp.client,
                         downloadAccess.revoke(provider)
                         update(provider) { it.copy(validated = false, error = failure.message) }
                     }
+                    fileUnavailable = fileUnavailable || failure.fileUnavailable
                     failures += "${provider.label}: ${failure.message}"
                 }
             }
         }
-        throw DebridException(failures.joinToString("\n\n").ifEmpty { resources.getString(R.string.debrid_account_changed) })
+        throw DebridException(failures.joinToString("\n\n").ifEmpty { resources.getString(R.string.debrid_account_changed) },
+            fileUnavailable = fileUnavailable)
     }
 
     private fun <T> withAccount(provider: DebridProvider, owner: String, block: (String) -> T): T =

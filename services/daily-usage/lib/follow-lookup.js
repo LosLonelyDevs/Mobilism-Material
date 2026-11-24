@@ -20,6 +20,29 @@ export async function visibleSnapshot(database, now, latestOnly = false) {
   return { observedAt: Number(row?.observed_at ?? 0), items, lifetime };
 }
 
+export function publicRelease({ id, title, name, version, postedAt, author, adultFiltered, category, packageName }) {
+  return { id, title, name, version, postedAt, author, adultFiltered, ...(category && { category }), ...(packageName && { packageName }) };
+}
+
+// One shared ranking for every phone. Each installation counts at most once per app per UTC day.
+export async function discoverApps(database, now, safe) {
+  const day = new Date(now * 1000).toISOString().slice(0, 10);
+  const rows = await database(`WITH demand AS (
+      SELECT app_key, sum(followers) AS popularity FROM daily_followed_apps
+      WHERE day BETWEEN $1::date - 6 AND $1::date GROUP BY app_key HAVING sum(followers) > 0
+    ), candidates AS (
+      SELECT item, popularity, ${retentionSecondsSql} AS lifetime FROM latest_apps_cache
+      CROSS JOIN LATERAL jsonb_array_elements(items) item JOIN demand ON app_key = item->>'key'
+      WHERE singleton AND item ? 'category' AND NOT item ? 'hiddenAt' AND (NOT $3::boolean OR (item->>'adultFiltered')::boolean)
+    ), ranked AS (
+      SELECT *, row_number() OVER (PARTITION BY item#>>'{category,id}' ORDER BY popularity DESC,
+        (item->>'postedAt')::bigint DESC, (item->>'id')::bigint DESC) AS rank
+      FROM candidates WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $2::bigint - lifetime
+    ) SELECT item, lifetime FROM ranked WHERE rank <= 20 ORDER BY rank, popularity DESC, (item->>'id')::bigint DESC LIMIT 500`,
+    [day, now, safe]);
+  return { observedAt: now, items: rows.map(row => row.item), lifetime: Number(rows[0]?.lifetime ?? cacheLifetime) };
+}
+
 export function parseLookup(body) {
   if (Object.keys(body).some(k => !['apps', 'adultFiltered', 'day'].includes(k)) ||
       typeof body.adultFiltered !== 'boolean' || typeof body.day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(body.day) ||
@@ -87,6 +110,5 @@ export async function lookup(database, apps, adultFiltered, now, clientDay, mode
       [JSON.stringify(counts), day, day === clientDay, mode, now, clientVersion]);
   } catch { /* A statistics write must never turn a cache hit into a Mobilism search. */ }
   return { observedAt, misses: counts.filter(app => app.miss).length,
-    items: items.map(({ id, title, name, version, postedAt, author, adultFiltered }) =>
-    ({ id, title, name, version, postedAt, author, adultFiltered })) };
+    items: items.map(publicRelease) };
 }

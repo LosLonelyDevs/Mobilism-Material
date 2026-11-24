@@ -54,7 +54,7 @@ class DebridApiTest {
                 .code(status).message("Test response")
                 .header("Location", "https://other.example.org/")
                 .body(body.toResponseBody("application/json".toMediaType())).build()
-        }.build())
+        }.build(), message = ::providerTestString)
 
     @Test fun realDebridRequiresSupportedAndUpHosts() {
         val result = api("""{
@@ -165,6 +165,19 @@ class DebridApiTest {
         }
     }
 
+    @Test fun distinguishesMissingFileFromUnavailableProviderEndpoint() {
+        for (code in listOf(6, 7, 19, 24, -1)) {
+            val failure = assertThrows(DebridException::class.java) {
+                api("""{"error":"failure","error_code":$code}""", 404).resolve(DebridProvider.RealDebrid, key, original)
+            }
+            assertEquals(code == 7 || code == 24, failure.fileUnavailable)
+        }
+        val absent = assertThrows(DebridException::class.java) {
+            api("""{"response_code":"HOST_ERROR","response_text":"File not found"}""").resolve(DebridProvider.MegaDebrid, key, original)
+        }
+        assertTrue(absent.fileUnavailable)
+    }
+
     @Test fun hostAndQuotaFailuresKeepAccountValid() {
         for (code in listOf(16, 17, 18, 19, 21, 23)) {
             val error = assertThrows(DebridException::class.java) {
@@ -198,7 +211,7 @@ class DebridApiTest {
     }
 
     @Test fun networkErrorsNeverExposeRequestSecrets() {
-        val service = DebridApi(OkHttpClient.Builder().addInterceptor { throw IOException("token=$key $original") }.build())
+        val service = DebridApi(OkHttpClient.Builder().addInterceptor { throw IOException("token=$key $original") }.build(), message = ::providerTestString)
         val error = assertThrows(DebridException::class.java) { service.validate(DebridProvider.MegaDebrid, key) }
         assertFalse(error.message.orEmpty().contains(key))
         assertFalse(error.message.orEmpty().contains(original))

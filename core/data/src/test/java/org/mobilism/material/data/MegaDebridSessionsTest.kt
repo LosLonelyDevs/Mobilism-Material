@@ -44,7 +44,7 @@ class MegaDebridSessionsTest {
             }
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
                 .body(body.toResponseBody()).build()
-        }.build())
+        }.build(), message = ::providerTestString)
         fun sessions() = MegaDebridSessions(api, { saved }, { saved = it }, { Long.MAX_VALUE }, DiagnosticLogger { events += it })
         fun connect() = sessions().connect("sample", "private-password")
     }

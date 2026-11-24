@@ -43,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -51,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import org.mobilism.material.R
 import org.mobilism.material.data.DebridState
 import org.mobilism.material.designsystem.AppIconButton
 
@@ -70,11 +72,11 @@ internal fun ReleaseDownloadsSheet(releaseId: Long, title: String, groups: List<
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AppHeading("Downloads", HeadingLevel.Page, style = MaterialTheme.typography.titleLarge)
+                    AppHeading(stringResource(R.string.settings_downloads), HeadingLevel.Page, style = MaterialTheme.typography.titleLarge)
                     Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
-                AppIconButton(Icons.Outlined.Close, "Close downloads", {
+                AppIconButton(Icons.Outlined.Close, stringResource(R.string.download_close_sheet), {
                     scope.launch { sheetState.hide() }.invokeOnCompletion {
                         if (!sheetState.isVisible) onDismiss()
                     }
@@ -89,11 +91,11 @@ internal fun ReleaseDownloadsSheet(releaseId: Long, title: String, groups: List<
                     }
                     items(groups, key = { it.id }) { group ->
                         ReleaseDownloadGroup(releaseId, group, baseUrl, debrid, requests, onResolve, onOpened,
-                            onCopied = { snackbar.showSnackbar("Link copied") }, onRelease = onRelease,
+                            snackbar = snackbar, onRelease = onRelease,
                             onBeforeHelp = onDismiss, downloadFile = downloadFile)
                     }
                     if (groups.isEmpty()) item("empty") {
-                        Text("No download links available.", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.download_empty_links), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
@@ -106,15 +108,16 @@ internal fun ReleaseDownloadsSheet(releaseId: Long, title: String, groups: List<
 @Composable
 internal fun ReleaseDownloadGroup(releaseId: Long, group: DownloadGroup, baseUrl: String, debrid: DebridState,
     requests: DownloadRequestTracker, onResolve: suspend (String) -> String, onOpened: () -> Unit,
-    onCopied: suspend () -> Unit, onRelease: (Long) -> Unit, onBeforeHelp: () -> Unit = {},
+    snackbar: SnackbarHostState, onRelease: (Long) -> Unit, onBeforeHelp: () -> Unit = {},
     downloadFile: (suspend (String, suspend () -> String) -> Unit)? = null) {
     var expanded by rememberSaveable(releaseId, group.id, group.collapsed) { mutableStateOf(!group.collapsed) }
+    val stateLabel = stringResource(if (expanded) R.string.state_expanded else R.string.state_collapsed)
     val motion = MaterialTheme.motionScheme
     val rotation by animateFloatAsState(if (expanded) 180f else 0f, motion.fastSpatialSpec(), label = "Download group chevron")
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).heightIn(min = 48.dp)
             .clip(MaterialTheme.shapes.medium)
-            .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
+            .semantics { stateDescription = stateLabel }
             .clickable(role = Role.Button, onClick = { expanded = !expanded })
             .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
@@ -130,7 +133,7 @@ internal fun ReleaseDownloadGroup(releaseId: Long, group: DownloadGroup, baseUrl
                 if (group.notesHtml.isNotBlank()) DownloadNotes(group.notesHtml, baseUrl, onRelease, onBeforeHelp)
                 group.links.forEach { link ->
                     DownloadLinkRow(link, debrid, onOpened, resolveLink = onResolve, requests = requests,
-                        downloadFile = downloadFile, onCopied = onCopied)
+                        downloadFile = downloadFile, snackbar = snackbar)
                 }
             }
         }

@@ -22,7 +22,7 @@ enum class BrowseTab(@androidx.annotation.StringRes val labelRes: Int) {
     Latest(org.mobilism.material.R.string.browse_tab_latest),
     Top(org.mobilism.material.R.string.browse_tab_top),
 }
-enum class HomeCollection { Latest, Popular, Categories, Reviews, Discussions }
+enum class HomeCollection { Latest, Popular, Categories, Reviews, Discussions, Discover }
 
 data class HomeShelf<T>(val items: List<T> = emptyList(), val busy: Boolean = false,
     val error: ScreenError? = null, val loaded: Boolean = false)
@@ -35,15 +35,18 @@ data class HomeState(
     val latest: HomeShelf<Release> = HomeShelf(), val popular: HomeShelf<Release> = HomeShelf(),
     val categories: HomeShelf<ReleaseCategory> = HomeShelf(), val reviews: HomeForum = HomeForum(),
     val discussions: HomeForum = HomeForum(), val newReleaseIds: Set<Long> = emptySet(),
+    val discovery: HomeShelf<Release> = HomeShelf(), val day: Int = 0,
 ) {
-    val busy: Boolean get() = latest.busy || popular.busy || categories.busy || reviews.busy || discussions.busy
+    val busy: Boolean get() = latest.busy || popular.busy || categories.busy || reviews.busy || discussions.busy || discovery.busy
 }
 
 class HomeViewModel(private val repository: HomeRepository, initialSection: ContentSection,
     hideAdult: StateFlow<Boolean> = MutableStateFlow(false),
     private val observeNewReleases: (ContentSection, List<Release>) -> Set<Long> = { _, _ -> emptySet() },
-    private val now: () -> Long = { System.nanoTime() / 1_000_000 }) : ViewModel() {
-    private val mutableState = MutableStateFlow(HomeState(initialSection))
+    private val now: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val discover: suspend (Boolean) -> List<Release> = { emptyList() },
+    private val localDay: () -> Int = { java.time.LocalDate.now().toEpochDay().toInt() }) : ViewModel() {
+    private val mutableState = MutableStateFlow(HomeState(initialSection, day = localDay()))
     val state = mutableState.asStateFlow()
     private val cache = mutableMapOf<ContentSection, HomeState>()
     private val jobs = mutableMapOf<HomeCollection, Job>()
@@ -51,6 +54,7 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
     private val releaseStamps = mutableMapOf<Pair<ContentSection, FeedOrder>, ShelfStamp>()
     private var adultFilter = hideAdult.value
     private var visible = false
+    private var discoveryStamp: ShelfStamp? = null
 
     init {
         viewModelScope.launch {
@@ -60,7 +64,8 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
                 cancelLoads()
                 cache.clear()
                 releaseStamps.clear()
-                mutableState.value = HomeState(state.value.section)
+                discoveryStamp = null
+                mutableState.value = HomeState(state.value.section, day = localDay())
                 if (visible) refresh()
             }
         }
@@ -71,12 +76,18 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
         cancelLoads()
         cache[state.value.section] = state.value.let { it.copy(latest = it.latest.copy(busy = false),
             popular = it.popular.copy(busy = false), categories = it.categories.copy(busy = false),
-            reviews = it.reviews.copy(busy = false), discussions = it.discussions.copy(busy = false)) }
+            reviews = it.reviews.copy(busy = false), discussions = it.discussions.copy(busy = false), discovery = it.discovery.copy(busy = false)) }
         mutableState.value = cache[section] ?: HomeState(section)
-        if (visible) loadMissing()
+        if (visible) { updateDay(); loadMissing() }
+    }
+
+    fun updateDay() {
+        val today = localDay()
+        if (today != state.value.day) mutableState.update { it.copy(day = today) }
     }
 
     fun setVisible(value: Boolean) {
+        if (value) updateDay()
         visible = value
         if (value) loadMissing()
         else {
@@ -93,12 +104,20 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
     fun retry(collection: HomeCollection) = load(collection, fresh = true)
 
     private fun load(collection: HomeCollection, fresh: Boolean) {
-        jobs.remove(collection)?.cancel()
         val section = state.value.section
+        if (collection == HomeCollection.Discover && section != ContentSection.Apps) return
+        jobs.remove(collection)?.cancel()
         mark(collection, busy = true)
         jobs[collection] = viewModelScope.launch {
             try {
                 when (collection) {
+                    HomeCollection.Discover -> {
+                        val generation = repository.feedPolicy(FeedOrder.Top).generation
+                        val items = discover(adultFilter)
+                        ensureActive()
+                        discoveryStamp = ShelfStamp(generation, now(), 0)
+                        mutableState.update { it.copy(discovery = HomeShelf(items, loaded = true)) }
+                    }
                     HomeCollection.Latest, HomeCollection.Popular -> {
                         val order = if (collection == HomeCollection.Latest) FeedOrder.Latest else FeedOrder.Top
                         val generation = repository.feedPolicy(order).generation
@@ -130,6 +149,7 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 ensureActive()
+                if (collection == HomeCollection.Discover) discoveryStamp = ShelfStamp(repository.feedPolicy(FeedOrder.Top).generation, now(), 0)
                 mark(collection, busy = false, error = error.forScreen())
             }
         }
@@ -137,6 +157,10 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
 
     private fun loaded(collection: HomeCollection) = with(state.value) {
         when (collection) {
+            HomeCollection.Discover -> section != ContentSection.Apps || discoveryStamp?.let { stamp ->
+                val policy = repository.feedPolicy(FeedOrder.Top)
+                stamp.generation == policy.generation && now() - stamp.loadedAt in 0 until policy.ttlMs
+            } == true
             HomeCollection.Latest, HomeCollection.Popular -> {
                 val order = if (collection == HomeCollection.Latest) FeedOrder.Latest else FeedOrder.Top
                 val policy = repository.feedPolicy(order)
@@ -153,6 +177,8 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
 
     private fun mark(collection: HomeCollection, busy: Boolean, error: ScreenError? = null) {
         mutableState.update { when (collection) {
+            HomeCollection.Discover -> it.copy(discovery = if (error != null) HomeShelf(error = error)
+                else it.discovery.copy(busy = busy))
             HomeCollection.Latest -> it.copy(latest = it.latest.copy(busy = busy, error = error))
             HomeCollection.Popular -> it.copy(popular = it.popular.copy(busy = busy, error = error))
             HomeCollection.Categories -> it.copy(categories = it.categories.copy(busy = busy, error = error))

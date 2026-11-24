@@ -19,10 +19,10 @@ const query = async (sql, values) => (await db.query(sql, values)).rows;
 const item = (id, name = 'App ' + id) => ({
   id, name, title: name + ' v1.1', version: '1.1', postedAt: now - 2000 + id, author: 'Uploader'
 });
-async function call(method, body, database = query, time = now, headers = {}) {
+async function call(method, body, database = query, time = now, headers = {}, url = '/') {
   const res = { headers: {}, setHeader(key, value) { this.headers[key] = value; },
     end(value) { this.body = JSON.parse(value); } };
-  await createHandler(database, () => time)({ method, headers: { 'content-type': 'application/json', ...headers }, body }, res);
+  await createHandler(database, () => time)({ method, headers: { 'content-type': 'application/json', ...headers }, body, url }, res);
   return res;
 }
 const post = (items, firstPage = false, adultFiltered = false) => call('POST', { firstPage, adultFiltered, items });
@@ -31,6 +31,55 @@ const named = (apps, adultFiltered = false, database = query, time = now) =>
   call('POST', { apps, adultFiltered, day }, database, time);
 const feed = (ids, baseline, at, filtered = false, items = ids.map(id => item(id)), arrival = at) =>
   call('POST', { ids, baseline, readAt: at, items, firstPage: true, adultFiltered: filtered }, query, arrival);
+
+test('category metadata fills older rows, survives legacy uploads, and belongs to the release topic', async () => {
+  const original = item(9, 'MyPGallery'), adult = { id: 12, name: 'Adult' };
+  const upload = (release, at = now) => call('POST', { firstPage: true, adultFiltered: false,
+    items: [release], readAt: at }, query, at);
+  await upload(original);
+  await Promise.all([upload({ ...original, category: adult }), upload(original)]);
+  await upload({ ...original, category: { id: 12 } }, now + 1);
+  assert.deepEqual((await call('GET')).body.items[0].category, adult);
+  assert.deepEqual((await named([{ name: original.name, receipt: randomUUID() }])).body.items[0].category, adult);
+  await upload({ ...original, category: { id: 21 } }, now + 3);
+  await upload({ ...original, category: adult }, now + 2);
+  assert.deepEqual((await call('GET')).body.items[0].category, { id: 21 });
+  const next = { ...original, id: 10, postedAt: original.postedAt + 1 };
+  await upload(next);
+  await upload({ ...original, category: adult });
+  assert.equal((await call('GET')).body.items[0].category, undefined);
+  for (const category of [null, { id: -1 }, { id: 12, name: ' ' }, { id: 2, custom: 'private' }])
+    assert.equal((await upload({ ...next, category })).statusCode, 400);
+});
+
+test('Installed shares current versions without receiving device packages or counting lookups', async () => {
+  const camera = { ...item(11, 'Camera'), packageName: 'example.camera', category: { id: 7 } };
+  await post([camera], true, true);
+  await post([item(11, 'Camera'), item(13, 'Another')]);
+  const get = safe => call('GET', null, query, now, {}, '/?view=installed&safe=' + safe);
+  assert.deepEqual((await get('1')).body, { observedAt: now, collection: 'installed',
+    items: [{ id: 11, name: 'Camera', version: '1.1', packageName: 'example.camera', adultFiltered: true }] });
+  assert.equal((await get('0')).body.items.length, 2);
+  assert.equal((await get('x')).statusCode, 400);
+  assert.equal((await post([{ ...camera, packageName: 'invalid package' }])).statusCode, 400);
+  assert.equal((await query('SELECT * FROM daily_followed_apps')).length, 0);
+});
+
+test('Discover ranks unique cached apps by recent follow demand and only returns safe sightings when requested', async () => {
+  const apps = Array.from({ length: 5 }, (_, index) => ({ ...item(index + 1), category: { id: 20, name: 'Utilities' } }));
+  await post(apps.slice(0, 4), true, true);
+  await post(apps.slice(4));
+  for (const [index, followers] of [5, 1, 0, 2, 8].entries())
+    await query('INSERT INTO daily_followed_apps(day, app_key, name, followers, misses, hits) VALUES ($1,$2,$3,$4,0,$5)',
+      [day, apps[index].name.toLowerCase(), apps[index].name, followers, index === 2 ? 1000 : 1]);
+  const discover = (safe, time = now) => call('GET', null, query, time, {}, '/?view=discover&safe=' + safe);
+  assert.equal((await discover('1')).body.collection, 'discover');
+  assert.deepEqual((await discover('1')).body.items.map(r => r.id), [1, 4, 2]);
+  assert.deepEqual((await discover('0')).body.items.map(r => r.id), [5, 1, 4, 2]);
+  assert.deepEqual((await discover('0', now + 2 * 86400)).body.items, []);
+  assert.equal((await discover('unknown')).statusCode, 400);
+  assert.equal(Number((await query('SELECT sum(hits) AS hits FROM daily_followed_apps'))[0].hits), 1004);
+});
 
 test('one lookup counts each requesting device once per app and only absent visible rows as misses', async () => {
   const apps = ['APP 1', 'App 2', 'Absent'].map(name => ({ name, receipt: randomUUID() }));

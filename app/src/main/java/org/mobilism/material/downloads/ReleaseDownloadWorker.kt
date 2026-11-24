@@ -340,6 +340,8 @@ internal fun releaseFileClient(context: Context): OkHttpClient {
                     edit.putLong(host, now + delay.coerceAtMost(Long.MAX_VALUE - now)).apply()
                 }
                 response.close()
+                if (response.code == 404 || response.code == 410)
+                    throw DownloadProblem(context.getString(R.string.download_direct_unavailable))
                 throw DownloadProblem(context.getString(R.string.download_http_retry, response.code))
             }
             response

@@ -66,8 +66,8 @@ export function createHandler(database = query, session = req => sessionUser(req
         const withVersion = ({ key, ...row }) => ({ ...row, cachedVersion: versions.get(key) ?? null });
         return respond(res, 200, { available, from, to, asOf: asOf.toISOString(), cachedApps: versions.size,
           cacheUsage, lookups, todayLookups: to === today ? todayLookups : null, followRankings: rankings.map(withVersion),
-          recentApps: recent.map(withVersion), catalog: snapshot.items.map(({ key, name, version }) =>
-            ({ name, version, clientVersion: Object.hasOwn(catalogClients, key) ? catalogClients[key] : null })),
+          recentApps: recent.map(withVersion), catalog: snapshot.items.map(({ key, name, version, category }) =>
+            ({ name, version, ...(category && { category }), clientVersion: Object.hasOwn(catalogClients, key) ? catalogClients[key] : null })),
           storage: config.followingStorage ?? defaultStorage, canEditStorage: user.isAdmin === true,
           pullToRefresh: setting(config) });
       }

@@ -16,6 +16,14 @@ class InstalledApps(context: Context) {
     }.getOrNull()
 
     @Suppress("DEPRECATION")
+    fun launcherLabels(): Map<String, String> = manager.queryIntentActivities(
+        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0,
+    ).associate { activity ->
+        val info = activity.activityInfo.applicationInfo
+        info.packageName to info.loadLabel(manager).toString()
+    }
+
+    @Suppress("DEPRECATION")
     fun list(): List<InstalledVersion> = manager.queryIntentActivities(
         Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0,
     ).map { it.activityInfo.packageName }.distinct().mapNotNull(::read)

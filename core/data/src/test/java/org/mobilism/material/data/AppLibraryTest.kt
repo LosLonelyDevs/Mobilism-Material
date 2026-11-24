@@ -20,6 +20,19 @@ class AppLibraryTest {
         assertTrue(entries.single().downloaded)
     }
 
+    @Test fun olderFollowsRecoverOnlyForumCategoriesAndNewFollowsRememberTheirCategoryName() {
+        fun restored(url: String, id: Long? = null, name: String? = null): Release {
+            val original = release(42, "1.0").copy(browserUrl = url, categoryId = id, categoryName = name)
+            return LibraryJson.decode(LibraryJson.encode(listOf(LibraryEntry(original, watched = true)))).single().release
+        }
+        assertEquals(42L, restored("https://forum.mobilism.org/viewtopic.php?f=42&t=99").categoryId)
+        assertNull(restored("https://example.invalid/page?f=42").categoryId)
+        assertNull(restored("https://forum.mobilism.org/viewtopic.php?t=99").categoryId)
+        val saved = restored("https://forum.mobilism.org/viewtopic.php?t=99", 7, "Photography")
+        assertEquals(7L, saved.categoryId)
+        assertEquals("Photography", saved.categoryName)
+    }
+
     @Test fun roundTripKeepsFlagsIdentityAndUpdateWithoutPostBody() {
         val entry = LibraryEntry(AppLibrary.compact(release(1, "1.0")), true, true, 123L, 456L, AppLibrary.compact(release(2, "2.0")))
         val json = LibraryJson.encode(listOf(entry))

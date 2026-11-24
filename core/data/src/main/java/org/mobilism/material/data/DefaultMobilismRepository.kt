@@ -149,9 +149,7 @@ class DefaultMobilismRepository(context: Context, private val contentPreferences
                     pager = CategoryFeedPager(query.categories, order,
                         localMatches = if (customIds.isNotEmpty()) ({ release -> local.matches(release, customIds) }) else null) { category, sourcePage ->
                         if (category == 0L) checkNotNull(customSearch).page(sourcePage)
-                        else api.releases(section, order, sourcePage, token, category, hideAdult).let { result ->
-                            result.copy(items = result.items.map { it.copy(categoryId = it.categoryId ?: category) })
-                        }
+                        else api.releases(section, order, sourcePage, token, category, hideAdult)
                     }
                 }
                 // A date scan can fail after consuming several category pages. Retrying must replay them.

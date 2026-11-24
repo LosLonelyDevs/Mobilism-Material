@@ -28,7 +28,11 @@ data class Release(
     val likeId: Long? = null,
     val liked: Boolean? = null,
     val categoryId: Long? = null,
-)
+    val categoryName: String? = null,
+    val storePackage: String? = null,
+) {
+    val appTitle: ReleaseTitle by lazy { ReleaseTitles.parse(title, ContentSection.Apps) }
+}
 
 data class ReleasePage(val items: List<Release>, val canLoadMore: Boolean, val lastPage: Int? = null,
     val nextActivityAtMost: Long? = null, val cachedAgeMs: Long = 0)

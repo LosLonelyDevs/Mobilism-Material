@@ -43,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,11 +58,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -75,6 +78,7 @@ import org.mobilism.material.data.ContentSection
 import org.mobilism.material.data.DiscussionCategory
 import org.mobilism.material.data.DiscussionTopic
 import org.mobilism.material.data.FeedOrder
+import org.mobilism.material.data.LibraryEntry
 import org.mobilism.material.data.Release
 import org.mobilism.material.data.ReleaseCategory
 import org.mobilism.material.data.ReleaseTitles
@@ -90,64 +94,69 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
     onTopic: (DiscussionTopic, DiscussionCategory) -> Unit, onForum: (DiscussionCategory) -> Unit,
     customCategories: List<org.mobilism.material.data.CustomCategory> = emptyList(),
     onCustomCategory: (org.mobilism.material.data.CustomCategory) -> Unit = {},
-    onReleasesViewed: (ContentSection, List<Release>) -> Unit = { _, _ -> }) {
+    onReleasesViewed: (ContentSection, List<Release>) -> Unit = { _, _ -> }, library: List<LibraryEntry> = emptyList(),
+    installed: Map<String, String>? = emptyMap(), account: String? = null, hideAdult: Boolean = false) {
     val section = state.section
-    val highlights = state.popular.items.ifEmpty { state.latest.items }.take(5)
+    val context = LocalContext.current
+    val store = remember(section, account, hideAdult, context) {
+        if (section == ContentSection.Apps && account != null)
+            DailyHomeStore(context.getSharedPreferences("daily-home", android.content.Context.MODE_PRIVATE), "$hideAdult:$account") else null
+    }
+    var saved by remember(store, state.day) { mutableStateOf(store?.read(state.day)) }
+    val ready = installed != null && listOf(state.discovery, state.latest, state.popular, state.categories).all { it.loaded || it.error != null }
+    val apps = remember(section, ready, state.discovery.items, library, installed, state.latest.items, state.popular.items,
+        state.categories.items, state.day, saved, account) {
+        if (section == ContentSection.Apps && ready) discoverPicks(state.discovery.items, library, state.latest.items,
+            state.popular.items, state.categories.items, state.day, installed.orEmpty(), saved, account?.hashCode() ?: 0) else null
+    }
+    LaunchedEffect(store, state.day, apps?.selection) {
+        val selection = apps?.selection ?: return@LaunchedEffect
+        if (store != null && saved == null && (selection.discover.isNotEmpty() || selection.featured.isNotEmpty()) &&
+            state.discovery.loaded && state.popular.loaded && state.latest.loaded && state.categories.loaded) {
+            store.save(state.day, selection)
+            saved = selection
+        }
+    }
+    val highlights = if (section == ContentSection.Apps) apps?.discover.orEmpty()
+        else state.popular.items.ifEmpty { state.latest.items }.take(5)
+    val latest = apps?.latest ?: state.latest.items
+    val popular = apps?.popular ?: state.popular.items
     val scroll = rememberLazyListState()
     val latestScroll = rememberLazyListState()
     var latestVisible by remember { mutableStateOf(false) }
-    ObserveVisibleReleases(latestScroll, section, state.latest.items,
+    ObserveVisibleReleases(latestScroll, section, latest,
         isVisible = { latestVisible && scroll.layoutInfo.visibleItemsInfo.any { it.key == "latest" } }, onViewed = onReleasesViewed)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(Modifier.widthIn(max = 1000.dp).fillMaxSize().testTag("home-${section.name}"),
             state = scroll,
             contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            item(key = "hero") {
+            if (highlights.isNotEmpty() || state.popular.busy || state.latest.busy || state.discovery.busy) item(key = "hero") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(stringResource(when (section) {
+                    val heading = stringResource(when (section) {
                         ContentSection.Apps -> R.string.home_discover_apps
                         ContentSection.Books -> R.string.home_discover_books
                         ContentSection.Games -> R.string.home_discover_games
-                    }),
+                    })
+                    Text(heading,
                         Modifier.padding(horizontal = 20.dp).semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
                     if (highlights.isNotEmpty()) HomeHero(highlights, section, onRelease)
-                    else if (state.popular.busy || state.latest.busy) LoadingState(stringResource(when (section) {
+                    else LoadingState(stringResource(when (section) {
                         ContentSection.Apps -> R.string.home_finding_apps
                         ContentSection.Books -> R.string.home_finding_books
                         ContentSection.Games -> R.string.home_finding_games
                     }), Modifier.fillMaxWidth().heightIn(min = 220.dp))
                 }
             }
-            item(key = "latest") {
+            if (apps != null && apps.featured.isNotEmpty() && apps.categoryNames.isNotEmpty()) item(key = "daily-category") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HomeHeading(stringResource(when (section) {
-                        ContentSection.Apps -> R.string.home_latest_apps
-                        ContentSection.Books -> R.string.home_latest_books
-                        ContentSection.Games -> R.string.home_latest_games
-                    }), { onMore(FeedOrder.Latest) })
-                    if (state.latest.items.isNotEmpty()) LazyRow(state = latestScroll,
-                        modifier = Modifier.onGloballyPositioned {
-                            latestVisible = it.boundsInWindow().let { bounds -> bounds.width > 0 && bounds.height > 0 }
-                        },
-                        contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(state.latest.items, key = { it.id }) { release ->
-                            LatestTile(release, section, onRelease, isNew = release.id in state.newReleaseIds)
+                    val names = apps.categoryNames
+                    HomeHeading(if (names.size == 2) stringResource(R.string.home_top_apps_two_categories, names[0], names[1])
+                        else stringResource(R.string.home_top_apps_in_category, names.first()), null)
+                    LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        itemsIndexed(apps.featured, key = { _, release -> release.id }) { index, release ->
+                            DailyCategoryTile(release, index, onRelease)
                         }
                     }
-                    HomeShelfStatus(state.latest, stringResource(R.string.home_empty_releases)) { onRetry(HomeCollection.Latest) }
-                }
-            }
-            item(key = "popular") {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HomeHeading(stringResource(when (section) {
-                        ContentSection.Apps -> R.string.home_popular_apps
-                        ContentSection.Books -> R.string.home_popular_books
-                        ContentSection.Games -> R.string.home_popular_games
-                    }), { onMore(FeedOrder.Top) })
-                    if (state.popular.items.isNotEmpty()) LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        itemsIndexed(state.popular.items, key = { _, item -> item.id }) { index, release -> PopularTile(release, section, index, onRelease) }
-                    }
-                    HomeShelfStatus(state.popular, stringResource(R.string.home_empty_popular)) { onRetry(HomeCollection.Popular) }
                 }
             }
             item(key = "categories") {
@@ -167,17 +176,51 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
                     }
                 }
             }
-            item(key = "reviews") {
+            if (section != ContentSection.Apps || state.reviews.visibleOnHome()) item(key = "reviews") {
                 HomeForumShelf(stringResource(R.string.home_reviews), state.reviews, true,
                     onRetry = { onRetry(HomeCollection.Reviews) }, onTopic, onForum)
             }
-            item(key = "discussions") {
+            if (section != ContentSection.Apps || state.discussions.visibleOnHome()) item(key = "discussions") {
                 HomeForumShelf(stringResource(R.string.home_discussions), state.discussions, false,
                     onRetry = { onRetry(HomeCollection.Discussions) }, onTopic, onForum)
+            }
+            if (latest.isNotEmpty() || state.latest.items.isEmpty()) item(key = "latest") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HomeHeading(stringResource(when (section) {
+                        ContentSection.Apps -> R.string.home_latest_apps
+                        ContentSection.Books -> R.string.home_latest_books
+                        ContentSection.Games -> R.string.home_latest_games
+                    }), { onMore(FeedOrder.Latest) })
+                    if (latest.isNotEmpty()) LazyRow(state = latestScroll,
+                        modifier = Modifier.onGloballyPositioned {
+                            latestVisible = it.boundsInWindow().let { bounds -> bounds.width > 0 && bounds.height > 0 }
+                        },
+                        contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(latest, key = { it.id }) { release ->
+                            LatestTile(release, section, onRelease, isNew = release.id in state.newReleaseIds)
+                        }
+                    }
+                    HomeShelfStatus(state.latest, stringResource(R.string.home_empty_releases)) { onRetry(HomeCollection.Latest) }
+                }
+            }
+            if (popular.isNotEmpty() || state.popular.items.isEmpty()) item(key = "popular") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HomeHeading(stringResource(when (section) {
+                        ContentSection.Apps -> R.string.home_popular_apps
+                        ContentSection.Books -> R.string.home_popular_books
+                        ContentSection.Games -> R.string.home_popular_games
+                    }), { onMore(FeedOrder.Top) })
+                    if (popular.isNotEmpty()) LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        itemsIndexed(popular, key = { _, item -> item.id }) { index, release -> PopularTile(release, section, index, onRelease) }
+                    }
+                    HomeShelfStatus(state.popular, stringResource(R.string.home_empty_popular)) { onRetry(HomeCollection.Popular) }
+                }
             }
         }
     }
 }
+
+private fun HomeForum.visibleOnHome() = busy || error != null || !topics?.items.isNullOrEmpty()
 
 @Composable
 private fun HomeHeading(title: String, onMore: (() -> Unit)?) {
@@ -197,7 +240,7 @@ private fun HomeHero(releases: List<Release>, section: ContentSection, onRelease
     val windowWidth = LocalWindowInfo.current.containerSize.width
     val wide = with(LocalDensity.current) { windowWidth.toDp() } >= 600.dp
     val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.6f)
-    val heroHeight = (220 * fontScale).dp
+    val heroHeight = ((if (section == ContentSection.Apps) 172 else 220) * fontScale).dp
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HorizontalPager(pager, Modifier.fillMaxWidth().height(heroHeight).testTag("home-hero"),
             contentPadding = PaddingValues(horizontal = 20.dp), pageSpacing = 12.dp,
@@ -212,17 +255,27 @@ private fun HomeHero(releases: List<Release>, section: ContentSection, onRelease
                 val images = remember(release) { (release.images + listOfNotNull(release.thumbnail)).distinct().take(2) }
                 Box(Modifier.align(Alignment.BottomEnd).fillMaxWidth(0.4f).fillMaxHeight(0.84f).padding(end = 16.dp)
                     .offset(y = 16.dp).graphicsLayer { translationX = distance() * 28.dp.toPx() }) {
-                    images.take(1).takeIf { images.size > 1 }?.forEach { url ->
-                        HomeArtwork(url, Modifier.fillMaxSize().offset(x = (-22).dp, y = 8.dp).graphicsLayer { rotationZ = -9f }, section)
+                    if (section == ContentSection.Apps) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(title.name.take(1), color = tone.second.copy(alpha = 0.55f),
+                            style = MaterialTheme.typography.displayLarge, modifier = Modifier.clearAndSetSemantics {})
+                    } else {
+                        images.take(1).takeIf { images.size > 1 }?.forEach { url ->
+                            HomeArtwork(url, Modifier.fillMaxSize().offset(x = (-22).dp, y = 8.dp).graphicsLayer { rotationZ = -9f }, section)
+                        }
+                        HomeArtwork(images.lastOrNull(), Modifier.fillMaxSize().graphicsLayer { rotationZ = if (section == ContentSection.Books) 6f else 4f }, section)
                     }
-                    HomeArtwork(images.lastOrNull(), Modifier.fillMaxSize().graphicsLayer { rotationZ = if (section == ContentSection.Books) 6f else 4f }, section)
                 }
                 Column(Modifier.fillMaxHeight().fillMaxWidth(0.59f).padding(20.dp)
                     .graphicsLayer { translationX = -distance() * 16.dp.toPx() }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(section.style().icon, null, Modifier.size(28.dp), tint = tone.second)
                     Spacer(Modifier.weight(1f))
                     Text(title.name, style = MaterialTheme.typography.titleLargeEmphasized, maxLines = 3, overflow = TextOverflow.Ellipsis, color = tone.second)
-                    if (section == ContentSection.Books && title.subtitle.isNotBlank()) Text(title.subtitle,
+                    if (section == ContentSection.Apps) {
+                        val detail = listOfNotNull(release.categoryName, title.version?.let { stringResource(R.string.follow_version, it) })
+                            .joinToString(" · ")
+                        if (detail.isNotEmpty()) Text(detail, style = MaterialTheme.typography.labelLarge, color = tone.second,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    } else if (section == ContentSection.Books && title.subtitle.isNotBlank()) Text(title.subtitle,
                         style = MaterialTheme.typography.labelMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, color = tone.second)
                     else UsernameLink(release.author, style = MaterialTheme.typography.labelMedium, maxLines = 2, color = tone.second)
                     ReleaseViewCount(release.views, color = tone.second)
@@ -242,6 +295,25 @@ private fun HomeHero(releases: List<Release>, section: ContentSection, onRelease
                     Box(Modifier.align(Alignment.Center).height(6.dp).width(if (pager.currentPage == index) 24.dp else 6.dp)
                         .clip(MaterialTheme.shapes.extraLarge).background(if (pager.currentPage == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant))
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun DailyCategoryTile(release: Release, index: Int, onRelease: (Long) -> Unit) {
+    val title = release.appTitle
+    val tone = homeTone(index)
+    StoreCard({ onRelease(release.id) }, Modifier.width(184.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            StoreShape(index, 36.dp, tone.first) {
+                Text(title.name.take(1), Modifier.clearAndSetSemantics {}, style = MaterialTheme.typography.titleSmall, color = tone.second)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title.name, style = MaterialTheme.typography.titleSmallEmphasized, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
+                title.version?.let { Text(stringResource(R.string.follow_version, it), style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
         }
     }

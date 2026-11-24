@@ -1,7 +1,7 @@
 import { query } from '../lib/database.js';
 import { authorizeAppWrite, enrollmentEnabled } from '../lib/app-writes.js';
 import { respond } from '../lib/protocol.js';
-import { appKey, cacheLifetime, capacitySql, latestFeedSize, lookup, parseLookup, retentionSecondsSql, visibleSnapshot } from '../lib/follow-lookup.js';
+import { appKey, cacheLifetime, capacitySql, discoverApps, latestFeedSize, lookup, parseLookup, publicRelease, retentionSecondsSql, visibleSnapshot } from '../lib/follow-lookup.js';
 import { defaultStorage } from '../public/config-schema.js';
 
 const fields = ['id', 'title', 'name', 'version', 'postedAt', 'author'];
@@ -24,10 +24,16 @@ function parsePage(body, now) {
   if (dated && (!Number.isSafeInteger(body.readAt) || Math.abs(now - body.readAt) > maxUploadDelay)) throw new Error();
   const at = dated ? Math.min(body.readAt, now) : now;
   const items = body.items.map(item => {
-    if (!item || Object.keys(item).length !== fields.length || !fields.every(key => Object.hasOwn(item, key)) ||
+    if (!item || Object.keys(item).some(key => !['category', 'packageName', ...fields].includes(key)) || !fields.every(key => Object.hasOwn(item, key)) ||
+        (Object.hasOwn(item, 'packageName') && !(text(item.packageName, 255) && /^[A-Za-z][\w]*(?:\.[A-Za-z\d_]+)+$/u.test(item.packageName))) ||
         !Number.isSafeInteger(item.id) || item.id <= 0 || !Number.isSafeInteger(item.postedAt) ||
         item.postedAt < 1 || item.postedAt > now + 300 || !text(item.name, 200) ||
         !text(item.version, 80) || !text(item.title, 512) || !text(item.author, 100)) throw new Error();
+    if (Object.hasOwn(item, 'category')) {
+      const c = item.category;
+      if (!c || !Number.isSafeInteger(c.id) || c.id <= 0 || Object.keys(c).some(k => k !== 'id' && k !== 'name') ||
+          (Object.hasOwn(c, 'name') && !text(c.name, 120))) throw new Error();
+    }
     return { ...item, adultFiltered: body.adultFiltered, lastSeen: dated ? at : Math.min(item.postedAt, now),
       key: appKey(item.name) };
   });
@@ -67,10 +73,17 @@ const updatePage = `
         WHEN gap AND $4 > seen AND missed IS NULL THEN item || jsonb_build_object('firstMiss', $4::bigint)
         WHEN gap AND $4 > seen AND $4 - missed >= $8::bigint THEN
           item || jsonb_build_object('hiddenAt', greatest((item->>'hiddenAt')::bigint, $4::bigint))
-        ELSE item END AS item
+        ELSE item END AS item, seen, $12::jsonb -> id AS category
       FROM observations
     ), candidates AS (
-      SELECT item, 0 AS priority FROM updated
+      -- Merge metadata only for the same topic. An ID-only report can move a topic but cannot erase its known label.
+      SELECT CASE WHEN category IS NOT NULL AND (
+          NOT item ? 'category' OR
+          (category->'id' = item#>'{category,id}' AND category ? 'name' AND NOT (item->'category' ? 'name')) OR
+          ($4::bigint >= seen AND (category ? 'name' OR category->'id' <> item#>'{category,id}'))
+        ) THEN jsonb_set(item, '{category}', category) ELSE item END ||
+        CASE WHEN $13::jsonb ? (item->>'id') AND (NOT item ? 'packageName' OR $4::bigint >= seen)
+          THEN jsonb_build_object('packageName', $13::jsonb -> (item->>'id')) ELSE '{}'::jsonb END AS item, 0 AS priority FROM updated
       UNION ALL SELECT item, 1 FROM jsonb_array_elements($1::jsonb) AS item
     ), unique_apps AS (
       SELECT DISTINCT ON (item->>'key') item, item->>'key' AS app_key,
@@ -103,14 +116,22 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
     if (req.method === 'GET') {
       try {
         const now = clock();
-        const { observedAt, items: visible, lifetime } = await visibleSnapshot(database, now, true);
-        const items = visible.map(item => Object.fromEntries([...fields, 'adultFiltered'].map(key => [key, item[key]])));
-        const ttl = Math.min(60, ...visible.map(item => (item.lastSeen ?? item.postedAt) + lifetime - now));
+        const params = new URL(req.url ?? '/', 'https://fixture.invalid').searchParams;
+        const discover = params.get('view') === 'discover';
+        const installed = params.get('view') === 'installed';
+        const safe = params.get('safe') === '1';
+        if ((discover || installed) && !['0', '1'].includes(params.get('safe'))) return respond(res, 400, { error: 'Invalid visibility' });
+        const { observedAt, items: visible, lifetime } = discover
+          ? await discoverApps(database, now, safe) : await visibleSnapshot(database, now, !installed);
+        const items = installed ? visible.filter(item => !safe || item.adultFiltered).map(({ id, name, version, packageName, adultFiltered }) =>
+          ({ id, name, version, ...(packageName && { packageName }), adultFiltered })) : visible.map(publicRelease);
+        const ttl = Math.max(0, Math.min(discover || installed ? 300 : 60, ...visible.map(item => (item.lastSeen ?? item.postedAt) + lifetime - now)));
         res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=' + ttl);
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Cache-Control', 'public, max-age=' + ttl);
         res.statusCode = 200;
-        return res.end(JSON.stringify({ observedAt, items }));
+        return res.end(JSON.stringify({ observedAt: installed ? now : observedAt, items,
+          ...(discover && { collection: 'discover' }), ...(installed && { collection: 'installed' }) }));
       } catch { return respond(res, 503, { error: 'Cache unavailable' }); }
     }
     if (req.method !== 'POST') {
@@ -156,7 +177,8 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
       const yesterdayWeight = 1 - (now % 86400) / 86400;
       await database(updatePage, [JSON.stringify(items), firstPage ? at : 0, JSON.stringify(seen), at,
         now, JSON.stringify(anchors), JSON.stringify(missing), confirmAfter, JSON.stringify(safe),
-        today, yesterdayWeight]);
+        today, yesterdayWeight, JSON.stringify(Object.fromEntries(items.filter(item => item.category).map(item => [item.id, item.category]))),
+        JSON.stringify(Object.fromEntries(items.filter(item => item.packageName).map(item => [item.id, item.packageName])))]);
       return respond(res, 200, { accepted: true });
     } catch { return respond(res, 503, { error: 'Cache unavailable' }); }
   };

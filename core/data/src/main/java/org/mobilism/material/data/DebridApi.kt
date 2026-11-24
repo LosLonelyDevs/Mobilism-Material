@@ -11,16 +11,16 @@ import okhttp3.Request
 import org.json.JSONObject
 
 class DebridException(message: String, val invalidatesAccount: Boolean = false,
-    val sessionExpired: Boolean = false) : Exception(message)
+    val sessionExpired: Boolean = false, val fileUnavailable: Boolean = false) : Exception(message)
 
 internal class DebridApi(client: OkHttpClient,
-    private val diagnostics: DiagnosticLogger = DiagnosticLogger.None) {
+    private val diagnostics: DiagnosticLogger = DiagnosticLogger.None, private val message: (Int) -> String) {
     private val client = client.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS)
         .callTimeout(45, TimeUnit.SECONDS)
         // MegaDebrid requires its token in the query. Never forward it through redirects.
         .followRedirects(false).followSslRedirects(false).build()
-    private val mobilism = MobilismPremiumApi(this.client)
+    private val mobilism = MobilismPremiumApi(this.client, message)
 
     fun connectMobilism(username: String, password: String): String =
         mobilism.credentials(username, password).also(mobilism::validate)
@@ -28,7 +28,7 @@ internal class DebridApi(client: OkHttpClient,
     fun connectMegaDebrid(username: String, password: String): MegaDebridSession {
         if (username.isBlank() || password.isEmpty() || username.length > 256 || password.length > 4096 ||
             username.any { it.isISOControl() } || password.any { it.isISOControl() }) {
-            throw DebridException("Enter your MegaDebrid username and password.")
+            throw DebridException(message(R.string.mega_credentials_required))
         }
         val url = "https://www.mega-debrid.eu/api.php".toHttpUrl().newBuilder()
             .addQueryParameter("action", "connectUser")
@@ -40,7 +40,7 @@ internal class DebridApi(client: OkHttpClient,
         checkKey(token)
         val premiumUntil = result.optLong("vip_end")
         if (premiumUntil <= System.currentTimeMillis() / 1000) {
-            throw DebridException("An active MegaDebrid Premium subscription is required.", true)
+            throw DebridException(message(R.string.mega_subscription_required), true)
         }
         return MegaDebridSession(token, premiumUntil)
     }
@@ -54,7 +54,7 @@ internal class DebridApi(client: OkHttpClient,
                 val user = request(provider, realRequest("user", key).build())
                 if (user.optLong("id") <= 0 || !user.has("type")) throw invalidResponse()
                 if (user.optString("type") != "premium" || user.optLong("premium") <= 0) {
-                    throw DebridException("An active Real-Debrid Premium subscription is required.", true)
+                    throw DebridException(message(R.string.real_subscription_required), true)
                 }
             }
             DebridProvider.MegaDebrid -> {
@@ -107,7 +107,7 @@ internal class DebridApi(client: OkHttpClient,
     fun resolve(provider: DebridProvider, key: String, original: String): String {
         if (provider == DebridProvider.Mobilism) return mobilism.resolve(key, original)
         checkKey(key)
-        val source = webUrl(original) ?: throw DebridException("This download link is not a valid web address.")
+        val source = webUrl(original) ?: throw DebridException(message(R.string.debrid_invalid_link))
         val body = FormBody.Builder().add("link", source).build()
         val request = when (provider) {
             DebridProvider.Mobilism -> error("Handled above")
@@ -131,7 +131,7 @@ internal class DebridApi(client: OkHttpClient,
     private fun request(provider: DebridProvider, request: Request): JSONObject {
         try {
             return client.newCall(request).execute().use { response ->
-                if (response.code in 300..399) throw DebridException("The service redirected the request. Please try again later.")
+                if (response.code in 300..399) throw DebridException(message(R.string.debrid_redirect))
                 val source = response.body?.source() ?: throw invalidResponse()
                 source.request(MAX_RESPONSE_BYTES + 1)
                 if (source.buffer.size > MAX_RESPONSE_BYTES) throw invalidResponse()
@@ -166,7 +166,7 @@ internal class DebridApi(client: OkHttpClient,
         } catch (failure: DebridException) {
             throw failure
         } catch (_: IOException) {
-            throw DebridException("Could not reach the service. Check your connection and try again.")
+            throw DebridException(message(R.string.debrid_unreachable))
         } catch (_: Exception) {
             // Provider responses and exception messages can contain credentials or private URLs.
             throw invalidResponse()
@@ -174,16 +174,16 @@ internal class DebridApi(client: OkHttpClient,
     }
 
     private fun realError(status: Int, code: Int): DebridException = when (code) {
-        8, 12, 13 -> DebridException("The key is invalid or expired. Remove it and add a valid key in Settings.", true)
-        9, 14, 15 -> DebridException("The account is locked or does not have permission to download.", true)
-        10, 11 -> DebridException("Complete two-factor authentication on Real-Debrid, then try again.")
-        5 -> DebridException("Too many requests. Wait a moment and try again.")
-        6, 7, 24 -> DebridException("The file is unavailable or the link has expired.")
-        16 -> DebridException("This file host is not supported by Real-Debrid.")
-        17, 19 -> DebridException("This file host is temporarily unavailable on Real-Debrid.")
-        18, 21, 23 -> DebridException("The account's download or traffic limit has been reached.")
-        20 -> DebridException("An active Real-Debrid Premium subscription is required.", true)
-        22 -> DebridException("Real-Debrid does not allow downloads from this network.")
+        8, 12, 13 -> DebridException(message(R.string.real_invalid_key), true)
+        9, 14, 15 -> DebridException(message(R.string.real_permission), true)
+        10, 11 -> DebridException(message(R.string.real_two_factor))
+        5 -> DebridException(message(R.string.debrid_rate_limit))
+        6, 7, 24 -> DebridException(message(R.string.real_file_unavailable), fileUnavailable = code == 7 || code == 24)
+        16 -> DebridException(message(R.string.real_unsupported_host))
+        17, 19 -> DebridException(message(R.string.real_host_unavailable))
+        18, 21, 23 -> DebridException(message(R.string.debrid_account_limit))
+        20 -> DebridException(message(R.string.real_subscription_required), true)
+        22 -> DebridException(message(R.string.real_network_denied))
         else -> httpError(status)
     }
 
@@ -193,39 +193,42 @@ internal class DebridApi(client: OkHttpClient,
             response?.optString("response_text").orEmpty()).lowercase()
         return when {
             "unknown_user" in reason ->
-                DebridException("The MegaDebrid username or password is incorrect.", true)
+                DebridException(message(R.string.mega_credentials_rejected), true)
             response?.optString("response_code").orEmpty().contains("token", ignoreCase = true) ||
                 "token error" in reason || "invalid token" in reason || "expired token" in reason ->
-                DebridException("The MegaDebrid session could not be renewed. Sign in again.", true, sessionExpired = true)
+                DebridException(message(R.string.mega_session_expired), true, sessionExpired = true)
             listOf("vip", "premium", "subscription").any(reason::contains) ->
-                DebridException("An active MegaDebrid Premium subscription is required.", true)
-            "password" in reason -> DebridException("This file needs a password. Open the original host to continue.")
+                DebridException(message(R.string.mega_subscription_required), true)
+            "password" in reason -> DebridException(message(R.string.debrid_file_password))
             listOf("quota", "traffic", "limit").any(reason::contains) ->
-                DebridException("The account's download or traffic limit has been reached.")
+                DebridException(message(R.string.debrid_account_limit))
+            listOf("file not found", "file deleted", "file was deleted", "file has been deleted", "link deleted",
+                "link not found").any(reason.replace('_', ' ')::contains) ->
+                DebridException(message(R.string.mega_file_unavailable), fileUnavailable = true)
             listOf("host", "maintenance").any(reason::contains) ->
-                DebridException("This file host is unsupported or temporarily unavailable on MegaDebrid.")
+                DebridException(message(R.string.mega_host_unavailable))
             "unrestrict" in reason ->
-                DebridException("MegaDebrid could not resolve this link. Try another host, or open the original link.")
+                DebridException(message(R.string.mega_unresolved_link))
             listOf("link", "file", "deleted", "not found").any(reason::contains) ->
-                DebridException("The file is unavailable or the link could not be resolved.")
-            status == 401 -> DebridException("The MegaDebrid session could not be renewed. Sign in again.", true, sessionExpired = true)
+                DebridException(message(R.string.mega_file_unavailable))
+            status == 401 -> DebridException(message(R.string.mega_session_expired), true, sessionExpired = true)
             else -> httpError(status)
         }
     }
 
     private fun httpError(status: Int) = when (status) {
-        401 -> DebridException("The key or token is invalid or expired. Update it in Settings.", true)
-        403 -> DebridException("The service denied access. Check your account and network.")
-        429 -> DebridException("Too many requests. Wait a moment and try again.")
-        in 500..599 -> DebridException("The service is temporarily unavailable. Try again later.")
-        else -> DebridException("The service could not complete this request. Try again or open the original host.")
+        401 -> DebridException(message(R.string.debrid_invalid_token), true)
+        403 -> DebridException(message(R.string.debrid_access_denied))
+        429 -> DebridException(message(R.string.debrid_rate_limit))
+        in 500..599 -> DebridException(message(R.string.debrid_service_unavailable))
+        else -> DebridException(message(R.string.debrid_request_failed))
     }
 
-    private fun invalidResponse() = DebridException("The service returned an invalid download response. Try again later.")
+    private fun invalidResponse() = DebridException(message(R.string.debrid_invalid_response))
 
     private fun checkKey(key: String) {
         if (key.isBlank() || key.length > 4096 || key.any { it.code !in 33..126 }) {
-            throw DebridException("Enter a valid key or token without spaces.", true)
+            throw DebridException(message(R.string.debrid_key_format), true)
         }
     }
 

@@ -18,6 +18,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,12 +46,14 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import org.mobilism.material.R
 import org.mobilism.material.data.DebridState
+import org.mobilism.material.data.DebridException
 import org.mobilism.material.designsystem.AppIconButton
 import org.mobilism.material.designsystem.AppTextButton
 import org.mobilism.material.designsystem.ExpressiveButton
 import org.mobilism.material.designsystem.LocalAppTheme
 import org.mobilism.material.designsystem.LocalReducedMotion
 import org.mobilism.material.downloads.ReleaseFiles
+import org.mobilism.material.downloads.showDownloadToast
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -58,7 +63,7 @@ fun DownloadLinkRow(
     openLink: ((String) -> Boolean)? = null,
     requests: DownloadRequestTracker = remember { DownloadRequestTracker() },
     downloadFile: (suspend (String, suspend () -> String) -> Unit)? = null,
-    onCopied: suspend () -> Unit,
+    snackbar: SnackbarHostState,
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -72,10 +77,10 @@ fun DownloadLinkRow(
     val internal = downloadFile != null && supported
     val pending by requests.pending.collectAsStateWithLifecycle()
     val resolving = link.url in pending
-    var error by remember(link.url) { mutableStateOf<String?>(null) }
+    var error by remember(link.url) { mutableStateOf<Int?>(null) }
     fun open(url: String): Boolean {
         val opened = openLink?.invoke(url) ?: openForumBrowser(context, url)
-        if (opened) onOpened() else error = resources.getString(R.string.download_browser_missing)
+        if (opened) onOpened() else error = R.string.download_browser_missing
         return opened
     }
     val theme = LocalAppTheme.current
@@ -101,7 +106,15 @@ fun DownloadLinkRow(
                                 }
                                 catch (cancelled: CancellationException) { throw cancelled }
                                 catch (failure: Exception) {
-                                    open(link.url)
+                                    if (failure is DebridException && failure.fileUnavailable) {
+                                        scope.launch {
+                                            val result = snackbar.showSnackbar(resources.getString(R.string.download_file_unavailable),
+                                                actionLabel = resources.getString(R.string.download_open_original), duration = SnackbarDuration.Long)
+                                            if (result == SnackbarResult.ActionPerformed) open(link.url)
+                                        }
+                                    } else if (open(link.url)) {
+                                        showDownloadToast(context, resources.getString(R.string.download_premium_fallback))
+                                    }
                                 }
                             }.invokeOnCompletion { requests.finish(link.url) }
                         }
@@ -140,7 +153,7 @@ fun DownloadLinkRow(
             AppIconButton(Icons.Outlined.ContentCopy, resources.getString(R.string.download_copy_host_link, linkLabel), {
                 scope.launch {
                     clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(resources.getString(R.string.download_clip_label), link.url)))
-                    onCopied()
+                    snackbar.showSnackbar(resources.getString(R.string.release_link_copied))
                 }
             })
         }
@@ -149,11 +162,13 @@ fun DownloadLinkRow(
         AlertDialog(
             onDismissRequest = { error = null },
             title = { Text(resources.getString(R.string.download_unavailable_title)) },
-            text = { Text(message) },
+            text = { Text(resources.getString(message)) },
             confirmButton = {
+                AppTextButton(resources.getString(R.string.download_cancel_action), { error = null })
+            },
+            dismissButton = {
                 AppTextButton(resources.getString(R.string.download_open_original), { if (open(link.url)) error = null })
             },
-            dismissButton = { AppTextButton(resources.getString(R.string.download_cancel_action), { error = null }) },
             shape = MaterialTheme.shapes.extraLarge,
         )
     }

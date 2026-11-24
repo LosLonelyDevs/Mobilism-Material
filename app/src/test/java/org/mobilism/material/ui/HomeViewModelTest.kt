@@ -138,6 +138,40 @@ class HomeViewModelTest {
         assertEquals(2, repo.calls.count { it == "Apps-Latest" })
     }
 
+    @Test fun bothShelvesKeepTheirDayAcrossVisitsAndReuseTheRankingUntilExpiryOrPrivacyChange() = runTest(dispatcher) {
+        val repo = Repository().apply { topPolicy = ReleaseFeedPolicy(ttlMs = 100, generation = 1) }
+        val hidden = MutableStateFlow(false)
+        val calls = mutableListOf<Boolean>()
+        var time = 0L
+        var today = 100
+        val model = HomeViewModel(repo, ContentSection.Apps, hidden, now = { time }, localDay = { today }, discover = {
+            calls += it
+            emptyList()
+        })
+        model.setVisible(true)
+        advanceUntilIdle()
+        val first = model.state.value.day
+        model.setVisible(false)
+        model.setVisible(true)
+        advanceUntilIdle()
+        assertEquals(first, model.state.value.day)
+        today++
+        model.updateDay()
+        assertEquals(today, model.state.value.day)
+        model.selectSection(ContentSection.Games)
+        model.selectSection(ContentSection.Books)
+        model.selectSection(ContentSection.Apps)
+        advanceUntilIdle()
+        assertEquals(listOf(false), calls)
+        model.setVisible(false)
+        time += 100
+        model.setVisible(true)
+        advanceUntilIdle()
+        hidden.value = true
+        advanceUntilIdle()
+        assertEquals(listOf(false, false, true), calls)
+    }
+
     private class Repository : HomeRepository {
         val calls = mutableListOf<String>()
         var topPolicy: ReleaseFeedPolicy? = null

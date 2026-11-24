@@ -21,7 +21,7 @@ class MobilismPremiumApiTest {
             val (status, body) = respond(chain.request())
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(status).message("Test")
                 .header("Location", "https://other.example.org/").body(body.toResponseBody()).build()
-        }.build())
+        }.build(), message = ::providerTestString)
 
     private fun FormBody.fields() = (0 until size).associate { name(it) to value(it) }
 
@@ -185,6 +185,7 @@ class MobilismPremiumApiTest {
         assertEquals(3, calls)
         val deleted = api { request -> 200 to if (request.url.host == "forum.mobilism.org") catalog else "<span><b>File not found</b></span>" }
         val error = assertThrows(DebridException::class.java) { deleted.resolve(deleted.credentials("sample", "test-password"), original) }
+        assertTrue(error.fileUnavailable)
         assertFalse(error.invalidatesAccount)
     }
 }

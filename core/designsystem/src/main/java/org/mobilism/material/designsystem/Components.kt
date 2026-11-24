@@ -135,6 +135,7 @@ fun ExpressiveCard(
     modifier: Modifier = Modifier,
     colors: CardColors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
     border: BorderStroke = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    enabled: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -144,7 +145,7 @@ fun ExpressiveCard(
         MaterialTheme.motionScheme.fastSpatialSpec(), label = "card press",
     )
     Card(
-        onClick = onClick, interactionSource = interaction,
+        onClick = onClick, enabled = enabled, interactionSource = interaction,
         shape = MaterialTheme.shapes.large,
         colors = colors,
         border = border,

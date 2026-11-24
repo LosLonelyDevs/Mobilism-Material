@@ -44,6 +44,58 @@ class LatestAppsClientTest {
         requests.forEach { assertEquals(identity, it.header("User-Agent")) }
     }
 
+    @Test fun installedCatalogMatchesPrivatelyByPackageOrUniqueExactLabel() = runBlocking {
+        val rows = org.json.JSONArray()
+        fun row(id: Int, name: String, pkg: String?, safe: Boolean = true) {
+            rows.put(JSONObject().put("id", id).put("name", name).put("version", "2").put("packageName", pkg).put("adultFiltered", safe))
+        }
+        row(1, "Camera Deluxe", "org.camera")
+        row(2, "Listen", null)
+        row(3, "Hidden", null, false)
+        val reply = JSONObject().put("observedAt", 100).put("items", rows)
+        var requests = 0
+        val client = LatestAppsClient("https://fixture.invalid/api/ping", AppHttp.builder(OkHttpClient()) { identity }
+            .addInterceptor { chain ->
+                requests++
+                assertEquals("GET", chain.request().method)
+                assertEquals("view=installed&safe=1", chain.request().url.query)
+                assertNull(chain.request().body)
+                assertNull(chain.request().header("X-Following-Check"))
+                Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("Fixture")
+                    .body(reply.toString().toResponseBody()).build()
+            }.build(), now = { 110 })
+        assertNull(client.installedCatalog(true).match("org.camera", "Camera", true))
+        reply.put("collection", "installed")
+        val catalog = client.installedCatalog(true)
+        assertEquals(1L, catalog.match("org.camera", "Renamed", false)?.id)
+        assertNull(catalog.match("com.different", "Camera Deluxe", true))
+        assertEquals(2L, catalog.match("org.listen", "LISTEN", true)?.id)
+        assertNull(catalog.match("org.listen", "Listen", false))
+        assertNull(catalog.match("org.hidden", "Hidden", true))
+        assertEquals(2, requests)
+    }
+
+    @Test fun discoveryReadsOnlyASharedRankingAndHonorsTheAdultFilterOnDevice() = runBlocking {
+        val requests = mutableListOf<okhttp3.Request>()
+        val response = JSONObject().put("observedAt", 200).put("items", org.json.JSONArray((1..2).map { id ->
+            JSONObject().put("id", id).put("title", "App $id v1").put("name", "App $id").put("version", "1")
+                .put("postedAt", 100).put("author", "Member").put("adultFiltered", id == 1)
+        }))
+        val client = LatestAppsClient("https://fixture.invalid/api/ping", AppHttp.builder(OkHttpClient()) { identity }
+            .addInterceptor { chain ->
+                requests += chain.request()
+                Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("Fixture")
+                    .body(response.toString().toResponseBody()).build()
+            }.build(), now = { 200 })
+        assertTrue(client.discover(false).isEmpty())
+        response.put("collection", "discover")
+        assertEquals(listOf(1L), client.discover(true).map { it.id })
+        assertEquals(listOf(1L, 2L), client.discover(false).map { it.id })
+        assertEquals(listOf("0", "1", "0"), requests.map { it.url.queryParameter("safe") })
+        assertTrue(requests.all { it.method == "GET" && it.body == null && it.url.queryParameter("view") == "discover" &&
+            it.url.queryParameterNames == setOf("view", "safe") && it.header("X-Following-Check") == null })
+    }
+
     @Test fun acceptsFiveHundredAppsAndRejectsAnOversizedList() = runBlocking {
         val items = org.json.JSONArray()
         fun add(id: Int) { items.put(JSONObject().put("id", id).put("name", "App $id").put("title", "App $id v1.0")
@@ -62,7 +114,7 @@ class LatestAppsClientTest {
         val posted = 1_700_000_000L
         var now = posted + 10
         val page = Release(72, "Fixture v2.1 build 9 [Premium]", "Uploader", null, posted, 0, 0,
-            section = ContentSection.Apps, contentHtml = "private body", downloadLinks = listOf("private link"))
+            section = ContentSection.Apps, contentHtml = "private body", downloadLinks = listOf("private link"), categoryId = 20)
         var uploaded = JSONObject()
         val client = LatestAppsClient("https://fixture.invalid/api/ping", AppHttp.builder(OkHttpClient()) { identity }.addInterceptor { chain ->
             val request = chain.request()
@@ -78,13 +130,17 @@ class LatestAppsClientTest {
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("Fixture")
                 .body(reply.toResponseBody()).build()
         }.build(), now = { now })
-        client.publish(LatestAppsPage(listOf(page), firstPage = true, adultFiltered = false))
+        client.publish(LatestAppsPage(listOf(page), firstPage = true, adultFiltered = false), mapOf(20L to "Photography"))
         assertTrue(uploaded.getBoolean("firstPage"))
         val row = uploaded.getJSONArray("items").getJSONObject(0)
-        assertEquals(setOf("id", "name", "title", "postedAt", "version", "author"), row.keys().asSequence().toSet())
+        assertEquals(setOf("id", "name", "title", "postedAt", "version", "author", "category"), row.keys().asSequence().toSet())
+        assertEquals(20L, row.getJSONObject("category").getLong("id"))
         assertEquals("Fixture", row.getString("name"))
         assertEquals("2.1", row.getString("version"))
-        assertEquals(page.title, client.snapshot(hideAdult = false).releases.single().title)
+        val restored = client.snapshot(hideAdult = false).releases.single()
+        assertEquals(page.title, restored.title)
+        assertEquals(page.categoryId, restored.categoryId)
+        assertEquals("Photography", restored.categoryName)
         assertTrue(client.snapshot(hideAdult = true).releases.isEmpty())
         now = posted + 24 * 3600
         assertEquals(CacheOutcome.Stale, client.snapshot(hideAdult = false).outcome)

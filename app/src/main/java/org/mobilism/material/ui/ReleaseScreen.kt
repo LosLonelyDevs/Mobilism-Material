@@ -360,7 +360,7 @@ fun ReleaseScreen(
                                     groups.forEach { group ->
                                         ReleaseDownloadGroup(release.id, group, release.browserUrl ?: "https://forum.mobilism.org/",
                                             debrid, downloadRequests, onResolveDownload, downloadOpened,
-                                            onCopied = { snackbar.showSnackbar(resources.getString(R.string.release_link_copied)) }, onRelease = onRelease,
+                                            snackbar = snackbar, onRelease = onRelease,
                                             downloadFile = downloadFile)
                                     }
                                 }

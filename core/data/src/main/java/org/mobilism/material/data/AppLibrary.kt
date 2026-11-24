@@ -1,5 +1,6 @@
 package org.mobilism.material.data
 
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -18,6 +19,9 @@ data class LibraryEntry(
 
 /** Local release records. A watch follows one app; downloaded history keeps individual releases. */
 object AppLibrary {
+    fun linkedFollowPackages(entries: List<LibraryEntry>): Set<String> = entries.asSequence().filter { it.watched }
+        .mapNotNull { it.linkedPackage ?: it.release.storePackage ?: ReleaseVersions.packageName(it.release) }.toSet()
+
     fun watch(entries: List<LibraryEntry>, release: Release, enabled: Boolean): List<LibraryEntry> {
         val previous = entries.firstOrNull { it.watched && ReleaseVersions.sameApp(it.release, release) }
         val result = entries.map { entry ->
@@ -98,6 +102,7 @@ internal object LibraryJson {
         put("id", value.id); put("title", value.title); put("author", value.author); put("thumbnail", value.thumbnail)
         put("publishedAt", value.publishedAt); put("replies", value.replies); put("views", value.views)
         put("content", AppLibrary.compact(value).contentHtml); put("url", value.browserUrl); put("section", value.section?.name)
+        put("categoryId", value.categoryId); put("categoryName", value.categoryName); put("storePackage", value.storePackage)
     }
 
     private fun release(value: JSONObject) = Release(
@@ -106,5 +111,10 @@ internal object LibraryJson {
         replies = value.optLong("replies"), views = value.optLong("views"), contentHtml = value.optString("content"),
         browserUrl = value.optString("url").takeIf(String::isNotBlank),
         section = ContentSection.entries.firstOrNull { it.name == value.optString("section") },
+        categoryId = value.optLong("categoryId").takeIf { it > 0 } ?: value.optString("url").toHttpUrlOrNull()
+            ?.takeIf { it.host in setOf("forum.mobilism.org", "mobilism.org", "www.mobilism.org") }
+            ?.queryParameter("f")?.toLongOrNull()?.takeIf { it > 0 },
+        categoryName = (value.opt("categoryName") as? String)?.takeIf(String::isNotBlank),
+        storePackage = (value.opt("storePackage") as? String)?.takeIf(String::isNotBlank),
     )
 }

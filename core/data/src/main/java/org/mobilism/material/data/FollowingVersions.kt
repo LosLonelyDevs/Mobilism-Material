@@ -11,7 +11,7 @@ object FollowingVersions {
     } ?: ReleaseTitles.parse(entry.release.title)
 
     fun matchingInstalled(entry: LibraryEntry, apps: List<InstalledVersion>): InstalledVersion? {
-        val known = entry.linkedPackage ?: ReleaseVersions.packageName(entry.release)
+        val known = entry.linkedPackage ?: entry.release.storePackage ?: ReleaseVersions.packageName(entry.release)
         if (known != null) return apps.firstOrNull { it.packageName == known }
         val name = normalize(ReleaseTitles.parse(entry.release.title).name)
         return apps.filter { normalize(it.name) == name }.singleOrNull()

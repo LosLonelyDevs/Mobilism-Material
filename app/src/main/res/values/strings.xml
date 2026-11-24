@@ -268,6 +268,11 @@
     <string name="download_retry">Download failed. Check your connection and folder space, then tap the link to retry.</string>
     <string name="download_http_error">File host returned HTTP %1$d.</string>
     <string name="download_http_retry">File host returned HTTP %1$d. Try again later.</string>
+    <string name="download_file_unavailable">File unavailable. Try another download link.</string>
+    <string name="download_premium_fallback">Premium download unavailable. Opening original host.</string>
+    <string name="download_close_sheet">Close downloads</string>
+    <string name="download_empty_links">No download links available.</string>
+    <string name="download_direct_unavailable">This download link expired or was removed. Reopen the release to choose another link.</string>
     <string name="download_host_wait">The file host asked you to wait before retrying.</string>
     <string name="download_host_webpage">The host returned a webpage. Open the original link in your browser.</string>
     <string name="download_empty_file">The host returned an empty file.</string>
@@ -378,6 +383,8 @@
     <string name="release_image_zoom">Full size release image. Pinch or double tap to zoom.</string>
 
     <string name="home_discover_apps">Discover apps</string>
+    <string name="home_top_apps_in_category">Popular apps in %1$s</string>
+    <string name="home_top_apps_two_categories">Popular apps in %1$s and %2$s</string>
     <string name="home_discover_books">Your next read</string>
     <string name="home_discover_games">Find your next game</string>
     <string name="home_finding_apps">Finding apps…</string>
@@ -413,7 +420,9 @@
     <string name="library_filter">Find an installed app</string>
     <string name="library_clear_filter">Clear app filter</string>
     <string name="library_system_apps">Include system apps</string>
-    <string name="library_find_hint">Tap an app to find its releases on Mobilism.</string>
+    <string name="library_already_following">Already following</string>
+    <string name="library_cached_release">Open cached release</string>
+    <string name="library_back_to_top">Back to top</string>
     <string name="library_reading">Reading installed apps…</string>
     <string name="library_no_version">Version unavailable</string>
     <string name="library_find">Find releases</string>

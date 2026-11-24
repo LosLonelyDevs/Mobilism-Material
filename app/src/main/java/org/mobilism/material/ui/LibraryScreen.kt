@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +24,11 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import org.mobilism.material.R
 import kotlinx.coroutines.launch
 import org.mobilism.material.data.AppLibraryStore
+import org.mobilism.material.data.FollowingVersions
+import org.mobilism.material.data.InstalledVersion
+import org.mobilism.material.data.InstalledReleaseCatalog
+import org.mobilism.material.data.latestAppKey
+import kotlinx.coroutines.CancellationException
 import org.mobilism.material.data.LibraryEntry
 import org.mobilism.material.data.ReleaseTitles
 import org.mobilism.material.data.Alphabetical
@@ -36,6 +42,7 @@ import org.mobilism.material.designsystem.LocalAppTheme
 fun LibraryScreen(
     entries: List<LibraryEntry>, installed: InstalledState, store: AppLibraryStore,
     onRefresh: () -> Unit, onSearch: (String) -> Unit, onFollowing: () -> Unit, onRelease: (Long) -> Unit, onBack: () -> Unit,
+    hideAdult: Boolean, loadCatalog: suspend (Boolean) -> InstalledReleaseCatalog,
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -45,8 +52,31 @@ fun LibraryScreen(
     val theme = LocalAppTheme.current
     val installedScroll = rememberLazyListState()
     val downloadedScroll = rememberLazyListState()
-    LifecycleResumeEffect(Unit) { onRefresh(); onPauseOrDispose { } }
-    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = { TopAppBar(
+    val versions = remember(installed.apps) { installed.apps.map { InstalledVersion(it.packageName, it.label, it.version, 0L) } }
+    fun linkedPackages(follows: List<LibraryEntry>) = follows.asSequence().filter { it.watched }
+        .mapNotNull { FollowingVersions.matchingInstalled(it, versions)?.packageName }.toSet()
+    val linked = remember(entries, versions) { linkedPackages(entries) }
+    val names = remember(installed.apps) { installed.apps.groupingBy { latestAppKey(it.label) }.eachCount() }
+    var catalog by remember(hideAdult) { mutableStateOf<InstalledReleaseCatalog?>(null) }
+    val currentScroll = if (tab == 0) installedScroll else downloadedScroll
+    val showTop by remember(currentScroll) { derivedStateOf { currentScroll.firstVisibleItemIndex > 0 } }
+    val reducedMotion = org.mobilism.material.designsystem.LocalReducedMotion.current
+    LifecycleResumeEffect(tab, hideAdult) {
+        val job = if (tab == 0) {
+            onRefresh()
+            scope.launch {
+                catalog = try { loadCatalog(hideAdult) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { InstalledReleaseCatalog() }
+            }
+        } else null
+        onPauseOrDispose { job?.cancel() }
+    }
+    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, floatingActionButton = {
+        if (showTop) SmallFloatingActionButton(onClick = { scope.launch {
+            if (reducedMotion) currentScroll.scrollToItem(0) else currentScroll.animateScrollToItem(0)
+        } }) { Icon(Icons.Outlined.VerticalAlignTop, stringResource(R.string.library_back_to_top)) }
+    }, topBar = { TopAppBar(
         title = { AppHeading(stringResource(R.string.drawer_library), HeadingLevel.Page, style = MaterialTheme.typography.titleLarge) },
         navigationIcon = { AppIconButton(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.action_back), onBack) },
         actions = {
@@ -60,29 +90,38 @@ fun LibraryScreen(
                     Tab(selected = tab == index, onClick = { tab = index }, text = { Text(stringResource(label)) })
                 }
             }
-            LazyColumn(state = if (tab == 0) installedScroll else downloadedScroll,
-                modifier = Modifier.widthIn(max = 840.dp).fillMaxSize(), contentPadding = PaddingValues(16.dp),
+            if (tab == 0) OutlinedTextField(query, { query = it; installedScroll.requestScrollToItem(0) },
+                Modifier.widthIn(max = 840.dp).fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                singleLine = true, label = { Text(stringResource(R.string.library_filter)) },
+                shape = MaterialTheme.shapes.extraLarge, leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                trailingIcon = { if (query.isNotEmpty()) AppIconButton(Icons.Outlined.Close, stringResource(R.string.library_clear_filter), {
+                    query = ""; installedScroll.requestScrollToItem(0)
+                }) })
+            if (tab == 0 && catalog == null) LinearProgressIndicator(Modifier.widthIn(max = 840.dp).fillMaxWidth())
+            LazyColumn(state = currentScroll,
+                modifier = Modifier.widthIn(max = 840.dp).fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 80.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (tab == 0) {
                     item(key = "installed-controls") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), singleLine = true,
-                                label = { Text(stringResource(R.string.library_filter)) }, shape = MaterialTheme.shapes.extraLarge,
-                                leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                                trailingIcon = { if (query.isNotEmpty()) AppIconButton(Icons.Outlined.Close, stringResource(R.string.library_clear_filter), { query = "" }) })
-                            FilterChip(showSystem, { showSystem = !showSystem }, label = { Text(stringResource(R.string.library_system_apps)) },
-                                shape = MaterialTheme.shapes.large,
-                                leadingIcon = { Icon(if (showSystem) Icons.Outlined.Check else Icons.Outlined.PhoneAndroid, null, Modifier.size(18.dp)) })
-                            Text(stringResource(R.string.library_find_hint), style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        FilterChip(showSystem, { showSystem = !showSystem; installedScroll.requestScrollToItem(0) },
+                            label = { Text(stringResource(R.string.library_system_apps)) }, shape = MaterialTheme.shapes.large,
+                            leadingIcon = { Icon(if (showSystem) Icons.Outlined.Check else Icons.Outlined.PhoneAndroid, null, Modifier.size(18.dp)) })
                     }
                     val apps = Alphabetical.sorted(installed.apps) { it.label }.filter { (showSystem || !it.system) &&
                         (it.label.contains(query, true) || it.packageName.contains(query, true)) }
                     if (installed.busy) item { LoadingState(stringResource(R.string.library_reading), Modifier.fillMaxWidth()) }
                     installed.error?.let { item { ErrorPanel(it, onRetry = onRefresh) } }
                     items(apps, key = { it.packageName }) { app ->
-                        ExpressiveCard({ onSearch(app.label) }, Modifier.fillMaxWidth()) {
+                        val followed = app.packageName in linked
+                        val match = catalog?.match(app.packageName, app.label, names[latestAppKey(app.label)] == 1)
+                        ExpressiveCard({
+                            val current = store.state.value
+                            val alreadyFollowing = app.packageName in (if (current === entries) linked else linkedPackages(current))
+                            if (!alreadyFollowing) {
+                                if (match != null) onRelease(match.id) else onSearch(app.label)
+                            }
+                        }, Modifier.fillMaxWidth(), enabled = !followed && catalog != null) {
                             Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                                 val icon = remember(app.icon) { app.icon.toBitmap(144, 144).asImageBitmap() }
                                 Image(icon, null, Modifier.size(56.dp).clip(MaterialTheme.shapes.medium))
@@ -92,7 +131,19 @@ fun LibraryScreen(
                                     Text(app.packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
-                                Icon(Icons.Outlined.Search, stringResource(R.string.library_find), tint = theme.featured)
+                                when {
+                                    followed -> Column(horizontalAlignment = Alignment.End) {
+                                        Icon(Icons.Outlined.BookmarkAdded, stringResource(R.string.library_already_following), tint = theme.featured)
+                                        Text(stringResource(R.string.drawer_following), style = MaterialTheme.typography.labelSmall)
+                                    }
+                                    match != null -> Column(horizontalAlignment = Alignment.End) {
+                                        Icon(Icons.AutoMirrored.Outlined.ArrowForward, stringResource(R.string.library_cached_release), tint = theme.featured)
+                                        Text(stringResource(R.string.follow_version, match.version), Modifier.widthIn(max = 92.dp),
+                                            style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    catalog != null -> Icon(Icons.Outlined.Search, stringResource(R.string.library_find), tint = theme.featured)
+                                    else -> Unit
+                                }
                             }
                         }
                     }

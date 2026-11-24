@@ -25,7 +25,7 @@ class LiveMobilismPremiumTest {
             chain.proceed(chain.request()).also { response ->
                 println("Premium check: ${chain.request().url.host} HTTP ${response.code}")
             }
-        }.build())
+        }.build(), message = ::providerTestString)
         val key = api.credentials(values.getValue("MOBILISM_USERNAME"), values.getValue("MOBILISM_PREMIUM_PASSWORD"))
         api.validate(key)
         val hosts = api.hosts()

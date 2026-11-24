@@ -96,7 +96,7 @@ internal class MobilismApi(private val context: Context, private val diagnostics
         val category = categoryId?.toString() ?: "all"
         val path = "release/${section.apiPath}/category/$category/page/$page/limit/$PAGE_SIZE/orderby/${order.apiValue}/desc/0"
         fun parse(array: org.json.JSONArray): ReleasePage = ReleaseJson.page(array).let { result ->
-            result.copy(items = result.items.map { it.copy(section = it.section ?: section) })
+            result.copy(items = result.items.map { it.copy(section = it.section ?: section, categoryId = it.categoryId ?: categoryId) })
         }
         suspend fun fetch(key: String?): ReleasePage {
             val readAt = System.currentTimeMillis() / 1000

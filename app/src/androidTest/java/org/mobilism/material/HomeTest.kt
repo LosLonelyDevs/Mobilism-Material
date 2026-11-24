@@ -96,7 +96,8 @@ class HomeTest {
                 key(section) {
                     HomeHost(states.getValue(section)) {
                         HomeScreen(states.getValue(section), {}, { opened = it }, { order = it }, { category = it.id },
-                            { categories = true }, { item, _ -> topic = item }, { forum = it })
+                            { categories = true }, { item, _ -> topic = item }, { forum = it },
+                            library = listOf(LibraryEntry(states.getValue(section).popular.items.first(), watched = true)))
                     }
                 }
             }
@@ -104,12 +105,17 @@ class HomeTest {
         ContentSection.entries.forEach { current ->
             compose.runOnIdle { section = current }
             val home = compose.onNodeWithTag("home-${current.name}")
+            if (current == ContentSection.Apps) {
+                compose.onNodeWithText("Discover apps").assertIsDisplayed()
+                compose.onNodeWithText("Popular apps in Creative tools").assertIsDisplayed()
+            }
             capture("${current.name.lowercase()}-hero")
             compose.onNodeWithContentDescription("Show featured 2 of 5").performClick()
             compose.onNodeWithContentDescription("Show featured 1 of 5").performClick()
             compose.onNodeWithTag("home-hero").onChildren().filter(hasClickAction()).onFirst().performClick()
-            compose.runOnIdle { assertEquals(states.getValue(current).popular.items.first().id, opened) }
-            compose.onNodeWithContentDescription("More Latest ${current.label.lowercase()}").performScrollTo().performClick()
+            compose.runOnIdle { assertEquals(if (current == ContentSection.Apps) 201L else 1L, opened) }
+            home.performScrollToNode(hasContentDescription("More Latest ${current.label.lowercase()}"))
+            compose.onNodeWithContentDescription("More Latest ${current.label.lowercase()}").performClick()
             compose.runOnIdle { assertEquals(FeedOrder.Latest, order) }
             home.performScrollToNode(hasContentDescription("More Popular in ${current.label}"))
             compose.onNodeWithContentDescription("More Popular in ${current.label}").performClick()
@@ -133,6 +139,35 @@ class HomeTest {
             compose.runOnIdle { assertEquals(12L, forum?.id) }
             capture("${current.name.lowercase()}-community")
         }
+    }
+
+    @Test fun pairedDayShowsBothCategoriesInOneRowBelowDiscover() {
+        val base = fixtureState(ContentSection.Apps)
+        val split = base.popular.items.mapIndexed { index, release -> release.copy(categoryId = if (index % 2 == 0) 21L else 22L) }
+        val state = base.copy(popular = HomeShelf(split, loaded = true), day = -3)
+        val followed = split.take(2).map { LibraryEntry(it, watched = true) }
+        compose.setContent {
+            MobilismTheme(theme = CatppuccinFrappe) {
+                HomeHost(state) { HomeScreen(state, {}, {}, {}, {}, {}, { _, _ -> }, {}, library = followed) }
+            }
+        }
+        val heading = compose.onNodeWithText("Popular apps in Everyday essentials and Creative tools")
+        heading.assertIsDisplayed()
+        assertTrue(heading.fetchSemanticsNode().boundsInRoot.top >
+            compose.onNodeWithText("Discover apps").fetchSemanticsNode().boundsInRoot.bottom)
+        capture("apps-paired-categories")
+    }
+
+    @Test fun dailySelectionsSurviveReopeningButExpireAtTheNextDayAndStayAccountScoped() {
+        val prefs = compose.activity.getSharedPreferences("home-selection-fixture", Context.MODE_PRIVATE)
+        val key = java.util.UUID.randomUUID().toString()
+        val choices = DailySelection(listOf("mypgallery", "sketch"), listOf(7, 8), listOf("camera", "editor"))
+        try {
+            DailyHomeStore(prefs, key).save(10, choices)
+            assertEquals(choices, DailyHomeStore(prefs, key).read(10))
+            assertNull(DailyHomeStore(prefs, key).read(11))
+            assertNull(DailyHomeStore(prefs, key + "-other").read(10))
+        } finally { prefs.edit().remove(key).apply() }
     }
 
     @Test fun homeTabReturnsToItsScrollPositionAndFeedsRemainAccessible() {
@@ -198,7 +233,11 @@ class HomeTest {
         val requests = CopyOnWriteArrayList<Request>()
         val context = object : ContextWrapper(InstrumentationRegistry.getInstrumentation().targetContext) {
             override fun getApplicationContext(): Context = this
-            override fun getSharedPreferences(name: String, mode: Int) = super.getSharedPreferences("home-test-$name", mode)
+            private val opened = mutableSetOf<String>()
+            @Synchronized override fun getSharedPreferences(name: String, mode: Int) =
+                super.getSharedPreferences("home-test-$name", mode).also { prefs ->
+                    if (opened.add(name)) prefs.edit().clear().commit()
+                }
         }
         val preferences = ContentPreferencesStore(context)
         preferences.hideAdult(true)
@@ -257,10 +296,17 @@ class HomeTest {
         }
         val category = DiscussionCategory(70, "Reviews", DiscussionArea.valueOf(section.name))
         val review = DiscussionTopic(80, "A community review", "Avid reader", "Review", DiscussionKind.Discussion, 70, replies = 12)
-        return HomeState(section, HomeShelf(releases, loaded = true), HomeShelf(releases, loaded = true),
+        val latest = if (section == ContentSection.Apps) releases.mapIndexed { i, r ->
+            r.copy(id = 100L + i, title = listOf("Color Notebook", "Sun Map", "Pixel Desk", "Daybreak", "Pocket Paint")[i] + " v2.1")
+        } else releases
+        val discovery = if (section == ContentSection.Apps) listOf("Frame Studio", "Pocket Canvas", "Hue Notes", "Tiny Sketch", "Light Meter")
+            .mapIndexed { i, name -> releases[i].copy(id = 201L + i, title = "$name v2.1", thumbnail = null, images = emptyList(),
+                categoryId = 21, categoryName = "Creative tools", views = 0) } else emptyList()
+        return HomeState(section, HomeShelf(latest, loaded = true), HomeShelf(releases.map { it.copy(categoryId = 21) }, loaded = true),
             HomeShelf(listOf(ReleaseCategory(21, "Creative tools"), ReleaseCategory(22, "Everyday essentials"), ReleaseCategory(23, "Explore more")), loaded = true),
             HomeForum(HomeTopics(category, listOf(review)), loaded = true),
-            HomeForum(HomeTopics(category.copy(id = 12, name = "Recent discussions"), listOf(review.copy(id = 81, title = "What are you enjoying lately?"))), loaded = true))
+            HomeForum(HomeTopics(category.copy(id = 12, name = "Recent discussions"), listOf(review.copy(id = 81, title = "What are you enjoying lately?"))), loaded = true),
+            discovery = HomeShelf(discovery, loaded = true))
     }
 
     @Composable

@@ -297,6 +297,8 @@ class MobilismViewModel(
         mutableFeed.value = FeedState(section = section, order = snapshot.order, filters = filters)
     }
 
+    private val topTopicIds = mutableSetOf<Long>()
+
     fun loadFeed(refresh: Boolean = false, revisit: Boolean = false) {
         if (!feedVisible) return
         if (auth.value == AuthState.SignedOut || auth.value == AuthState.Restoring) return
@@ -315,15 +317,20 @@ class MobilismViewModel(
                     firstPageLoadedAt = android.os.SystemClock.elapsedRealtime() - result.cachedAgeMs
                 }
                 val existing = if (page == 1) emptyList() else snapshot.items
-                val combined = (existing + result.items).distinctBy { it.id }
+                val appRanking = snapshot.section == ContentSection.Apps && snapshot.order == FeedOrder.Top
+                if (page == 1) topTopicIds.clear()
+                val added = if (appRanking) result.items.filter { topTopicIds.add(it.id) } else result.items
+                val combined = if (appRanking) newestPerApp(existing + added) else (existing + added).distinctBy { it.id }
+                val collapsedVersions = appRanking && combined.size - existing.size < added.size
                 val newReleaseIds = if (snapshot.order == FeedOrder.Latest)
                     newReleaseSession.observe(snapshot.section, combined, initialize = !snapshot.filters.isActive)
                 else emptySet()
                 mutableFeed.update { it.copy(
                     items = combined, page = result.lastPage ?: page, busy = false, refreshing = false,
                     newReleaseIds = newReleaseIds,
-                    awaitingMore = result.items.isEmpty() && result.canLoadMore,
-                    canLoadMore = result.canLoadMore && (result.items.isEmpty() || page == 1 || combined.size > existing.size),
+                    awaitingMore = (result.items.isEmpty() || collapsedVersions) && result.canLoadMore,
+                    canLoadMore = result.canLoadMore && (result.items.isEmpty() || page == 1 ||
+                        if (appRanking) added.isNotEmpty() else combined.size > existing.size),
                 ) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {

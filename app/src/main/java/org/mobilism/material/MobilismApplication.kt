@@ -1,7 +1,9 @@
 package org.mobilism.material
 
 import android.app.Application
+import org.mobilism.material.data.ContentSection
 import org.mobilism.material.data.DefaultMobilismRepository
+import org.mobilism.material.data.LatestAppsPage
 import org.mobilism.material.data.DebridRepository
 import org.mobilism.material.settings.AppearanceStore
 import org.mobilism.material.data.AppLibraryStore
@@ -65,7 +67,8 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
     private val latestApps by lazy { org.mobilism.material.data.LatestAppsClient(BuildConfig.DAILY_USAGE_ENDPOINT,
         client = org.mobilism.material.data.AppHttp.builder().followRedirects(false).retryOnConnectionFailure(false)
             .callTimeout(4, java.util.concurrent.TimeUnit.SECONDS)
-            .addInterceptor(appWriteAttestation.interceptor("following")).build(), diagnostics = appLogger) }
+            .addInterceptor(appWriteAttestation.interceptor("following")).build(), diagnostics = appLogger,
+        browseCache = okhttp3.Cache(cacheDir.resolve("app-browse-cache"), 8L * 1024 * 1024)) }
     private val latestPages = kotlinx.coroutines.channels.Channel<org.mobilism.material.data.LatestAppsPage>(
         capacity = 4, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
     val repository by lazy { DefaultMobilismRepository(this, contentPreferences, appLogger,
@@ -75,6 +78,16 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
             if (latestApps.configured && remoteControl.limits.followCacheBatchSize > 0 && dailyUsage.enabled.value)
                 latestPages.trySend(page)
         }) }
+    private suspend fun publishLatestApps(page: LatestAppsPage) {
+        val catalogs = repository.categoryCatalogs.value
+        val apps = (catalogs[false] ?: catalogs[true])?.get(ContentSection.Apps).orEmpty()
+        latestApps.publish(page, apps.associate { it.id to it.name })
+    }
+
+    internal suspend fun discoverApps(hideAdult: Boolean) = latestApps.discover(hideAdult)
+    internal suspend fun installedCatalog(hideAdult: Boolean) = latestApps.installedCatalog(hideAdult)
+    internal suspend fun installedLauncherLabels() = withContext(Dispatchers.IO) { InstalledApps(this@MobilismApplication).launcherLabels() }
+
     val appearance by lazy { AppearanceStore(this) }
     val releaseDisplay by lazy { org.mobilism.material.settings.ReleaseDisplayStore(this) }
     val debrid by lazy { DebridRepository(this, isEnabled = {
@@ -88,7 +101,7 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
             latestApps.lookup(names, contentPreferences.hideAdult.value, background.takeIf { dailyUsage.enabled.value },
                 followPreferences::dailyLookupSeed)
         }, diagnostics = appLogger, searchError = { getString(R.string.follow_search_error) }, publishMatches = { page ->
-            if (dailyUsage.enabled.value && remoteControl.limits.followCacheBatchSize > 0) latestApps.publish(page)
+            if (dailyUsage.enabled.value && remoteControl.limits.followCacheBatchSize > 0) publishLatestApps(page)
         }) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val foreground = MutableStateFlow(false)
@@ -110,7 +123,7 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
         scope.launch {
             for (page in latestPages) {
                 if (dailyUsage.enabled.value && remoteControl.limits.followCacheBatchSize > 0) {
-                    try { latestApps.publish(page) }
+                    try { publishLatestApps(page) }
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (_: Exception) { /* A contribution is best effort. The feed is already available. */ }
                 }
