@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added monochrome category icons and a searchable icon picker for custom categories.
+
 ## 0.1.27
 
 - Note: you may need to login to premium accounts again. Check in settings

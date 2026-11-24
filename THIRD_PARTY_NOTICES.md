@@ -1,5 +1,9 @@
 # Third-party notices
 
+## Tabler Icons
+
+Category icons use Tabler Icons Outline 3.52.0, converted to Android vector drawables. [MIT license](app/src/main/assets/licenses/tabler-icons.txt).
+
 ## Geist
 
 Geist Regular, Medium, Semibold, and Bold are bundled without modifying the font binaries.

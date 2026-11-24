@@ -54,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
@@ -175,7 +176,7 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
                     val choices = categoryChoices(state.categories.items, customCategories)
                     if (choices.isNotEmpty()) LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(choices, key = { _, item -> item.key }) { index, category ->
-                            CategoryTile(category.forum?.id, category.name, index) {
+                            CategoryTile(category, index) {
                                 category.forum?.let(onCategory)
                                 category.custom?.let(onCustomCategory)
                             }
@@ -406,17 +407,17 @@ private fun PopularTile(release: Release, section: ContentSection, index: Int, o
 }
 
 @Composable
-private fun CategoryTile(id: Long?, name: String, index: Int, onClick: () -> Unit) {
+private fun CategoryTile(category: CategoryChoice, index: Int, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val tone = homeTone(index)
     StoreCard(onClick, Modifier.width(120.dp), color = MaterialTheme.colorScheme.background, interaction = interaction) {
         Column(Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             StoreShape(index, 80.dp, tone.first, pressed = pressed) {
-                Text(id?.let(::categorySymbol) ?: name.take(2).uppercase(), Modifier.clearAndSetSemantics {},
-                    style = MaterialTheme.typography.headlineMedium, color = tone.second)
+                Icon(painterResource(categoryIcon(category.forum?.id, category.custom?.icon).drawable), null,
+                    Modifier.size(32.dp), tint = if (tone.first.luminance() <= 0.18f) Color.White else tone.second)
             }
-            Text(name, style = MaterialTheme.typography.labelLarge, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis,
+            Text(category.name, style = MaterialTheme.typography.labelLarge, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
     }

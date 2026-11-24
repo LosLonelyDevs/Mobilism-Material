@@ -4,6 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,6 +19,8 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -33,6 +39,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import androidx.compose.material3.Icon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,6 +55,8 @@ import org.mobilism.material.data.Release
 import org.mobilism.material.data.ReleaseCategory
 import org.mobilism.material.data.ReleaseTitles
 import org.mobilism.material.designsystem.AppIconButton
+import org.mobilism.material.designsystem.AppIconToggleButton
+import org.mobilism.material.designsystem.AppSearchField
 import org.mobilism.material.designsystem.AppTextButton
 import org.mobilism.material.designsystem.ExpressiveCard
 
@@ -66,27 +77,61 @@ internal fun ContentSection.categorySectionLabel() = stringResource(when (this) 
 })
 
 @Composable
-private fun CategoryEditor(category: CustomCategory? = null, onDismiss: () -> Unit, onSave: (String, String) -> Unit) {
+private fun CategoryEditor(category: CustomCategory? = null, onDismiss: () -> Unit, onSave: (String, String, String) -> Unit) {
     var name by rememberSaveable(category?.id) { mutableStateOf(category?.name.orEmpty()) }
     var description by rememberSaveable(category?.id) { mutableStateOf(category?.description.orEmpty()) }
     var error by rememberSaveable(category?.id) { mutableStateOf<Int?>(null) }
+    var icon by rememberSaveable(category?.id) { mutableStateOf(category?.icon ?: "tag") }
+    var picking by rememberSaveable { mutableStateOf(false) }
+    if (picking) {
+        CategoryIconPicker(icon, onPick = { icon = it; picking = false }, onDismiss = { picking = false })
+        return
+    }
     AlertDialog(onDismissRequest = onDismiss,
         title = { Text(stringResource(if (category == null) R.string.category_create else R.string.category_edit)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it; error = null }, Modifier.fillMaxWidth(),
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SmallFloatingActionButton(onClick = { picking = true }) {
+                        Icon(ImageVector.vectorResource(categoryIcon(null, icon).drawable), stringResource(R.string.category_choose_icon))
+                    }
+                    OutlinedTextField(name, { name = it; error = null }, Modifier.weight(1f),
                     label = { Text(stringResource(R.string.category_name)) }, singleLine = true, isError = error != null,
                     supportingText = error?.let { reason -> { Text(stringResource(reason)) } })
+                }
                 OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(),
                     label = { Text(stringResource(R.string.category_description)) }, maxLines = 3)
             }
         },
         confirmButton = { AppTextButton(stringResource(R.string.category_save), {
-            try { onSave(name, description); onDismiss() }
+            try { onSave(name, description, icon); onDismiss() }
             catch (invalid: CategoryNameException) { error = invalid.reason }
         }) },
         dismissButton = { AppTextButton(stringResource(R.string.download_cancel_action), onDismiss) },
     )
+}
+
+@Composable
+private fun CategoryIconPicker(selected: String, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val terms = query.trim().lowercase().split(Regex("\\s+"))
+    val matches = categoryIcons.filter { icon ->
+        val words = icon.key.replace('-', ' ') + " " + icon.keywords + " " + stringResource(icon.label).lowercase()
+        terms.all(words::contains)
+    }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.category_choose_icon)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppSearchField(query, { query = it }, stringResource(R.string.category_search_icons), searchIcon = Icons.Outlined.Search)
+                if (matches.isEmpty()) Text(stringResource(R.string.category_no_icons))
+                else LazyVerticalGrid(GridCells.Adaptive(48.dp), Modifier.fillMaxWidth().heightIn(max = 288.dp)) {
+                    items(matches, key = { it.key }) { icon ->
+                        AppIconToggleButton(ImageVector.vectorResource(icon.drawable), stringResource(icon.label), selected == icon.key,
+                            MaterialTheme.colorScheme.primary, { onPick(icon.key) })
+                    }
+                }
+            }
+        }, confirmButton = { AppTextButton(stringResource(R.string.download_cancel_action), onDismiss) })
 }
 
 @Composable
@@ -104,8 +149,8 @@ fun CategoryAssignmentSheet(release: Release, store: CustomCategoryStore, onDism
         removed = if (!checked && id in assigned) (removed - id) + id else removed - id
     }
     var creating by rememberSaveable { mutableStateOf(false) }
-    if (creating) CategoryEditor(onDismiss = { creating = false }, onSave = { name, description ->
-        select(store.create(section, name, description).id, true)
+    if (creating) CategoryEditor(onDismiss = { creating = false }, onSave = { name, description, icon ->
+        select(store.create(section, name, description, icon).id, true)
     })
     FilterSheet(onDismiss = onDismiss, onApply = { store.assign(release, selected) }, applyEnabled = true,
         headerAction = { AppTextButton(stringResource(R.string.category_manage), { onManage(section) }) },
@@ -117,6 +162,7 @@ fun CategoryAssignmentSheet(release: Release, store: CustomCategoryStore, onDism
                 onValueChange = { select(category.id, it) }).padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Checkbox(checked, onCheckedChange = null)
+                Icon(ImageVector.vectorResource(categoryIcon(null, category.icon).drawable), null)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(category.name, style = MaterialTheme.typography.bodyLarge)
                     if (category.description.isNotBlank()) Text(category.description, style = MaterialTheme.typography.bodySmall,
@@ -141,8 +187,8 @@ fun CustomCategoriesScreen(section: ContentSection, store: CustomCategoryStore, 
     var deleting by rememberSaveable { mutableStateOf(false) }
     val back = { if (selectedId != null) selectedId = null else onBack() }
     androidx.activity.compose.BackHandler(selectedId != null) { selectedId = null }
-    if (editing) CategoryEditor(selected, onDismiss = { editing = false }, onSave = { name, description ->
-        if (selected == null) store.create(section, name, description) else store.update(selected.id, name, description)
+    if (editing) CategoryEditor(selected, onDismiss = { editing = false }, onSave = { name, description, icon ->
+        if (selected == null) store.create(section, name, description, icon) else store.update(selected.id, name, description, icon)
     })
     if (deleting && selected != null) AlertDialog(onDismissRequest = { deleting = false },
         title = { Text(stringResource(R.string.category_delete_title, selected.name)) },
@@ -169,7 +215,10 @@ fun CustomCategoriesScreen(section: ContentSection, store: CustomCategoryStore, 
                     val count = state.items.count { category.id in it.categoryIds }
                     ExpressiveCard({ selectedId = category.id }, Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            AppHeading(category.name, HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Icon(ImageVector.vectorResource(categoryIcon(null, category.icon).drawable), null)
+                                AppHeading(category.name, HeadingLevel.Section, style = MaterialTheme.typography.titleLarge)
+                            }
                             Text(pluralStringResource(R.plurals.category_items, count, count), style = MaterialTheme.typography.bodyMedium)
                         }
                     }

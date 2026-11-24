@@ -330,21 +330,36 @@ class CustomCategoriesTest {
     }
 
     @Test fun managementCreatesRenamesRemovesMembersAndConfirmsDeletion() {
-        val store = CustomCategoryStore(context())
+        val context = context()
+        val store = CustomCategoryStore(context)
         val favorites = store.create(ContentSection.Apps, "Favorites")
         compose.setContent { MobilismTheme(reduceMotion = true) {
             CustomCategoriesScreen(ContentSection.Apps, store, {}, {})
         } }
         compose.onNodeWithContentDescription("Create category").performClick()
+        val iconButton = compose.onNodeWithContentDescription("Choose icon")
+        val iconBounds = iconButton.getUnclippedBoundsInRoot()
+        val nameBounds = compose.onNodeWithText("Category name").getUnclippedBoundsInRoot()
+        assertTrue(iconBounds.right + 12.dp <= nameBounds.left && iconBounds.top < nameBounds.bottom)
+        iconButton.performClick()
+        compose.onNodeWithText("Search icons").performTextInput("sports")
+        compose.onNodeWithContentDescription("Ball football").assertIsDisplayed()
+        compose.onNodeWithText("Search icons").performTextReplacement("football")
+        compose.onNodeWithContentDescription("Ball football").performClick()
         compose.onNodeWithText("Category name").performTextInput(" Sports ")
         compose.onNodeWithText("Save").performClick()
         compose.onNodeWithText("Sports").performClick()
         val sports = store.state.value.categories.first { it.name == "Sports" }
+        assertEquals("ball-football", CustomCategoryStore(context).state.value.categories.single { it.id == sports.id }.icon)
         compose.runOnIdle { store.assign(release(), setOf(sports.id, favorites.id)) }
         capture("category-members")
         compose.onNodeWithContentDescription("Edit category").performClick()
         compose.onNodeWithText("Category name").performTextReplacement("Matchdays")
+        compose.onNodeWithContentDescription("Choose icon").performClick()
+        compose.onNodeWithText("Search icons").performTextInput("camera")
+        compose.onNodeWithContentDescription("Camera").performClick()
         compose.onNodeWithText("Save").performClick()
+        assertEquals("camera", CustomCategoryStore(context).state.value.categories.single { it.id == sports.id }.icon)
         compose.onNodeWithContentDescription("Remove Example from Matchdays").performClick()
         compose.runOnIdle {
             assertEquals(setOf(favorites.id), store.state.value.memberships(release()))

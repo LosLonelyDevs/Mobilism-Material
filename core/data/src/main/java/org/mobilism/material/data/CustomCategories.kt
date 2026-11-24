@@ -5,7 +5,7 @@ import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class CustomCategory(val id: String, val section: ContentSection, val name: String, val description: String = "")
+data class CustomCategory(val id: String, val section: ContentSection, val name: String, val description: String = "", val icon: String = "tag")
 
 class CategoryNameException(@androidx.annotation.StringRes val reason: Int) : IllegalArgumentException()
 
@@ -102,6 +102,7 @@ internal object CustomCategoryJson {
         put("categories", JSONArray().apply { state.categories.forEach { category -> put(JSONObject().apply {
             put("id", category.id); put("section", category.section.name); put("name", category.name)
             if (category.description.isNotEmpty()) put("description", category.description)
+            put("icon", category.icon)
         }) } })
         put("items", JSONArray().apply { state.items.forEach { item -> put(JSONObject().apply {
             put("id", item.id); put("categories", JSONArray(item.categoryIds.toList()))
@@ -120,7 +121,7 @@ internal object CustomCategoryJson {
         val categories = root.getJSONArray("categories").objects().mapNotNull { item -> runCatching {
             CustomCategory(item.getString("id").also { require(it.isNotBlank()) },
                 ContentSection.valueOf(item.getString("section")), item.getString("name").also { require(it.isNotBlank()) },
-                item.text("description").orEmpty())
+                item.text("description").orEmpty(), item.text("icon") ?: "tag")
         }.getOrNull() }.distinctBy { it.id }
         val items = root.getJSONArray("items").objects().mapNotNull { item -> runCatching {
             val releases = item.getJSONArray("releases").objects().map { release -> Release(

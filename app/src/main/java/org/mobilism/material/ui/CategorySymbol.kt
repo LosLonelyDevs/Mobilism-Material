@@ -1,70 +1,80 @@
 package org.mobilism.material.ui
 
-internal fun categorySymbol(id: Long): String = when (id) {
-    1283L -> "🔞" // Adult
-    424L -> "💼" // Business & Finance
-    419L -> "🧮" // Calculators
-    434L -> "💬" // Communication
-    421L -> "🎓" // Education
-    422L -> "👾" // Emulators
-    423L -> "🎭" // Entertainment
-    431L -> "🧭" // GPS
-    425L -> "💪" // Health & Fitness
-    439L -> "🏠" // Home Screen & Widgets
-    426L -> "⌨️" // Input
-    428L -> "🌐" // Internet & Network
-    1209L -> "🧸" // Kids
-    430L -> "🗣️" // Languages
-    429L -> "🎬" // Media & Video
-    1288L -> "🩺" // Medical
-    1332L -> "🎵" // Music & Audio
-    1333L -> "📰" // News & Magazines
-    432L -> "🗂️" // Office & Productivity
-    427L -> "📸" // Photography
-    433L -> "🖥️" // PC/Mac
-    435L -> "💻" // Programming & Development
-    436L -> "🗓️" // Schedule & Calendar
-    437L -> "🔒" // Security
-    1335L -> "🛍️" // Shopping
-    1336L -> "🤝" // Social
-    438L -> "⚙️" // System
-    440L -> "🧳" // Travel
-    441L -> "🛐" // Religious
-    1064L -> "🖼️" // Wallpapers & Themes
-    442L -> "🌦️" // Weather
-    443L -> "🧰" // Other
-    444L -> "📦" // Software Packages
-    447L -> "🕹️" // Action/Arcade
-    448L -> "🌶️" // Adult
-    450L -> "🎲" // Board
-    451L -> "🃏" // Card
-    452L -> "🎯" // FPS
-    1048L -> "⚛️" // Physics/Accelerometer
-    453L -> "🏎️" // Racing
-    454L -> "⚔️" // RPG/Quest
-    455L -> "🏟️" // Sports
-    456L -> "♟️" // Strategy
-    457L -> "🧩" // Trivia/Puzzle
-    458L -> "🎮" // Other
-    459L -> "🎁" // Game Packages
-    1292L -> "💌" // Romance
-    1340L -> "💋" // Erotic
-    1293L -> "🐉" // Sci-Fi/Fantasy/Horror
-    1294L -> "🔎" // Mystery/Thriller
-    121L -> "📜" // General Fiction/Classics
-    1295L -> "🎒" // Children/Young Adult
-    1285L -> "🖋️" // Biographies & Memoirs
-    122L -> "📐" // Educational
-    1345L -> "🕯️" // Faith, Beliefs & Philosophy
-    1328L -> "🍲" // Food & Drink
-    545L -> "🌱" // Health, Fitness & Self-help
-    1346L -> "🏛️" // History
-    892L -> "🔌" // Tech & Devices
-    126L -> "📖" // General
-    123L -> "🗞️" // Magazines & Newspapers
-    124L -> "🎧" // Audiobooks
-    311L -> "🗯️" // Comics
-    1271L -> "🗃️" // Collections
-    899L -> "⌛" // Expired eBook Releases
-    else -> "🏷️"
-}
+import org.mobilism.material.R
+
+internal data class CategoryIcon(val forumId: Long?, val key: String, val drawable: Int, val label: Int, val keywords: String)
+
+internal val categoryIcons = listOf(
+    CategoryIcon(1283L, "rating-18-plus", R.drawable.tabler_rating_18_plus, R.string.icon_rating_18_plus, "age-rating age-limit age-restriction 18-plus nsfw adult pegi movie film content-rating rating plus adult"),
+    CategoryIcon(424L, "briefcase", R.drawable.tabler_briefcase, R.string.icon_briefcase, "briefcase business work job portfolio bag office suitcase career business & finance"),
+    CategoryIcon(419L, "calculator", R.drawable.tabler_calculator, R.string.icon_calculator, "calculator math calculate calculation accounting arithmetic numbers finance calculators"),
+    CategoryIcon(434L, "messages", R.drawable.tabler_messages, R.string.icon_messages, "chat conversation comments discussion dialogue thread speech-bubbles forum group-chat communication messages communication"),
+    CategoryIcon(421L, "school", R.drawable.tabler_school, R.string.icon_school, "graduation education student mortarboard university college academic hat learning education"),
+    CategoryIcon(422L, "device-gamepad-2", R.drawable.tabler_device_gamepad_2, R.string.icon_device_gamepad_2, "gamepad controller game-controller gaming joystick joypad console play video-game device emulators"),
+    CategoryIcon(423L, "masks-theater", R.drawable.tabler_masks_theater, R.string.icon_masks_theater, "theater theatre drama comedy tragedy acting performance stage arts show masks entertainment"),
+    CategoryIcon(431L, "compass", R.drawable.tabler_compass, R.string.icon_compass, "compass navigation direction explore discover north travel orientation safari gps"),
+    CategoryIcon(425L, "barbell", R.drawable.tabler_barbell, R.string.icon_barbell, "dumbbell weights gym fitness workout exercise weightlifting training barbell health & fitness"),
+    CategoryIcon(439L, "layout-dashboard", R.drawable.tabler_layout_dashboard, R.string.icon_layout_dashboard, "dashboard layout grid admin panel overview widgets ui home screen & widgets"),
+    CategoryIcon(426L, "keyboard", R.drawable.tabler_keyboard, R.string.icon_keyboard, "keyboard typing input keys computer hardware device type input"),
+    CategoryIcon(428L, "world", R.drawable.tabler_world, R.string.icon_world, "globe earth world internet global web international language planet internet & network"),
+    CategoryIcon(1209L, "horse-toy", R.drawable.tabler_horse_toy, R.string.icon_horse_toy, "rocking-horse horse toy baby child kid nursery play kids"),
+    CategoryIcon(430L, "language", R.drawable.tabler_language, R.string.icon_language, "language translate translation localization i18n multilingual locale internationalization dictionary languages"),
+    CategoryIcon(429L, "movie", R.drawable.tabler_movie, R.string.icon_movie, "film video cinema movies clapperboard filmstrip theater media movie media & video"),
+    CategoryIcon(1288L, "stethoscope", R.drawable.tabler_stethoscope, R.string.icon_stethoscope, "doctor medical physician health checkup examination hospital healthcare medical"),
+    CategoryIcon(1332L, "music", R.drawable.tabler_music, R.string.icon_music, "song audio sound note melody track mp3 playlist player tune media spotify music music & audio"),
+    CategoryIcon(1333L, "news", R.drawable.tabler_news, R.string.icon_news, "newspaper article press journal headline blog magazine feed news news & magazines"),
+    CategoryIcon(432L, "folders", R.drawable.tabler_folders, R.string.icon_folders, "folders directories multiple-folders files copy duplicate collection archive dir office & productivity"),
+    CategoryIcon(427L, "camera", R.drawable.tabler_camera, R.string.icon_camera, "camera photo photography picture video lens image snapshot photography"),
+    CategoryIcon(433L, "devices", R.drawable.tabler_devices, R.string.icon_devices, "devices responsive multi-device cross-platform computer laptop phone tablet desktop mobile pc/mac"),
+    CategoryIcon(435L, "code", R.drawable.tabler_code, R.string.icon_code, "brackets angle-brackets html source programming developer coding embed markup tag code programming & development"),
+    CategoryIcon(436L, "calendar", R.drawable.tabler_calendar, R.string.icon_calendar, "calendar date schedule event day month planner agenda appointment calender schedule & calendar"),
+    CategoryIcon(437L, "lock", R.drawable.tabler_lock, R.string.icon_lock, "lock padlock locked security secure password private protected security"),
+    CategoryIcon(1335L, "shopping-bag", R.drawable.tabler_shopping_bag, R.string.icon_shopping_bag, "bag shop store purchase buy ecommerce retail checkout shopping shopping"),
+    CategoryIcon(1336L, "users", R.drawable.tabler_users, R.string.icon_users, "people group team persons accounts members community user users social"),
+    CategoryIcon(438L, "settings", R.drawable.tabler_settings, R.string.icon_settings, "cog gear preferences configuration options config setup control settings system"),
+    CategoryIcon(440L, "luggage", R.drawable.tabler_luggage, R.string.icon_luggage, "luggage suitcase baggage bag travel trip vacation holiday travel"),
+    CategoryIcon(441L, "pray", R.drawable.tabler_pray, R.string.icon_pray, "prayer praying hands religion faith worship namaste thanks please pray religious"),
+    CategoryIcon(1064L, "wallpaper", R.drawable.tabler_wallpaper, R.string.icon_wallpaper, "wallpaper background image picture decor bricks backdrop desktop-background wallpapers & themes"),
+    CategoryIcon(442L, "cloud-rain", R.drawable.tabler_cloud_rain, R.string.icon_cloud_rain, "rain rainy showers drizzle weather forecast precipitation cloud weather"),
+    CategoryIcon(443L, "tools", R.drawable.tabler_tools, R.string.icon_tools, "tools wrench screwdriver repair fix settings maintenance toolbox other"),
+    CategoryIcon(444L, "package", R.drawable.tabler_package, R.string.icon_package, "box parcel delivery shipping product cube container 3d package software packages"),
+    CategoryIcon(447L, "device-gamepad", R.drawable.tabler_device_gamepad, R.string.icon_device_gamepad, "gamepad controller game-controller gaming joystick joypad console play video-game device action/arcade"),
+    CategoryIcon(448L, "pepper", R.drawable.tabler_pepper, R.string.icon_pepper, "chili chilli hot spicy vegetable food paprika pepper adult"),
+    CategoryIcon(450L, "dice", R.drawable.tabler_dice, R.string.icon_dice, "dice die game board-game random roll gambling chance luck casino board"),
+    CategoryIcon(451L, "cards", R.drawable.tabler_cards, R.string.icon_cards, "cards playing-cards card-game poker casino deck game gambling card"),
+    CategoryIcon(452L, "crosshair", R.drawable.tabler_crosshair, R.string.icon_crosshair, "crosshair target aim reticle crosshairs focus select precision center fps"),
+    CategoryIcon(1048L, "atom", R.drawable.tabler_atom, R.string.icon_atom, "science physics chemistry nuclear molecule electron react laboratory atom physics/accelerometer"),
+    CategoryIcon(453L, "steering-wheel", R.drawable.tabler_steering_wheel, R.string.icon_steering_wheel, "car drive driving vehicle steer wheel automotive racing steering racing"),
+    CategoryIcon(454L, "swords", R.drawable.tabler_swords, R.string.icon_swords, "weapons blades battle fight war duel game rpg crossed swords rpg/quest"),
+    CategoryIcon(455L, "ball-football", R.drawable.tabler_ball_football, R.string.icon_ball_football, "soccer fifa sport game sports team-sport play match athletics ball football sports"),
+    CategoryIcon(456L, "chess-knight", R.drawable.tabler_chess_knight, R.string.icon_chess_knight, "knight horse chess chess-piece piece board-game game strategy play strategy"),
+    CategoryIcon(457L, "puzzle", R.drawable.tabler_puzzle, R.string.icon_puzzle, "jigsaw extension plugin add-on addon piece solution game puzzle trivia/puzzle"),
+    CategoryIcon(458L, "device-nintendo", R.drawable.tabler_device_nintendo, R.string.icon_device_nintendo, "nintendo-switch switch console game-console gaming handheld controller gamepad video-game device nintendo other"),
+    CategoryIcon(459L, "gift", R.drawable.tabler_gift, R.string.icon_gift, "gift present gift-box birthday surprise reward bonus christmas celebration giveaway game packages"),
+    CategoryIcon(1292L, "heart", R.drawable.tabler_heart, R.string.icon_heart, "heart love like favorite favourite wishlist valentine emotion health romance"),
+    CategoryIcon(1340L, "flame", R.drawable.tabler_flame, R.string.icon_flame, "flame fire hot burn trending popular heat lit streak campfire erotic"),
+    CategoryIcon(1293L, "planet", R.drawable.tabler_planet, R.string.icon_planet, "saturn space astronomy orbit universe galaxy cosmos rings world planet sci-fi/fantasy/horror"),
+    CategoryIcon(1294L, "zoom", R.drawable.tabler_zoom, R.string.icon_zoom, "search find magnifier magnifying-glass lookup zoom zooming magnify mystery/thriller"),
+    CategoryIcon(121L, "book-2", R.drawable.tabler_book_2, R.string.icon_book_2, "read reading library education study literature novel ebook book general fiction/classics"),
+    CategoryIcon(1295L, "backpack", R.drawable.tabler_backpack, R.string.icon_backpack, "bag rucksack school travel hiking luggage schoolbag knapsack camping backpack children/young adult"),
+    CategoryIcon(1285L, "feather", R.drawable.tabler_feather, R.string.icon_feather, "feather quill light lightweight bird write plume writing biographies & memoirs"),
+    CategoryIcon(122L, "ruler", R.drawable.tabler_ruler, R.string.icon_ruler, "measure measurement dimensions size length width scale ruler educational"),
+    CategoryIcon(1345L, "bulb", R.drawable.tabler_bulb, R.string.icon_bulb, "bulb lightbulb light idea lamp tip hint creativity innovation faith, beliefs & philosophy"),
+    CategoryIcon(1328L, "soup", R.drawable.tabler_soup, R.string.icon_soup, "bowl soup food meal hot ramen food & drink"),
+    CategoryIcon(545L, "plant", R.drawable.tabler_plant, R.string.icon_plant, "potted-plant houseplant pot leaf green nature garden growth eco sprout health, fitness & self-help"),
+    CategoryIcon(1346L, "building-monument", R.drawable.tabler_building_monument, R.string.icon_building_monument, "monument memorial obelisk landmark history building tower history"),
+    CategoryIcon(892L, "cpu", R.drawable.tabler_cpu, R.string.icon_cpu, "cpu processor chip microchip hardware computer semiconductor core integrated-circuit tech & devices"),
+    CategoryIcon(126L, "book", R.drawable.tabler_book, R.string.icon_book, "read reading library education study literature novel ebook book general"),
+    CategoryIcon(123L, "article", R.drawable.tabler_article, R.string.icon_article, "post blog news document text page story newspaper content article magazines & newspapers"),
+    CategoryIcon(124L, "headphones", R.drawable.tabler_headphones, R.string.icon_headphones, "headphones headset earphones audio music sound listen podcast audiobooks"),
+    CategoryIcon(311L, "message-circle", R.drawable.tabler_message_circle, R.string.icon_message_circle, "chat comment speech-bubble round conversation sms reply communication dm messaging bubble whatsapp message circle comics"),
+    CategoryIcon(1271L, "books", R.drawable.tabler_books, R.string.icon_books, "library reading education study literature bookshelf book-stack reading-list books collections"),
+    CategoryIcon(899L, "hourglass", R.drawable.tabler_hourglass, R.string.icon_hourglass, "hourglass sand-timer timer time wait loading countdown deadline expired ebook releases"),
+    CategoryIcon(null, "tag", R.drawable.tabler_tag, R.string.icon_tag, "label price-tag price sale discount shopping category tagging tag "),
+)
+
+private val iconsByForum = categoryIcons.filter { it.forumId != null }.associateBy { it.forumId }
+private val iconsByKey = categoryIcons.associateBy { it.key }
+
+internal fun categoryIcon(forumId: Long?, key: String?) =
+    iconsByForum[forumId] ?: iconsByKey[key] ?: iconsByKey.getValue("tag")
