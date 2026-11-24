@@ -59,6 +59,29 @@ class AppDiscoveryTest {
         assertEquals(first.featured, reopened.featured)
     }
 
+    @Test fun twentyThreeUtilityFollowsAndOneMusicFollowGetTwentyThreePrimaryDaysAndOneMusicDay() {
+        val labels = listOf(ReleaseCategory(7, "Music"), ReleaseCategory(8, "Utilities"))
+        val library = (1L..24).map { LibraryEntry(app(it, "Followed $it v1", if (it == 1L) 7 else 8), watched = true) }
+        val music = (101L..106).map { app(it, "Player $it v1") }
+        val utilities = (201L..206).map { app(it, "Tool $it v1", 8) }
+        val previouslyMusic = DailySelection(emptyList(), listOf(7), music.take(5).map(Release::discoveryKey))
+        fun days(rows: List<Release>, entries: List<LibraryEntry> = library) = (20_000 until 20_024).map { day ->
+            discoverPicks(rows, entries, emptyList(), emptyList(), labels, day, saved = previouslyMusic, seed = 91)
+        }
+        val full = days(music + utilities)
+        assertEquals(23, full.count { it.categoryNames.first() == "Utilities" })
+        assertEquals(1, full.count { it.categoryNames.first() == "Music" })
+        assertEquals(full.map { it.categoryNames }, days((music + utilities).reversed(), library.reversed()).map { it.categoryNames })
+        val sparse = days(utilities + music.first() + music.first().copy(id = 107, title = "Player 101 v2"))
+        assertTrue(sparse.all { it.categoryNames == listOf("Utilities") })
+        assertTrue(full.all { shelf -> shelf.categoryNames.all { label ->
+            shelf.featured.count { app -> labels.single { it.name == label }.id == app.categoryId } >= 2
+        } })
+        val unknown = library.map { it.copy(release = it.release.copy(categoryId = null)) }.toMutableList()
+        unknown[0] = library[0]
+        assertEquals(1, days(music, unknown).count { "Music" == it.categoryNames.firstOrNull() })
+    }
+
     @Test fun installedAppsGuideDiscoverAndAreNeverSuggestionsEvenWhenTheirStoreTitleDiffers() {
         val installed = mapOf("org.reader" to "My Library", "org.notes" to "Notes")
         val reader = app(1, "Reader Premium v2", 8).copy(storePackage = "org.reader")

@@ -35,6 +35,29 @@ private fun <T> List<T>.rotated(offset: Int): List<T> {
     return drop(start) + take(start)
 }
 
+private fun dailyCategories(byCategory: Map<Long, List<Release>>, followed: Map<String, Long?>,
+    interests: Map<String, Long>, saved: List<Long>, day: Int, seed: Int, paired: Boolean): List<Long> {
+    val eligible = byCategory.filterValues { it.size >= 2 }.keys
+    if (eligible.isEmpty()) return emptyList()
+    // One slot per distinct app, even if its category is unknown or has too few recommendations.
+    val votes = (followed.ifEmpty { interests }).toSortedMap().values.shuffled(kotlin.random.Random(seed))
+    val counts = votes.groupingBy { it }.eachCount()
+    val start = if (votes.isEmpty()) 0 else Math.floorMod(day, votes.size)
+    val ballot = votes.rotated(start)
+    val weight = counts[ballot.firstOrNull()] ?: 0
+    val primary = ballot.firstOrNull { it != null && it in eligible && (counts[it] ?: 0) >= weight }
+
+    // When a category cannot fill the row, avoid promoting a weaker follow to fill all its days.
+    val neutral = eligible.filter { it !in counts }.sorted().rotated(day + (seed and 0xffff))
+    val installedChoices = interests.values.filter { it in neutral }.groupingBy { it }.eachCount()
+    val fallbackPool = neutral.filter { byCategory.getValue(it).size >= 3 }.ifEmpty { neutral }
+    val fallback = (saved.filter { it in fallbackPool } + fallbackPool.sortedByDescending { installedChoices[it] ?: 0 }).distinct()
+    val first = primary ?: fallback.firstOrNull() ?: return emptyList()
+    if (!paired) return listOf(first)
+    val second = if (votes.isEmpty()) fallback.getOrNull(1) else ballot.getOrNull(1)?.takeIf { it in eligible && it != first }
+    return listOfNotNull(first, second)
+}
+
 internal fun discoverPicks(ranked: List<Release>, library: List<LibraryEntry>, latest: List<Release>,
     popular: List<Release>, categories: List<ReleaseCategory>, day: Int, installed: Map<String, String> = emptyMap(),
     saved: DailySelection? = null, seed: Int = 0): AppHomeShelves {
@@ -66,14 +89,16 @@ internal fun discoverPicks(ranked: List<Release>, library: List<LibraryEntry>, l
             release.categoryId?.let { interests[name] = it }
         }
     }
-    val followedCategories = mutableSetOf<Long>()
+    val followed = mutableMapOf<String, Long?>()
     for (entry in library.filter { it.watched }) {
         val releases = listOfNotNull(entry.latest, entry.update, entry.release)
         excluded.addAll(releases.map(::key))
-        val category = releases.firstNotNullOfOrNull { it.categoryId ?: catalog[key(it)]?.categoryId } ?: continue
-        interests[key(entry.release)] = category
-        followedCategories += category
+        val category = releases.firstNotNullOfOrNull { it.categoryId ?: catalog[key(it)]?.categoryId }
+        val name = key(entry.release)
+        followed[name] = category ?: followed[name]
+        if (category != null) interests[name] = category
     }
+    val followedCounts = followed.values.filterNotNull().groupingBy { it }.eachCount()
     val preferences = interests.values.groupingBy { it }.eachCount()
     val viewedLatest = latest.filter { it.views > 0 }.sortedByDescending { it.views }
     val available = (ranked + popular + viewedLatest).map(::key).distinct().filter { it !in excluded }.map(catalog::getValue)
@@ -84,7 +109,7 @@ internal fun discoverPicks(ranked: List<Release>, library: List<LibraryEntry>, l
         labels.putIfAbsent(id, name)
     }
     val byCategory = available.filter { it.categoryId in labels }.groupBy { requireNotNull(it.categoryId) }
-    val preferred = byCategory.keys.sortedWith(compareByDescending<Long> { it in followedCategories }
+    val preferred = byCategory.keys.sortedWith(compareByDescending<Long> { followedCounts[it] ?: 0 }
         .thenByDescending { preferences[it] ?: 0 }.thenBy { it })
     val rotation = day + (seed and 0xffff)
     val favorites = preferred.filter { it in preferences }.take(4)
@@ -102,22 +127,19 @@ internal fun discoverPicks(ranked: List<Release>, library: List<LibraryEntry>, l
     // Epoch day zero was a Thursday. Give each Monday-based week one eligible two-category day.
     val mondayIndex = day + 3
     val paired = Math.floorMod(mondayIndex, 7) == Math.floorMod(Math.floorDiv(mondayIndex, 7) + (seed and 0xffff), 7)
-    val categoryOrder = (saved?.categoryIds.orEmpty() + favorites.ifEmpty { preferred }.rotated(rotation) + preferred)
-        .distinct().filter { it in byCategory }
-    val substantial = categoryOrder.filter { byCategory.getValue(it).size >= 3 }
-    val viable = categoryOrder.filter { byCategory.getValue(it).size >= 2 }
-    val chosen = if (paired) (viable + categoryOrder).distinct().take(2).sortedBy(categoryOrder::indexOf)
-        else (substantial.ifEmpty { viable }).take(1)
+    val chosen = dailyCategories(byCategory, followed, interests, saved?.categoryIds.orEmpty(), day, seed, paired)
     val heroPriority = heroOrder.take(5).mapIndexed { i, app -> key(app) to (5 - i) }.toMap()
     val coverCandidate = heroOrder.firstOrNull { it.homeArtwork != null && it !in keptFeatures }
     val categoryOrderByArtwork = compareBy<Release> { it.id == coverCandidate?.id }
         .thenBy { it.homeArtwork == null }.thenBy { heroPriority[key(it)] ?: 0 }
-    val decks = chosen.map { id -> byCategory.getValue(id).sortedWith(categoryOrderByArtwork) }
+    val decks = chosen.map { id ->
+        (keptFeatures.filter { it.categoryId == id } + byCategory.getValue(id).sortedWith(categoryOrderByArtwork)).distinctBy(::key)
+    }
     val sharedPoolSize = (heroOrder + decks.flatten()).distinctBy(::key).size
     val reservedForDiscover = minOf(3, heroOrder.size, sharedPoolSize / 2)
     val limit = (sharedPoolSize - reservedForDiscover).coerceAtMost(5)
-    val alternated = (0 until 5).flatMap { index -> decks.mapNotNull { it.getOrNull(index) } }
-    val featured = (keptFeatures.filter { it.categoryId in chosen } + alternated).distinctBy(::key).take(limit)
+    val visibleDecks = if (limit < 4) decks.take(1) else decks
+    val featured = (0 until 5).flatMap { index -> visibleDecks.mapNotNull { it.getOrNull(index) } }.take(limit)
         .takeIf { it.size >= 2 }.orEmpty()
     val featureKeys = featured.mapTo(mutableSetOf(), ::key)
     val heroCandidates = heroOrder.filter { key(it) !in featureKeys }

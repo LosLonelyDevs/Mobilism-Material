@@ -35,7 +35,7 @@ data class HomeState(
     val latest: HomeShelf<Release> = HomeShelf(), val popular: HomeShelf<Release> = HomeShelf(),
     val categories: HomeShelf<ReleaseCategory> = HomeShelf(), val reviews: HomeForum = HomeForum(),
     val discussions: HomeForum = HomeForum(), val newReleaseIds: Set<Long> = emptySet(),
-    val discovery: HomeShelf<Release> = HomeShelf(), val day: Int = 0,
+    val discovery: HomeShelf<Release> = HomeShelf(), val day: Int = 0, val refreshing: Boolean = false,
 ) {
     val busy: Boolean get() = latest.busy || popular.busy || categories.busy || reviews.busy || discussions.busy || discovery.busy
 }
@@ -66,7 +66,7 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
                 releaseStamps.clear()
                 discoveryStamp = null
                 mutableState.value = HomeState(state.value.section, day = localDay())
-                if (visible) refresh()
+                if (visible) HomeCollection.entries.forEach(::retry)
             }
         }
     }
@@ -76,7 +76,7 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
         cancelLoads()
         cache[state.value.section] = state.value.let { it.copy(latest = it.latest.copy(busy = false),
             popular = it.popular.copy(busy = false), categories = it.categories.copy(busy = false),
-            reviews = it.reviews.copy(busy = false), discussions = it.discussions.copy(busy = false), discovery = it.discovery.copy(busy = false)) }
+            reviews = it.reviews.copy(busy = false), discussions = it.discussions.copy(busy = false), discovery = it.discovery.copy(busy = false), refreshing = false) }
         mutableState.value = cache[section] ?: HomeState(section)
         if (visible) { updateDay(); loadMissing() }
     }
@@ -93,13 +93,18 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
         else {
             cancelLoads()
             HomeCollection.entries.forEach { mark(it, busy = false) }
+            mutableState.update { it.copy(refreshing = false) }
         }
     }
 
     private fun loadMissing() = HomeCollection.entries.filter { !loaded(it) && jobs[it]?.isActive != true }
         .forEach { load(it, fresh = false) }
 
-    fun refresh() = HomeCollection.entries.forEach(::retry)
+    fun refresh() {
+        if (state.value.busy) return
+        HomeCollection.entries.forEach(::retry)
+        mutableState.update { it.copy(refreshing = it.busy) }
+    }
 
     fun retry(collection: HomeCollection) = load(collection, fresh = true)
 
@@ -151,6 +156,8 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
                 ensureActive()
                 if (collection == HomeCollection.Discover) discoveryStamp = ShelfStamp(repository.feedPolicy(FeedOrder.Top).generation, now(), 0)
                 mark(collection, busy = false, error = error.forScreen())
+            } finally {
+                mutableState.update { if (it.refreshing && !it.busy) it.copy(refreshing = false) else it }
             }
         }
     }

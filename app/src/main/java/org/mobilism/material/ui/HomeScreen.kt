@@ -7,7 +7,6 @@
 package org.mobilism.material.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -126,6 +125,10 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
         else listOf(state.popular, state.latest).any { !it.loaded && it.error == null }
     val latest = apps?.latest ?: state.latest.items
     val popular = apps?.popular ?: state.popular.items
+    val showInitialIndicator = !state.refreshing && (waitingForHero || state.busy) && highlights.isEmpty() &&
+        listOf(state.latest, state.popular, state.categories).all { it.items.isEmpty() && it.error == null } &&
+        customCategories.isEmpty() && state.discovery.error == null &&
+        listOf(state.reviews, state.discussions).all { it.topics?.items.isNullOrEmpty() && it.error == null }
     val scroll = rememberLazyListState()
     val latestScroll = rememberLazyListState()
     var latestVisible by remember { mutableStateOf(false) }
@@ -179,7 +182,7 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
                         }
                     }
                     if (choices.isEmpty() || state.categories.busy || state.categories.error != null) {
-                        HomeShelfStatus(state.categories, stringResource(R.string.home_empty_categories)) { onRetry(HomeCollection.Categories) }
+                        HomeShelfStatus(state.categories, stringResource(R.string.home_empty_categories), choices.isEmpty()) { onRetry(HomeCollection.Categories) }
                     }
                 }
             }
@@ -224,6 +227,9 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
                 }
             }
         }
+        if (showInitialIndicator) LoadingState(stringResource(R.string.home_loading),
+            Modifier.align(Alignment.Center).testTag("home-initial-loading")
+                .background(MaterialTheme.colorScheme.surfaceContainer, MaterialTheme.shapes.extraLarge), indicatorSize = 64.dp)
     }
 }
 
@@ -248,7 +254,7 @@ private fun HomeHeroPlaceholder(section: ContentSection) {
         ContentSection.Books -> R.string.home_finding_books
         ContentSection.Games -> R.string.home_finding_games
     })
-    Column(Modifier.testTag("home-hero-loading").progressSemantics().semantics { contentDescription = label },
+    Column(Modifier.testTag("home-hero-loading").semantics { contentDescription = label },
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ReleaseImageShimmer(Modifier.fillMaxWidth().padding(horizontal = 20.dp).widthIn(max = 520.dp)
             .height(homeHeroHeight(section)).clip(MaterialTheme.shapes.extraLarge))
@@ -444,7 +450,7 @@ private fun HomeForumShelf(title: String, state: HomeForum, reviews: Boolean, on
                 }
             }
         }
-        if (state.busy) LoadingState(stringResource(if (reviews) R.string.home_loading_reviews else R.string.home_loading_discussions), Modifier.fillMaxWidth())
+        if (state.busy && topics?.items.isNullOrEmpty()) HomeShelfPlaceholder()
         state.error?.let { ErrorPanel(it, Modifier.padding(horizontal = 20.dp), onRetry) }
         if (!state.busy && state.error == null && state.loaded && topics?.items.isNullOrEmpty()) {
             Text(stringResource(if (reviews) R.string.home_empty_reviews else R.string.home_empty_discussions),
@@ -454,8 +460,13 @@ private fun HomeForumShelf(title: String, state: HomeForum, reviews: Boolean, on
 }
 
 @Composable
-private fun <T> HomeShelfStatus(state: HomeShelf<T>, empty: String, onRetry: () -> Unit) {
-    if (state.busy) LoadingState(stringResource(R.string.home_loading), Modifier.fillMaxWidth())
+private fun HomeShelfPlaceholder() {
+    ReleaseImageShimmer(Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(64.dp).clip(MaterialTheme.shapes.large))
+}
+
+@Composable
+private fun <T> HomeShelfStatus(state: HomeShelf<T>, empty: String, showPlaceholder: Boolean = state.items.isEmpty(), onRetry: () -> Unit) {
+    if (state.busy && showPlaceholder) HomeShelfPlaceholder()
     state.error?.let { ErrorPanel(it, Modifier.padding(horizontal = 20.dp), onRetry) }
     if (state.loaded && !state.busy && state.error == null && state.items.isEmpty()) Text(empty, Modifier.padding(horizontal = 20.dp),
         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

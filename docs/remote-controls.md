@@ -186,7 +186,9 @@ Ordinary app contributions include the forum category when available. Fresh Top 
 
 Apps Home ranks category picks by recent Following demand and forum view counts. A verified category Top snapshot can supply more picks for the configured cache lifetime. These historical posts appear only in Discover. When the cache has a newer release of the same app, its link and version take priority. The phone can load one thumbnail per visible Discover card through its release image cache. The shared ranking accepts public Mobilism image IDs.
 
-Each phone matches installed and followed apps locally. The daily category row can include viewed releases already present in Latest. A row needs at least two distinct eligible apps and can combine two categories on one day per week. Installed can read the public catalog separately, matching by package or an exact app name. Opening Home does not add a Following lookup.
+Each phone picks a category locally. Each distinct followed app gets one day per rotation. When a pick has too few suggestions, Home can use another well-stocked category or omit the row. Installed apps guide the rotation when there are no follows. On one day per week, two categories can share the row if each supplies at least two distinct suggestions. Already loaded releases from Latest can count toward either category.
+
+Installed can read the public catalog separately, matching by package or an exact app name. Opening Home does not add a Following lookup.
 
 Discussion category activity has a separate 5-minute hold per category, including failed attempts. Explicit refresh clears the hold. The category list and first topic page have separate lifetimes under **API controls > Limits > Discussions**.
 

@@ -293,7 +293,7 @@ private fun MainNavigation(model: MobilismViewModel, auth: AuthState, notificati
                     }
                 },
                 onHomeRefresh = home::refresh,
-                homeRefreshing = homeState.busy,
+                homeRefreshing = homeState.refreshing, homeBusy = homeState.busy,
                 homeContent = { openCategories ->
                     key(homeState.section) {
                         var installedApps by remember { mutableStateOf<Map<String, String>?>(null) }

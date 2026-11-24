@@ -147,7 +147,8 @@ class HomeTest {
 
     @Test fun pairedDayShowsBothCategoriesInOneRowBelowDiscover() {
         val base = fixtureState(ContentSection.Apps)
-        val split = base.popular.items.mapIndexed { index, release -> release.copy(categoryId = if (index % 2 == 0) 21L else 22L) }
+        val split = base.popular.items.mapIndexed { index, release -> release.copy(categoryId = if (index % 2 == 0) 21L else 22L) } +
+            base.popular.items.last().copy(id = 50, title = "Creative option v1", categoryId = 22L)
         val state = base.copy(popular = HomeShelf(split, loaded = true), day = -3)
         val followed = split.take(2).map { LibraryEntry(it, watched = true) }
         compose.setContent {
@@ -155,7 +156,8 @@ class HomeTest {
                 HomeHost(state) { HomeScreen(state, {}, {}, {}, {}, {}, { _, _ -> }, {}, library = followed) }
             }
         }
-        val heading = compose.onNodeWithText("Popular apps in Everyday essentials and Creative tools")
+        val heading = compose.onNode(hasText("Popular apps in Everyday essentials and Creative tools") or
+            hasText("Popular apps in Creative tools and Everyday essentials"))
         heading.assertIsDisplayed()
         assertTrue(heading.fetchSemanticsNode().boundsInRoot.top >
             compose.onNodeWithText("Discover apps").fetchSemanticsNode().boundsInRoot.bottom)
@@ -234,6 +236,30 @@ class HomeTest {
             assertNull(DailyHomeStore(prefs, key).read(11))
             assertNull(DailyHomeStore(prefs, key + "-other").read(10))
         } finally { prefs.edit().remove(key).apply() }
+    }
+
+    @Test fun eachHomeShowsOneCenteredInitialIndicatorUntilContentArrives() {
+        fun loading(section: ContentSection) = HomeState(section, latest = HomeShelf(busy = true), popular = HomeShelf(busy = true),
+            categories = HomeShelf(busy = true), reviews = HomeForum(busy = true), discussions = HomeForum(busy = true))
+        var home by mutableStateOf(loading(ContentSection.Apps))
+        compose.setContent { MobilismTheme {
+            HomeHost(home) { HomeScreen(home, {}, {}, {}, {}, {}, { _, _ -> }, {}) }
+        } }
+        val label = compose.activity.getString(R.string.home_loading)
+        for (section in ContentSection.entries) {
+            compose.runOnIdle { home = loading(section) }
+            val frame = compose.onNodeWithTag("home-${section.name}").fetchSemanticsNode().boundsInRoot
+            val indicator = compose.onNodeWithTag("home-initial-loading").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            assertEquals(frame.center.x, indicator.center.x, 1f)
+            assertEquals(frame.center.y, indicator.center.y, 1f)
+            compose.onAllNodesWithText(label).assertCountEquals(1)
+            compose.onNodeWithTag("feed-refresh-indicator").assertDoesNotExist()
+            compose.runOnIdle { home = home.copy(categories = HomeShelf(listOf(ReleaseCategory(1, "Utilities")), loaded = true)) }
+            compose.onNodeWithTag("home-initial-loading").assertDoesNotExist()
+            compose.onNodeWithText("Utilities").assertIsDisplayed()
+            compose.onAllNodesWithText(label).assertCountEquals(0)
+            compose.onNodeWithTag("feed-refresh-indicator").assertDoesNotExist()
+        }
     }
 
     @Test fun discoverStaysAtTheTopFromTheFirstFrameThroughDelayedRecommendations() {
@@ -401,7 +427,7 @@ class HomeTest {
     private fun HomeHost(state: HomeState, content: @Composable () -> Unit) {
         FeedScreen(FeedState(section = state.section, items = state.latest.items), AuthState.Guest,
             {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, CategoryState(), {}, {}, tab = BrowseTab.Home,
-            homeContent = { content() })
+            homeRefreshing = state.refreshing, homeBusy = state.busy, homeContent = { content() })
     }
 
     // Local artwork makes screenshots deterministic; these fixtures never enter the app catalog.

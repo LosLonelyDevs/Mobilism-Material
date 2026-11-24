@@ -125,6 +125,7 @@ fun FeedScreen(
     onCompact: (Boolean) -> Unit = {},
     onReleasesViewed: (ContentSection, List<Release>) -> Unit = { _, _ -> },
     homeRefreshing: Boolean = false,
+    homeBusy: Boolean = homeRefreshing,
 ) {
     val theme = LocalAppTheme.current
     val sectionStyle = state.section.style()
@@ -264,7 +265,7 @@ fun FeedScreen(
                     savedTabs.SaveableStateProvider("${state.section}-$selectedTab") {
                         FeedRefreshContainer(
                             refreshing = if (selectedTab == BrowseTab.Home) homeRefreshing else state.refreshing,
-                            busy = if (selectedTab == BrowseTab.Home) homeRefreshing else state.busy,
+                            busy = if (selectedTab == BrowseTab.Home) homeBusy else state.busy,
                             onRefresh = if (selectedTab == BrowseTab.Home) onHomeRefresh else onRefresh,
                         ) {
                         if (selectedTab == BrowseTab.Home && homeContent != null) homeContent(openFilters)
