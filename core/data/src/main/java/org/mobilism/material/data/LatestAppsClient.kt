@@ -8,6 +8,7 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -163,9 +164,11 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
         ?.addQueryParameter("view", view)?.addQueryParameter("safe", if (hideAdult) "1" else "0")
         ?.build()?.let { Request.Builder().url(it).build() }
 
-    suspend fun discover(hideAdult: Boolean): List<Release> {
+    suspend fun discover(hideAdult: Boolean, refresh: Boolean = false): List<Release> {
         val request = browseRequest("discover", hideAdult) ?: return emptyList()
-        return read(request, hideAdult, discovery = true).releases
+        val ranked = if (refresh) request.newBuilder().cacheControl(CacheControl.Builder().maxAge(0, TimeUnit.SECONDS).build()).build()
+            else request
+        return read(ranked, hideAdult, discovery = true).releases
     }
 
     suspend fun installedCatalog(hideAdult: Boolean): InstalledReleaseCatalog = withContext(Dispatchers.IO) {

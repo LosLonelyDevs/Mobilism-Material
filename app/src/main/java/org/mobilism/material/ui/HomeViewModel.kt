@@ -44,7 +44,7 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
     hideAdult: StateFlow<Boolean> = MutableStateFlow(false),
     private val observeNewReleases: (ContentSection, List<Release>) -> Set<Long> = { _, _ -> emptySet() },
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
-    private val discover: suspend (Boolean) -> List<Release> = { emptyList() },
+    private val discover: suspend (Boolean, Boolean) -> List<Release> = { _, _ -> emptyList() },
     private val localDay: () -> Int = { java.time.LocalDate.now().toEpochDay().toInt() }) : ViewModel() {
     private val mutableState = MutableStateFlow(HomeState(initialSection, day = localDay()))
     val state = mutableState.asStateFlow()
@@ -113,7 +113,7 @@ class HomeViewModel(private val repository: HomeRepository, initialSection: Cont
                 when (collection) {
                     HomeCollection.Discover -> {
                         val generation = repository.feedPolicy(FeedOrder.Top).generation
-                        val items = discover(adultFilter)
+                        val items = discover(adultFilter, fresh)
                         ensureActive()
                         discoveryStamp = ShelfStamp(generation, now(), 0)
                         mutableState.update { it.copy(discovery = HomeShelf(items, loaded = true)) }

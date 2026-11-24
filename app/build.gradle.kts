@@ -30,7 +30,13 @@ val verifyAppHttp by tasks.registering {
 tasks.named("preBuild") { dependsOn(verifyAppHttp) }
 
 val signingPath = providers.environmentVariable("KEYSTORE_FILE").orNull
-val dailyUsageEndpoint = providers.environmentVariable("DAILY_USAGE_ENDPOINT").orElse("").get().trim()
+val dailyUsageEndpoint = providers.environmentVariable("DAILY_USAGE_ENDPOINT").orElse(providers.provider {
+    val localConfig = rootProject.file(".env")
+    if (localConfig.isFile) localConfig.useLines { lines ->
+        lines.firstOrNull { it.substringBefore('=').trim() == "DAILY_USAGE_ENDPOINT" }
+            ?.substringAfter('=')?.trim()?.removeSurrounding("\"")?.removeSurrounding("'").orEmpty()
+    } else ""
+}).get().trim()
 if (dailyUsageEndpoint.isNotEmpty()) {
     val endpoint = URI(dailyUsageEndpoint)
     require(endpoint.scheme == "https" && !endpoint.host.isNullOrBlank() && endpoint.userInfo == null &&

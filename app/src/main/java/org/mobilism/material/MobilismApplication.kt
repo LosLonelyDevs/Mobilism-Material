@@ -87,7 +87,7 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
     }
     private suspend fun publishLatestApps(page: LatestAppsPage) = latestApps.publish(page, categoryNames())
 
-    internal suspend fun discoverApps(hideAdult: Boolean) = latestApps.discover(hideAdult)
+    internal suspend fun discoverApps(hideAdult: Boolean, refresh: Boolean) = latestApps.discover(hideAdult, refresh)
     internal suspend fun installedCatalog(hideAdult: Boolean) = latestApps.installedCatalog(hideAdult)
     internal suspend fun installedLauncherLabels() = withContext(Dispatchers.IO) { InstalledApps(this@MobilismApplication).launcherLabels() }
 

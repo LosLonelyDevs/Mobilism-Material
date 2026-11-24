@@ -114,6 +114,41 @@ class LatestAppsClientTest {
         assertEquals(2, requests)
     }
 
+    @Test fun pullingRefreshesDiscoverWhileOrdinaryVisitsReuseTheDiskCache() = runBlocking {
+        val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
+        val reads = java.util.concurrent.atomic.AtomicInteger()
+        server.createContext("/api/latest-apps") { exchange ->
+            val count = reads.incrementAndGet()
+            val items = org.json.JSONArray((1..count).map { id ->
+                JSONObject().put("id", id).put("title", "App $id v1").put("name", "App $id").put("version", "1")
+                    .put("postedAt", 100).put("author", "Member").put("adultFiltered", true)
+            })
+            val body = JSONObject().put("collection", "discover").put("observedAt", 200).put("items", items).toString().toByteArray()
+            exchange.responseHeaders.add("Cache-Control", "public, max-age=300")
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+        }
+        server.start()
+        val directory = java.nio.file.Files.createTempDirectory("discover-cache").toFile()
+        val cache = okhttp3.Cache(directory, 1_000_000)
+        try {
+            val transport = AppHttp.builder(OkHttpClient()) { identity }.proxy(java.net.Proxy.NO_PROXY).addInterceptor { chain ->
+                val url = chain.request().url.newBuilder().scheme("http").host("127.0.0.1").port(server.address.port).build()
+                chain.proceed(chain.request().newBuilder().url(url).build())
+            }.build()
+            val client = LatestAppsClient("https://fixture.invalid/api/ping", transport, now = { 200 }, browseCache = cache)
+            assertEquals(1, client.discover(true).size)
+            assertEquals(1, client.discover(true).size)
+            assertEquals(2, client.discover(true, refresh = true).size)
+            assertEquals(2, client.discover(true).size)
+            assertEquals(2, reads.get())
+        } finally {
+            server.stop(0)
+            cache.delete()
+            directory.delete()
+        }
+    }
+
     @Test fun discoveryReadsOnlyASharedRankingAndHonorsTheAdultFilterOnDevice() = runBlocking {
         val requests = mutableListOf<okhttp3.Request>()
         val response = JSONObject().put("observedAt", 200).put("items", org.json.JSONArray((1..2).map { id ->
