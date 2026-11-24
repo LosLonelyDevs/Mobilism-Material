@@ -30,15 +30,33 @@ export async function discoverApps(database, now, safe) {
   const rows = await database(`WITH demand AS (
       SELECT app_key, sum(followers) AS popularity FROM daily_followed_apps
       WHERE day BETWEEN $1::date - 6 AND $1::date GROUP BY app_key HAVING sum(followers) > 0
+    ), cache AS (
+      SELECT items, category_top, ${retentionSecondsSql} AS lifetime FROM latest_apps_cache WHERE singleton
+    ), live AS (
+      SELECT item, lifetime FROM cache CROSS JOIN LATERAL jsonb_array_elements(items) item
+      WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $2::bigint - lifetime
+    ), placements AS (
+      SELECT chart, lifetime FROM cache CROSS JOIN LATERAL jsonb_array_elements(category_top) chart
+      WHERE (chart->>'lastSeen')::bigint > $2::bigint - lifetime AND (NOT $3::boolean OR (chart->>'adultFiltered')::boolean)
+    ), sources AS (
+      SELECT item, lifetime, coalesce((item->>'topicViews')::bigint, 0) AS views FROM live
+      WHERE item ? 'category' AND NOT item ? 'hiddenAt' AND (NOT $3::boolean OR (item->>'adultFiltered')::boolean)
+      UNION ALL
+      SELECT CASE WHEN item IS NULL OR ((chart->>'postedAt')::bigint, (chart->>'id')::bigint) >
+          ((item->>'postedAt')::bigint, (item->>'id')::bigint) THEN chart
+        ELSE jsonb_strip_nulls(jsonb_build_object('category', chart->'category', 'artworkId', chart->'artworkId')) || item END,
+        placements.lifetime, (chart->>'topicViews')::bigint
+      FROM placements LEFT JOIN live ON item->>'key' = chart->>'key'
+      WHERE item IS NULL OR (NOT item ? 'hiddenAt' AND (NOT $3::boolean OR (item->>'adultFiltered')::boolean)
+        AND (NOT item ? 'category' OR item#>>'{category,id}' = chart#>>'{category,id}'))
     ), candidates AS (
-      SELECT item, popularity, ${retentionSecondsSql} AS lifetime FROM latest_apps_cache
-      CROSS JOIN LATERAL jsonb_array_elements(items) item JOIN demand ON app_key = item->>'key'
-      WHERE singleton AND item ? 'category' AND NOT item ? 'hiddenAt' AND (NOT $3::boolean OR (item->>'adultFiltered')::boolean)
+      SELECT DISTINCT ON (item->>'key') item, lifetime, views, coalesce(popularity, 0) AS popularity
+      FROM sources LEFT JOIN demand ON app_key = item->>'key' WHERE popularity > 0 OR views > 0
+      ORDER BY item->>'key', (item->>'postedAt')::bigint DESC, (item->>'id')::bigint DESC, views DESC, (item ? 'artworkId') DESC
     ), ranked AS (
-      SELECT *, row_number() OVER (PARTITION BY item#>>'{category,id}' ORDER BY popularity DESC,
-        (item->>'postedAt')::bigint DESC, (item->>'id')::bigint DESC) AS rank
-      FROM candidates WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $2::bigint - lifetime
-    ) SELECT item, lifetime FROM ranked WHERE rank <= 20 ORDER BY rank, popularity DESC, (item->>'id')::bigint DESC LIMIT 500`,
+      SELECT *, row_number() OVER (PARTITION BY item#>>'{category,id}' ORDER BY popularity DESC, views DESC,
+        (item->>'postedAt')::bigint DESC, (item->>'id')::bigint DESC) AS rank FROM candidates
+    ) SELECT item, lifetime FROM ranked WHERE rank <= 20 ORDER BY rank, popularity DESC, views DESC, (item->>'id')::bigint DESC LIMIT 500`,
     [day, now, safe]);
   return { observedAt: now, items: rows.map(row => row.item), lifetime: Number(rows[0]?.lifetime ?? cacheLifetime) };
 }

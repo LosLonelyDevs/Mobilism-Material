@@ -164,4 +164,6 @@ CREATE TABLE IF NOT EXISTS latest_apps_cache (
 ALTER TABLE latest_apps_cache
     DROP CONSTRAINT IF EXISTS latest_apps_cache_items_check,
     ADD CONSTRAINT latest_apps_cache_items_check CHECK (jsonb_typeof(items) = 'array' AND jsonb_array_length(items) <= 2000);
+ALTER TABLE latest_apps_cache ADD COLUMN IF NOT EXISTS category_top jsonb NOT NULL DEFAULT '[]'
+    CHECK (jsonb_typeof(category_top) = 'array' AND jsonb_array_length(category_top) <= 500);
 INSERT INTO latest_apps_cache(singleton, items) VALUES (true, '[]') ON CONFLICT DO NOTHING;

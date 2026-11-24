@@ -13,7 +13,7 @@ before(async () => {
   db = new PGlite();
   await db.exec(await readFile(new URL('../schema.sql', import.meta.url), 'utf8'));
 });
-beforeEach(async () => { await db.exec("UPDATE latest_apps_cache SET items = '[]', observed_at = 0; TRUNCATE daily_followed_apps, follow_lookup_receipts"); });
+beforeEach(async () => { await db.exec("UPDATE latest_apps_cache SET items = '[]', category_top = '[]', observed_at = 0; TRUNCATE daily_followed_apps, follow_lookup_receipts"); });
 after(async () => { await db.close(); });
 const query = async (sql, values) => (await db.query(sql, values)).rows;
 const item = (id, name = 'App ' + id) => ({
@@ -107,6 +107,34 @@ test('Discover ranks unique cached apps by recent follow demand and only returns
   assert.deepEqual((await discover('0', now + 2 * 86400)).body.items, []);
   assert.equal((await discover('unknown')).statusCode, 400);
   assert.equal(Number((await query('SELECT sum(hits) AS hits FROM daily_followed_apps'))[0].hits), 1004);
+});
+
+test('category Top backfills Home, prefers a newer known post, and stays outside Following', async () => {
+  const category = { id: 1332, name: 'Music & Audio' };
+  const chart = [1, 2, 3, 4].map(id => ({ ...item(id), key: 'app ' + id, lastSeen: now, adultFiltered: true,
+    category, topicViews: 1000 - id, artworkId: 'cover' + id }));
+  await query('UPDATE latest_apps_cache SET category_top = $1::jsonb WHERE singleton', [JSON.stringify(chart)]);
+  await post([{ ...item(15, 'App 2'), version: '2' }], true, true);
+  await post([item(17, 'App 3')], false, false);
+  await post([{ ...item(18, 'App 4'), category: { id: 7 } }], false, true);
+  const path = '/?view=discover&safe=1';
+  const rows = (await call('GET', null, query, now, {}, path)).body.items;
+  assert.deepEqual(rows.map(r => [r.id, r.artworkId]), [[1, 'cover1'], [15, 'cover2']]);
+  assert.equal(rows[1].version, '2');
+  assert.equal((await named([{ name: 'App 1', receipt: randomUUID() }])).body.items.length, 0);
+  assert.deepEqual((await call('GET', null, query, now + 2 * 86400, {}, path)).body.items, []);
+});
+
+test('ordinary view counts can rank a category and only public artwork IDs are shared', async () => {
+  const release = { ...item(4), category: { id: 1332, name: 'Music & Audio' }, topicViews: 54, artworkId: 'ab_1' };
+  await post([item(4)], true, true);
+  await feed([4], undefined, now, true, [release]);
+  await post([item(4)]);
+  const rows = (await call('GET', null, query, now, {}, '/?view=discover&safe=1')).body.items;
+  assert.equal(rows[0].artworkId, 'ab_1');
+  assert.equal((await call('GET')).body.items[0].artworkId, undefined);
+  assert.equal((await post([{ ...release, artworkId: 'https://private.invalid/image' }])).statusCode, 400);
+  assert.equal((await post([{ ...release, topicViews: -1 }])).statusCode, 400);
 });
 
 test('one lookup counts each requesting device once per app and only absent visible rows as misses', async () => {

@@ -184,7 +184,9 @@ Under **Followed App Cache > Cache storage**, administrators can keep 500 to 2,0
 
 Ordinary app contributions include the forum category when available. Fresh Top pages, app searches, and release details can also supply public release metadata. A phone can attach up to ten observations to its next Latest contribution or named Following lookup. Observations expire after six hours or when the app process exits. The same contribution preferences and server write policy apply. An optional write failure leaves the normal lookup available.
 
-Apps Home ranks cached releases by how many devices checked each app over the past seven UTC dates, counting each device once per app per day. Each phone matches installed and followed apps locally. The daily category row can include viewed releases already present in Latest. A row needs at least two distinct eligible apps and can combine two categories on one day per week. Installed can read the public catalog separately, matching by package or an exact app name. Opening Home does not add a Following lookup.
+Apps Home ranks category picks by recent Following demand and forum view counts. A verified category Top snapshot can supply more picks for the configured cache lifetime. These historical posts appear only in Discover. When the cache has a newer release of the same app, its link and version take priority. The phone can load one thumbnail per visible Discover card through its release image cache. The shared ranking accepts public Mobilism image IDs.
+
+Each phone matches installed and followed apps locally. The daily category row can include viewed releases already present in Latest. A row needs at least two distinct eligible apps and can combine two categories on one day per week. Installed can read the public catalog separately, matching by package or an exact app name. Opening Home does not add a Following lookup.
 
 Discussion category activity has a separate 5-minute hold per category, including failed attempts. Explicit refresh clears the hold. The category list and first topic page have separate lifetimes under **API controls > Limits > Discussions**.
 

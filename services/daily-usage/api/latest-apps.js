@@ -24,7 +24,9 @@ function parsePage(body, now, maxAge = maxUploadDelay) {
   if (dated && (!Number.isSafeInteger(body.readAt) || body.readAt > now + maxUploadDelay || now - body.readAt > maxAge)) throw new Error();
   const at = dated ? Math.min(body.readAt, now) : now;
   const items = body.items.map(item => {
-    if (!item || Object.keys(item).some(key => !['category', 'packageName', ...fields].includes(key)) || !fields.every(key => Object.hasOwn(item, key)) ||
+    if (!item || Object.keys(item).some(key => !['category', 'packageName', 'artworkId', 'topicViews', ...fields].includes(key)) || !fields.every(key => Object.hasOwn(item, key)) ||
+        (Object.hasOwn(item, 'artworkId') && !(text(item.artworkId, 64) && /^[A-Za-z0-9_-]+$/u.test(item.artworkId))) ||
+        (Object.hasOwn(item, 'topicViews') && !(Number.isSafeInteger(item.topicViews) && item.topicViews > 0)) ||
         (Object.hasOwn(item, 'packageName') && !(text(item.packageName, 255) && /^[A-Za-z][\w]*(?:\.[A-Za-z\d_]+)+$/u.test(item.packageName))) ||
         !Number.isSafeInteger(item.id) || item.id <= 0 || !Number.isSafeInteger(item.postedAt) ||
         item.postedAt < 1 || item.postedAt > now + 300 || !text(item.name, 200) ||
@@ -83,7 +85,11 @@ const updatePage = `
           ($4::bigint >= seen AND (category ? 'name' OR category->'id' <> item#>'{category,id}'))
         ) THEN jsonb_set(item, '{category}', category) ELSE item END ||
         CASE WHEN $13::jsonb ? (item->>'id') AND (NOT item ? 'packageName' OR $4::bigint >= seen)
-          THEN jsonb_build_object('packageName', $13::jsonb -> (item->>'id')) ELSE '{}'::jsonb END AS item, 0 AS priority FROM updated
+          THEN jsonb_build_object('packageName', $13::jsonb -> (item->>'id')) ELSE '{}'::jsonb END ||
+        CASE WHEN $14::jsonb ? (item->>'id') AND (NOT item ? 'artworkId' OR $4::bigint >= seen)
+          THEN jsonb_build_object('artworkId', $14::jsonb -> (item->>'id')) ELSE '{}'::jsonb END ||
+        CASE WHEN $15::jsonb ? (item->>'id') THEN jsonb_build_object('topicViews', greatest(
+          (item->>'topicViews')::bigint, ($15::jsonb ->> (item->>'id'))::bigint)) ELSE '{}'::jsonb END AS item, 0 AS priority FROM updated
       UNION ALL SELECT item, 1 FROM jsonb_array_elements($1::jsonb) AS item
     ), unique_apps AS (
       SELECT DISTINCT ON (item->>'key') item, item->>'key' AS app_key,
@@ -122,7 +128,9 @@ async function savePage(database, page, firstPage, now) {
   await database(updatePage, [JSON.stringify(items), firstPage ? at : 0, JSON.stringify(seen), at,
     now, JSON.stringify(anchors), JSON.stringify(missing), confirmAfter, JSON.stringify(safe),
     today, yesterdayWeight, JSON.stringify(Object.fromEntries(items.filter(item => item.category).map(item => [item.id, item.category]))),
-    JSON.stringify(Object.fromEntries(items.filter(item => item.packageName).map(item => [item.id, item.packageName])))]);
+    JSON.stringify(Object.fromEntries(items.filter(item => item.packageName).map(item => [item.id, item.packageName]))),
+    JSON.stringify(Object.fromEntries(items.filter(item => item.artworkId).map(item => [item.id, item.artworkId]))),
+    JSON.stringify(Object.fromEntries(items.filter(item => item.topicViews).map(item => [item.id, item.topicViews])))]);
 }
 
 export function createHandler(database = query, clock = () => Math.floor(Date.now() / 1000), env = process.env) {
@@ -138,7 +146,8 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
         const { observedAt, items: visible, lifetime } = discover
           ? await discoverApps(database, now, safe) : await visibleSnapshot(database, now, !installed);
         const items = installed ? visible.filter(item => !safe || item.adultFiltered).map(({ id, name, version, packageName, adultFiltered }) =>
-          ({ id, name, version, ...(packageName && { packageName }), adultFiltered })) : visible.map(publicRelease);
+          ({ id, name, version, ...(packageName && { packageName }), adultFiltered })) : visible.map(item =>
+            discover && item.artworkId ? { ...publicRelease(item), artworkId: item.artworkId } : publicRelease(item));
         const ttl = Math.max(0, Math.min(discover || installed ? 300 : 60, ...visible.map(item => (item.lastSeen ?? item.postedAt) + lifetime - now)));
         res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=' + ttl);
         res.setHeader('Content-Type', 'application/json');
