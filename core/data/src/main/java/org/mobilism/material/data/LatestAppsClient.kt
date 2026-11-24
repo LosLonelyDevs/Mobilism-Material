@@ -49,8 +49,9 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
         return JSONObject().put("id", release.id).put("name", title.name).put("version", version)
             .put("title", release.title.trim()).put("postedAt", release.publishedAt).put("author", release.author.trim()).apply {
                 release.views.takeIf { it > 0 }?.let { put("topicViews", it) }
-                val thumbnail = release.thumbnail ?: release.images.firstOrNull()
-                thumbnail?.let(sharedArtwork::matchEntire)?.let { put("artworkId", it.groupValues[1]) }
+                val artwork = (sequenceOf(release.thumbnail) + release.images.asSequence()).filterNotNull()
+                    .firstNotNullOfOrNull(sharedArtwork::matchEntire)
+                artwork?.let { put("artworkId", it.groupValues[1]) }
                 (release.storePackage ?: ReleaseVersions.packageName(release))?.takeIf { it.length <= 255 }?.let { put("packageName", it) }
                 release.categoryId?.takeIf { it > 0 }?.let { id ->
                     val name = (categoryNames[id] ?: release.categoryName)?.trim()

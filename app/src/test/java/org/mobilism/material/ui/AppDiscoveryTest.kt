@@ -91,6 +91,21 @@ class AppDiscoveryTest {
         assertTrue(expanded.discover.none { it in expanded.featured })
     }
 
+    @Test fun discoverLeadsWithArtworkEvenWhenEverySavedHeroHasOnlyAnInitial() {
+        val savedApps = (1L..5).map { app(it, "Saved app $it v1") }
+        val pictured = app(6, "Illustrated app v1").copy(thumbnail = " ", images = listOf("", "cover.png"))
+        val followed = app(7, "Followed v1").copy(thumbnail = "followed.png")
+        val library = listOf(LibraryEntry(followed, watched = true))
+        val saved = DailySelection(savedApps.map(Release::discoveryKey), emptyList(), emptyList())
+        fun picks(selection: DailySelection) = discoverPicks(savedApps + followed + pictured, library,
+            emptyList(), emptyList(), emptyList(), 1, saved = selection)
+        val first = picks(saved)
+        assertEquals(pictured, first.discover.first())
+        assertEquals("cover.png", pictured.homeArtwork)
+        assertEquals(savedApps.take(4), first.discover.drop(1))
+        assertEquals(first.selection, picks(first.selection).selection)
+    }
+
     @Test fun emptySharedCacheFallsBackToDistinctUnfollowedLocallyLoadedApps() {
         val followed = app(1, "Followed v1")
         val old = app(2, "Sketch v1")

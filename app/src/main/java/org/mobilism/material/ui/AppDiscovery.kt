@@ -9,6 +9,9 @@ import org.mobilism.material.data.latestAppKey
 
 internal fun Release.discoveryKey() = latestAppKey(appTitle.name)
 
+internal val Release.homeArtwork: String?
+    get() = thumbnail?.takeIf(String::isNotBlank) ?: images.firstOrNull(String::isNotBlank)
+
 private val postingOrder = compareBy<Release> { it.publishedAt }.thenBy { it.id }
 
 /** Keep the first popularity position, but open the newest known post for that app. */
@@ -46,7 +49,7 @@ internal fun discoverPicks(ranked: List<Release>, library: List<LibraryEntry>, l
         } else if (release.id == old.id) {
             // Feed cards carry artwork and counts. The shared ranking can supply their category.
             val category = release.categoryId ?: old.categoryId
-            catalog[app] = release.copy(thumbnail = release.thumbnail ?: old.thumbnail, images = release.images.ifEmpty { old.images },
+            catalog[app] = release.copy(thumbnail = release.thumbnail?.takeIf(String::isNotBlank) ?: old.thumbnail, images = release.images.ifEmpty { old.images },
                 categoryId = category, storePackage = release.storePackage ?: old.storePackage,
                 categoryName = release.categoryName ?: old.categoryName.takeIf { category == old.categoryId })
         }
@@ -89,7 +92,8 @@ internal fun discoverPicks(ranked: List<Release>, library: List<LibraryEntry>, l
     val discoveryPool = (available + latest.sortedByDescending { it.views }).distinctBy(::key)
         .filter { key(it) !in excluded && key(it) !in topTen }.map { catalog.getValue(key(it)) }
     val familiarCategories = discoveryPool.filter { it.categoryId in favorites }
-    val discoverOrder = (familiarCategories.take(20).rotated(rotation) + discoveryPool.take(25).rotated(rotation)).distinctBy(::key)
+    val discoverOrder = (familiarCategories.take(20).rotated(rotation).sortedBy { it.homeArtwork == null } +
+        discoveryPool.take(25).rotated(rotation).sortedBy { it.homeArtwork == null }).distinctBy(::key)
     val eligible = catalog.filterKeys { it !in excluded }
     val keptHero = saved?.discover.orEmpty().filterNot { it in topTen }.mapNotNull(eligible::get)
     val keptFeatures = saved?.featured.orEmpty().mapNotNull(eligible::get).filter { it.categoryId in saved?.categoryIds.orEmpty() }
@@ -105,7 +109,10 @@ internal fun discoverPicks(ranked: List<Release>, library: List<LibraryEntry>, l
     val chosen = if (paired) (viable + categoryOrder).distinct().take(2).sortedBy(categoryOrder::indexOf)
         else (substantial.ifEmpty { viable }).take(1)
     val heroPriority = heroOrder.take(5).mapIndexed { i, app -> key(app) to (5 - i) }.toMap()
-    val decks = chosen.map { id -> byCategory.getValue(id).sortedBy { heroPriority[key(it)] ?: 0 } }
+    val coverCandidate = heroOrder.firstOrNull { it.homeArtwork != null && it !in keptFeatures }
+    val categoryOrderByArtwork = compareBy<Release> { it.id == coverCandidate?.id }
+        .thenBy { it.homeArtwork == null }.thenBy { heroPriority[key(it)] ?: 0 }
+    val decks = chosen.map { id -> byCategory.getValue(id).sortedWith(categoryOrderByArtwork) }
     val sharedPoolSize = (heroOrder + decks.flatten()).distinctBy(::key).size
     val reservedForDiscover = minOf(3, heroOrder.size, sharedPoolSize / 2)
     val limit = (sharedPoolSize - reservedForDiscover).coerceAtMost(5)
@@ -113,7 +120,10 @@ internal fun discoverPicks(ranked: List<Release>, library: List<LibraryEntry>, l
     val featured = (keptFeatures.filter { it.categoryId in chosen } + alternated).distinctBy(::key).take(limit)
         .takeIf { it.size >= 2 }.orEmpty()
     val featureKeys = featured.mapTo(mutableSetOf(), ::key)
-    val hero = heroOrder.filter { key(it) !in featureKeys }.take(5)
+    val heroCandidates = heroOrder.filter { key(it) !in featureKeys }
+    // Keep daily picks in order, giving the cover to the first eligible app with artwork.
+    val cover = heroCandidates.firstOrNull { it.homeArtwork != null }
+    val hero = (listOfNotNull(cover) + heroCandidates).distinctBy(::key).take(5)
     val shown = (hero + featured).mapTo(mutableSetOf(), ::key)
     fun remaining(source: List<Release>) = source.filter { shown.add(key(it)) }.map { catalog.getValue(key(it)) }
     val top = remaining(popular)

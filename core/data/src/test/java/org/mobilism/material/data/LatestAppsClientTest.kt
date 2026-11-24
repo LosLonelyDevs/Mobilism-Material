@@ -55,8 +55,9 @@ class LatestAppsClientTest {
             if (accept) builder.header("X-App-Observations-Accepted", "1")
             builder.body(JSONObject().put("observedAt", now).put("items", org.json.JSONArray()).toString().toResponseBody()).build()
         }.build(), now = { now }, contributionsEnabled = { enabled })
-        val release = Release(7, "Camera v2", "Uploader", "http://images.mobilism.org/?dm=sample1", 80, 0, 4, section = ContentSection.Apps, categoryId = 7,
-            contentHtml = "private body", downloadLinks = listOf("https://private.invalid/file"))
+        val release = Release(7, "Camera v2", "Uploader", "https://external.invalid/poster", 80, 0, 4, section = ContentSection.Apps, categoryId = 7,
+            contentHtml = "private body", downloadLinks = listOf("https://private.invalid/file"),
+            images = listOf("invalid", "http://images.mobilism.org/?dm=sample1"))
         fun observe() = client.observe(listOf(release), true, mapOf(7L to "Photography"))
         suspend fun lookup() { client.lookup(listOf("Camera"), true) { "day" } }
         observe()

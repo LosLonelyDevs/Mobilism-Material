@@ -112,8 +112,12 @@ class HomeTest {
             capture("${current.name.lowercase()}-hero")
             compose.onNodeWithContentDescription("Show featured 2 of 5").performClick()
             compose.onNodeWithContentDescription("Show featured 1 of 5").performClick()
-            compose.onNodeWithTag("home-hero").onChildren().filter(hasClickAction()).onFirst().performClick()
-            compose.runOnIdle { assertEquals(if (current == ContentSection.Apps) 201L else 1L, opened) }
+            val firstCard = compose.onNodeWithTag("home-hero").onChildren().filter(hasClickAction()).onFirst()
+            val fixture = states.getValue(current)
+            val displayed = (fixture.discovery.items + fixture.popular.items + fixture.latest.items).distinctBy { it.id }
+                .single { hasText(ReleaseTitles.parse(it.title, current).name).matches(firstCard.fetchSemanticsNode()) }
+            firstCard.performClick()
+            compose.runOnIdle { assertEquals(displayed.id, opened) }
             home.performScrollToNode(hasContentDescription("More Latest ${current.label.lowercase()}"))
             compose.onNodeWithContentDescription("More Latest ${current.label.lowercase()}").performClick()
             compose.runOnIdle { assertEquals(FeedOrder.Latest, order) }
@@ -158,12 +162,29 @@ class HomeTest {
         capture("apps-paired-categories")
     }
 
+    @OptIn(coil3.annotation.DelicateCoilApi::class)
     @Test fun discoverDrawsThumbnailPixelsAndExpandsAVerifiedMusicRowSavedWithOneApp() {
         val base = fixtureState(ContentSection.Apps)
-        val hero = base.latest.items.first().copy(id = 500, title = "Daily Notes v1")
+        val keyPrefix = java.util.UUID.randomUUID().toString()
+        fun imageUrl(id: Long) = "https://images.mobilism.org/?dm=$keyPrefix-$id"
+        val hero = base.latest.items.first().copy(id = 500, title = "Daily Notes v1", thumbnail = imageUrl(500), images = emptyList())
         val music = List(7) { index ->
-            hero.copy(id = 600L + index, title = "Player ${index + 1} v2", categoryId = 1332, categoryName = "Music & Audio")
+            val id = 600L + index
+            hero.copy(id = id, title = "Player ${index + 1} v2", thumbnail = imageUrl(id), categoryId = 1332, categoryName = "Music & Audio")
         }
+        val heroBytes = File(java.net.URI(base.latest.items[0].thumbnail)).readBytes()
+        val musicBytes = File(java.net.URI(base.latest.items[1].thumbnail)).readBytes()
+        val calls = CopyOnWriteArrayList<String>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val url = chain.request().url.toString()
+            calls += url
+            val bytes = if (url == hero.thumbnail) heroBytes else musicBytes
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .header("Content-Type", "image/png").body(bytes.toResponseBody()).build()
+        }.build()
+        val loader = org.mobilism.material.images.appImageLoader(compose.activity, client)
+        val previous = coil3.SingletonImageLoader.get(compose.activity)
+        coil3.SingletonImageLoader.setUnsafe(loader)
         val state = base.copy(latest = HomeShelf(loaded = true), popular = HomeShelf(loaded = true),
             discovery = HomeShelf(listOf(hero) + music, loaded = true))
         val account = java.util.UUID.randomUUID().toString()
@@ -174,26 +195,33 @@ class HomeTest {
             compose.setContent { MobilismTheme(reduceMotion = true) {
                 HomeHost(state) { HomeScreen(state, {}, {}, {}, {}, {}, { _, _ -> }, {}, account = account) }
             } }
-            val art = compose.onNodeWithTag("home-hero-artwork-500", useUnmergedTree = true)
-            compose.waitUntil(8_000) {
-                if (compose.onAllNodesWithTag("home-hero-artwork-500", useUnmergedTree = true).fetchSemanticsNodes().isEmpty()) false
-                else {
-                    val bmp = art.captureToImage().asAndroidBitmap()
-                    (3 until bmp.width step 11).any { x ->
-                        (3 until bmp.height step 11).any { y -> bmp.getPixel(x, y) == 0xff285e55.toInt() }
+            fun assertPixels(tag: String, color: Int) {
+                compose.waitUntil(8_000) {
+                    if (compose.onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes().isEmpty()) false
+                    else {
+                        val bmp = compose.onNodeWithTag(tag, useUnmergedTree = true).captureToImage().asAndroidBitmap()
+                        (3 until bmp.width step 7).any { x -> (3 until bmp.height step 7).any { y -> bmp.getPixel(x, y) == color } }
                     }
                 }
             }
+            assertPixels("home-hero-artwork-500", 0xff285e55.toInt())
+            assertPixels("home-category-artwork-600", 0xff3b467d.toInt())
             compose.onNodeWithText("Popular apps in Music & Audio").assertIsDisplayed()
             val selected = requireNotNull(DailyHomeStore(prefs, key).read(state.day))
             assertEquals(5, selected.featured.distinct().size)
             val row = compose.onNodeWithTag("home-daily-category")
-            row.performScrollToIndex(4)
             val last = music.single { it.discoveryKey() == selected.featured.last() }
+            assertFalse(last.thumbnail in calls)
+            row.performScrollToIndex(4)
             compose.onNodeWithText(last.appTitle.name).assertIsDisplayed()
+            assertPixels("home-category-artwork-${last.id}", 0xff3b467d.toInt())
             row.performScrollToIndex(0)
             capture("apps-music-artwork")
-        } finally { prefs.edit().remove(key).apply() }
+        } finally {
+            coil3.SingletonImageLoader.setUnsafe(previous)
+            loader.shutdown()
+            prefs.edit().remove(key).apply()
+        }
     }
 
     @Test fun dailySelectionsSurviveReopeningButExpireAtTheNextDayAndStayAccountScoped() {

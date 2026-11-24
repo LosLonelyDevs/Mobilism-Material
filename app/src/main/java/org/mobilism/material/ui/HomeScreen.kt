@@ -153,10 +153,15 @@ fun HomeScreen(state: HomeState, onRetry: (HomeCollection) -> Unit, onRelease: (
                     val names = apps.categoryNames
                     HomeHeading(if (names.size == 2) stringResource(R.string.home_top_apps_two_categories, names[0], names[1])
                         else stringResource(R.string.home_top_apps_in_category, names.first()), null)
-                    LazyRow(Modifier.testTag("home-daily-category"), contentPadding = PaddingValues(horizontal = 20.dp),
+                    val row = rememberLazyListState()
+                    LazyRow(Modifier.testTag("home-daily-category"), state = row, contentPadding = PaddingValues(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         itemsIndexed(apps.featured, key = { _, release -> release.id }) { index, release ->
-                            DailyCategoryTile(release, index, onRelease)
+                            val visible by remember(scroll, row, release.id) { derivedStateOf {
+                                scroll.layoutInfo.visibleItemsInfo.any { it.key == "daily-category" } &&
+                                    row.layoutInfo.visibleItemsInfo.any { it.key == release.id }
+                            } }
+                            DailyCategoryTile(release, index, visible, onRelease)
                         }
                     }
                 }
@@ -281,7 +286,7 @@ private fun HomeHero(releases: List<Release>, section: ContentSection, onRelease
                         Text(title.name.take(1), color = tone.second.copy(alpha = 0.55f),
                             style = MaterialTheme.typography.displayLarge, modifier = Modifier.clearAndSetSemantics {})
                         val visible by remember(pager, index) { derivedStateOf { pager.layoutInfo.visiblePagesInfo.any { it.index == index } } }
-                        val thumbnail = release.thumbnail ?: images.firstOrNull()
+                        val thumbnail = release.homeArtwork
                         if (visible && thumbnail != null) ReleaseArtwork(thumbnail, null,
                             Modifier.fillMaxSize().graphicsLayer { rotationZ = 4f }.clip(MaterialTheme.shapes.large)
                                 .testTag("home-hero-artwork-${release.id}"), contentScale = ContentScale.Crop)
@@ -329,13 +334,17 @@ private fun HomeHero(releases: List<Release>, section: ContentSection, onRelease
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun DailyCategoryTile(release: Release, index: Int, onRelease: (Long) -> Unit) {
+private fun DailyCategoryTile(release: Release, index: Int, visible: Boolean, onRelease: (Long) -> Unit) {
     val title = release.appTitle
     val tone = homeTone(index)
     StoreCard({ onRelease(release.id) }, Modifier.width(184.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StoreShape(index, 36.dp, tone.first) {
                 Text(title.name.take(1), Modifier.clearAndSetSemantics {}, style = MaterialTheme.typography.titleSmall, color = tone.second)
+                val artwork = release.homeArtwork
+                if (visible && artwork != null) ReleaseArtwork(artwork, null,
+                    Modifier.fillMaxSize().clip(MaterialTheme.shapes.small).testTag("home-category-artwork-${release.id}"),
+                    contentScale = ContentScale.Crop)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title.name, style = MaterialTheme.typography.titleSmallEmphasized, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
