@@ -19,6 +19,8 @@ class CommentJsonTest {
         assertEquals("""\ud83d""", CommentMarkup.html("""[smile]\ud83d[/smile]"""))
         assertEquals("""\uZZZZ""", CommentMarkup.html("""[smile]\uZZZZ[/smile]"""))
         assertEquals("&lt;b&gt;", CommentMarkup.html("""[smile]\u003cb\u003e[/smile]"""))
+        assertEquals("🙏☺️", CommentMarkup.html("🙏☺️"))
+        assertEquals("🙏☺️", CommentMarkup.html("""[smile]\ud83d\ude4f\u263a\ufe0f[/smile]"""))
         assertEquals("😊", CommentMarkup.html("[smile]&#128522;[/smile]"))
         assertEquals("👩‍💻", CommentMarkup.html("""[smile]\ud83d\udc69\u200d\ud83d\udcbb[/smile]"""))
         assertEquals("<a href=\"https://example.org\">😊</a>",

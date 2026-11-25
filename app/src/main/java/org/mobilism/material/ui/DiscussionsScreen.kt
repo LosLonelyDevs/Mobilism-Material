@@ -70,7 +70,7 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
     var commentAction by rememberSaveable(state.topic?.key) { mutableStateOf(ForumCommentAction.Edit.name) }
     if (auth is AuthState.SignedIn) state.topic?.let { topic -> managedCommentId?.let { postId ->
         val comment = state.comments.items.firstOrNull { it.id == postId && canManageComment(it, auth) }
-        if (comment != null) ForumCommentEditor(ForumCommentTarget(topic.id, postId, ForumCommentAction.valueOf(commentAction)),
+        if (comment != null) ForumCommentEditor(ForumCommentTarget(topic.id, postId, ForumCommentAction.valueOf(commentAction), topic.forumId),
             auth.username, comment.contentHtml) { refresh ->
             managedCommentId = null
             if (refresh) model.refreshManagedComment(postId)
@@ -88,8 +88,7 @@ private fun DiscussionsContent(model: DiscussionsViewModel, auth: AuthState, onB
         state.notice?.let { snackbar.showSnackbar(it); model.noticeShown() }
     }
     gallery?.let { (urls, index) -> ReleaseImageViewer(urls, index, onDismiss = { gallery = null }) }
-    if (state.composer.open) ReleaseCommentComposer(state.composer, (auth as? AuthState.SignedIn)?.username.orEmpty(),
-        state.topic?.title.orEmpty(), model::editDraft, model::post, model::closeComposer,
+    if (state.composer.open) ReleaseCommentComposer(state.composer, model::editDraft, model::post, model::closeComposer,
         onCheckComments = { model.closeComposer(); model.loadComments(refresh = true) }, onRemoveReply = model::removeReply)
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,

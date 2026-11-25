@@ -215,20 +215,20 @@ class ReleaseCommentTest {
         compose.waitUntil(10_000) { !model.state.value.busy }
         compose.onNodeWithTag("write-comment").performScrollTo().performClick()
         compose.onNodeWithTag("post-comment").assertIsNotEnabled()
-        compose.onNodeWithText("Posting publicly as Reader").assertIsDisplayed()
-        compose.onNodeWithTag("comment-draft").performTextInput("Thanks & hello\nSecond line")
+        compose.onNodeWithText("Posting publicly as Reader").assertDoesNotExist()
+        compose.onNodeWithTag("comment-draft").performTextInput("Thanks & hello\nSecond line 🙏☺️")
         assertTrue(fixture.posts.isEmpty())
         compose.activityRule.scenario.onActivity { it.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
             .hideSoftInputFromWindow(it.window.decorView.windowToken, 0) }
         compose.onNodeWithText("Close", useUnmergedTree = true).performScrollTo().performClick()
         compose.onNodeWithText("Continue your comment").performScrollTo().performClick()
-        compose.onNodeWithTag("comment-draft").assertTextContains("Thanks & hello\nSecond line")
+        compose.onNodeWithTag("comment-draft").assertTextContains("Thanks & hello\nSecond line 🙏☺️")
         capture("comment-composer")
         fixture.failPost = true
         compose.onNodeWithTag("post-comment").performScrollTo().performClick()
         compose.waitUntil(10_000) { model.state.value.composer.error != null }
         compose.onNodeWithText("Check comments").assertExists()
-        assertEquals("Thanks & hello\nSecond line", model.state.value.composer.draft)
+        assertEquals("Thanks & hello\nSecond line 🙏☺️", model.state.value.composer.draft)
         assertEquals(1, fixture.posts.size)
         compose.onNodeWithText("Check comments").performScrollTo().performClick()
         compose.onNodeWithText("Continue your comment").performScrollTo().performClick()
@@ -244,7 +244,7 @@ class ReleaseCommentTest {
         assertEquals("POST", request.method)
         val body = checkNotNull(request.body)
         assertTrue(body.isOneShot())
-        val expected = FormBody.Builder().add("id", "42").add("comment", "Thanks & hello\nSecond line").build()
+        val expected = FormBody.Builder().add("id", "42").add("comment", "Thanks & hello\nSecond line 🙏☺️").build()
         assertEquals(okio.Buffer().also(expected::writeTo).readUtf8(), okio.Buffer().also(body::writeTo).readUtf8())
         fixture.repository.signOut()
     }
@@ -308,7 +308,6 @@ class ReleaseCommentTest {
         org.junit.Assume.assumeTrue(compose.activity.resources.configuration.fontScale >= 1.8f)
         compose.setContent { MobilismTheme(reduceMotion = true) {
             ReleaseCommentComposer(CommentComposerState(draft = "A comment with larger text"),
-                "Reader", "A longer release title that wraps on a compact screen",
                 onEdit = {}, onPost = {}, onDismiss = {}, onCheckComments = {})
         } }
         compose.onNodeWithTag("post-comment").performScrollTo().assertIsDisplayed().assertIsEnabled()
@@ -320,10 +319,10 @@ class ReleaseCommentTest {
         org.junit.Assume.assumeTrue(compose.activity.resources.configuration.screenWidthDp >= 840)
         compose.setContent { MobilismTheme(reduceMotion = true) {
             ReleaseCommentComposer(CommentComposerState(draft = "A comment in a wider window"),
-                "Reader", "Sample release", onEdit = {}, onPost = {}, onDismiss = {}, onCheckComments = {})
+                onEdit = {}, onPost = {}, onDismiss = {}, onCheckComments = {})
         } }
         compose.onNodeWithTag("post-comment").assertIsDisplayed().assertIsEnabled()
-        compose.onNodeWithText("Posting publicly as Reader").assertIsDisplayed()
+        compose.onNodeWithText("Posting publicly as Reader").assertDoesNotExist()
         capture("comment-wide")
     }
 
@@ -331,7 +330,7 @@ class ReleaseCommentTest {
         var dismissed = false
         compose.setContent { MobilismTheme(reduceMotion = true) {
             ReleaseCommentComposer(CommentComposerState(draft = "Sending", posting = true),
-                "Reader", "Sample release", onEdit = {}, onPost = {},
+                onEdit = {}, onPost = {},
                 onDismiss = { dismissed = true }, onCheckComments = {})
         } }
         compose.onNodeWithTag("post-comment").assertIsNotEnabled()
@@ -349,7 +348,7 @@ class ReleaseCommentTest {
             quotes = listOf(CommentQuote("Earlier author", "Earlier comment")))
         var composer by androidx.compose.runtime.mutableStateOf(CommentComposerState())
         compose.setContent { MobilismTheme(reduceMotion = true) {
-            if (composer.open) ReleaseCommentComposer(composer, "Reader", "Sample release",
+            if (composer.open) ReleaseCommentComposer(composer,
                 onEdit = { composer = composer.copy(draft = it) }, onPost = {},
                 onDismiss = { composer = composer.copy(open = false) }, onCheckComments = {},
                 onRemoveReply = { composer = composer.copy(replyTo = null) })

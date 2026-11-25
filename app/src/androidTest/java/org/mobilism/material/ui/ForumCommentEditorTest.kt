@@ -33,6 +33,7 @@ internal class CommentForumFixture {
     val writes = CopyOnWriteArrayList<String>()
     val formReads = CopyOnWriteArrayList<String>()
     @Volatile var source = "My comment"
+    @Volatile var requireForumId = false
     @Volatile var missing = false
     @Volatile var loginRequired = false
     @Volatile var blocked = false
@@ -47,7 +48,8 @@ internal class CommentForumFixture {
         val body = when {
             path.endsWith("/auth/login") -> """{"access_token":"sample-session","id":7}"""
             request.header("X-Auth-Token") != null -> error("API token sent to forum")
-            missing -> {
+            path == "/viewtopic.php" -> """<a href="./posting.php?mode=quote&amp;f=428&amp;p=123">Quote</a>"""
+            missing || (path == "/posting.php" && request.url.queryParameter("f") == null && requireForumId) -> {
                 response.code(404)
                 "Page not found"
             }
@@ -93,7 +95,7 @@ internal class CommentForumFixture {
 
 class ForumCommentEditorTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
-    private val target = ForumCommentTarget(42, 123, ForumCommentAction.Edit)
+    private val target = ForumCommentTarget(42, 123, ForumCommentAction.Edit, 428)
 
     private fun show(fixture: CommentForumFixture, close: (Boolean) -> Unit = {}) {
         compose.setContent { CompositionLocalProvider(LocalCommentGateway provides fixture.gateway) {
@@ -216,6 +218,14 @@ class ForumCommentEditorTest {
         compose.onNodeWithText("Cancel").performClick()
         assertEquals(false, dismissed)
         assertTrue(fixture.formReads.isEmpty())
+        assertTrue(fixture.writes.isEmpty())
+    }
+
+    @Test fun missingForumIdIsRecoveredFromThePostLink() = runBlocking {
+        val fixture = CommentForumFixture().apply { signIn(); requireForumId = true }
+        fixture.gateway.load(target.copy(forumId = null), "Reader")
+        assertEquals(2, fixture.formReads.size)
+        assertTrue(fixture.formReads.last().contains("f=428"))
         assertTrue(fixture.writes.isEmpty())
     }
 

@@ -7,10 +7,11 @@ enum class ForumCommentAction(val mode: String, val title: String) {
     Edit("edit", "Edit comment"), Delete("delete", "Delete comment"),
 }
 
-data class ForumCommentTarget(val topicId: Long, val postId: Long, val action: ForumCommentAction) {
+data class ForumCommentTarget(val topicId: Long, val postId: Long, val action: ForumCommentAction, val forumId: Long? = null) {
     init { require(topicId > 0 && postId > 0) }
 
-    val url: String get() = "https://forum.mobilism.org/posting.php?mode=${action.mode}&p=$postId"
+    val url: String get() = "https://forum.mobilism.org/posting.php?mode=${action.mode}" +
+        (forumId?.takeIf { it > 0 }?.let { "&f=$it" } ?: "") + "&p=$postId"
 
     fun accepts(url: String): Boolean = runCatching {
         val uri = URI(url)

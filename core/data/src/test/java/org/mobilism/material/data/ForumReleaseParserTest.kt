@@ -164,7 +164,7 @@ class ForumReleaseParserTest {
           <img src='https://images.example.org/avatar.png'>
           <div class='postbody'><div class='hidden-phone'><span class='muted'><em><a id='12016008'></a>Oct 9th, 2025, 6:01 pm</em></span></div>
             <div class='content'>Watch description<img src='//images.example.org/watch.png'>
-              <img class='smilies' src='/smile.png' alt='😊'>
+              <img src='./images/smilies/icon_smile.gif' alt='😊'>
               <span style='text-decoration: underline'>Download Instructions:</span><br>
               <span style='font-weight: bold'>Watch APK:</span><br>
               <a href='https://files.example.org/watch.apk'>https://files.example.org/wa ... .apk</a>

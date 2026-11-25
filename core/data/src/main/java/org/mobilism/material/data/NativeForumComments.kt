@@ -48,11 +48,27 @@ internal class NativeForumComments(private val context: Context, private val cli
     }
 
     override suspend fun load(target: ForumCommentTarget, username: String): CommentForm = withContext(Dispatchers.IO) {
+        var resolved = target
         var url = target.url.toHttpUrl()
         repeat(4) {
-            val page = policy.pacedRead { request(target, username, url) }
+            val page = try {
+                policy.pacedRead { request(resolved, username, url) }
+            } catch (failure: ApiFailure) {
+                if (failure.httpStatus != 404 || resolved.forumId != null || url != target.url.toHttpUrl()) throw failure
+                val permalink = "https://forum.mobilism.org/viewtopic.php?t=${target.topicId}&p=${target.postId}".toHttpUrl()
+                val topic = policy.pacedRead { request(target, username, permalink) }
+                val forumId = topic.document.select("a[href*=posting.php]").asSequence()
+                    .mapNotNull { permalink.resolve(it.attr("href")) }
+                    .filter { it.host == permalink.host && it.encodedPath == "/posting.php" &&
+                        it.queryParameter("p") == target.postId.toString() }
+                    .firstNotNullOfOrNull { it.queryParameter("f")?.toLongOrNull()?.takeIf { id -> id > 0 } }
+                    ?: throw failure
+                resolved = target.copy(forumId = forumId)
+                url = resolved.url.toHttpUrl()
+                return@repeat
+            }
             val next = page.redirect ?: guestLoginLink(target, url, page.document)
-                ?: return@withContext parse(target, username, page.document)
+                ?: return@withContext parse(resolved, username, page.document)
             if (next.encodedPath !in setOf("/ucp.php", "/posting.php")) unavailable()
             url = next
         }

@@ -6,6 +6,11 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.res.stringResource
+import org.mobilism.material.R
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -60,10 +65,10 @@ internal fun ForumCommentEditor(target: ForumCommentTarget, username: String, cu
         if (failure is CancellationException) throw failure
         challenge = failure is ApiFailure && failure.kind == FailureKind.Challenge
         error = when {
-            challenge -> "The forum requires a browser check before changing this comment."
-            failure is ApiFailure && failure.httpStatus == 404 -> "The forum could not find this comment's form (404)."
+            challenge -> context.getString(R.string.forum_comment_challenge)
+            failure is ApiFailure && failure.httpStatus == 404 -> context.getString(R.string.forum_comment_missing_form)
             failure is ApiFailure -> failure.message
-            else -> "Could not reach the forum. Check your connection and try again."
+            else -> context.getString(R.string.forum_comment_connection)
         }
     }
 
@@ -71,7 +76,7 @@ internal fun ForumCommentEditor(target: ForumCommentTarget, username: String, cu
         if (!edit && !attempt) {
             error = null
             challenge = false
-            if (gateway == null) error = "Comment editing is unavailable."
+            if (gateway == null) error = context.getString(R.string.forum_comment_unavailable)
             else try { form = gateway.load(target, username) }
             catch (failure: Exception) { failed(failure) }
         }
@@ -81,7 +86,7 @@ internal fun ForumCommentEditor(target: ForumCommentTarget, username: String, cu
     fun submitChange() {
         if (busy || attempt) return
         if (gateway == null) {
-            error = "Comment editing is unavailable."
+            error = context.getString(R.string.forum_comment_unavailable)
             return
         }
         busy = true
@@ -121,58 +126,59 @@ internal fun ForumCommentEditor(target: ForumCommentTarget, username: String, cu
             } finally { busy = false }
         }
     }
-    AlertDialog(onDismissRequest = dismiss, modifier = Modifier.testTag("forum-comment-editor"),
+    AlertDialog(onDismissRequest = dismiss, modifier = (if (edit) Modifier.padding(horizontal = 16.dp).widthIn(max = 640.dp).fillMaxWidth() else Modifier).testTag("forum-comment-editor"),
+        properties = DialogProperties(usePlatformDefaultWidth = !edit),
         title = { AppHeading(target.action.title, HeadingLevel.Section, style = MaterialTheme.typography.headlineSmall) },
         text = {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (edit) {
                     OutlinedTextField(draft, { draft = it }, Modifier.fillMaxWidth().testTag("edit-comment-text"),
-                        readOnly = busy || attempt, label = { Text("Comment") }, minLines = 3, maxLines = 8,
+                        readOnly = busy || attempt, label = { Text(context.getString(R.string.forum_comment_field)) }, minLines = 7, maxLines = 14,
                         shape = MaterialTheme.shapes.large)
                     review?.let {
-                        Text("The forum copy differs from the comment you opened. Review it before replacing it with your changes.")
+                        Text(context.getString(R.string.forum_comment_conflict))
                         Text(it.message, style = MaterialTheme.typography.bodySmall)
-                        AppTextButton("Use forum copy", { draft = it.message }, enabled = !busy && !attempt)
+                        AppTextButton(context.getString(R.string.forum_comment_use_forum), { draft = it.message }, enabled = !busy && !attempt)
                     }
                 } else if (initialText.isNotBlank()) Text(initialText, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 if (loaded?.needsLogin == true) {
-                    Text("Sign in to the forum as $username to change this comment.")
+                    Text(context.getString(R.string.forum_comment_sign_in_as, username))
                     OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), singleLine = true,
-                        enabled = !busy, label = { Text("Forum password") }, visualTransformation = PasswordVisualTransformation(),
+                        enabled = !busy, label = { Text(context.getString(R.string.forum_comment_password)) }, visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), shape = MaterialTheme.shapes.large)
-                } else if (!edit && loaded != null && !attempt) Text("Delete this comment? This cannot be undone.")
+                } else if (!edit && loaded != null && !attempt) Text(context.getString(R.string.forum_comment_confirm_delete))
                 if (busy || (!edit && loaded == null && error == null && !attempt)) LoadingState(
-                    if (!busy) "Loading comment…" else if (loaded?.needsLogin == true) "Signing in…"
-                    else if (edit) "Saving comment…" else "Deleting comment…")
-                if (attempt && !busy) Text("The forum did not confirm the change. Check the comment before trying again.")
+                    if (!busy) context.getString(R.string.forum_comment_loading) else if (loaded?.needsLogin == true) context.getString(R.string.forum_comment_signing_in)
+                    else if (edit) context.getString(R.string.forum_comment_saving) else context.getString(R.string.forum_comment_deleting))
+                if (attempt && !busy) Text(context.getString(R.string.forum_comment_unconfirmed))
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                if (challenge) AppTextButton("Open in external browser", {
+                if (challenge) AppTextButton(context.getString(R.string.forum_comment_browser), {
                     try {
                         val view = Intent(Intent.ACTION_VIEW, Uri.parse(target.url)).addCategory(Intent.CATEGORY_BROWSABLE)
-                        val chooser = Intent.createChooser(view, "Open in external browser").putExtra(
+                        val chooser = Intent.createChooser(view, context.getString(R.string.forum_comment_browser)).putExtra(
                             Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(ComponentName(context, org.mobilism.material.MainActivity::class.java)))
                         context.startActivity(chooser)
                         openedBrowser = true
-                    } catch (_: ActivityNotFoundException) { error = "No browser is available." }
+                    } catch (_: ActivityNotFoundException) { error = context.getString(R.string.forum_comment_no_browser) }
                 })
             }
         },
         confirmButton = {
             when {
-                attempt && !busy -> AppTextButton("Check comment", { onClose(true) })
-                !edit && loaded == null && error != null -> AppTextButton("Try again", { loadKey++ })
+                attempt && !busy -> AppTextButton(context.getString(R.string.forum_comment_check_one), { onClose(true) })
+                !edit && loaded == null && error != null -> AppTextButton(context.getString(R.string.forum_comment_retry), { loadKey++ })
                 edit || loaded != null -> ExpressiveButton(onClick = ::submitChange,
                     enabled = !busy && !attempt && (!edit || draft.isNotBlank() && draft != initialText) &&
                         (loaded?.needsLogin != true || password.isNotEmpty())) {
                     Text(when {
-                        loaded?.needsLogin == true -> if (edit) "Sign in and update" else "Sign in"
-                        edit -> "Update"
-                        else -> "Delete"
+                        loaded?.needsLogin == true -> if (edit) context.getString(R.string.forum_comment_sign_in_update) else context.getString(R.string.forum_comment_sign_in)
+                        edit -> context.getString(R.string.forum_comment_update)
+                        else -> context.getString(R.string.forum_comment_delete)
                     })
                 }
             }
-        }, dismissButton = { AppTextButton("Cancel", dismiss, enabled = !busy) })
-    if (discard) AlertDialog(onDismissRequest = { discard = false }, title = { Text("Discard changes?") },
-        confirmButton = { AppTextButton("Discard", { onClose(openedBrowser) }) },
-        dismissButton = { AppTextButton("Keep editing", { discard = false }) })
+        }, dismissButton = { AppTextButton(context.getString(R.string.forum_comment_cancel), dismiss, enabled = !busy) })
+    if (discard) AlertDialog(onDismissRequest = { discard = false }, title = { Text(context.getString(R.string.forum_comment_discard_question)) },
+        confirmButton = { AppTextButton(context.getString(R.string.forum_comment_discard), { onClose(openedBrowser) }) },
+        dismissButton = { AppTextButton(context.getString(R.string.forum_comment_keep), { discard = false }) })
 }

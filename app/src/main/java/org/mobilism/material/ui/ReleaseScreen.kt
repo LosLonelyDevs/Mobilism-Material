@@ -126,7 +126,7 @@ fun ReleaseScreen(
     var commentAction by rememberSaveable(release?.id) { mutableStateOf(ForumCommentAction.Edit.name) }
     if (release != null && auth is AuthState.SignedIn) managedCommentId?.let { postId ->
         val comment = state.comments.items.firstOrNull { it.id == postId && canManageComment(it, auth) }
-        if (comment != null) ForumCommentEditor(ForumCommentTarget(release.id, postId, ForumCommentAction.valueOf(commentAction)),
+        if (comment != null) ForumCommentEditor(ForumCommentTarget(release.id, postId, ForumCommentAction.valueOf(commentAction), release.categoryId),
             auth.username, comment.contentHtml) { refresh ->
             managedCommentId = null
             if (refresh) onRefreshComments()
@@ -186,7 +186,7 @@ fun ReleaseScreen(
     val refresh = { if (canRefresh) onRefresh() }
     gallery?.let { (urls, index) -> ReleaseImageViewer(urls, index, onDismiss = { gallery = null }) }
     if (state.composer.open && release != null && auth is AuthState.SignedIn) {
-        ReleaseCommentComposer(state.composer, auth.username, ReleaseTitles.parse(release.title, release.section).name,
+        ReleaseCommentComposer(state.composer,
             onEditComment, onPostComment, onCloseComposer,
             onCheckComments = { onCloseComposer(); onRefreshComments() }, onRemoveReply = onRemoveReply)
     }
@@ -279,7 +279,7 @@ fun ReleaseScreen(
             }
             val list = androidx.compose.foundation.lazy.rememberLazyListState()
             CommentJumpList(release?.id, ordered, commentRows, collapsedComments, { collapsedComments = it }, list,
-                firstRow = { list.layoutInfo.totalItemsCount - commentRows.size - 1 },
+                firstRow = { list.layoutInfo.totalItemsCount - commentRows.size - if (commentRows.isEmpty()) 1 else 2 },
                 modifier = Modifier.widthIn(max = 840.dp).fillMaxSize().testTag("release-content"),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(24.dp),
             ) { highlight, followingLink ->
@@ -362,17 +362,18 @@ fun ReleaseScreen(
                             }
                         }
                     }
-                    item("comments-heading") {
-                        val label = if (auth !is AuthState.SignedIn) resources.getString(R.string.release_sign_in_comment)
+                    val label = if (auth !is AuthState.SignedIn) resources.getString(R.string.release_sign_in_comment)
                             else if (state.composer.draft.isNotBlank()) resources.getString(R.string.release_continue_comment) else resources.getString(R.string.release_comment)
-                        val write = if (auth is AuthState.SignedIn) onWriteComment else onSignIn
+                    val write = if (auth is AuthState.SignedIn) onWriteComment else onSignIn
+                    item("comments-heading") {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Column {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     AppHeading(resources.getString(R.string.release_comments), HeadingLevel.Section, Modifier.weight(1f),
                                         style = if (cleanUpHeadings) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge)
-                                    if (cleanUpHeadings) AppIconButton(Icons.Outlined.ChatBubbleOutline, label, write,
-                                        Modifier.testTag("write-comment"))
+                                    if (cleanUpHeadings) androidx.compose.material3.FilledTonalIconButton(write, Modifier.testTag("write-comment")) {
+                                        Icon(Icons.Outlined.ChatBubbleOutline, label)
+                                    }
                                 }
                                 CommentSortMenu(sort, maxOf(release.replies, state.comments.items.size.toLong())) { sort = sort.select(it) }
                             }
@@ -410,6 +411,12 @@ fun ReleaseScreen(
                             comments.canLoadMore && followingLink -> org.mobilism.material.designsystem.AppTextButton(resources.getString(R.string.release_load_more_comments), onMoreComments)
                             comments.canLoadMore -> LaunchedEffect(comments.page) { onMoreComments() }
                             comments.items.isEmpty() -> Text(resources.getString(R.string.release_empty_comments), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    if (commentRows.isNotEmpty()) item("comments-write-footer") {
+                        ExpressiveButton(write, Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("write-comment-footer"),
+                            colors = ButtonDefaults.filledTonalButtonColors()) {
+                            Icon(Icons.Outlined.ChatBubbleOutline, label)
                         }
                     }
                 }

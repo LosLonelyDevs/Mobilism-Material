@@ -26,7 +26,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
+import org.mobilism.material.R
 import androidx.compose.ui.unit.dp
 import org.mobilism.material.data.ReleaseComments
 import org.mobilism.material.designsystem.AppTextButton
@@ -36,7 +37,7 @@ import org.mobilism.material.designsystem.LoadingState
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ReleaseCommentComposer(
-    state: CommentComposerState, username: String, releaseTitle: String,
+    state: CommentComposerState,
     onEdit: (String) -> Unit, onPost: () -> Unit, onDismiss: () -> Unit, onCheckComments: () -> Unit,
     onRemoveReply: () -> Unit = {},
 ) {
@@ -51,14 +52,8 @@ internal fun ReleaseCommentComposer(
     ) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)
             .padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                AppHeading(if (state.replyTo == null) "Write a comment" else "Reply to comment",
+            AppHeading(if (state.replyTo == null) stringResource(R.string.forum_comment_write) else stringResource(R.string.forum_comment_reply),
                     HeadingLevel.Page, style = MaterialTheme.typography.headlineSmall)
-                Text(releaseTitle, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Posting publicly as $username", style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
             state.replyTo?.let { target ->
                 QuotedReply(target.author, target.html, "https://forum.mobilism.org/",
                     onRemove = onRemoveReply.takeUnless { state.posting })
@@ -66,28 +61,26 @@ internal fun ReleaseCommentComposer(
             OutlinedTextField(
                 value = state.draft, onValueChange = onEdit, readOnly = state.posting,
                 modifier = Modifier.fillMaxWidth().testTag("comment-draft"),
-                label = { Text("Comment") }, placeholder = { Text("Join the conversation") },
+                label = { Text(stringResource(R.string.forum_comment_field)) }, placeholder = { Text(stringResource(R.string.forum_comment_placeholder)) },
                 minLines = 4, maxLines = 8, shape = MaterialTheme.shapes.large,
-                supportingText = { Text("${state.draft.length} / ${ReleaseComments.MAX_LENGTH}") },
+                supportingText = { Text(stringResource(R.string.forum_comment_length, state.draft.length, ReleaseComments.MAX_LENGTH)) },
             )
             state.error?.let {
                 Column(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
                     Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-                    AppTextButton("Check comments", onCheckComments, enabled = !state.posting)
+                    AppTextButton(stringResource(R.string.forum_comment_check_many), onCheckComments, enabled = !state.posting)
                 }
             }
-            if (state.posting) LoadingState("Posting comment…", Modifier.fillMaxWidth())
+            if (state.posting) LoadingState(stringResource(R.string.forum_comment_posting), Modifier.fillMaxWidth())
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                AppTextButton("Close", onDismiss, enabled = !state.posting)
+                AppTextButton(stringResource(R.string.forum_comment_close), onDismiss, enabled = !state.posting)
                 ExpressiveButton(onPost, Modifier.weight(1f).testTag("post-comment"),
                     enabled = !state.posting && state.draft.isNotBlank() && state.draft.length <= ReleaseComments.MAX_LENGTH) {
                     Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Text(if (state.replyTo == null) "Post comment" else "Post reply", Modifier.padding(start = 8.dp))
+                    Text(if (state.replyTo == null) stringResource(R.string.forum_comment_post) else stringResource(R.string.forum_comment_post_reply), Modifier.padding(start = 8.dp))
                 }
             }
-            Text("Your draft stays here when you close this sheet.", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -148,7 +148,7 @@ internal object ForumReleaseParser {
     private fun content(post: Element): Element {
         val content = post.selectFirst(".postbody .content")?.clone() ?: invalid()
         content.select("script, style, iframe, form").remove()
-        content.select("img.smilies").forEach { it.replaceWith(TextNode(it.attr("alt"))) }
+        content.select("img.smilies, img[src*=images/smilies/][alt]").forEach { it.replaceWith(TextNode(it.attr("alt"))) }
         content.select("a[href]").forEach { link ->
             val url = webUrlOrNull(link.absUrl("href"))
             if (url == null) link.removeAttr("href") else link.attr("href", url)
