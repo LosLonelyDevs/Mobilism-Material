@@ -26,7 +26,7 @@ const ranks = `WITH selected AS (
   coalesce(sum(measured_misses),0)::text AS "measuredMisses",
   coalesce(jsonb_object_agg(app_key, client_version) FILTER (WHERE client_version IS NOT NULL AND app_key IN (
     SELECT item->>'key' FROM latest_apps_cache CROSS JOIN LATERAL jsonb_array_elements(items) item WHERE singleton)), '{}') AS "catalogClients",
-  coalesce(jsonb_agg(jsonb_build_object('key', app_key, 'name', name, 'requestedAt', last_requested_at, 'clientVersion', client_version)
+  coalesce(jsonb_agg(jsonb_build_object('key', app_key, 'name', name, 'requestedAt', last_requested_at, 'clientVersion', client_version, 'hits', hits::text)
     ORDER BY recent_rank) FILTER (WHERE recent_rank <= 15 AND last_requested_at IS NOT NULL), '[]') AS recent,
   (SELECT jsonb_build_object('hits', coalesce(sum(hits),0)::text, 'misses', coalesce(sum(misses),0)::text,
     'measuredMisses', coalesce(sum(measured_misses),0)::text,

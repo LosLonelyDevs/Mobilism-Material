@@ -239,7 +239,7 @@ test('each ranking includes its own top 20 apps without truncating lookup totals
     { method: 'GET', url: '/api/following-cache', headers: {} }, res);
   assert.equal(res.body.recentApps.length, 15);
   assert.equal(new Set(res.body.recentApps.map(row => row.name)).size, 15);
-  assert.deepEqual(res.body.recentApps[0], { name: 'App 17', requestedAt: now + 20, cachedVersion: null, clientVersion: null });
+  assert.deepEqual(res.body.recentApps[0], { name: 'App 17', requestedAt: now + 20, cachedVersion: null, clientVersion: null, hits: '0' });
 });
 
 test('a search contribution fills a miss and dates include the current partial UTC day', async () => {
@@ -276,6 +276,9 @@ test('a search contribution fills a miss and dates include the current partial U
   assert.equal((await report(yesterday, yesterday)).todayLookups, null);
   assert.equal(range.cachedApps, 2);
   assert.equal(range.followRankings.find(r => r.name === 'Facebook').cachedVersion, '2.0');
+  const expired = (await report(day, day, now + 86401)).recentApps.find(row => row.name === 'Facebook');
+  assert.equal(expired.cachedVersion, null);
+  assert.equal(expired.hits, '4');
   assert.deepEqual(range.catalog, [{ name: 'Facebook', version: '2.0', clientVersion: null }, { name: 'App 1', version: '1.1', clientVersion: null }]);
   const clientHeaders = version => ({ 'x-following-check': 'manual',
     'user-agent': `Example prefix MobilismMaterial/${version} (Android; build 27)` });

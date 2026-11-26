@@ -22,16 +22,16 @@ function CacheCard({ title, subtitle, defaultOpen = false, children }) {
   </section>;
 }
 
-function AppName({ app }) {
+function AppName({ app, children }) {
   const category = app.category?.name ?? (app.category?.id ? 'Forum ' + app.category.id : null);
-  return <td>{app.name}{category && <small className="cache-app-category">{category}</small>}</td>;
+  return <td>{app.name}{category && <small className="cache-app-category">{category}</small>}{children}</td>;
 }
 
 function Rankings({ rows, title, rank, count, displayCount = count, label }) {
   const sorted = rows.filter(row => row[rank] <= followingRankingLimit && BigInt(row[count]) > 0n)
     .sort((a, b) => a[rank] - b[rank]);
   return <CacheCard title={title} defaultOpen>
-    {sorted.length ? <table className="admin-traffic-table cache-rankings"><thead><tr><th>App</th><th>Cached version</th><th>Client version</th><th>{label}</th></tr></thead>
+    {sorted.length ? <table className="admin-traffic-table cache-rankings"><thead><tr><th>App</th><th>In cache now</th><th>Client version</th><th>{label}</th></tr></thead>
       <tbody>{sorted.map(row => <tr key={row[rank]}><AppName app={row} /><td>{row.cachedVersion ?? 'Not cached'}</td>
         <td className="client-version">{row.clientVersion ?? 'Unknown'}</td>
         <td>{BigInt(row[displayCount]) > 0n ? number(row[displayCount]) : '—'}</td></tr>)}</tbody></table>
@@ -40,10 +40,12 @@ function Rankings({ rows, title, rank, count, displayCount = count, label }) {
 }
 
 function RecentApps({ apps }) {
-  return <CacheCard title="Most recently requested apps">
+  return <CacheCard title="Most recently requested apps" subtitle="Cache hits cover the selected dates.">
     {apps.length ? <table className="admin-traffic-table cache-rankings recent-apps">
-      <thead><tr><th>App</th><th>Cached version</th><th>Client version</th><th>Requested (UTC)</th></tr></thead>
-      <tbody>{apps.map(app => <tr key={app.name}><AppName app={app} /><td>{app.cachedVersion ?? 'Not cached'}</td>
+      <thead><tr><th>App</th><th>In cache now</th><th>Client version</th><th>Requested (UTC)</th></tr></thead>
+      <tbody>{apps.map(app => <tr key={app.name}><AppName app={app}>
+        {app.hits != null && <small className="cache-app-category">{number(app.hits)} {String(app.hits) === '1' ? 'hit' : 'hits'}</small>}
+      </AppName><td>{app.cachedVersion ?? 'Not cached'}</td>
         <td className="client-version">{app.clientVersion ?? 'Unknown'}</td>
         <td>{requestTime.format(app.requestedAt * 1000)}</td></tr>)}</tbody>
     </table> : <p className="muted">No timestamped requests for these dates.</p>}
@@ -80,7 +82,7 @@ function LookupSummary({ report }) {
   return <section className="admin-panel"><h2>Cache lookups</h2>
     <p className="lookup-period">{partial ? `Includes today through ${time} UTC.` : 'Selected UTC dates.'}</p>
     <div className="destination-metrics">
-      {[[number(report.cachedApps), 'Cached apps'], [number(hits), 'Hits'], [number(misses), 'Misses'],
+      {[[number(report.cachedApps), 'Cached apps now'], [number(hits), 'Hits'], [number(misses), 'Misses'],
         [rate(hits, total), 'Hit rate'], [rate(measured, total), 'Miss rate']].map(([value, label]) =>
         <div key={label}><span className="metric-value">{value}</span><span className="muted">{label}</span></div>)}
     </div>
