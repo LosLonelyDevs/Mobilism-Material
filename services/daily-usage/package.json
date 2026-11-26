@@ -16,6 +16,7 @@
     "@nozbe/microfuzz": "1.0.0",
     "@peculiar/asn1-android": "2.11.1",
     "@peculiar/asn1-schema": "2.11.1",
+    "@vercel/functions": "3.11.4",
     "pkijs": "3.4.3",
     "react": "19.2.4",
     "react-dom": "19.2.4"

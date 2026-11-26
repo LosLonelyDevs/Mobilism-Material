@@ -1,7 +1,8 @@
 import { query } from '../lib/database.js';
 import { authorizeAppWrite, enrollmentEnabled } from '../lib/app-writes.js';
 import { respond } from '../lib/protocol.js';
-import { appKey, discoverApps, lookup, parseLookup, publicRelease, retainedCatalogSql, retentionSecondsSql, visibleSnapshot } from '../lib/follow-lookup.js';
+import { appKey, discoverApps, installedApps, lookup, parseLookup, publicRelease, retainedCatalogSql, retentionSecondsSql, visibleSnapshot } from '../lib/follow-lookup.js';
+import { publicReadCache } from '../lib/public-cache.js';
 import { defaultStorage } from '../public/config-schema.js';
 
 const fields = ['id', 'title', 'name', 'version', 'postedAt', 'author'];
@@ -116,7 +117,8 @@ async function savePage(database, page, firstPage, now) {
     JSON.stringify(Object.fromEntries(items.filter(item => item.topicViews).map(item => [item.id, item.topicViews])))]);
 }
 
-export function createHandler(database = query, clock = () => Math.floor(Date.now() / 1000), env = process.env) {
+export function createHandler(database = query, clock = () => Math.floor(Date.now() / 1000), env = process.env, store) {
+  const cached = publicReadCache(clock, store);
   return async (req, res) => {
     if (req.method === 'GET') {
       try {
@@ -126,18 +128,22 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
         const installed = params.get('view') === 'installed';
         const safe = params.get('safe') === '1';
         if ((discover || installed) && !['0', '1'].includes(params.get('safe'))) return respond(res, 400, { error: 'Invalid visibility' });
-        const { observedAt, items: visible, lifetime } = discover
-          ? await discoverApps(database, now, safe) : await visibleSnapshot(database, now, !installed);
-        const items = installed ? visible.filter(item => !safe || item.adultFiltered).map(({ id, name, version, packageName, adultFiltered }) =>
-          ({ id, name, version, ...(packageName && { packageName }), adultFiltered })) : visible.map(item =>
-            discover && item.artworkId ? { ...publicRelease(item), artworkId: item.artworkId } : publicRelease(item));
-        const ttl = Math.max(0, Math.min(discover || installed ? 300 : 60, ...visible.map(item => (item.lastSeen ?? item.postedAt) + lifetime - now)));
+        const key = installed ? 'installed-' + safe : discover ? 'discover-' + safe : 'latest';
+        const { body, expiresAt } = await cached(key, async () => {
+          if (installed) return installedApps(database, now, safe);
+          const { observedAt, items: visible, lifetime } = discover
+            ? await discoverApps(database, now, safe) : await visibleSnapshot(database, now, true);
+          const items = visible.map(item => discover && item.artworkId
+            ? { ...publicRelease(item), artworkId: item.artworkId } : publicRelease(item));
+          const expiresAt = Math.min(now + (discover ? 300 : 60), ...visible.map(item => (item.lastSeen ?? item.postedAt) + lifetime));
+          return { body: { observedAt, items, ...(discover && { collection: 'discover' }) }, expiresAt };
+        });
+        const ttl = Math.max(0, expiresAt - clock());
         res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=' + ttl);
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Cache-Control', 'public, max-age=' + ttl);
         res.statusCode = 200;
-        return res.end(JSON.stringify({ observedAt: installed ? now : observedAt, items,
-          ...(discover && { collection: 'discover' }), ...(installed && { collection: 'installed' }) }));
+        return res.end(JSON.stringify(body));
       } catch { return respond(res, 503, { error: 'Cache unavailable' }); }
     }
     if (req.method !== 'POST') {

@@ -52,6 +52,21 @@ export function publicRelease({ id, title, name, version, postedAt, author, adul
   return { id, title, name, version, postedAt, author, adultFiltered, ...(category && { category }), ...(packageName && { packageName }) };
 }
 
+// Project the phone's inventory in Postgres so titles, artwork and internal metadata stay off the wire.
+export async function installedApps(database, now, safe) {
+  const [row] = await database(`WITH snapshot AS (
+      SELECT items, ${retentionSecondsSql} AS lifetime FROM latest_apps_cache WHERE singleton
+    ), visible AS (
+      SELECT item, position, coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) + lifetime AS expires
+      FROM snapshot CROSS JOIN LATERAL jsonb_array_elements(items) WITH ORDINALITY AS entry(item, position)
+      WHERE NOT item ? 'hiddenAt' AND (NOT $2::boolean OR (item->>'adultFiltered')::boolean)
+    ) SELECT coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object('id', item->'id', 'name', item->'name',
+      'version', item->'version', 'packageName', item->'packageName', 'adultFiltered', item->'adultFiltered'))
+      ORDER BY position), '[]'::jsonb) AS items, least($1::bigint + 300, min(expires)) AS expires
+      FROM visible WHERE expires > $1`, [now, safe]);
+  return { body: { observedAt: now, items: row.items, collection: 'installed' }, expiresAt: Number(row.expires) };
+}
+
 // One shared ranking for every phone. Each installation counts at most once per app per UTC day.
 export async function discoverApps(database, now, safe) {
   const day = new Date(now * 1000).toISOString().slice(0, 10);

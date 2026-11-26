@@ -1,5 +1,6 @@
 import { defaultConfig, validateConfig } from '../public/config-schema.js';
 import { createHash } from 'node:crypto';
+import { expirePublicConfig } from './public-cache.js';
 
 export function publicConfig(config) {
   function audience(rule) {
@@ -21,16 +22,18 @@ export async function readConfig(database) {
   return validateConfig({ ...config, revision: rows[0].revision });
 }
 
-export async function saveConfig(database, config) {
+export async function saveConfig(database, config, expire = expirePublicConfig) {
   const rows = await database(`INSERT INTO app_control (id, revision, config, updated_at)
     SELECT 1, 1, $2::jsonb, CURRENT_TIMESTAMP WHERE $1::integer = 0
     ON CONFLICT (id) DO UPDATE SET revision = app_control.revision + 1,
       config = EXCLUDED.config, updated_at = CURRENT_TIMESTAMP
     WHERE app_control.revision = $1::integer RETURNING revision`, [config.revision, JSON.stringify(config)]);
-  if (rows.length) return { ...config, revision: rows[0].revision };
-  if (config.revision === 0) return null;
-  const updated = await database(`UPDATE app_control SET revision = revision + 1, config = $2::jsonb,
+  let saved = rows[0];
+  if (!saved && config.revision !== 0) [saved] = await database(`UPDATE app_control SET revision = revision + 1, config = $2::jsonb,
     updated_at = CURRENT_TIMESTAMP WHERE id = 1 AND revision = $1::integer RETURNING revision`,
   [config.revision, JSON.stringify(config)]);
-  return updated.length ? { ...config, revision: updated[0].revision } : null;
+  if (!saved) return null;
+  try { await expire(); }
+  catch { console.warn('Public configuration cache invalidation failed. Cached entries expire within 15 minutes.'); }
+  return { ...config, revision: saved.revision };
 }

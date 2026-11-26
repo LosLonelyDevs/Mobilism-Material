@@ -94,6 +94,35 @@ test('Installed shares current versions without receiving device packages or cou
   assert.equal((await query('SELECT * FROM daily_followed_apps')).length, 0);
 });
 
+test('Installed reads only inventory fields and reuses each visibility variant until the earliest expiry', async () => {
+  await post([{ ...item(10), title: '界'.repeat(512), artworkId: 'cover', topicViews: 100 }], true, true);
+  await post([item(11)]);
+  let clock = now, reads = 0;
+  const entries = new Map();
+  const origin = async (sql, values) => {
+    reads++;
+    const rows = await query(sql, values);
+    assert.ok(rows[0].items.every(i => Object.keys(i).every(k => ['id', 'name', 'version', 'packageName', 'adultFiltered'].includes(k))));
+    return rows;
+  };
+  const service = createHandler(origin, () => clock, {}, () => entries);
+  const get = async safe => {
+    const res = { headers: {}, setHeader(k, v) { this.headers[k] = v; }, end(body) { this.body = JSON.parse(body); } };
+    await service({ method: 'GET', url: '/?view=installed&safe=' + safe }, res);
+    assert.equal(res.statusCode, 200);
+    return res;
+  };
+  assert.equal((await get(0)).body.items.length, 2);
+  assert.equal((await get(1)).body.items.length, 1);
+  clock += 299;
+  assert.equal((await get(1)).headers['Cache-Control'], 'public, max-age=1');
+  assert.equal(reads, 2);
+  clock = item(10).postedAt + 86400 - 2;
+  assert.equal((await get(1)).headers['Cache-Control'], 'public, max-age=2');
+  clock += 2;
+  assert.equal((await get(1)).body.items.length, 0);
+});
+
 test('Discover ranks unique cached apps by recent follow demand and only returns safe sightings when requested', async () => {
   const apps = Array.from({ length: 5 }, (_, index) => ({ ...item(index + 1), category: { id: 20, name: 'Utilities' } }));
   await post(apps.slice(0, 4), true, true);

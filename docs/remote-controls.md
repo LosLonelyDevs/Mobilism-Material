@@ -162,6 +162,8 @@ The app keeps its hardcoded defaults. Missing or invalid fields fall back indivi
 
 Open apps check every five minutes. Schedules update within 30 seconds while foregrounded. Configuration expires after 15 minutes without a successful refresh. Foregrounding checks freshness without hammering the service. Required notices include **Refresh notice**, limited to one attempt per 15 seconds. An outage releases the notice gate and restores defaults.
 
+Vercel shares successful public configuration reads until the next UTC quarter hour. Saving a configuration invalidates its regional and CDN copies. If invalidation fails, copies expire at the same quarter-hour boundary. Dashboard settings read directly from Postgres. Latest, Discover and Installed share their public results within their existing freshness windows.
+
 Remote controls work independently of anonymous usage reporting and the user's optional update alerts. They use the service configured by `DAILY_USAGE_ENDPOINT`. Builds without that endpoint keep their defaults and show no remote notices.
 
 ### Release images

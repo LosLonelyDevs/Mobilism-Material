@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { createHandler as publicHandler } from '../api/app-config.js';
 import { createHandler as adminHandler } from '../api/control-config.js';
 import { defaultConfig, validateConfig, limitFields } from '../public/config-schema.js';
+import { saveConfig } from '../lib/app-config.js';
 
 let db;
 const query = async (sql, values) => (await db.query(sql, values)).rows;
@@ -27,6 +28,29 @@ test('empty database returns no overrides and no notices publicly', async () => 
   assert.equal(result.statusCode, 200);
   assert.deepEqual(result.body, defaultConfig());
   assert.equal(result.headers['Cache-Control'], 'no-store');
+});
+
+test('public config shares one origin read per window and expires on edit', async () => {
+  const entries = new Map();
+  let reads = 0, clock = 9000;
+  const counted = (...args) => { reads++; return query(...args); };
+  const service = () => publicHandler(counted, () => clock, () => entries);
+  const first = service();
+  const results = await Promise.all(Array.from({ length: 100 }, () => call(first)));
+  assert.equal(reads, 1);
+  assert.ok(results.every(r => r.headers['Vercel-CDN-Cache-Control'] === 'public, s-maxage=900'));
+  clock += 899;
+  assert.equal((await call(service())).headers['Vercel-CDN-Cache-Control'], 'public, s-maxage=1');
+  assert.equal(reads, 1);
+  clock++;
+  await call(service());
+  assert.equal(reads, 2);
+  let invalidations = 0;
+  const expire = () => { invalidations++; entries.clear(); };
+  await saveConfig(query, defaultConfig(), expire);
+  assert.equal((await call(service())).body.revision, 1);
+  assert.equal(await saveConfig(query, defaultConfig(), expire), null);
+  assert.equal(invalidations, 1);
 });
 test('only an admin with Controls can publish image switches or a new retry generation', async () => {
   const handler = user => adminHandler(query, () => user);
@@ -196,6 +220,7 @@ test('notices reject unsafe links, broken targeting, schedules, and missing upda
 test('database and malformed request errors never expose private details', async () => {
   const failing = () => { throw new Error('private connection secret'); };
   const publicResult = await call(publicHandler(failing));
+  assert.equal(publicResult.headers['Vercel-CDN-Cache-Control'], undefined);
   assert.equal(publicResult.statusCode, 503); assert.ok(!JSON.stringify(publicResult.body).includes('secret'));
   assert.equal((await call(adminHandler(query, () => true), { method: 'PUT', body: '{' })).statusCode, 400);
   assert.equal((await call(adminHandler(query, () => true), { method: 'PUT', body: 'x'.repeat(65537) })).statusCode, 413);
