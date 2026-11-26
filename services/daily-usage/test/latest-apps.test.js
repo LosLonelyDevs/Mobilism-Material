@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { catalogCapacity, createHandler } from '../api/latest-apps.js';
-import { latestFeedSize, visibleSnapshot } from '../lib/follow-lookup.js';
+import { catalogByteLimit, categoryTopByteLimit, latestFeedSize, visibleSnapshot } from '../lib/follow-lookup.js';
+import { cleanReports } from '../lib/database.js';
 import { createHandler as followingHandler } from '../api/following-cache.js';
 import { randomUUID } from 'node:crypto';
 
@@ -312,6 +313,32 @@ test('paging past a topic cannot evict it, and other fresh topics do not extend 
   assert.equal(before.body.items.length, 10);
   assert.match(before.headers['Cache-Control'], /max-age=1$/);
   assert.equal((await call('GET', null, query, now + 86400)).body.items.length, 5);
+});
+
+test('uploads and idle cleanup bound stored UTF-8 bytes and preserve feed freshness', async () => {
+  const entries = Array.from({ length: 800 }, (_, i) => ({
+    ...item(i + 1), title: '界'.repeat(512), key: 'app ' + (i + 1), lastSeen: now,
+  }));
+  const chart = entries.slice(0, 250);
+  const seed = () => query('UPDATE latest_apps_cache SET items=$1::jsonb, category_top=$2::jsonb, observed_at=$3',
+    [JSON.stringify(entries), JSON.stringify(chart), now]);
+  await seed();
+  await cleanReports(query, now);
+  const snapshot = () => visibleSnapshot(query, now, false, true);
+  const trimmed = await snapshot();
+  assert.ok(trimmed.items.length >= 500 && trimmed.items.length < entries.length);
+  assert.equal(trimmed.items[0].id, 800);
+  assert.equal(trimmed.observedAt, now);
+  assert.ok(trimmed.storageBytes.catalog <= catalogByteLimit);
+  assert.ok(trimmed.storageBytes.categoryTop > 2 && trimmed.storageBytes.categoryTop <= categoryTopByteLimit);
+  await seed();
+  assert.equal((await post([item(801)])).statusCode, 200);
+  assert.ok((await snapshot()).storageBytes.catalog <= catalogByteLimit);
+  await cleanReports(query, now + 86401);
+  const expired = await snapshot();
+  assert.equal(expired.storageBytes.catalog, 2);
+  assert.equal(expired.storageBytes.categoryTop, 2);
+  assert.equal(expired.observedAt, now);
 });
 
 test('changing storage policy trims on the next upload and keeps the published snapshot bounded', async () => {

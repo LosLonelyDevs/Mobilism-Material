@@ -8,6 +8,7 @@ import calendarMarkup from './report-calendar.html?raw';
 
 const calendarHtml = { __html: calendarMarkup };
 const number = value => BigInt(value).toLocaleString();
+const cacheSize = bytes => bytes < 1024 ? bytes + ' B' : (bytes / 1024).toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' KiB';
 const rate = (count, total) => total ? percentage(count, total) + '%' : '—';
 const requestTime = new Intl.DateTimeFormat(undefined, {
   timeZone: 'UTC', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -125,7 +126,7 @@ function StorageControls({ settings, saving, save }) {
       <InputField label="Retention (hours)" help="6 to 72 hours from the last sighting. Default 24." type="number" min={6} max={72} step={1}
         value={hours} onChange={event => setHours(event.target.value)} />
     </div>
-    <p className="muted">The newest 500 apps keep their slots. Recent requests determine which other apps stay.</p>
+    <p className="muted">The newest 500 apps have priority. Recent requests determine which other apps stay.</p>
     <Button disabled={saving || !dirty || !validStorage(storage)} onClick={() => save({ storage })}>Save cache policy</Button>
   </div>;
 }
@@ -166,6 +167,8 @@ export default function FollowingCache({ title }) {
       !report.available ? <p>Available with stable v0.1.24 or later.</p> : <>
         <LookupSummary report={report} />
         {report.canEditStorage && <CacheCard title="Cache storage" subtitle={`${number(report.storage.capacity)} apps · ${report.storage.retentionHours} hours`}>
+          {report.storageBytes && <p>Stored JSON · Following {cacheSize(report.storageBytes.catalog)} / {cacheSize(report.storageBytes.catalogLimit)}
+            {' · '}Category Top {cacheSize(report.storageBytes.categoryTop)} / {cacheSize(report.storageBytes.categoryTopLimit)}</p>}
           <StorageControls key={JSON.stringify(report.storage)} settings={report.storage} saving={saving} save={changeSetting} />
         </CacheCard>}
         <div role="status" aria-live="polite">{saving ? 'Saving…' : status}</div>

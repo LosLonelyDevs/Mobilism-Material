@@ -60,7 +60,7 @@ export function createHandler(database = query, session = req => sessionUser(req
           return respond(res, 400, { error: 'Invalid date range' });
         if (!available) return respond(res, 200, { available: false });
         const [cacheUsage, [totals], snapshot, config] = await Promise.all([database(rates, [from, to]), database(ranks, [from, to, followingRankingLimit, today]),
-          visibleSnapshot(database, Math.floor(asOf.getTime() / 1000)), readConfig(database)]);
+          visibleSnapshot(database, Math.floor(asOf.getTime() / 1000), false, true), readConfig(database)]);
         const apps = new Map(snapshot.items.map(item => [item.key, item]));
         const { rankings, recent, todayLookups, catalogClients, ...lookups } = totals;
         const withCachedApp = ({ key, ...row }) => {
@@ -71,7 +71,7 @@ export function createHandler(database = query, session = req => sessionUser(req
           cacheUsage, lookups, todayLookups: to === today ? todayLookups : null, followRankings: rankings.map(withCachedApp),
           recentApps: recent.map(withCachedApp), catalog: snapshot.items.map(({ key, name, version, category }) =>
             ({ name, version, ...(category && { category }), clientVersion: Object.hasOwn(catalogClients, key) ? catalogClients[key] : null })),
-          storage: config.followingStorage ?? defaultStorage, canEditStorage: user.isAdmin === true,
+          storage: config.followingStorage ?? defaultStorage, storageBytes: snapshot.storageBytes, canEditStorage: user.isAdmin === true,
           pullToRefresh: setting(config) });
       }
       if (!available) return respond(res, 409, { error: 'Requires stable v0.1.24 or later.' });

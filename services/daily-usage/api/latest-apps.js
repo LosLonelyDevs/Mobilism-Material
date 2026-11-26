@@ -1,7 +1,7 @@
 import { query } from '../lib/database.js';
 import { authorizeAppWrite, enrollmentEnabled } from '../lib/app-writes.js';
 import { respond } from '../lib/protocol.js';
-import { appKey, cacheLifetime, capacitySql, discoverApps, latestFeedSize, lookup, parseLookup, publicRelease, retentionSecondsSql, visibleSnapshot } from '../lib/follow-lookup.js';
+import { appKey, discoverApps, lookup, parseLookup, publicRelease, retainedCatalogSql, retentionSecondsSql, visibleSnapshot } from '../lib/follow-lookup.js';
 import { defaultStorage } from '../public/config-schema.js';
 
 const fields = ['id', 'title', 'name', 'version', 'postedAt', 'author'];
@@ -97,24 +97,7 @@ const updatePage = `
       FROM candidates
       WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $5::bigint - ${retentionSecondsSql}
       ORDER BY item->>'key', posted DESC, id DESC, priority
-    ), ranked AS (
-      SELECT *, row_number() OVER (ORDER BY posted DESC, id DESC, app_key) AS position FROM unique_apps
-    ), demand AS (
-      SELECT app_key, sum((hits + misses + other_lookups) *
-        CASE WHEN day = $10::date THEN 1 ELSE $11::numeric END) AS requests,
-        max(last_requested_at) AS last_request
-      FROM daily_followed_apps
-      WHERE day BETWEEN $10::date - 1 AND $10::date AND last_requested_at > $5::bigint - ${cacheLifetime}
-        AND app_key IN (SELECT app_key FROM ranked WHERE position > ${latestFeedSize})
-      GROUP BY app_key
-    ), followed AS (
-      SELECT position FROM ranked LEFT JOIN demand USING (app_key)
-      WHERE position > ${latestFeedSize}
-      ORDER BY requests DESC NULLS LAST, last_request DESC NULLS LAST, position
-      LIMIT (${capacitySql} - ${latestFeedSize})
-    )
-    SELECT coalesce(jsonb_agg(item ORDER BY position), '[]'::jsonb) FROM ranked
-    WHERE position <= ${latestFeedSize} OR position IN (SELECT position FROM followed)
+    ) ${retainedCatalogSql('$5::bigint', '$10::date', '$11::numeric')}
   ), observed_at = greatest(observed_at, $2::bigint) WHERE singleton`;
 
 async function savePage(database, page, firstPage, now) {

@@ -1,4 +1,5 @@
 import { neon } from '@neondatabase/serverless';
+import { capacitySql, catalogByteLimit, categoryTopByteLimit, retainedCatalogSql, retentionSecondsSql } from './follow-lookup.js';
 
 let sql;
 export function query(text, parameters = []) {
@@ -67,7 +68,7 @@ export async function recordReport(query, report) {
   return rows[0]?.inserted > 0;
 }
 
-export function cleanReports(query) {
+export function cleanReports(query, now = Math.floor(Date.now() / 1000)) {
   return query(`WITH receipts AS (
     DELETE FROM usage_receipts WHERE day < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 7 RETURNING day
   ), aggregates AS (
@@ -88,8 +89,30 @@ export function cleanReports(query) {
     DELETE FROM admin_login_challenges WHERE expires_at < CURRENT_TIMESTAMP RETURNING nonce
   ), write_windows AS (
     DELETE FROM app_write_windows WHERE window_start < extract(epoch from now())::bigint - 3600
+  ), trimmed AS (
+    UPDATE latest_apps_cache SET items = (
+      WITH unique_apps AS (
+        SELECT item, item->>'key' AS app_key, (item->>'postedAt')::bigint AS posted, (item->>'id')::bigint AS id
+        FROM jsonb_array_elements(items) item
+        WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $1::bigint - ${retentionSecondsSql}
+      ) ${retainedCatalogSql('$1::bigint', '$2::date', '$3::numeric')}
+    ), category_top = (
+      SELECT coalesce(jsonb_agg(item ORDER BY position), '[]'::jsonb) FROM (
+        SELECT item, position, sum(octet_length(item::text) + 2) OVER (ORDER BY position) AS bytes
+        FROM jsonb_array_elements(category_top) WITH ORDINALITY AS chart(item, position)
+        WHERE (item->>'lastSeen')::bigint > $1::bigint - ${retentionSecondsSql}
+      ) live WHERE bytes <= ${categoryTopByteLimit}
+    ) WHERE singleton AND (
+      jsonb_array_length(items) > ${capacitySql} OR octet_length(items::text) > ${catalogByteLimit}
+      OR octet_length(category_top::text) > ${categoryTopByteLimit}
+      OR EXISTS (SELECT FROM jsonb_array_elements(items) item
+        WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint, 0) <= $1::bigint - ${retentionSecondsSql})
+      OR EXISTS (SELECT FROM jsonb_array_elements(category_top) item
+        WHERE coalesce((item->>'lastSeen')::bigint, 0) <= $1::bigint - ${retentionSecondsSql})
+    )
   ), sessions AS (
     DELETE FROM dashboard_sessions WHERE expires_at < CURRENT_TIMESTAMP RETURNING nonce
   ) SELECT (SELECT count(*)::int FROM receipts) AS receipts,
-           (SELECT count(*)::int FROM aggregates) AS aggregates`);
+           (SELECT count(*)::int FROM aggregates) AS aggregates`,
+    [now, new Date(now * 1000).toISOString().slice(0, 10), 1 - (now % 86400) / 86400]);
 }

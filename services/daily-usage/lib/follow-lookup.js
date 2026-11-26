@@ -11,13 +11,41 @@ export const capacitySql = `coalesce((SELECT (config->'followingStorage'->>'capa
   FROM app_control WHERE id = 1), ${defaultStorage.capacity})`;
 export const latestFeedSize = 500;
 const verificationLifetime = 21600;
+export const catalogByteLimit = 1024 * 1024;
+export const categoryTopByteLimit = 256 * 1024;
 
-export async function visibleSnapshot(database, now, latestOnly = false) {
+// PostgreSQL renders a JSONB array with two separator bytes per entry, including the brackets.
+export function retainedCatalogSql(now, day, yesterdayWeight) {
+  return `, ranked AS (
+    SELECT *, row_number() OVER (ORDER BY posted DESC, id DESC, app_key) AS position FROM unique_apps
+  ), demand AS (
+    SELECT app_key, sum((hits + misses + other_lookups) *
+      CASE WHEN day = ${day} THEN 1 ELSE ${yesterdayWeight} END) AS requests,
+      max(last_requested_at) AS last_request
+    FROM daily_followed_apps
+    WHERE day BETWEEN ${day} - 1 AND ${day} AND last_requested_at > ${now} - ${cacheLifetime}
+      AND app_key IN (SELECT app_key FROM ranked WHERE position > ${latestFeedSize})
+    GROUP BY app_key
+  ), selected AS (
+    SELECT item, position, row_number() OVER priority AS slot,
+      sum(octet_length(item::text) + 2) OVER priority AS bytes
+    FROM ranked LEFT JOIN demand USING (app_key)
+    WINDOW priority AS (ORDER BY (position <= ${latestFeedSize}) DESC,
+      requests DESC NULLS LAST, last_request DESC NULLS LAST, position)
+  ) SELECT coalesce(jsonb_agg(item ORDER BY position), '[]'::jsonb) FROM selected
+    WHERE slot <= ${capacitySql} AND bytes <= ${catalogByteLimit}`;
+}
+
+export async function visibleSnapshot(database, now, latestOnly = false, includeStorage = false) {
   const itemsColumn = latestOnly ? `jsonb_path_query_array(items, '$[0 to ${latestFeedSize - 1}]') AS items` : 'items';
-  const [row] = await database(`SELECT ${itemsColumn}, observed_at, ${retentionSecondsSql} AS lifetime FROM latest_apps_cache WHERE singleton`);
+  const sizes = includeStorage ? ', octet_length(items::text) AS catalog_bytes, octet_length(category_top::text) AS chart_bytes' : '';
+  const [row] = await database(`SELECT ${itemsColumn}, observed_at, ${retentionSecondsSql} AS lifetime ${sizes} FROM latest_apps_cache WHERE singleton`);
   const lifetime = Math.min(row?.lifetime ?? cacheLifetime, latestOnly ? cacheLifetime : Infinity);
   const items = (row?.items ?? []).filter(item => !item.hiddenAt && (item.lastSeen ?? item.postedAt) > now - lifetime);
-  return { observedAt: Number(row?.observed_at ?? 0), items, lifetime };
+  return { observedAt: Number(row?.observed_at ?? 0), items, lifetime, ...(includeStorage && { storageBytes: {
+    catalog: row?.catalog_bytes ?? 0, catalogLimit: catalogByteLimit,
+    categoryTop: row?.chart_bytes ?? 0, categoryTopLimit: categoryTopByteLimit,
+  } }) };
 }
 
 export function publicRelease({ id, title, name, version, postedAt, author, adultFiltered, category, packageName }) {
