@@ -156,7 +156,10 @@ internal class MobilismApi(private val context: Context, private val diagnostics
             }
         }
         val content = ForumReleaseParser.linkedTopic(forumTopic(id, forumId = directForum?.takeIf { it > 0 }), id)
-        if (content is TopicContent.Catalog) forumPostIds[id] = requireNotNull(content.release.likeId)
+        if (content is TopicContent.Catalog) {
+            forumPostIds[id] = requireNotNull(content.release.likeId)
+            if (content.release.section == ContentSection.Apps) onObservedApps(listOf(content.release), false)
+        }
         return content
     }
 

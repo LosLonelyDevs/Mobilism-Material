@@ -62,7 +62,7 @@ class LatestAppsClientTest {
         suspend fun lookup() { client.lookup(listOf("Camera"), true) { "day" } }
         observe()
         client.snapshot(false)
-        assertTrue(requests.isEmpty())
+        assertEquals("latest", requests.single().getString("browse"))
         lookup()
         val payload = requests.last().getJSONObject("observations")
         assertEquals("Photography", payload.getJSONArray("items").getJSONObject(0).getJSONObject("category").getString("name"))
@@ -75,13 +75,37 @@ class LatestAppsClientTest {
         lookup()
         assertFalse(requests.last().has("observations"))
         observe()
-        now += 21_601
+        now += 30L * 86400 + 1
         lookup()
         assertFalse(requests.last().has("observations"))
         observe()
         enabled = false
         lookup()
         assertFalse(requests.last().has("observations"))
+    }
+
+    @Test fun aBrowseReadCarriesTheHighestObservedVersionAfterRestart() = runBlocking {
+        var saved: String? = null
+        val requests = mutableListOf<okhttp3.Request>()
+        val transport = OkHttpClient.Builder().addInterceptor { chain ->
+            requests += chain.request()
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .header("X-App-Observations-Accepted", "1")
+                .body("""{"collection":"installed","observedAt":100,"items":[]}""".toResponseBody()).build()
+        }.build()
+        fun client() = LatestAppsClient("https://fixture.invalid/api/ping", transport, now = { 100L },
+            loadObservations = { saved }, saveObservations = { saved = it })
+        val release = Release(7, "Camera v2.10", "Uploader", null, 80, 0, 0, section = ContentSection.Apps)
+        client().observe(listOf(release, release.copy(id = 8, title = "Camera v2.9", publishedAt = 90)), true, emptyMap())
+        val restarted = client()
+        restarted.installedCatalog(true)
+        val payload = JSONObject(Buffer().also { requests.single().body!!.writeTo(it) }.readUtf8())
+        val items = payload.getJSONObject("observations").getJSONArray("items")
+        assertEquals(1, items.length())
+        assertEquals("2.10", items.getJSONObject(0).getString("version"))
+        assertFalse(client().usagePayload("{}").first.contains("observations"))
+        restarted.installedCatalog(true)
+        assertEquals("GET", requests.last().method)
     }
 
     @Test fun installedCatalogMatchesPrivatelyByPackageOrUniqueExactLabel() = runBlocking {

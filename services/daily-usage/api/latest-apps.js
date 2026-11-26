@@ -1,7 +1,7 @@
 import { query } from '../lib/database.js';
 import { authorizeAppWrite, enrollmentEnabled } from '../lib/app-writes.js';
 import { respond } from '../lib/protocol.js';
-import { appKey, discoverApps, installedApps, lookup, parseLookup, publicRelease, retainedCatalogSql, retentionSecondsSql, visibleSnapshot } from '../lib/follow-lookup.js';
+import { appKey, catalogCutoffSql, discoverApps, installedApps, lookup, parseLookup, publicRelease, retainedCatalogSql, visibleSnapshot } from '../lib/follow-lookup.js';
 import { publicReadCache } from '../lib/public-cache.js';
 import { defaultStorage } from '../public/config-schema.js';
 
@@ -65,7 +65,8 @@ const updatePage = `
              (item->>'firstMiss')::bigint AS missed
       FROM jsonb_array_elements(items) AS item
     ), observations AS (
-      SELECT *, $3::jsonb ? id AND $4::bigint >= seen AS sighting,
+      SELECT *, $3::jsonb ? id AND $4::bigint >= seen AND
+        ($3::jsonb -> id = 'true'::jsonb OR $3::jsonb ->> id = item->>'version') AS sighting,
              $6::jsonb -> id AS anchors, $7::jsonb -> id = item->'anchors' AS gap
       FROM prior
     ), updated AS (
@@ -78,7 +79,7 @@ const updatePage = `
           item || jsonb_build_object('hiddenAt', greatest((item->>'hiddenAt')::bigint, $4::bigint))
         ELSE item END AS item, seen, $12::jsonb -> id AS category
       FROM observations
-    ), candidates AS (
+    ), existing AS (
       -- Merge metadata only for the same topic. An ID-only report can move a topic but cannot erase its known label.
       SELECT CASE WHEN category IS NOT NULL AND (
           NOT item ? 'category' OR
@@ -90,14 +91,28 @@ const updatePage = `
         CASE WHEN $14::jsonb ? (item->>'id') AND (NOT item ? 'artworkId' OR $4::bigint >= seen)
           THEN jsonb_build_object('artworkId', $14::jsonb -> (item->>'id')) ELSE '{}'::jsonb END ||
         CASE WHEN $15::jsonb ? (item->>'id') THEN jsonb_build_object('topicViews', greatest(
-          (item->>'topicViews')::bigint, ($15::jsonb ->> (item->>'id'))::bigint)) ELSE '{}'::jsonb END AS item, 0 AS priority FROM updated
-      UNION ALL SELECT item, 1 FROM jsonb_array_elements($1::jsonb) AS item
+          (item->>'topicViews')::bigint, ($15::jsonb ->> (item->>'id'))::bigint)) ELSE '{}'::jsonb END AS item FROM updated
+    ), candidates AS (
+      SELECT item, 0 AS priority FROM existing
+      UNION ALL
+      SELECT CASE WHEN e.item IS NULL THEN incoming ELSE (e.item - 'firstMiss' - 'hiddenAt') || jsonb_build_object(
+        'name', incoming->'name', 'title', incoming->'title', 'version', incoming->'version', 'author', incoming->'author', 'lastSeen', $4::bigint
+      ) END, 1 FROM jsonb_array_elements($1::jsonb) incoming
+      LEFT JOIN existing e ON e.item->>'id' = incoming->>'id' AND e.item->>'key' = incoming->>'key'
+      WHERE e.item IS NULL OR (e.item->>'version' <> incoming->>'version' AND $3::jsonb ? (incoming->>'id')
+        AND $4::bigint >= greatest(coalesce((e.item->>'lastSeen')::bigint, (e.item->>'postedAt')::bigint),
+          (e.item->>'hiddenAt')::bigint, (e.item->>'firstMiss')::bigint))
+    ), versions AS (
+      SELECT *, bool_and(item->>'version' ~ '^[0-9]+([.][0-9]+)*$') OVER (PARTITION BY item->>'key') AS numeric_versions
+      FROM candidates
+      WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > ${catalogCutoffSql('$5::bigint')}
     ), unique_apps AS (
       SELECT DISTINCT ON (item->>'key') item, item->>'key' AS app_key,
         (item->>'postedAt')::bigint AS posted, (item->>'id')::bigint AS id
-      FROM candidates
-      WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $5::bigint - ${retentionSecondsSql}
-      ORDER BY item->>'key', posted DESC, id DESC, priority
+      FROM versions
+      ORDER BY item->>'key', CASE WHEN numeric_versions THEN
+        string_to_array(regexp_replace(item->>'version', '([.]0+)+$', ''), '.')::numeric[] END DESC,
+        posted DESC, id DESC, priority DESC
     ) ${retainedCatalogSql('$5::bigint', '$10::date', '$11::numeric')}
   ), observed_at = greatest(observed_at, $2::bigint) WHERE singleton`;
 
@@ -105,6 +120,7 @@ async function savePage(database, page, firstPage, now) {
   const { items, ids, at, dated, anchors, missing, adultFiltered } = page;
   for (const item of items) if (anchors[item.id]) item.anchors = anchors[item.id];
   const seen = Object.fromEntries((dated ? ids : []).map(id => [id, true]));
+  if (dated) for (const item of items) seen[item.id] = item.version;
   const safe = Object.fromEntries((adultFiltered ? ids : []).map(id => [id, true]));
   // Approximate a rolling day using existing daily counts. Midnight preserves yesterday's demand.
   const today = new Date(now * 1000).toISOString().slice(0, 10);
@@ -117,8 +133,33 @@ async function savePage(database, page, firstPage, now) {
     JSON.stringify(Object.fromEntries(items.filter(item => item.topicViews).map(item => [item.id, item.topicViews])))]);
 }
 
+export async function acceptObservations(database, observations, now, res) {
+  if (!observations) return;
+  try {
+    const { items, adultFiltered, readAt } = observations;
+    if (!Array.isArray(items) || !items.length || items.length > 10 || !Number.isSafeInteger(readAt)) return;
+    // Only a real Latest page can advance the feed clock or report missing topics.
+    const page = parsePage({ items, adultFiltered, readAt, firstPage: false }, now, 30 * 86400);
+    await savePage(database, page, false, now);
+    res.setHeader('X-App-Observations-Accepted', '1');
+  } catch { /* Optional observations must never fail the original request. */ }
+}
+
 export function createHandler(database = query, clock = () => Math.floor(Date.now() / 1000), env = process.env, store) {
   const cached = publicReadCache(clock, store);
+  function browse(view, safe, now) {
+    const discover = view === 'discover', installed = view === 'installed';
+    const key = installed ? 'installed-' + safe : discover ? 'discover-' + safe : 'latest';
+    return cached(key, async () => {
+      if (installed) return installedApps(database, now, safe);
+      const { observedAt, items: visible, lifetime } = discover
+        ? await discoverApps(database, now, safe) : await visibleSnapshot(database, now, true);
+      const items = visible.map(item => discover && item.artworkId
+        ? { ...publicRelease(item), artworkId: item.artworkId } : publicRelease(item));
+      const expiresAt = Math.min(now + (discover ? 300 : 60), ...visible.map(item => (item.lastSeen ?? item.postedAt) + lifetime));
+      return { body: { observedAt, items, ...(discover && { collection: 'discover' }) }, expiresAt };
+    });
+  }
   return async (req, res) => {
     if (req.method === 'GET') {
       try {
@@ -128,16 +169,7 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
         const installed = params.get('view') === 'installed';
         const safe = params.get('safe') === '1';
         if ((discover || installed) && !['0', '1'].includes(params.get('safe'))) return respond(res, 400, { error: 'Invalid visibility' });
-        const key = installed ? 'installed-' + safe : discover ? 'discover-' + safe : 'latest';
-        const { body, expiresAt } = await cached(key, async () => {
-          if (installed) return installedApps(database, now, safe);
-          const { observedAt, items: visible, lifetime } = discover
-            ? await discoverApps(database, now, safe) : await visibleSnapshot(database, now, true);
-          const items = visible.map(item => discover && item.artworkId
-            ? { ...publicRelease(item), artworkId: item.artworkId } : publicRelease(item));
-          const expiresAt = Math.min(now + (discover ? 300 : 60), ...visible.map(item => (item.lastSeen ?? item.postedAt) + lifetime));
-          return { body: { observedAt, items, ...(discover && { collection: 'discover' }) }, expiresAt };
-        });
+        const { body, expiresAt } = await browse(params.get('view'), safe, now);
         const ttl = Math.max(0, expiresAt - clock());
         res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=' + ttl);
         res.setHeader('Content-Type', 'application/json');
@@ -166,7 +198,10 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
         observations = body.observations;
         delete body.observations;
       }
-      if (body && Object.hasOwn(body, 'apps')) requested = parseLookup(body);
+      if (body && Object.hasOwn(body, 'browse')) {
+        if (!['installed', 'discover', 'latest'].includes(body.browse) || typeof body.adultFiltered !== 'boolean' ||
+            Object.keys(body).length !== 2) throw new Error();
+      } else if (body && Object.hasOwn(body, 'apps')) requested = parseLookup(body);
       else {
         if (unavailable) return respond(res, 503, { error: 'Cache unavailable' });
         if (!allowed) return respond(res, 403, { error: 'Verified install required' });
@@ -175,16 +210,8 @@ export function createHandler(database = query, clock = () => Math.floor(Date.no
       }
     } catch { return respond(res, 400, { error: 'Invalid Latest page' }); }
     try {
-      if (allowed && observations) {
-        try {
-          const { items, adultFiltered, readAt } = observations;
-          if (!Array.isArray(items) || items.length < 1 || items.length > 10 || !Number.isSafeInteger(readAt)) throw new Error();
-          // Only an actual Latest page can provide a baseline, missing IDs or a feed timestamp.
-          const extra = parsePage({ items, adultFiltered, readAt, firstPage: false }, now, 6 * 3600);
-          await savePage(database, extra, false, now);
-          res.setHeader('X-App-Observations-Accepted', '1');
-        } catch { /* Invalid or unavailable optional data must not fail the primary request. */ }
-      }
+      if (allowed) await acceptObservations(database, observations, now, res);
+      if (body.browse) return respond(res, 200, (await browse(body.browse, body.adultFiltered, now)).body);
       if (requested) {
         const mode = req.headers?.['x-following-check'];
         const check = mode === 'background' || mode === 'manual' ? mode : null;

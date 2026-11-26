@@ -30,6 +30,7 @@ class DailyUsageStore(context: Context) {
         preferences.edit().putBoolean("enabled", enabled).apply()
         mutableEnabled.value = enabled
         if (!enabled) {
+            (context.applicationContext as org.mobilism.material.MobilismApplication).clearAppObservations()
             androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag(DailyUsageSchedule.TAG)
             traffic.clear()
             storage.keys().filter { it.startsWith("report-") }.forEach { key ->

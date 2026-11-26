@@ -5,8 +5,10 @@ const receiptFormat = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 export const appKey = name => name.normalize('NFKC').trim().toLowerCase().replace(/\s+/gu, ' ');
 export const cacheLifetime = 86400;
 // Scalar subqueries read the policy in the same statement as the snapshot.
-export const retentionSecondsSql = `(3600 * coalesce((SELECT (config->'followingStorage'->>'retentionHours')::int
-  FROM app_control WHERE id = 1), ${defaultStorage.retentionHours}))`;
+const retentionSecondsSql = `nullif(3600 * coalesce((SELECT (config->'followingStorage'->>'retentionHours')::int
+  FROM app_control WHERE id = 1), ${defaultStorage.retentionHours}), 0)`;
+export const catalogCutoffSql = now => `coalesce(${now} - ${retentionSecondsSql}, 0)`;
+export const chartLifetimeSql = `coalesce(${retentionSecondsSql}, ${cacheLifetime})`;
 export const capacitySql = `coalesce((SELECT (config->'followingStorage'->>'capacity')::int
   FROM app_control WHERE id = 1), ${defaultStorage.capacity})`;
 export const latestFeedSize = 500;
@@ -40,7 +42,7 @@ export async function visibleSnapshot(database, now, latestOnly = false, include
   const itemsColumn = latestOnly ? `jsonb_path_query_array(items, '$[0 to ${latestFeedSize - 1}]') AS items` : 'items';
   const sizes = includeStorage ? ', octet_length(items::text) AS catalog_bytes, octet_length(category_top::text) AS chart_bytes' : '';
   const [row] = await database(`SELECT ${itemsColumn}, observed_at, ${retentionSecondsSql} AS lifetime ${sizes} FROM latest_apps_cache WHERE singleton`);
-  const lifetime = Math.min(row?.lifetime ?? cacheLifetime, latestOnly ? cacheLifetime : Infinity);
+  const lifetime = Math.min(row?.lifetime ?? Infinity, latestOnly ? cacheLifetime : Infinity);
   const items = (row?.items ?? []).filter(item => !item.hiddenAt && (item.lastSeen ?? item.postedAt) > now - lifetime);
   return { observedAt: Number(row?.observed_at ?? 0), items, lifetime, ...(includeStorage && { storageBytes: {
     catalog: row?.catalog_bytes ?? 0, catalogLimit: catalogByteLimit,
@@ -63,7 +65,7 @@ export async function installedApps(database, now, safe) {
     ) SELECT coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object('id', item->'id', 'name', item->'name',
       'version', item->'version', 'packageName', item->'packageName', 'adultFiltered', item->'adultFiltered'))
       ORDER BY position), '[]'::jsonb) AS items, least($1::bigint + 300, min(expires)) AS expires
-      FROM visible WHERE expires > $1`, [now, safe]);
+      FROM visible WHERE expires IS NULL OR expires > $1`, [now, safe]);
   return { body: { observedAt: now, items: row.items, collection: 'installed' }, expiresAt: Number(row.expires) };
 }
 
@@ -74,7 +76,7 @@ export async function discoverApps(database, now, safe) {
       SELECT app_key, sum(followers) AS popularity FROM daily_followed_apps
       WHERE day BETWEEN $1::date - 6 AND $1::date GROUP BY app_key HAVING sum(followers) > 0
     ), cache AS (
-      SELECT items, category_top, ${retentionSecondsSql} AS lifetime FROM latest_apps_cache WHERE singleton
+      SELECT items, category_top, ${chartLifetimeSql} AS lifetime FROM latest_apps_cache WHERE singleton
     ), live AS (
       SELECT item, lifetime FROM cache CROSS JOIN LATERAL jsonb_array_elements(items) item
       WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $2::bigint - lifetime
@@ -130,7 +132,7 @@ export async function lookup(database, apps, adultFiltered, now, clientDay, mode
           OR (item->>'lastSeen')::bigint >= $4)), '[]') AS matches,
         coalesce(jsonb_agg(item->>'key'), '[]') AS keys
       FROM jsonb_array_elements(items) WITH ORDINALITY AS entry(item, position) WHERE item->>'key' = ANY ($1::text[])
-        AND NOT (item ? 'hiddenAt') AND coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $3::bigint - ${retentionSecondsSql}
+        AND NOT (item ? 'hiddenAt') AND coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > ${catalogCutoffSql('$3::bigint')}
     ) available WHERE singleton`, [keys, adultFiltered, now, now - verificationLifetime]);
   if (!row) throw new Error();
   const feedObservedAt = Number(row.observed_at);

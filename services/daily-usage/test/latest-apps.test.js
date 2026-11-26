@@ -64,7 +64,7 @@ test('a cache read can carry an observed release without changing the Latest fee
   assert.equal(reply.body.items[0].id, 2);
   assert.deepEqual(reply.body.items[0].category, newer.category);
   await request({ ...observations, items: [older] });
-  for (const bad of [{ ...observations, items: [{ url: 'private' }] }, { ...observations, readAt: now - 21601 },
+  for (const bad of [{ ...observations, items: [{ url: 'private' }] }, { ...observations, readAt: now - 30 * 86400 - 1 },
     { ...observations, items: Array(11).fill(newer) }]) {
     const ignored = await request(bad);
     assert.equal(ignored.statusCode, 200);
@@ -94,7 +94,27 @@ test('Installed shares current versions without receiving device packages or cou
   assert.equal((await query('SELECT * FROM daily_followed_apps')).length, 0);
 });
 
-test('Installed reads only inventory fields and reuses each visibility variant until the earliest expiry', async () => {
+test('browse observations survive idle months and upgrade an edited topic without regressing on an older version', async () => {
+  const read = (id, version, at, postedAt) => call('POST', { browse: 'installed', adultFiltered: false,
+    observations: { readAt: at, adultFiltered: true, items: [{ ...item(id, 'Calendar'), postedAt, version, title: 'Calendar v' + version }] }
+  }, query, at);
+  await read(5, '2.9', now, now - 100);
+  const later = now + 90 * 86400;
+  await cleanReports(query, later);
+  assert.equal((await visibleSnapshot(query, later)).items[0].version, '2.9');
+  assert.deepEqual((await call('GET', null, query, later)).body.items, []);
+  const update = await read(5, '2.10', later, now - 100);
+  assert.equal(update.headers['X-App-Observations-Accepted'], '1');
+  assert.equal(update.body.items[0].version, '2.10');
+  await read(9, '2.9', later + 1, later);
+  await read(5, '2.9', later + 2, now - 100);
+  assert.equal((await visibleSnapshot(query, later + 2)).items[0].version, '2.10');
+});
+
+test('Installed reads only inventory fields and reuses each visibility variant until the earliest expiry', async t => {
+  await query(`INSERT INTO app_control(id, revision, config, updated_at) VALUES (1,1,'{"followingStorage":{"capacity":1000,"retentionHours":24}}',now())
+    ON CONFLICT(id) DO UPDATE SET config=excluded.config`);
+  t.after(() => query('DELETE FROM app_control WHERE id=1'));
   await post([{ ...item(10), title: '界'.repeat(512), artworkId: 'cover', topicViews: 100 }], true, true);
   await post([item(11)]);
   let clock = now, reads = 0;
@@ -242,7 +262,10 @@ test('each ranking includes its own top 20 apps without truncating lookup totals
   assert.deepEqual(res.body.recentApps[0], { name: 'App 17', requestedAt: now + 20, cachedVersion: null, clientVersion: null, hits: '0' });
 });
 
-test('a search contribution fills a miss and dates include the current partial UTC day', async () => {
+test('a search contribution fills a miss and dates include the current partial UTC day', async t => {
+  await query(`INSERT INTO app_control(id, revision, config, updated_at) VALUES (1,1,'{"schema":2,"limits":{},"notices":[],"followingStorage":{"capacity":1000,"retentionHours":24}}',now())
+    ON CONFLICT(id) DO UPDATE SET config=excluded.config`);
+  t.after(() => query('DELETE FROM app_control WHERE id=1'));
   const apps = [{ name: 'Facebook', receipt: randomUUID() }];
   await post([item(1)], true);
   assert.equal((await named(apps)).body.misses, 1);
@@ -368,7 +391,7 @@ test('uploads and idle cleanup bound stored UTF-8 bytes and preserve feed freshn
   assert.ok((await snapshot()).storageBytes.catalog <= catalogByteLimit);
   await cleanReports(query, now + 86401);
   const expired = await snapshot();
-  assert.equal(expired.storageBytes.catalog, 2);
+  assert.ok(expired.storageBytes.catalog > 2 && expired.storageBytes.catalog <= catalogByteLimit);
   assert.equal(expired.storageBytes.categoryTop, 2);
   assert.equal(expired.observedAt, now);
 });
@@ -461,7 +484,7 @@ test('a verified older release fills a named miss and displaces the least reques
   assert.equal((await named(requested)).body.items[0].id, original.id);
   await feed([1], [], now + 21601);
   assert.equal((await named(requested, false, query, now + 21601)).body.items.length, 0);
-  assert.ok(!(await visibleSnapshot(query, now + 86400)).items.some(app => app.id === original.id));
+  assert.ok((await visibleSnapshot(query, now + 86400)).items.some(app => app.id === original.id));
 });
 
 test('migration widens an existing 500-app cache without losing its entries', async () => {

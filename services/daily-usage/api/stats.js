@@ -6,6 +6,10 @@ import { supportsMinimumVersion } from '../public/limit-availability.js';
 import { requestTrafficMinimumVersion } from '../public/request-traffic.js';
 
 const dimensions = 'app_version AS "appVersion", version_code AS "versionCode", android_api AS "androidApi", manufacturer, model';
+const usageRecord = `WITH totals AS (
+  SELECT day, sum(devices) AS devices FROM daily_usage GROUP BY day
+  UNION ALL SELECT day, devices FROM archived_usage_record
+) SELECT day::text, devices::text FROM totals ORDER BY totals.devices DESC, day LIMIT 2`;
 const usageByDay = `SELECT day::text, ${dimensions}, devices::text FROM daily_usage
   WHERE day BETWEEN $1::date AND $2::date ORDER BY day, app_version, version_code, android_api, manufacturer, model`;
 // Both groupings see the same reports even if a new ping arrives during the query.
@@ -62,7 +66,12 @@ export function createHandler(database = query, token = () => process.env.STATS_
         sum(hits)::text AS hits, sum(misses)::text AS misses FROM daily_cache_usage WHERE day BETWEEN $1::date AND $2::date
         AND cache NOT IN ('FollowingBackground', 'FollowingManual')
         GROUP BY ${period ? 'cache' : 'day, cache'} ORDER BY cache`, [from, to]) : [];
-      return respond(res, 200, { from, to, daily, breakdown, latestStable: latestStableVersion(releases), trafficAvailable, requestTraffic, cacheUsage });
+      let record;
+      if (params.get('record') === '1') {
+        const [best, runnerUp] = await database(usageRecord);
+        record = best ? { ...best, previous: runnerUp?.devices ?? null } : null;
+      }
+      return respond(res, 200, { from, to, daily, breakdown, record, latestStable: latestStableVersion(releases), trafficAvailable, requestTraffic, cacheUsage });
     } catch { return respond(res, 503, { error: 'Statistics unavailable' }); }
   };
 }

@@ -30,8 +30,9 @@ class DailyUsageWorker(context: Context, parameters: WorkerParameters) : Corouti
             if (!reportDayIsValid(day, LocalDate.now(ZoneOffset.UTC)) || store.journal.wasSent(day)) {
                 return@withContext Result.success()
             }
+            val (payload, acknowledge) = app.usagePayload(body)
             val request = Request.Builder().url(BuildConfig.DAILY_USAGE_ENDPOINT)
-                .post(body.toRequestBody("application/json".toMediaType())).build()
+                .post(payload.toRequestBody("application/json".toMediaType())).build()
             val client = AppHttp.builder().followRedirects(false).followSslRedirects(false)
                 .addInterceptor(app.appWriteAttestation.interceptor("usage")).callTimeout(20, TimeUnit.SECONDS).build()
             client.newCall(request).execute().use { response ->
@@ -42,6 +43,7 @@ class DailyUsageWorker(context: Context, parameters: WorkerParameters) : Corouti
                     val receipt = JSONObject(source.readUtf8())
                     if (receipt.optBoolean("accepted") && receipt.optString("pingId") == report.getString("pingId") &&
                         receipt.optString("day") == day.toString()) {
+                        acknowledge(response)
                         if (store.journal.markSent(day)) Result.success() else Result.retry()
                     } else Result.retry()
                 } else if (response.code == 428 && runAttemptCount < 2) Result.retry()

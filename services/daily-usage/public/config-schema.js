@@ -34,11 +34,11 @@ export const limitFields = [
 ];
 
 export const cacheResetTargets = ['Latest', 'Top', 'RealDebrid', 'MegaDebrid', 'Mobilism'];
-export const defaultStorage = { capacity: 1000, retentionHours: 24 };
+export const defaultStorage = { capacity: 1000, retentionHours: 0 };
 export function validStorage(value) {
   return value && Object.keys(value).length === 2 && Number.isInteger(value.capacity) &&
     value.capacity >= 500 && value.capacity <= 2000 && Number.isInteger(value.retentionHours) &&
-    value.retentionHours >= 6 && value.retentionHours <= 72;
+    (value.retentionHours === 0 || (value.retentionHours >= 6 && value.retentionHours <= 72));
 }
 
 export function defaultConfig() { return { schema: 2, revision: 0, limits: {}, notices: [], userAgentRules: [] }; }
@@ -53,7 +53,7 @@ export function validateConfig(input) {
   if (Object.keys(input).some(key => !['schema', 'revision', 'limits', 'notices', 'userAgentRules', 'imageRetryGeneration', 'imageCacheEnabled', 'imageRetriesEnabled', 'cacheResets', 'followingStorage'].includes(key))) fail('Unknown configuration field.');
   const cache = {};
   if ('followingStorage' in input) {
-    if (!validStorage(input.followingStorage)) fail('Choose 500 to 2,000 apps and 6 to 72 hours.');
+    if (!validStorage(input.followingStorage)) fail('Choose 500 to 2,000 apps. Use 0 for no time limit or 6 to 72 hours.');
     cache.followingStorage = { ...input.followingStorage };
   }
   if ('cacheResets' in input) {

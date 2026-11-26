@@ -24,6 +24,7 @@ data class LatestAppsSnapshot(val outcome: CacheOutcome, val releases: List<Rele
 
 private val sharedArtwork = Regex("""https?://images\.mobilism\.org/\?dm=([A-Za-z0-9_-]{1,64})""", RegexOption.IGNORE_CASE)
 private val artworkId = Regex("[A-Za-z0-9_-]{1,64}")
+private val publicPackage = Regex("[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)+")
 private val appWhitespace = Regex("[\\s\\p{Z}]+")
 fun latestAppKey(name: String): String = Normalizer.normalize(name, Normalizer.Form.NFKC)
     .trim().lowercase(Locale.ROOT).replace(appWhitespace, " ")
@@ -32,17 +33,47 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
     .callTimeout(4, TimeUnit.SECONDS).followRedirects(false).retryOnConnectionFailure(false).build(),
     private val now: () -> Long = { System.currentTimeMillis() / 1000 },
     private val diagnostics: DiagnosticLogger = DiagnosticLogger.None,
-    browseCache: okhttp3.Cache? = null, private val contributionsEnabled: () -> Boolean = { true }) {
+    private val browseCache: okhttp3.Cache? = null, private val contributionsEnabled: () -> Boolean = { true },
+    loadObservations: () -> String? = { null }, private val saveObservations: (String?) -> Unit = {}) {
     private val browseClient = browseCache?.let { client.newBuilder().cache(it).build() } ?: client
     private val endpoint = serviceEndpoint(usageEndpoint, "/api/latest-apps")
     val configured get() = endpoint != null
 
     private class Observation(val id: Long, val item: JSONObject, val readAt: Long, val safe: Boolean)
-    private val pending = LinkedHashMap<Long, Observation>()
+    private val pending = LinkedHashMap<String, Observation>()
+    private val observationLifetime = 30L * 86400
+    private var lastBrowseAttempt: Long? = null
+
+    init {
+        runCatching {
+            val saved = loadObservations()?.let(::JSONObject)
+            lastBrowseAttempt = saved?.optLong("attempt")?.takeIf { it > 0 }
+            val rows = saved?.optJSONArray("rows") ?: JSONArray()
+            for (i in 0 until minOf(rows.length(), 64)) {
+                val row = rows.getJSONObject(i)
+                val item = row.getJSONObject("item")
+                val at = row.getLong("at")
+                if (now() - at in 0..observationLifetime) pending[latestAppKey(item.getString("name"))] =
+                    Observation(item.getLong("id"), item, at, row.getBoolean("safe"))
+            }
+        }
+    }
+
+    private fun persist() {
+        val rows = JSONArray(pending.values.map { JSONObject().put("item", it.item).put("at", it.readAt).put("safe", it.safe) })
+        saveObservations(JSONObject().put("rows", rows).put("attempt", lastBrowseAttempt).toString())
+    }
+
+    @Synchronized fun clearObservations() {
+        pending.clear()
+        lastBrowseAttempt = null
+        saveObservations(null)
+    }
 
     private fun publicItem(release: Release, categoryNames: Map<Long, String>): JSONObject? {
         if (release.section != ContentSection.Apps || release.id <= 0 || release.publishedAt <= 0 ||
-            release.author.isBlank() || release.author.length > 100 || release.title.length !in 1..512) return null
+            release.author.isBlank() || release.author.length > 100 || release.title.length !in 1..512 ||
+            release.title.trim().any(Char::isISOControl) || release.author.trim().any(Char::isISOControl)) return null
         val title = release.appTitle
         val version = title.version ?: return null
         if (title.name.length !in 1..200 || version.length !in 1..80) return null
@@ -52,7 +83,7 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
                 val artwork = (sequenceOf(release.thumbnail) + release.images.asSequence()).filterNotNull()
                     .firstNotNullOfOrNull(sharedArtwork::matchEntire)
                 artwork?.let { put("artworkId", it.groupValues[1]) }
-                (release.storePackage ?: ReleaseVersions.packageName(release))?.takeIf { it.length <= 255 }?.let { put("packageName", it) }
+                (release.storePackage ?: ReleaseVersions.packageName(release))?.takeIf { it.length <= 255 && publicPackage.matches(it) }?.let { put("packageName", it) }
                 release.categoryId?.takeIf { it > 0 }?.let { id ->
                     val name = (categoryNames[id] ?: release.categoryName)?.trim()
                         ?.takeIf { it.length in 1..120 && it.none(Char::isISOControl) }
@@ -63,12 +94,19 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
 
     @Synchronized
     fun observe(releases: List<Release>, safe: Boolean, categoryNames: Map<Long, String>) {
-        if (!configured || !contributionsEnabled()) { pending.clear(); return }
+        if (!configured || !contributionsEnabled()) { if (pending.isNotEmpty()) clearObservations(); return }
         val at = now()
+        pending.values.removeAll { at - it.readAt !in 0..observationLifetime }
         for (release in releases.take(20)) {
+            if (release.publishedAt > at + 300) continue
             val item = publicItem(release, categoryNames) ?: continue
-            val old = pending[release.id]
-            if (old != null && at - old.readAt in 0..21_600) {
+            val key = latestAppKey(item.getString("name"))
+            val old = pending[key]
+            if (old != null) {
+                val comparison = ReleaseVersions.compare(release.appTitle, ReleaseTitles.parse(old.item.getString("title"), ContentSection.Apps)) ?: 0
+                if (comparison < 0 || (comparison == 0 && release.publishedAt < old.item.getLong("postedAt"))) continue
+            }
+            if (old?.id == release.id) {
                 val previous = old.item.optJSONObject("category")
                 val category = item.optJSONObject("category")
                 if (previous != null && (category == null || (category.optLong("id") == previous.optLong("id") && !category.has("name"))))
@@ -77,17 +115,19 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
                 if (!item.has("artworkId") && old.item.has("artworkId")) item.put("artworkId", old.item.getString("artworkId"))
                 maxOf(item.optLong("topicViews"), old.item.optLong("topicViews")).takeIf { it > 0 }?.let { item.put("topicViews", it) }
             }
-            pending[release.id] = Observation(release.id, item, at, safe)
+            pending[key] = Observation(release.id, item, at, safe || (old?.id == release.id && old.safe))
         }
         while (pending.size > 64) pending.remove(pending.keys.first())
+        persist()
     }
 
     @Synchronized
     private fun attachObservations(body: JSONObject): List<Observation> {
-        if (!contributionsEnabled()) pending.clear()
+        if (!contributionsEnabled() && pending.isNotEmpty()) clearObservations()
         val at = now()
-        pending.values.removeAll { at - it.readAt !in 0..21_600 }
-        val batch = pending.values.take(10)
+        if (pending.values.removeAll { at - it.readAt !in 0..observationLifetime }) persist()
+        val first = pending.values.firstOrNull() ?: return emptyList()
+        val batch = pending.values.filter { it.safe == first.safe && kotlin.math.abs(it.readAt - first.readAt) <= 300 }.take(10)
         if (batch.isNotEmpty()) body.put("observations", JSONObject().put("readAt", batch.minOf { it.readAt })
             .put("adultFiltered", batch.all { it.safe }).put("items", JSONArray(batch.map { it.item })))
         return batch
@@ -95,8 +135,16 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
 
     @Synchronized
     private fun acknowledge(batch: List<Observation>, response: okhttp3.Response) {
-        if (response.header("X-App-Observations-Accepted") == "1")
-            batch.forEach { if (pending[it.id] === it) pending.remove(it.id) }
+        if (response.header("X-App-Observations-Accepted") == "1" && pending.values.removeAll(batch.toSet())) persist()
+    }
+
+    fun usagePayload(report: String): Pair<String, (okhttp3.Response) -> Unit> {
+        val envelope = JSONObject()
+        val batch = attachObservations(envelope)
+        if (batch.isEmpty()) return report to {}
+        val payload = envelope.put("report", JSONObject(report)).toString()
+        return if (payload.toByteArray(Charsets.UTF_8).size <= 262144) payload to { acknowledge(batch, it) }
+            else report to {}
     }
 
     suspend fun publish(page: LatestAppsPage, categoryNames: Map<Long, String> = emptyMap()) = withContext(Dispatchers.IO) {
@@ -165,6 +213,29 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
         ?.addQueryParameter("view", view)?.addQueryParameter("safe", if (hideAdult) "1" else "0")
         ?.build()?.let { Request.Builder().url(it).build() }
 
+    private suspend fun browseResponse(request: Request): okhttp3.Response {
+        fun due() = pending.isNotEmpty() && (lastBrowseAttempt?.let { now() - it in 0 until 3600L } != true)
+        if (synchronized(this) { due() } && contributionsEnabled()) {
+            if (browseCache != null && request.cacheControl.maxAgeSeconds != 0) {
+                val local = browseClient.newCall(request.newBuilder().cacheControl(CacheControl.Builder().onlyIfCached().build()).build()).await()
+                if (local.code != 504) return local
+                local.close()
+            }
+            val body = JSONObject().put("browse", request.url.queryParameter("view") ?: "latest")
+                .put("adultFiltered", request.url.queryParameter("safe") == "1")
+            val batch = synchronized(this) {
+                if (!due()) emptyList() else attachObservations(body).also {
+                    if (it.isNotEmpty()) { lastBrowseAttempt = now(); persist() }
+                }
+            }
+            if (batch.isNotEmpty()) {
+                val post = Request.Builder().url(requireNotNull(endpoint)).post(body.toString().toRequestBody("application/json".toMediaType())).build()
+                return client.newCall(post).await().also { acknowledge(batch, it) }
+            }
+        }
+        return browseClient.newCall(request).await()
+    }
+
     suspend fun discover(hideAdult: Boolean, refresh: Boolean = false): List<Release> {
         val request = browseRequest("discover", hideAdult) ?: return emptyList()
         val ranked = if (refresh) request.newBuilder().cacheControl(CacheControl.Builder().maxAge(0, TimeUnit.SECONDS).build()).build()
@@ -174,7 +245,7 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
 
     suspend fun installedCatalog(hideAdult: Boolean): InstalledReleaseCatalog = withContext(Dispatchers.IO) {
         val request = browseRequest("installed", hideAdult) ?: return@withContext InstalledReleaseCatalog()
-        browseClient.newCall(request).await().use { response ->
+        browseResponse(request).use { response ->
             if (!response.isSuccessful) return@use InstalledReleaseCatalog()
             val source = response.body?.source() ?: return@use InstalledReleaseCatalog()
             val limit = 4L * 1024 * 1024
@@ -200,7 +271,7 @@ class LatestAppsClient(usageEndpoint: String, private val client: OkHttpClient =
     }
 
     private suspend fun read(request: Request, hideAdult: Boolean, discovery: Boolean = false, batch: List<Observation> = emptyList()): LatestAppsSnapshot = withContext(Dispatchers.IO) {
-        (if (discovery) browseClient else client).newCall(request).await().use { response ->
+        (if (request.method == "GET") browseResponse(request) else client.newCall(request).await()).use { response ->
             acknowledge(batch, response)
             if (!response.isSuccessful) return@use LatestAppsSnapshot(CacheOutcome.Failed, httpStatus = response.code)
             val source = response.body?.source() ?: throw IOException("Missing snapshot")

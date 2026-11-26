@@ -50,6 +50,20 @@ test('different daily IDs count separately, with no cross-day identifier', async
   assert.deepEqual((await query('SELECT devices::text FROM daily_usage ORDER BY day')).map(row => row.devices), ['1', '2']);
 });
 
+test('a retried daily report carries observations without counting the installation twice', async () => {
+  const body = report();
+  await call(pingHandler(query), { body });
+  const readAt = Math.floor(Date.now() / 1000) - 86400;
+  const observations = { readAt, adultFiltered: true, items: [{
+    id: 3, name: 'Calendar', version: '3.4', title: 'Calendar v3.4', postedAt: readAt, author: 'Uploader',
+  }] };
+  const result = await call(pingHandler(query), { body: { report: body, observations } });
+  assert.equal(result.body.duplicate, true);
+  assert.equal(result.headers['X-App-Observations-Accepted'], '1');
+  assert.equal((await query("SELECT items->0->>'version' AS version FROM latest_apps_cache"))[0].version, '3.4');
+  assert.equal((await query('SELECT devices::text FROM daily_usage'))[0].devices, '1');
+});
+
 test('replayed ID with changed app or device metadata cannot add another count', async () => {
   const body = report();
   await recordReport(query, body);
@@ -93,7 +107,7 @@ test('statistics require a separate strong token and include daily totals and di
   const handler = statsHandler(query, () => token, () => new Date(), () => false, async () => ({ versions: [] }));
   assert.equal((await call(handler, { method: 'GET' })).statusCode, 401);
   assert.equal((await call(statsHandler(query, () => ''), { method: 'GET', headers: { authorization: 'Bearer ' } })).statusCode, 401);
-  const result = await call(handler, { method: 'GET', url: `/api/stats?from=${dateAgo(1)}&to=${today()}`,
+  const result = await call(handler, { method: 'GET', url: `/api/stats?record=1&from=${dateAgo(1)}&to=${today()}`,
     headers: { authorization: `Bearer ${token}` } });
   assert.equal(result.statusCode, 200);
   assert.equal(result.headers['Cache-Control'], 'no-store');
@@ -101,6 +115,7 @@ test('statistics require a separate strong token and include daily totals and di
     { appVersion: '0.1.17', devices: '1' }, { appVersion: '0.1.18', devices: '1' },
   ] }]);
   assert.equal(result.body.breakdown.length, 2);
+  assert.deepEqual(result.body.record, { day: today(), devices: '2', previous: null });
   assert.ok(result.body.breakdown.every(row => !('pingId' in row)));
   assert.equal((await call(handler, { method: 'GET', url: '/api/stats?from=bad',
     headers: { authorization: `Bearer ${token}` } })).statusCode, 400);
@@ -116,6 +131,7 @@ test('retention keeps all still-retryable IDs and prevents counting expired repl
   assert.equal((await call(handler, { method: 'GET' })).statusCode, 401);
   const result = await call(handler, { method: 'GET', headers: { authorization: `Bearer ${token}` } });
   assert.deepEqual(result.body, { receipts: 1, aggregates: 1 });
+  assert.deepEqual(await query('SELECT day::text, devices::text FROM archived_usage_record'), [{ day: dateAgo(365), devices: '1' }]);
   assert.equal(await recordReport(query, boundary), false);
   assert.equal((await call(pingHandler(query), { body: expired })).statusCode, 400);
   assert.equal((await query('SELECT devices::text FROM daily_usage'))[0].devices, '1');

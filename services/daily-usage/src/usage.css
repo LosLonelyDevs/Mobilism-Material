@@ -96,3 +96,6 @@
   .usage-page .admin-panel { padding: 18px 14px; }
   .usage-page .admin-stat { padding: 16px; }
 }
+.usage-record { position: relative; overflow: hidden; }
+.usage-record:not([hidden]) { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.35em 0.8em; }
+.usage-record i { position: absolute; top: 0; width: 6px; height: 10px; border-radius: 2px; pointer-events: none; }

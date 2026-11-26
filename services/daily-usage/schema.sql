@@ -21,6 +21,12 @@ CREATE TABLE IF NOT EXISTS request_receipts (
     PRIMARY KEY (day, ping_id)
 );
 
+CREATE TABLE IF NOT EXISTS archived_usage_record (
+    singleton boolean PRIMARY KEY CHECK (singleton),
+    day date NOT NULL,
+    devices numeric NOT NULL CHECK (devices > 0)
+);
+
 CREATE TABLE IF NOT EXISTS daily_requests (
     day date NOT NULL,
     app_version varchar(50) NOT NULL,

@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless';
-import { capacitySql, catalogByteLimit, categoryTopByteLimit, retainedCatalogSql, retentionSecondsSql } from './follow-lookup.js';
+import { capacitySql, catalogByteLimit, catalogCutoffSql, categoryTopByteLimit, chartLifetimeSql, retainedCatalogSql } from './follow-lookup.js';
 
 let sql;
 export function query(text, parameters = []) {
@@ -72,7 +72,13 @@ export function cleanReports(query, now = Math.floor(Date.now() / 1000)) {
   return query(`WITH receipts AS (
     DELETE FROM usage_receipts WHERE day < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 7 RETURNING day
   ), aggregates AS (
-    DELETE FROM daily_usage WHERE day < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 364 RETURNING day
+    DELETE FROM daily_usage WHERE day < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 364 RETURNING day, devices
+  ), archived AS (
+    INSERT INTO archived_usage_record(singleton, day, devices)
+    SELECT true, day, sum(devices) FROM aggregates GROUP BY day ORDER BY sum(devices) DESC, day LIMIT 1
+    ON CONFLICT (singleton) DO UPDATE SET day = excluded.day, devices = excluded.devices
+    WHERE excluded.devices > archived_usage_record.devices OR
+      (excluded.devices = archived_usage_record.devices AND excluded.day < archived_usage_record.day)
   ), traffic_receipts AS (
     DELETE FROM request_receipts WHERE day < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 14 RETURNING day
   ), traffic AS (
@@ -94,21 +100,21 @@ export function cleanReports(query, now = Math.floor(Date.now() / 1000)) {
       WITH unique_apps AS (
         SELECT item, item->>'key' AS app_key, (item->>'postedAt')::bigint AS posted, (item->>'id')::bigint AS id
         FROM jsonb_array_elements(items) item
-        WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > $1::bigint - ${retentionSecondsSql}
+        WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint) > ${catalogCutoffSql('$1::bigint')}
       ) ${retainedCatalogSql('$1::bigint', '$2::date', '$3::numeric')}
     ), category_top = (
       SELECT coalesce(jsonb_agg(item ORDER BY position), '[]'::jsonb) FROM (
         SELECT item, position, sum(octet_length(item::text) + 2) OVER (ORDER BY position) AS bytes
         FROM jsonb_array_elements(category_top) WITH ORDINALITY AS chart(item, position)
-        WHERE (item->>'lastSeen')::bigint > $1::bigint - ${retentionSecondsSql}
+        WHERE (item->>'lastSeen')::bigint > $1::bigint - ${chartLifetimeSql}
       ) live WHERE bytes <= ${categoryTopByteLimit}
     ) WHERE singleton AND (
       jsonb_array_length(items) > ${capacitySql} OR octet_length(items::text) > ${catalogByteLimit}
       OR octet_length(category_top::text) > ${categoryTopByteLimit}
       OR EXISTS (SELECT FROM jsonb_array_elements(items) item
-        WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint, 0) <= $1::bigint - ${retentionSecondsSql})
+        WHERE coalesce((item->>'lastSeen')::bigint, (item->>'postedAt')::bigint, 0) <= ${catalogCutoffSql('$1::bigint')})
       OR EXISTS (SELECT FROM jsonb_array_elements(category_top) item
-        WHERE coalesce((item->>'lastSeen')::bigint, 0) <= $1::bigint - ${retentionSecondsSql})
+        WHERE coalesce((item->>'lastSeen')::bigint, 0) <= $1::bigint - ${chartLifetimeSql})
     )
   ), sessions AS (
     DELETE FROM dashboard_sessions WHERE expires_at < CURRENT_TIMESTAMP RETURNING nonce

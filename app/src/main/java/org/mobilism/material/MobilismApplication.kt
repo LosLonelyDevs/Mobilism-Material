@@ -64,12 +64,17 @@ class MobilismApplication : Application(), org.mobilism.material.data.UserAgentP
     internal val connectionRecovery by lazy { org.mobilism.material.ui.ConnectionRecoveryController() }
     internal val remoteControl by lazy { org.mobilism.material.remote.RemoteControlStore.create(this, diagnostics) }
     internal val appWriteAttestation by lazy { org.mobilism.material.usage.AppWriteAttestation(this, BuildConfig.DAILY_USAGE_ENDPOINT) }
+    private val observationPrefs by lazy { getSharedPreferences("public-app-observations", MODE_PRIVATE) }
+    internal fun clearAppObservations() = latestApps.clearObservations()
+    internal fun usagePayload(report: String) = latestApps.usagePayload(report)
     private val latestApps by lazy { org.mobilism.material.data.LatestAppsClient(BuildConfig.DAILY_USAGE_ENDPOINT,
         client = org.mobilism.material.data.AppHttp.builder().followRedirects(false).retryOnConnectionFailure(false)
             .callTimeout(4, java.util.concurrent.TimeUnit.SECONDS)
             .addInterceptor(appWriteAttestation.interceptor("following")).build(), diagnostics = appLogger,
         browseCache = okhttp3.Cache(cacheDir.resolve("app-browse-cache"), 8L * 1024 * 1024),
-        contributionsEnabled = { dailyUsage.enabled.value && remoteControl.limits.followCacheBatchSize > 0 }) }
+        contributionsEnabled = { dailyUsage.enabled.value && remoteControl.limits.followCacheBatchSize > 0 },
+        loadObservations = { observationPrefs.getString("pending", null) },
+        saveObservations = { observationPrefs.edit().putString("pending", it).apply() }) }
     private val latestPages = kotlinx.coroutines.channels.Channel<org.mobilism.material.data.LatestAppsPage>(
         capacity = 4, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
     val repository by lazy { DefaultMobilismRepository(this, contentPreferences, appLogger,

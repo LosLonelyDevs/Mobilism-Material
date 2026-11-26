@@ -60,7 +60,7 @@ async function loadReport(selection) {
   const trendStart = offsetDay(to, -13);
   const from = aggregate ? selection.from : trendStart < earliest ? earliest : trendStart;
   try {
-    const response = await fetch(`/api/stats?from=${from}&to=${to}${aggregate ? '&group=period' : ''}`, { credentials: 'same-origin', cache: 'no-store', signal: request.signal });
+    const response = await fetch(`/api/stats?record=1&from=${from}&to=${to}${aggregate ? '&group=period' : ''}`, { credentials: 'same-origin', cache: 'no-store', signal: request.signal });
     if (response.status === 401) { data = null; request.abort(); onExpired(); return; }
     if (!response.ok) throw new Error('Activity is unavailable. Try refreshing.');
     const report = await response.json();
@@ -68,8 +68,34 @@ async function loadReport(selection) {
     data = report;
     rangeView = aggregate;
     renderReport(); $('report').hidden = false;
+    renderRecord(report.record);
   } catch (error) { if (!request.signal.aborted) notice('dashboard-error', error.message); }
   finally { if (!request.signal.aborted) { $('loading').hidden = true; $('dashboard').setAttribute('aria-busy', 'false'); } }
+}
+let seenRecord;
+function renderRecord(record) {
+  const panel = $('usage-record');
+  panel.hidden = !record;
+  if (!record) return;
+  try { seenRecord ??= JSON.parse(localStorage.getItem('usage-record-seen')); } catch { /* Storage is optional. */ }
+  const higher = record.previous !== null && BigInt(record.devices) > BigInt(record.previous);
+  const celebrate = higher && (seenRecord ? record.day !== seenRecord.day && BigInt(record.devices) > BigInt(seenRecord.devices)
+    : record.day === today());
+  panel.replaceChildren(text('strong', '', celebrate ? 'New daily record!' : 'Daily record'),
+    text('span', '', `${number(record.devices)} active installations · ${dateLabel(record.day)} UTC`));
+  seenRecord = { day: record.day, devices: record.devices };
+  try { localStorage.setItem('usage-record-seen', JSON.stringify(seenRecord)); } catch { /* Keep the in-memory value. */ }
+  if (!celebrate || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  for (let i = 0; i < 28; i++) {
+    const piece = document.createElement('i');
+    piece.setAttribute('aria-hidden', 'true');
+    piece.style.left = (i * 37 % 100) + '%';
+    piece.style.background = ['#ef74aa', '#ffd66b', '#85dfdd', '#a995ff'][i % 4];
+    panel.append(piece);
+    piece.animate([{ transform: 'translateY(-12px) rotate(0deg)', opacity: 1 },
+      { transform: `translate(${i % 2 ? 24 : -24}px, 120px) rotate(${150 + i * 11}deg)`, opacity: 0 }],
+      { duration: 1100 + i * 18, delay: (i * 83) % 410, fill: 'both' }).onfinish = () => piece.remove();
+  }
 }
 function renderReport() {
   const peak = data.daily.reduce((max, day) => BigInt(day.devices) > max ? BigInt(day.devices) : max, 0n);

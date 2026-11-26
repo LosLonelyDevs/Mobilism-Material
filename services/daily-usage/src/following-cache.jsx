@@ -125,7 +125,7 @@ function StorageControls({ settings, saving, save }) {
     <div className="form-grid">
       <InputField label="Cache capacity (apps)" help="500 to 2,000 apps. Default 1,000." type="number" min={500} max={2000} step={1}
         value={capacity} onChange={event => setCapacity(event.target.value)} />
-      <InputField label="Retention (hours)" help="6 to 72 hours from the last sighting. Default 24." type="number" min={6} max={72} step={1}
+      <InputField label="Retention (hours)" help="0 keeps versions until the cache fills. Choose 6 to 72 for a time limit." type="number" min={0} max={72} step={1}
         value={hours} onChange={event => setHours(event.target.value)} />
     </div>
     <p className="muted">The newest 500 apps have priority. Recent requests determine which other apps stay.</p>
@@ -168,7 +168,7 @@ export default function FollowingCache({ title }) {
     {error ? <Notice variant="danger">{error}</Notice> : !report ? <p role="status">Loading report…</p> :
       !report.available ? <p>Available with stable v0.1.24 or later.</p> : <>
         <LookupSummary report={report} />
-        {report.canEditStorage && <CacheCard title="Cache storage" subtitle={`${number(report.storage.capacity)} apps · ${report.storage.retentionHours} hours`}>
+        {report.canEditStorage && <CacheCard title="Cache storage" subtitle={`${number(report.storage.capacity)} apps · ${report.storage.retentionHours ? report.storage.retentionHours + ' hours' : 'No time limit'}`}>
           {report.storageBytes && <p>Stored JSON · Following {cacheSize(report.storageBytes.catalog)} / {cacheSize(report.storageBytes.catalogLimit)}
             {' · '}Category Top {cacheSize(report.storageBytes.categoryTop)} / {cacheSize(report.storageBytes.categoryTopLimit)}</p>}
           <StorageControls key={JSON.stringify(report.storage)} settings={report.storage} saving={saving} save={changeSetting} />
